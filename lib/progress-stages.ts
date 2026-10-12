@@ -128,6 +128,10 @@ export function getFailedStage(errorStage: string): ProgressStage | undefined {
  * Get all stage IDs that were completed before the failure point
  */
 export function getCompletedStagesBeforeFailure(errorStage: string): StageId[] {
+  // A failure outside the pipeline (for example a validation block before
+  // dispatch) completed none of these stages.
+  if (!getFailedStage(errorStage)) return [];
+
   const completed: StageId[] = [];
 
   for (const stage of PROGRESS_STAGES) {

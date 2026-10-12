@@ -48,21 +48,23 @@ export function TenantSwitcher({ className }: TenantSwitcherProps) {
         onClick={() => setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-overlay/5 hover:bg-overlay/10 border border-overlay/10 transition-all duration-200"
+        aria-label={`Switch tenant: ${selectedTenant?.display_name || 'Select Tenant'}`}
+        title={selectedTenant?.display_name || 'Select Tenant'}
+        className="flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-overlay/5 hover:bg-overlay/10 border border-overlay/10 transition-all duration-200 sm:w-auto sm:px-3"
       >
         <Building2 className="w-4 h-4 text-accent-cyan" />
-        <span className="text-sm font-medium text-text-primary max-w-[150px] truncate">
+        <span className="sr-only text-sm font-medium text-text-primary sm:not-sr-only sm:max-w-[150px] sm:truncate">
           {selectedTenant?.display_name || 'Select Tenant'}
         </span>
         <ChevronDown className={cn(
-          'w-4 h-4 text-text-secondary transition-transform duration-200',
+          'hidden w-4 h-4 text-text-secondary transition-transform duration-200 sm:block',
           isOpen && 'rotate-180'
         )} />
       </button>
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-64 bg-bg-surface border border-overlay/10 rounded-lg shadow-xl z-50 overflow-hidden animate-fade-in">
+        <div className="fixed left-4 right-4 top-16 bg-bg-surface border border-overlay/10 rounded-lg shadow-xl z-50 overflow-hidden animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64">
           <div className="p-2 border-b border-overlay/5">
             <p className="text-xs text-text-muted px-2 py-1">Switch tenant</p>
           </div>

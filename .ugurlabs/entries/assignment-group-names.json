@@ -1,0 +1,5 @@
+{
+  "title": "Show assignment group names in app details",
+  "summary": "App details now display assigned group names and identify excluded groups. When a name cannot be read, the existing group ID remains visible.",
+  "type": "fixed"
+}

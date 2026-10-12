@@ -1,3 +1,8 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 /**
  * Package API Route
  * Queues packaging jobs by triggering GitHub Actions workflows
@@ -5,7 +10,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { logValue } from '@/lib/server-log';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import {
   isGitHubActionsConfigured,
@@ -21,7 +27,9 @@ import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { checkStoredConsent } from '@/lib/msp/consent-cache';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { acquireGraphToken } from '@/lib/graph-token';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import { deployStoreApp } from '@/lib/store-app-deploy';
 import {
   STALE_JOB_TIMEOUT_MINUTES,
@@ -36,6 +44,25 @@ import {
   enforceInstallerPreflight,
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
+import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
+import { ensureQaDemand } from '@/lib/qa/demand';
+import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
+import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
+import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
+import { inferSavedCustomMarkerPath } from '@/lib/registry-marker';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import { evaluatePackagingContract } from '@/lib/packaging-contract';
+import type { NormalizedInstaller } from '@/types/winget';
+import {
+  getPackageEligibilityBlocks,
+  PACKAGE_UNAVAILABLE_MESSAGE,
+} from '@/lib/package-eligibility';
+import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
 
 export const maxDuration = 300;
 
@@ -75,13 +102,16 @@ export async function POST(request: NextRequest) {
 
     // Check for MSP tenant override header and enforce tenant access checks
     // (membership, managed tenant consent, and customer-only access mode)
+    const supabaseServerConfigured = isSupabaseServerConfigured();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
-    const { tenantId, errorResponse: tenantError } = await resolveTargetTenantId({
-      supabase: createServerClient(),
-      userId,
-      tokenTenantId,
-      requestedTenantId: mspTenantId,
-    });
+    const { tenantId, errorResponse: tenantError } = supabaseServerConfigured
+      ? await resolveTargetTenantId({
+          supabase: createServerClient(),
+          userId,
+          tokenTenantId,
+          requestedTenantId: mspTenantId,
+        })
+      : { tenantId: tokenTenantId, errorResponse: null };
 
     if (tenantError) {
       return tenantError;
@@ -137,10 +167,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const body: PackageRequestBody = await request.json();
-    const { items, forceCreate } = body;
+    const body: unknown = await request.json();
+    const { items, forceCreate } = (body && typeof body === 'object' ? body : {}) as PackageRequestBody;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: 'No items provided for packaging' },
         { status: 400 }
@@ -155,19 +185,132 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Reject the entire invalid custom detection request before packaging side effects.
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return NextResponse.json({ error: 'Invalid package item' }, { status: 400 });
+      }
+      const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
+      if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
+        return NextResponse.json({ error: 'Invalid PSADT settings' }, { status: 400 });
+      }
+      const flag = (item as unknown as { psadtConfig?: { customDetection?: unknown } }).psadtConfig?.customDetection;
+      if (flag !== undefined && typeof flag !== 'boolean') {
+        return NextResponse.json({ error: 'Invalid custom detection setting' }, { status: 400 });
+      }
+      if (!isStoreCartItem(item) && item.psadtConfig?.customDetection) {
+        const validation = validateCustomDetectionRules(item.detectionRules);
+        if (!canUseCustomDetection(item) || !validation.valid) {
+          return NextResponse.json({ error: 'Invalid custom detection rules', message: validation.errors.join(' ') || 'Custom detection is supported only for ordinary catalog Win32 apps.' }, { status: 400 });
+        }
+      } else if (isStoreCartItem(item) && (item as unknown as { psadtConfig?: { customDetection?: boolean } }).psadtConfig?.customDetection) {
+        return NextResponse.json({ error: 'Custom detection is not supported for Store apps' }, { status: 400 });
+      }
+    }
+
     // Get database adapter (SQLite or Supabase)
     const db = getDatabase();
+
+    // This checkpoint precedes every Store/Win32 insert and curated QA demand.
+    // Neither request-level nor item-level forceCreate bypasses approval safety.
+    // Check the stored canonical ID and any legacy submitted casing before demand.
+    const approvalBlocks = await findPendingApprovalBlocks({ tenantId,
+      wingetIds: items.flatMap(item => {
+        const curated = typeof item.wingetId === 'string' &&
+          (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated')
+          ? findCuratedApp(item.wingetId) : undefined;
+        return curated ? [curated.packageId, item.wingetId] : [item.wingetId];
+      }) }, { db });
+    if (approvalBlocks.length) {
+      const block = approvalBlocks[0];
+      return NextResponse.json({ error: 'Intune approval unresolved', code: block.code,
+        message: block.message, package: { wingetId: block.wingetId }, retryable: false }, { status: 409 });
+    }
 
     // Partition items into store apps and win32 apps
     const storeItems: StoreCartItem[] = [];
     const win32Items: Win32CartItem[] = [];
 
     for (const item of items) {
+      if (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated') {
+        try {
+          if (isStoreCartItem(item)) throw new CuratedCatalogError('Curated pilot applications require Win32 packaging.');
+          // Custom PSADT execution settings are queued for VM verification
+          // on first use and rejected until that verification passes.
+          Object.assign(item, (await reconcileCuratedCartItem(item as Win32CartItem, { tenantId, userId })).item);
+        } catch (error) {
+          if (!(error instanceof CuratedCatalogError)) throw error;
+          return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+        }
+      }
       if (isStoreCartItem(item)) {
         storeItems.push(item);
       } else {
         // Treat missing appSource as win32 for backward compatibility
         win32Items.push(item as Win32CartItem);
+      }
+    }
+
+    // Publisher licence agreements are accepted per tenant, never per cart.
+    // Record the acceptance that authorized each curated job for audit; the
+    // dispatch and local packager claim paths verify it again.
+    for (const item of win32Items) {
+      delete item.curatedLicenceAcceptance;
+      if (item.sourceType !== 'curated') continue;
+      try {
+        const acceptance = await assertCuratedLicenceAccepted(tenantId, item.wingetId, db);
+        if (acceptance) item.curatedLicenceAcceptance = acceptance;
+      } catch (error) {
+        if (!(error instanceof CuratedLicenceError)) throw error;
+        return NextResponse.json({
+          error: 'Licence agreement required',
+          message: error.message,
+          code: error.code,
+          attestation: error.attestation,
+          package: { wingetId: item.wingetId, displayName: item.displayName, version: item.version },
+        }, { status: 409 });
+      }
+    }
+
+    const catalogWin32Items = win32Items.filter(
+      (item) => item.sourceType !== 'custom' && typeof item.wingetId === 'string'
+    );
+    const eligibilityBlocks = supabaseServerConfigured
+      ? await getPackageEligibilityBlocks(
+          createServerClient(),
+          catalogWin32Items.map((item) => item.wingetId)
+        )
+      : [];
+    if (eligibilityBlocks.length > 0) {
+      const block = eligibilityBlocks[0];
+      const blockedItem = catalogWin32Items.find(
+        (item) => item.wingetId === block.wingetId
+      );
+      return NextResponse.json({
+        error: 'App unavailable',
+        message: PACKAGE_UNAVAILABLE_MESSAGE,
+        code: 'PACKAGE_UNAVAILABLE',
+        package: {
+          wingetId: block.wingetId,
+          displayName: blockedItem?.displayName || block.wingetId,
+          version: blockedItem?.version,
+        },
+      }, { status: 409 });
+    }
+
+    // Apply reviewed behavior constraints before preflight, QA identity, job
+    // persistence, and Intune run-as selection so every packaging route uses
+    // the same effective scope. Custom packages remain fully user-controlled.
+    for (const item of win32Items) {
+      if (
+        item.sourceType !== 'custom' &&
+        typeof item.wingetId === 'string' &&
+        item.wingetId.trim()
+      ) {
+        item.installScope = resolveApplicationInstallScope(
+          item.wingetId,
+          item.installScope
+        );
       }
     }
 
@@ -202,6 +345,87 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      if (item.sourceType === 'custom') {
+        const packagingContract = evaluatePackagingContract({
+          wingetId: item.wingetId,
+          installerType: item.installerType,
+          silentArgs: extractSilentSwitches(
+            item.installCommand,
+            item.installerType,
+            item.nestedInstallerType
+          ),
+          nestedInstallerType: item.nestedInstallerType,
+          nestedInstallerFiles: item.nestedInstallerPath ? [item.nestedInstallerPath] : [],
+        });
+        if (!packagingContract.valid) {
+          return NextResponse.json({
+            error: 'Installer validation blocked this deployment',
+            message: packagingContract.message,
+            code: 'SILENT_INSTALL_UNAVAILABLE',
+          }, { status: 400 });
+        }
+      }
+    }
+
+    // Re-resolve catalog metadata from the live trusted manifest after the
+    // requested scope has been finalized. This prevents a stale cart command
+    // from combining a machine deployment with a per-user installer (or the
+    // reverse). Explicit PSADT command overrides remain authoritative.
+    const trustedInstallersByItem = new Map<Win32CartItem, NormalizedInstaller[]>();
+    for (let i = 0; i < win32Items.length; i += 2) {
+      const batch = win32Items.slice(i, i + 2);
+      const reconciliationResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          if (
+            item.sourceType === 'custom' ||
+            typeof item.wingetId !== 'string' ||
+            !item.wingetId.trim()
+          ) return null;
+          const reconciled = await reconcileCatalogInstaller(item);
+          Object.assign(item, reconciled.item);
+          trustedInstallersByItem.set(item, reconciled.trustedInstallers);
+          return reconciled;
+        })
+      );
+
+      const failedIndex = reconciliationResults.findIndex(
+        (result) => result.status === 'rejected'
+      );
+      if (failedIndex !== -1) {
+        const failed = reconciliationResults[failedIndex] as PromiseRejectedResult;
+        const failedItem = batch[failedIndex];
+        const error = failed.reason;
+        if (error instanceof InstallerPreflightError) {
+          console.warn('Installer selection blocked before dispatch', {
+            requestId: request.headers.get('x-vercel-id'),
+            wingetId: failedItem.wingetId,
+            version: failedItem.version,
+            code: error.code,
+            retryable: error.retryable,
+          });
+          return NextResponse.json({
+            error: 'Installer validation blocked this deployment',
+            message: error.message,
+            code: error.code,
+            retryable: error.retryable,
+            package: {
+              wingetId: failedItem.wingetId,
+              displayName: failedItem.displayName || failedItem.wingetId,
+              version: failedItem.version,
+            },
+            expectedSha256: failedItem.installerSha256?.toUpperCase(),
+            actualSha256: error.actualSha256,
+          }, { status: error.retryable ? 503 : 409 });
+        }
+        throw error;
+      }
+    }
+
+    // Trusted manifest reconciliation can change the effective installer type.
+    for (const item of win32Items) {
+      if (item.psadtConfig?.customDetection && !canUseCustomDetection(item)) {
+        return NextResponse.json({ error: 'Custom detection is not supported for this resolved installer' }, { status: 400 });
+      }
     }
 
     // Enforce installer health before creating job rows. Work in pairs to
@@ -209,16 +433,27 @@ export async function POST(request: NextRequest) {
     // batches responsive.
     for (let i = 0; i < win32Items.length; i += 2) {
       const preflightResults = await Promise.allSettled(
-        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight({
-          wingetId: item.wingetId,
-          version: item.version,
-          architecture: item.architecture,
-          installerUrl: item.installerUrl,
-          installerSha256: item.installerSha256,
-          installerType: item.installerType,
-          installScope: item.installScope,
-          sourceType: item.sourceType,
-        })),
+        win32Items.slice(i, i + 2).map((item) => {
+          const executionInstallerUrl = applyInstallerUrlOverride(
+            item.wingetId,
+            item.version,
+            item.architecture || '',
+            item.installerUrl,
+          );
+          return enforceInstallerPreflight({
+            wingetId: item.wingetId,
+            version: item.version,
+            architecture: item.architecture,
+            installerUrl: executionInstallerUrl,
+            manifestInstallerUrl: item.installerUrl,
+            installerSha256: item.installerSha256,
+            installerType: item.installerType,
+            installScope: item.installScope,
+            sourceType: item.sourceType,
+          },
+          trustedInstallersByItem.get(item),
+          );
+        }),
       );
 
       const failedIndex = preflightResults.findIndex((result) => result.status === 'rejected');
@@ -394,8 +629,82 @@ export async function POST(request: NextRequest) {
         // Phase 1: Create all win32 job records
         for (const item of win32Items) {
           try {
+            if (item.sourceType !== 'custom') {
+              const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
+              let detectionRules = requestedPsadtConfig.customDetection ? item.detectionRules : normalizeCatalogDetectionRules({
+                detectionRules: item.detectionRules,
+                fallbackDetectionRules: requestedPsadtConfig.detectionRules,
+                wingetId: item.wingetId,
+                version: item.version,
+                installScope: item.installScope,
+                markerPath: requestedPsadtConfig.registryMarkerPath,
+                installerType: item.nestedInstallerType || item.installerType,
+              });
+              const inferredMarkerPath = requestedPsadtConfig.customDetection || requestedPsadtConfig.registryMarkerPath
+                ? null
+                : inferSavedCustomMarkerPath({
+                    detectionRules,
+                    wingetId: item.wingetId,
+                    version: item.version,
+                    installScope: item.installScope,
+                  });
+              const effectivePsadtConfig = inferredMarkerPath
+                ? { ...requestedPsadtConfig, registryMarkerPath: inferredMarkerPath }
+                : requestedPsadtConfig;
+              if (inferredMarkerPath) {
+                detectionRules = normalizeCatalogDetectionRules({
+                  detectionRules,
+                  wingetId: item.wingetId,
+                  version: item.version,
+                  installScope: item.installScope,
+                  markerPath: inferredMarkerPath,
+                  installerType: item.nestedInstallerType || item.installerType,
+                });
+              }
+              item.detectionRules = detectionRules;
+              item.psadtConfig = applyApplicationPackagingAdapter(
+                item.wingetId,
+                { ...effectivePsadtConfig, detectionRules }
+              );
+            }
             const jobId = crypto.randomUUID();
             const installerSha256 = item.installerSha256?.trim() || '';
+            const qaDemand = isQaMaintenanceMode() || item.sourceType === 'custom' || !supabaseServerConfigured
+              ? null
+              : await ensureQaDemand(createServerClient(), {
+                  wingetId: item.wingetId,
+                  displayName: item.displayName,
+                  publisher: item.publisher || 'Unknown Publisher',
+                  version: item.version,
+                  architecture: item.architecture,
+                  installerUrl: item.installerUrl,
+                  installerSha256,
+                  installerType: item.installerType,
+                  nestedInstallerType: item.nestedInstallerType,
+                  nestedInstallerPath: item.nestedInstallerPath,
+                  silentSwitches: extractSilentSwitches(
+                    item.installCommand,
+                    item.installerType,
+                    item.nestedInstallerType
+                  ),
+                  installerSuccessCodes: item.installerSuccessCodes,
+                  uninstallCommand: item.uninstallCommand,
+                  installScope: item.installScope,
+                  psadtConfig: JSON.stringify(item.psadtConfig),
+                  detectionRules: JSON.stringify(item.detectionRules || []),
+                  priority: QA_PRIORITY_CUSTOMER,
+                  demandSource: 'customer',
+                });
+            const qaDeferred = qaDemand?.state === 'waiting' && isDeferredCustomerQaEnabled();
+            // Self-hosted installs have no QA pipeline, so local jobs must remain pollable.
+            const initialStatus = isLocalPackagerMode && !supabaseServerConfigured
+              ? 'queued'
+              : qaDemand?.state === 'waiting' && !qaDeferred
+                ? 'awaiting_qa'
+                : qaDemand?.state === 'failed'
+                  ? 'qa_failed'
+                  : 'queued';
+            const now = new Date().toISOString();
 
             const jobRecord = await db.jobs.create({
               id: jobId,
@@ -415,8 +724,23 @@ export async function POST(request: NextRequest) {
               install_scope: item.installScope,
               detection_rules: item.detectionRules as unknown as import('@/types/database').Json,
               package_config: item as unknown as import('@/types/database').Json,
-              status: 'queued',
+              status: initialStatus,
+              status_message: qaDemand?.state === 'waiting'
+                ? qaDeferred
+                  ? 'Preparing deployment while installation validation remains scheduled'
+                  : 'Running an isolated installation test to make sure this app works before deployment'
+                : qaDemand?.state === 'failed'
+                  ? qaDemand.failureSummary
+                  : null,
               progress_percent: 0,
+              execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
+              presentation_profile_sha256: qaDemand?.identity.presentationProfileSha256 || null,
+              qa_candidate_id: qaDemand?.candidateId || null,
+              qa_requested_at: qaDemand ? now : null,
+              qa_completed_at: qaDemand?.state === 'passed' ? now : null,
+              error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
+              error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
+              error_category: qaDemand?.state === 'failed' ? 'installer' : null,
             });
 
             if (!jobRecord) {
@@ -424,7 +748,23 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            // Local packager mode: leave job in queued state for pickup
+            if ((qaDemand?.state === 'waiting' && !qaDeferred) || qaDemand?.state === 'failed') {
+              jobs.push({
+                id: jobId,
+                user_id: userId,
+                tenant_id: tenantId,
+                winget_id: item.wingetId,
+                version: item.version,
+                display_name: item.displayName,
+                publisher: item.publisher,
+                status: initialStatus,
+                package_config: item,
+                created_at: jobRecord?.created_at || now,
+              });
+              continue;
+            }
+
+            // Local packager mode: leave passed/custom jobs queued for pickup.
             if (isLocalPackagerMode) {
               jobs.push({
                 id: jobId,
@@ -479,13 +819,25 @@ export async function POST(request: NextRequest) {
               installerType: item.installerType,
               nestedInstallerType: item.nestedInstallerType,
               nestedInstallerPath: item.nestedInstallerPath,
-              silentSwitches: extractSilentSwitches(item.installCommand, item.installerType),
+              silentSwitches: extractSilentSwitches(
+                item.installCommand,
+                item.installerType,
+                item.nestedInstallerType
+              ),
+              installerSuccessCodes: item.installerSuccessCodes,
               uninstallCommand: item.uninstallCommand,
               callbackUrl,
               psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
               detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
               requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
-              assignments: item.assignments ? JSON.stringify(item.assignments) : undefined,
+              assignments: item.assignments
+                ? JSON.stringify(
+                    sanitizeAssignmentsForDispatch(
+                      item.assignments,
+                      Boolean(item.requirementRules?.length)
+                    )
+                  )
+                : undefined,
               categories: item.categories ? JSON.stringify(item.categories) : undefined,
               espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
               relationships: item.relationships && item.relationships.length > 0
@@ -493,7 +845,9 @@ export async function POST(request: NextRequest) {
                 : undefined,
               installScope: item.installScope,
               forceCreate: item.forceCreate || forceCreate,
+              qaOverride: item.sourceType === 'curated' ? false : isQaMaintenanceMode() || item.qaOverride,
               sourceType: item.sourceType,
+              curatedReleaseId: item.curatedReleaseId,
             };
 
             const triggerResult = await triggerPackagingWorkflow(
@@ -537,14 +891,20 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
-            const dispatchError = result.reason instanceof Error ? result.reason.message : 'Unknown error';
+            // The final dispatch boundary re-checks QA, security and
+            // compatibility evidence. A block there is a validation outcome
+            // with its own reason, not a failure to start the workflow.
+            const qaGateError = isQaGateError(result.reason) ? result.reason : null;
+            const dispatchError = qaGateError
+              ? describeQaGateError(qaGateError)
+              : result.reason instanceof Error ? result.reason.message : 'Unknown error';
             if (dispatch) {
               await db.jobs.update(dispatch.jobId, {
                 status: 'failed',
                 progress_percent: 0,
-                error_stage: 'authenticate',
-                error_category: 'network',
-                error_code: 'WORKFLOW_DISPATCH_FAILED',
+                error_stage: qaGateError ? 'validation' : 'authenticate',
+                error_category: qaGateError ? null : 'network',
+                error_code: qaGateError ? qaGateError.code : 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
                 completed_at: new Date().toISOString(),
               }).catch((updateError) => {
@@ -558,6 +918,17 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }
+
+    // Record each deployment start and failure in the server log so operators
+    // can trace actions that change Intune without opening the web UI.
+    for (const job of jobs) {
+      console.info(
+        `[Package] Deployment job ${logValue(job.id)} created for ${logValue(job.winget_id)} ${logValue(job.version)} (status: ${logValue(job.status)})`
+      );
+    }
+    for (const failure of errors) {
+      console.error(`[Package] Deployment of ${logValue(failure.wingetId)} failed: ${logValue(failure.error)}`);
     }
 
     // Return results
@@ -577,9 +948,12 @@ export async function POST(request: NextRequest) {
             ? `${storeDeployed} Store app(s) deployed successfully`
             : `${win32Queued} job(s) queued successfully`,
     });
-  } catch {
+  } catch (err) {
+    console.error('[Package] Failed to create packaging jobs:', err);
+    // Self-hosted operators read their own logs, so surface the real message there.
+    const detail = !isSupabaseServerConfigured() && err instanceof Error ? err.message : null;
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: detail ?? 'Internal server error' },
       { status: 500 }
     );
   }
@@ -722,10 +1096,13 @@ export async function GET(request: NextRequest) {
     const healedJobs = await healStaleJobs(db, jobs);
 
     return NextResponse.json({ jobs: healedJobs });
-  } catch {
+  } catch (err) {
+    console.error('[Package] Failed to fetch jobs:', err);
+    const detail = !isSupabaseServerConfigured() && err instanceof Error ? err.message : null;
     return NextResponse.json(
-      { error: 'Failed to fetch jobs' },
+      { error: detail ?? 'Failed to fetch jobs' },
       { status: 500 }
     );
   }
 }
+import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';

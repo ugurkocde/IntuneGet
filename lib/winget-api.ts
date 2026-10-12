@@ -174,9 +174,10 @@ export async function getInstallers(
 export async function getBestInstaller(
   packageId: string,
   version?: string,
-  preferredArch: 'x64' | 'x86' | 'arm64' = 'x64'
+  preferredArch: 'x64' | 'x86' | 'arm64' = 'x64',
+  preferredScope?: 'machine' | 'user'
 ): Promise<NormalizedInstaller | null> {
-  return getManifestBestInstaller(packageId, version, preferredArch);
+  return getManifestBestInstaller(packageId, version, preferredArch, preferredScope);
 }
 
 /**

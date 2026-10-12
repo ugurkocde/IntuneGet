@@ -1,5 +1,6 @@
 'use client';
 
+import { useNearViewport } from '@/hooks/use-near-viewport';
 import { useRef, useState, useEffect, memo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ChevronRight as ArrowRight, Loader2, Plus, Check, Settings } from 'lucide-react';
 import { AppIcon } from '@/components/AppIcon';
@@ -9,6 +10,7 @@ import { cleanPackageName } from '@/lib/locale-utils';
 import { usePackagesByCategory } from '@/hooks/use-packages';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { TenantDeploymentBadge } from '@/components/TenantDeploymentBadge';
 import { cn } from '@/lib/utils';
 import { getCategoryLabel } from '@/lib/category-utils';
 
@@ -31,14 +33,16 @@ interface AppCollectionProps {
   onSelect?: (pkg: NormalizedPackage) => void;
   onSeeAll?: (category: string) => void;
   deployedSet?: Set<string>;
+  tenantDeployments?: Map<string, string | null>;
 }
 
-export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: AppCollectionProps) {
+export function AppCollection({ category, onSelect, onSeeAll, deployedSet, tenantDeployments }: AppCollectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const { data, isLoading } = usePackagesByCategory(category, 12);
+  const { ref: collectionRef, near } = useNearViewport<HTMLDivElement>();
+  const { data, isLoading } = usePackagesByCategory(category, 12, near);
   const packages = data?.packages || [];
 
   const displayName = getCategoryLabel(category);
@@ -73,9 +77,9 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
     }
   };
 
-  if (isLoading) {
+  if (!near || isLoading) {
     return (
-      <div className="space-y-3">
+      <div ref={collectionRef} className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="h-6 w-32 bg-bg-elevated rounded animate-shimmer" />
           <div className="h-4 w-16 bg-bg-elevated rounded animate-shimmer" />
@@ -92,7 +96,7 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
   if (packages.length === 0) return null;
 
   return (
-    <div className="space-y-3">
+    <div ref={collectionRef} className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-bold tracking-tight text-text-primary flex items-center gap-2">
@@ -136,6 +140,7 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
               package={pkg}
               onSelect={onSelect}
               isDeployed={deployedSet?.has(pkg.id)}
+              tenantDeployedBy={tenantDeployments?.get(pkg.id)}
             />
           ))}
 
@@ -176,9 +181,10 @@ interface CollectionCardProps {
   package: NormalizedPackage;
   onSelect?: (pkg: NormalizedPackage) => void;
   isDeployed?: boolean;
+  tenantDeployedBy?: string | null;
 }
 
-function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false }: CollectionCardProps) {
+function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy }: CollectionCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -235,6 +241,7 @@ function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false }:
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-overlay/10">
         <span className="text-xs text-text-muted">v{pkg.version}</span>
+        <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
         {isDeployed ? (
           <Button
             size="sm"
@@ -277,5 +284,6 @@ function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false }:
 const CollectionCard = memo(CollectionCardComponent, (prev, next) =>
   prev.package.id === next.package.id &&
   prev.package.version === next.package.version &&
-  prev.isDeployed === next.isDeployed
+  prev.isDeployed === next.isDeployed &&
+  prev.tenantDeployedBy === next.tenantDeployedBy
 );

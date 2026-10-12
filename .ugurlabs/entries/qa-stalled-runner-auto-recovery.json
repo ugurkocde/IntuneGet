@@ -1,0 +1,5 @@
+{
+  "title": "QA automatically recovers stalled runner handoffs",
+  "summary": "The application QA scheduler now detects and clears an orphaned GitHub workflow that can hold the single-test runner slot after its application test has already ended. Queue processing resumes automatically without requiring an operator to notice or clear a stalled-runner warning.",
+  "type": "fixed"
+}

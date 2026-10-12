@@ -1,0 +1,6 @@
+{
+  "title": "Verify larger installers before packaging",
+  "summary": "Installer verification now supports downloads up to 5 GiB. Oversized installers receive a clear size limit response instead of repeated source availability retries. Hash and security checks remain required.",
+  "type": "improved",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/1496"
+}

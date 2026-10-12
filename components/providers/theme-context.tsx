@@ -28,10 +28,12 @@ const THEME_CLASS = "dark";
 // theme change in the app and its toggle stops working until a full reload.
 const THEME_CHANGE_EVENT = "intuneget:theme-change";
 
-export function applyThemeClass(theme: ThemeMode) {
+export function applyThemeClass(_theme: ThemeMode) {
   if (typeof document === "undefined") return;
 
-  document.documentElement.classList.toggle(THEME_CLASS, theme === "dark");
+  // The site is light-only: the dark class is never applied, regardless of
+  // any stored preference from when a theme toggle existed.
+  document.documentElement.classList.remove(THEME_CLASS);
   window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
 }
 
@@ -56,16 +58,6 @@ export function PublicThemeProvider({ children }: { children: ReactNode }) {
           : "light",
       );
     };
-
-    try {
-      const stored = window.localStorage.getItem(PUBLIC_THEME_KEY);
-      if (stored === "light" || stored === "dark") {
-        setThemeState(stored);
-      }
-    } catch {
-      // Storage unavailable; the boot script already applied the class and
-      // toggling still works from the default state.
-    }
 
     // Track theme changes made by the settings-synced ThemeProvider while
     // the visitor was inside the app surface.

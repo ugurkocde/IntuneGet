@@ -15,7 +15,21 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(1, 900)]
-    [int]$TimeoutSeconds = 90
+    [int]$TimeoutSeconds = 90,
+
+    # HttpCompletionOption.ResponseHeadersRead means $client.Timeout only
+    # bounds the response headers. The body is then read straight off the
+    # stream, which has no timeout of its own -- a server that accepts the
+    # connection and then stops sending would hang the caller until its own
+    # job timeout. These two bound the body: a stall between chunks, and the
+    # total time spent pulling one installer.
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 900)]
+    [int]$ReadTimeoutSeconds = 60,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 3600)]
+    [int]$BodyTimeoutSeconds = 300
 )
 
 $ErrorActionPreference = 'Stop'
@@ -112,10 +126,25 @@ try {
             try {
                 $buffer = [byte[]]::new(1048576)
                 [long]$total = 0
-                while (($read = $input.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $bodyDeadline = [DateTime]::UtcNow.AddSeconds($BodyTimeoutSeconds)
+                while ($true) {
+                    $cts = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($ReadTimeoutSeconds))
+                    try {
+                        $read = $input.ReadAsync($buffer, 0, $buffer.Length, $cts.Token).GetAwaiter().GetResult()
+                    } catch [System.OperationCanceledException] {
+                        throw "Installer stalled for more than $ReadTimeoutSeconds seconds"
+                    } finally {
+                        $cts.Dispose()
+                    }
+
+                    if ($read -le 0) { break }
                     $total += $read
                     if ($total -gt $MaxBytes) { throw "Installer exceeds the $MaxBytes byte limit" }
                     $output.Write($buffer, 0, $read)
+
+                    if ([DateTime]::UtcNow -gt $bodyDeadline) {
+                        throw "Installer body exceeded the $BodyTimeoutSeconds second limit"
+                    }
                 }
             } finally {
                 $output.Dispose()

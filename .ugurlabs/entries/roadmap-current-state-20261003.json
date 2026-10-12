@@ -1,0 +1,5 @@
+{
+  "title": "Roadmap reflects live QA and planned work",
+  "summary": "The public roadmap now separates available package verification and installer security checks from ongoing catalog coverage and planned features, with a review date and clearer coverage wording. It includes the tenant-private catalog idea and live evidence links, adds roadmap links in docs and the README, and improves tablet navigation and keyboard access.",
+  "type": "improved"
+}

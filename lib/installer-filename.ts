@@ -29,6 +29,7 @@ export function resolveInstallerFileName(
   installerType?: WingetInstallerType
 ): string {
   const fallback = `installer${getDefaultExtension(installerType)}`;
+  const knownInstallerExtension = /\.(?:exe|msi|msix|msixbundle|appx|appxbundle|zip)$/i;
 
   try {
     const urlObj = new URL(url);
@@ -39,7 +40,10 @@ export function resolveInstallerFileName(
       return fallback;
     }
 
-    if (/\.[a-z0-9]{1,8}$/i.test(fileName)) {
+    // A version-shaped URL such as /26.7.174 has a dotted numeric suffix but
+    // no executable extension. Only preserve extensions that Windows package
+    // handling supports; otherwise append the type-specific extension.
+    if (knownInstallerExtension.test(fileName)) {
       return fileName;
     }
 

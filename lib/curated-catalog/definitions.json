@@ -1,0 +1,1823 @@
+[
+  {
+    "id": "chrome",
+    "installedIdentity": { "displayNamePattern": "^Google Chrome$", "executablePaths": ["Google/Chrome/Application/chrome.exe"] },
+    "packageId": "IntuneGet.Curated.Chrome",
+    "wingetId": "Google.Chrome",
+    "name": "Google Chrome",
+    "publisher": "Google LLC",
+    "channel": "Enterprise Stable",
+    "category": "browsers",
+    "homepage": "https://chromeenterprise.google/browser/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Google LLC"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://versionhistory.googleapis.com/v1/chrome/platforms/win64/channels/stable/versions/all/releases?filter=endtime=none,fraction=1&pageSize=100",
+    "discovery": "chrome",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://dl.google.com",
+        "pathPrefix": "/dl/chrome/install/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Enterprise MSI. Google Update remains enabled; catalog approval applies to the packaged release. The mutable MSI URL must be rechecked against the candidate version in the isolated verifier."
+  },
+  {
+    "id": "firefox-esr",
+    "installedIdentity": { "displayNamePattern": "^Mozilla Firefox.*$", "executablePaths": ["Mozilla Firefox/firefox.exe"] },
+    "packageId": "IntuneGet.Curated.FirefoxESR",
+    "wingetId": "Mozilla.Firefox.ESR",
+    "name": "Mozilla Firefox ESR",
+    "publisher": "Mozilla Corporation",
+    "channel": "ESR",
+    "category": "browsers",
+    "homepage": "https://www.firefox.com/en-US/browsers/enterprise/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Mozilla Corporation"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://product-details.mozilla.org/1.0/firefox_versions.json",
+    "discovery": "firefox",
+    "checksumSource": {
+      "urlTemplate": "https://archive.mozilla.org/pub/firefox/releases/{version}esr/SHA256SUMS",
+      "entryTemplate": "win64/en-US/Firefox Setup {version}esr.msi",
+      "format": "sha256sums"
+    },
+    "allowedInstallerSources": [
+      {
+        "origin": "https://archive.mozilla.org",
+        "pathPrefix": "/pub/firefox/releases/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Use the ESR channel and the en-US machine MSI. Firefox's own update mechanism remains enabled."
+  },
+  {
+    "id": "acrobat-reader",
+    "installedIdentity": { "displayNamePattern": "^Adobe Acrobat(?: Reader)?(?: DC)?(?: \\(64-bit\\))?$", "executablePaths": ["Adobe/Acrobat DC/Acrobat/Acrobat.exe", "Adobe/Acrobat Reader DC/Reader/AcroRd32.exe"] },
+    "registeredUninstall": { "displayName": "Adobe Acrobat (64-bit)", "key": "{AC76BA86-1033-FF00-7760-BC15014EA700}" },
+    "packageId": "IntuneGet.Curated.AcrobatReader",
+    "wingetId": "Adobe.Acrobat.Reader.64-bit",
+    "name": "Adobe Acrobat Reader",
+    "publisher": "Adobe Inc.",
+    "channel": "Continuous",
+    "category": "productivity",
+    "homepage": "https://www.adobe.com/acrobat/pdf-reader/volume-distribution.html",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "exe",
+    "silentArgs": "/sAll /rs /rps /msi EULA_ACCEPT=YES",
+    "signaturePublishers": [
+      "Adobe Inc.",
+      "Adobe Systems Incorporated"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://rdc.adobe.io/reader/products?lang=en&site=enterprise&os=Windows%2011&api_key=dc-get-adobereader-cdn",
+    "discovery": "adobe",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://ardownload2.adobe.com",
+        "pathPrefix": "/pub/adobe/acrobat/win/AcrobatDC/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Adobe's enterprise download service reports the current Reader version. Discovery selects only the matching full x64 en-US installer on Adobe's distribution host and confirms it exists, never an MSP patch. Each tenant accepts Adobe's distribution agreement before deployment. Adobe ARM remains enabled.",
+    "licenceAttestation": {
+      "id": "adobe-acrobat-reader-distribution",
+      "title": "Adobe Acrobat Reader Distribution License Agreement",
+      "url": "https://get.adobe.com/reader/licenseform",
+      "version": "2026-10-04"
+    }
+  },
+  {
+    "id": "7zip",
+    "installedIdentity": { "displayNamePattern": "^7-Zip.*$", "executablePaths": ["7-Zip/7z.exe"] },
+    "packageId": "IntuneGet.Curated.7Zip",
+    "wingetId": "7zip.7zip",
+    "name": "7-Zip",
+    "publisher": "Igor Pavlov",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://www.7-zip.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [],
+    "allowUnsigned": true,
+    "unsignedExceptionReason": "Igor Pavlov publishes 7-Zip installers without Authenticode signatures. Releases come only from the publisher's official GitHub repository, are pinned to the GitHub asset SHA256, and must pass a clean Defender scan and the full lifecycle test.",
+    "releaseSource": "https://api.github.com/repos/ip7z/7zip/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^7z[0-9]+-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/ip7z/7zip/releases/download/"
+      }
+    ],
+    "autoUpdate": "none",
+    "notes": "Publisher-linked official GitHub releases. Unsigned binaries are accepted only under the reviewed exception above, with an exact hash and clean malware evidence."
+  },
+  {
+    "id": "notepad-plus-plus",
+    "installedIdentity": { "displayNamePattern": "^Notepad\\+\\+(?: \\(64-bit x64\\))?$", "executablePaths": ["Notepad++/notepad++.exe"] },
+    "registeredUninstall": { "displayName": "Notepad++", "key": "Notepad++" },
+    "packageId": "IntuneGet.Curated.NotepadPlusPlus",
+    "wingetId": "Notepad++.Notepad++",
+    "name": "Notepad++",
+    "publisher": "Notepad++",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://notepad-plus-plus.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": [
+      "Notepad++",
+      "Notepad Plus Plus"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://api.github.com/repos/notepad-plus-plus/notepad-plus-plus/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^npp\\.[0-9.]+\\.Installer\\.x64\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/notepad-plus-plus/notepad-plus-plus/releases/download/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Review the exact current signing identity before first approval. Signing identity changes require a definition review. The vendor updater remains enabled."
+  },
+  {
+    "id": "vscode",
+    "installedIdentity": { "displayNamePattern": "^Microsoft Visual Studio Code$", "executablePaths": ["Microsoft VS Code/Code.exe"] },
+    "registeredUninstall": { "displayName": "Microsoft Visual Studio Code", "key": "{EA457B21-F73E-494C-ACAB-524FDE069978}_is1" },
+    "packageId": "IntuneGet.Curated.VisualStudioCode",
+    "wingetId": "Microsoft.VisualStudioCode",
+    "name": "Visual Studio Code",
+    "publisher": "Microsoft Corporation",
+    "channel": "Stable system installer",
+    "category": "developer-tools",
+    "homepage": "https://code.visualstudio.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://update.code.visualstudio.com/api/update/win32-x64/stable/latest",
+    "discovery": "vscode",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://vscode.download.prss.microsoft.com",
+        "pathPrefix": "/dbazure/download/stable/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "System installer only. The user installer is outside this pilot's machine deployment profile. VS Code's updater remains enabled."
+  },
+  {
+    "id": "git",
+    "installedIdentity": { "displayNamePattern": "^Git(?:(?: version)? [0-9.]+)?$", "executablePaths": ["Git/cmd/git.exe"] },
+    "registeredUninstall": { "displayName": "Git", "key": "Git_is1" },
+    "packageId": "IntuneGet.Curated.Git",
+    "wingetId": "Git.Git",
+    "name": "Git for Windows",
+    "publisher": "The Git Development Community",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://git-scm.com/install/windows",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+    "signaturePublishers": [
+      "Open Source Developer, Johannes Schindelin"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://api.github.com/repos/git-for-windows/git/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^Git-[0-9.]+(?:\\.[0-9]+)?-64-bit\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/git-for-windows/git/releases/download/"
+      }
+    ],
+    "autoUpdate": "none",
+    "notes": "Review the publisher certificate identity and default installation choices before approval."
+  },
+  {
+    "id": "vlc",
+    "installedIdentity": { "displayNamePattern": "^VLC media player$", "executablePaths": ["VideoLAN/VLC/vlc.exe"] },
+    "packageId": "IntuneGet.Curated.VLC",
+    "wingetId": "VideoLAN.VLC",
+    "name": "VLC media player",
+    "publisher": "VideoLAN",
+    "channel": "Stable",
+    "category": "media",
+    "homepage": "https://www.videolan.org/vlc/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": [
+      "VideoLAN"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://update.videolan.org/vlc/status-win-x64",
+    "discovery": "vlc",
+    "checksumSource": {
+      "urlTemplate": "https://downloads.videolan.org/pub/videolan/vlc/{version}/win64/vlc-{version}-win64.exe.sha256",
+      "entryTemplate": "vlc-{version}-win64.exe",
+      "format": "sha256sums"
+    },
+    "installerRedirectPolicy": "any-https-mirror-with-pinned-sha256",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://downloads.videolan.org",
+        "pathPrefix": "/pub/videolan/vlc/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Starts from the official archive. VideoLAN may redirect the download to any HTTPS mirror; that is accepted automatically because discovery pins the publisher SHA256 from the .sha256 file beside the installer and every download must match it. The application's update notifications remain enabled."
+  },
+  {
+    "id": "winscp",
+    "installedIdentity": { "displayNamePattern": "^WinSCP(?: [0-9.]+)?$", "executablePaths": ["WinSCP/WinSCP.exe"] },
+    "registeredUninstall": { "displayName": "WinSCP", "key": "winscp3_is1" },
+    "packageId": "IntuneGet.Curated.WinSCP",
+    "wingetId": "WinSCP.WinSCP",
+    "name": "WinSCP",
+    "publisher": "Martin Prikryl",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://winscp.net/",
+    "architecture": "x86",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
+    "signaturePublishers": [
+      "Martin Prikryl"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://winscp.net/eng/updates.php",
+    "discovery": "winscp",
+    "checksumSource": {
+      "urlTemplate": "https://winscp.net/download/WinSCP-{version}-ReadMe.txt",
+      "entryTemplate": "WinSCP-{version}-Setup.exe",
+      "format": "winscp-readme"
+    },
+    "allowedInstallerSources": [
+      {
+        "origin": "https://downloads.sourceforge.net",
+        "pathPrefix": "/project/winscp/WinSCP/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher-linked SourceForge project and all-users setup. The setup is a 32-bit (x86) installer that installs to Program Files (x86); the stable release has no x64 build. Discovery pins the publisher SHA256 from the official release ReadMe on winscp.net. Verify final redirect provenance, signature, and hash in the isolated verifier. Update notifications remain enabled."
+  },
+  {
+    "id": "putty",
+    "installedIdentity": { "displayNamePattern": "^PuTTY(?: release)? [0-9.]+(?: \\(64-bit\\))?$", "executablePaths": ["PuTTY/putty.exe"] },
+    "packageId": "IntuneGet.Curated.PuTTY",
+    "wingetId": "PuTTY.PuTTY",
+    "name": "PuTTY",
+    "publisher": "Simon Tatham",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Simon Tatham"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://the.earth.li/~sgtatham/putty/latest/w64/",
+    "discovery": "putty",
+    "checksumSource": {
+      "urlTemplate": "https://the.earth.li/~sgtatham/putty/{version}/sha256sums",
+      "entryTemplate": "w64/putty-64bit-{version}-installer.msi",
+      "format": "sha256sums"
+    },
+    "allowedInstallerSources": [
+      {
+        "origin": "https://the.earth.li",
+        "pathPrefix": "/~sgtatham/putty/"
+      }
+    ],
+    "autoUpdate": "none",
+    "notes": "Publisher-linked versioned x64 MSI; standalone executables and development snapshots are excluded."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "vendor-managed",
+    "id": "firefox",
+    "packageId": "IntuneGet.Curated.Firefox",
+    "wingetId": "Mozilla.Firefox",
+    "name": "Mozilla Firefox",
+    "publisher": "Mozilla Corporation",
+    "channel": "Stable",
+    "category": "browsers",
+    "homepage": "https://www.firefox.com/",
+    "signaturePublishers": [
+      "Mozilla Corporation"
+    ],
+    "releaseSource": "https://product-details.mozilla.org/1.0/firefox_versions.json",
+    "discovery": "firefox-stable",
+    "checksumSource": {
+      "urlTemplate": "https://archive.mozilla.org/pub/firefox/releases/{version}/SHA256SUMS",
+      "entryTemplate": "win64/en-US/Firefox Setup {version}.msi",
+      "format": "sha256sums"
+    },
+    "allowedInstallerSources": [
+      {
+        "origin": "https://archive.mozilla.org",
+        "pathPrefix": "/pub/firefox/releases/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Mozilla Firefox.*$",
+      "executablePaths": [
+        "Mozilla Firefox/firefox.exe"
+      ]
+    },
+    "notes": "Stable Release channel, x64 en-US publisher MSI. Independent from ESR. Use a prior publisher release for upgrade QA; vendor updater remains enabled."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "zoom",
+    "packageId": "IntuneGet.Curated.Zoom",
+    "wingetId": "Zoom.Zoom",
+    "name": "Zoom Workplace",
+    "publisher": "Zoom Communications, Inc.",
+    "channel": "Stable",
+    "category": "communication",
+    "homepage": "https://www.zoom.com/",
+    "signaturePublishers": [
+      "Zoom Communications, Inc.",
+      "Zoom Video Communications, Inc."
+    ],
+    "releaseSource": "https://zoom.us/rest/download?os=win64",
+    "discovery": "zoom",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://cdn.zoom.us",
+        "pathPrefix": "/prod/"
+      }
+    ],
+    "initialUpgradeBaseline": {
+      "version": "7.1.41345",
+      "installerUrl": "https://cdn.zoom.us/prod/7.1.0.41345/x64/ZoomInstallerFull.msi"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^Zoom Workplace(?: \\(64-bit\\))?$",
+      "executablePaths": [
+        "Zoom/bin/Zoom.exe"
+      ]
+    },
+    "notes": "Publisher x64 enterprise MSI, all users. Publisher four-part download build maps to the MSI three-part ProductVersion (major.minor.build). MSI automatic update defaults stay disabled. The reviewed initial upgrade baseline is used only before an approved release exists."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "audacity",
+    "packageId": "IntuneGet.Curated.Audacity",
+    "wingetId": "Audacity.Audacity",
+    "name": "Audacity",
+    "publisher": "Muse Group",
+    "channel": "Stable",
+    "category": "multimedia",
+    "homepage": "https://www.audacityteam.org/",
+    "signaturePublishers": [
+      "MuseCY Limited",
+      "MuseCY LIMITED"
+    ],
+    "releaseSource": "https://api.github.com/repos/audacity/audacity/releases/latest",
+    "discovery": "github",
+    "releaseTagPrefix": "Audacity-",
+    "assetPattern": "^audacity-win-[0-9]+(?:\\.[0-9]+){2}-x86_64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/audacity/audacity/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Audacity(?:\\s+[0-9.]+)?(?: \\(x64\\))?$",
+      "executablePaths": [
+        "Audacity 4/bin/Audacity4.exe"
+      ],
+      "versionComponents": 3
+    },
+    "notes": "Publisher x86_64 MSI with GitHub asset SHA-256. The publisher appends an MSI build number to its three-part public release; QA compares the reviewed release components and binds the exact build by hash. ARM and optional FFmpeg/AI payloads are separate; use a previous MSI release for upgrade QA."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart USE_MU=0 ENABLE_MU=0",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "powershell-lts",
+    "packageId": "IntuneGet.Curated.PowerShellLTS",
+    "wingetId": "Microsoft.PowerShell",
+    "name": "PowerShell 7",
+    "publisher": "Microsoft Corporation",
+    "channel": "7.6 LTS",
+    "category": "developer-tools",
+    "homepage": "https://learn.microsoft.com/powershell/",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "releaseSource": "https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=10",
+    "discovery": "github-channel",
+    "releaseVersionPattern": "^7\\.6\\.[0-9]+$",
+    "assetPattern": "^PowerShell-7\\.6\\.[0-9]+-win-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/PowerShell/PowerShell/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^PowerShell 7(?:\\.6\\.[0-9.]+)?(?:[- ]x64| \\(x64\\))$",
+      "executablePaths": [
+        "PowerShell/7/pwsh.exe"
+      ]
+    },
+    "notes": "Explicit 7.6 LTS channel, x64 machine MSI, publisher asset SHA-256. Microsoft Update opt-in is disabled by installer properties; existing administrator update policy may override it. Never switch to the 7.7 MSIX distribution; updating the major/minor channel requires a reviewed definition."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "aws-cli",
+    "packageId": "IntuneGet.Curated.AWSCLI",
+    "wingetId": "Amazon.AWSCLI",
+    "name": "AWS Command Line Interface v2",
+    "publisher": "Amazon Web Services",
+    "channel": "v2",
+    "category": "developer-tools",
+    "homepage": "https://aws.amazon.com/cli/",
+    "signaturePublishers": [
+      "Amazon Web Services, Inc."
+    ],
+    "releaseSource": "https://api.github.com/repos/aws/aws-cli/tags?per_page=30",
+    "discovery": "aws-cli",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://awscli.amazonaws.com",
+        "pathPrefix": "/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^AWS Command Line Interface v2$",
+      "executablePaths": [
+        "Amazon/AWSCLIV2/aws.exe"
+      ]
+    },
+    "notes": "Publisher versioned x64 all-users MSI. Discover v2 releases from the official repository tags, measure SHA-256 in the isolated VM, and require an earlier official version for upgrade QA."
+  },
+  {
+    "id": "teamviewer",
+    "packageId": "IntuneGet.Curated.TeamViewer",
+    "wingetId": "TeamViewer.TeamViewer",
+    "name": "TeamViewer",
+    "publisher": "TeamViewer Germany GmbH",
+    "channel": "Stable full client",
+    "category": "utilities",
+    "homepage": "https://www.teamviewer.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": ["TeamViewer Germany GmbH"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.teamviewer.com/en/download/windows/",
+    "discovery": "teamviewer",
+    "allowedInstallerSources": [
+      { "origin": "https://download.teamviewer.com", "pathPrefix": "/download/" },
+      { "origin": "https://dl.teamviewer.com", "pathPrefix": "/download/" }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^TeamViewer(?: \\(64-bit\\))?$",
+      "executablePaths": ["TeamViewer/TeamViewer.exe"]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher full x64 client, not QuickSupport, Host, or the licensed custom MSI. The publisher URL is mutable; the VM must verify the advertised installed version and measure the exact SHA-256. The vendor updater remains enabled. Commercial use requires the organization's TeamViewer licence; no account assignment or remote access configuration is included."
+  },
+  {
+    "id": "python-314",
+    "packageId": "IntuneGet.Curated.Python314",
+    "wingetId": "Python.Python.3.14",
+    "name": "Python 3.14",
+    "publisher": "Python Software Foundation",
+    "channel": "3.14 stable",
+    "category": "developer-tools",
+    "homepage": "https://www.python.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "burn",
+    "silentArgs": "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=0",
+    "signaturePublishers": ["Python Software Foundation"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.python.org/downloads/windows/",
+    "discovery": "python",
+    "allowedInstallerSources": [{ "origin": "https://www.python.org", "pathPrefix": "/ftp/python/" }],
+    "installedIdentity": {
+      "displayNamePattern": "^Python 3\\.14\\.[0-9]+ \\(64-bit\\)$",
+      "executablePaths": ["Python314/python.exe"],
+      "versionFormat": "python-msi",
+      "registrationScope": "machine-and-localsystem-user"
+    },
+    "autoUpdate": "none",
+    "notes": "Fixed 3.14 channel, publisher x64 offline EXE; exclude prereleases, install manager, embeddable ZIPs, ARM and x86. Machine install with pip and PATH; omit the separate shared launcher. CPython's Windows ARP version uses patch*1000+150 for final releases, which QA must compare exactly. Upgrade QA uses an earlier 3.14 installer."
+  },
+  {
+    "id": "winrar",
+    "packageId": "IntuneGet.Curated.WinRAR",
+    "wingetId": "RARLab.WinRAR",
+    "name": "WinRAR",
+    "publisher": "win.rar GmbH",
+    "channel": "Stable English",
+    "category": "utilities",
+    "homepage": "https://www.rarlab.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "exe",
+    "silentArgs": "-s1",
+    "signaturePublishers": ["win.rar GmbH"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.rarlab.com/download.htm",
+    "discovery": "winrar",
+    "registeredUninstall": { "displayName": "WinRAR (64-bit)", "key": "WinRAR archiver" },
+    "reviewedUninstallArguments": ["/s"],
+    "allowedInstallerSources": [{ "origin": "https://www.rarlab.com", "pathPrefix": "/rar/" }],
+    "installedIdentity": {
+      "displayNamePattern": "^WinRAR(?: [0-9.]+)? \\(64-bit\\)$",
+      "executablePaths": ["WinRAR/WinRAR.exe"]
+    },
+    "initialUpgradeBaseline": { "version": "7.22", "installerUrl": "https://www.rarlab.com/rar/winrar-x64-722.exe" },
+    "autoUpdate": "none",
+    "notes": "Publisher stable English x64 EXE; beta and localized filenames are excluded. The 7.22 publisher installer is the initial upgrade baseline. WinRAR is evaluation software; the deploying organization supplies its own licence. No licence key is bundled."
+  },
+  {
+    "id": "nodejs-lts",
+    "packageId": "IntuneGet.Curated.NodeJSLTS",
+    "wingetId": "OpenJS.NodeJS.LTS",
+    "name": "Node.js LTS",
+    "publisher": "OpenJS Foundation",
+    "channel": "24 LTS",
+    "category": "developer-tools",
+    "homepage": "https://nodejs.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": ["OpenJS Foundation"],
+    "allowUnsigned": false,
+    "releaseSource": "https://nodejs.org/dist/index.json",
+    "discovery": "node-lts",
+    "allowedInstallerSources": [{ "origin": "https://nodejs.org", "pathPrefix": "/dist/" }],
+    "checksumSource": {
+      "urlTemplate": "https://nodejs.org/dist/v{version}/SHASUMS256.txt",
+      "entryTemplate": "node-v{version}-x64.msi",
+      "format": "sha256sums"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^Node\\.js$",
+      "executablePaths": ["nodejs/node.exe"]
+    },
+    "autoUpdate": "none",
+    "notes": "Fixed major-24 LTS channel, publisher machine x64 MSI with npm and publisher SHA256SUMS. Current, older LTS majors and non-MSI payloads are excluded. Optional native-build tools are not enabled. An earlier major-24 MSI is required for upgrade QA."
+  },
+  {
+    "id": "wireshark",
+    "packageId": "IntuneGet.Curated.Wireshark",
+    "wingetId": "WiresharkFoundation.Wireshark",
+    "name": "Wireshark",
+    "publisher": "Wireshark Foundation",
+    "channel": "4.6 stable",
+    "category": "developer-tools",
+    "homepage": "https://www.wireshark.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": ["Wireshark Foundation"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.wireshark.org/download.html",
+    "discovery": "wireshark",
+    "allowedInstallerSources": [{ "origin": "https://www.wireshark.org", "pathPrefix": "/download/win64/" }],
+    "checksumSource": {
+      "urlTemplate": "https://www.wireshark.org/download/SIGNATURES-{version}.txt",
+      "entryTemplate": "Wireshark-{version}-x64.msi",
+      "format": "bsd-sha256"
+    },
+    "installerRedirectPolicy": "any-https-mirror-with-pinned-sha256",
+    "initialUpgradeBaseline": { "version": "4.6.8", "installerUrl": "https://www.wireshark.org/download/win64/Wireshark-4.6.8-x64.msi" },
+    "installedIdentity": {
+      "displayNamePattern": "^Wireshark(?: [0-9.]+)?(?: \\(64-bit\\))?$",
+      "executablePaths": ["Wireshark/Wireshark.exe"]
+    },
+    "autoUpdate": "none",
+    "notes": "Fixed 4.6 stable channel, publisher machine x64 MSI, hash pinned by the publisher SIGNATURES file. The approved publisher URL may redirect to HTTPS mirrors only with that hash pin. Npcap and USBPcap are separate products and are not installed, upgraded or removed by this package. The reviewed 4.6.8 MSI is the initial upgrade baseline when the download page lists only the current stable release."
+  },
+  {
+    "id": "libreoffice",
+    "packageId": "IntuneGet.Curated.LibreOffice",
+    "wingetId": "TheDocumentFoundation.LibreOffice",
+    "name": "LibreOffice",
+    "publisher": "The Document Foundation",
+    "channel": "Latest stable",
+    "category": "productivity",
+    "homepage": "https://www.libreoffice.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "The Document Foundation"
+    ],
+    "releaseSource": "https://download.documentfoundation.org/libreoffice/stable/",
+    "discovery": "libreoffice",
+    "checksumSource": {
+      "urlTemplate": "https://download.documentfoundation.org/libreoffice/stable/{version}/win/x86_64/LibreOffice_{version}_Win_x86-64.msi.sha256",
+      "entryTemplate": "LibreOffice_{version}_Win_x86-64.msi",
+      "format": "sha256sums"
+    },
+    "installerRedirectPolicy": "any-https-mirror-with-pinned-sha256",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://download.documentfoundation.org",
+        "pathPrefix": "/libreoffice/stable/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^LibreOffice [0-9.]+$",
+      "executablePaths": [
+        "LibreOffice/program/soffice.exe"
+      ],
+      "versionComponents": 3
+    },
+    "autoUpdate": "none",
+    "notes": "Newest release in the publisher stable directory, x64 machine MSI. The publisher download host redirects to HTTPS mirrors, so discovery pins the SHA256 from the .sha256 file beside the installer. The MSI appends a build number to the three-part public release; QA compares three components and binds the exact build by hash. The earlier stable release listed by the publisher is used for upgrade QA."
+  },
+  {
+    "id": "thunderbird",
+    "packageId": "IntuneGet.Curated.Thunderbird",
+    "wingetId": "Mozilla.Thunderbird",
+    "name": "Mozilla Thunderbird",
+    "publisher": "Mozilla Corporation",
+    "channel": "Stable",
+    "category": "communication",
+    "homepage": "https://www.thunderbird.net/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Mozilla Corporation"
+    ],
+    "releaseSource": "https://product-details.mozilla.org/1.0/thunderbird_versions.json",
+    "discovery": "thunderbird",
+    "checksumSource": {
+      "urlTemplate": "https://archive.mozilla.org/pub/thunderbird/releases/{version}/SHA256SUMS",
+      "entryTemplate": "win64/en-US/Thunderbird Setup {version}.msi",
+      "format": "sha256sums"
+    },
+    "allowedInstallerSources": [
+      {
+        "origin": "https://archive.mozilla.org",
+        "pathPrefix": "/pub/thunderbird/releases/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Mozilla Thunderbird.*$",
+      "executablePaths": [
+        "Mozilla Thunderbird/thunderbird.exe"
+      ]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Stable release channel, x64 en-US publisher MSI with publisher SHA256SUMS. Removal uses the Mozilla helper /S contract shared with Firefox. The previous major release is used for upgrade QA; the vendor updater remains enabled."
+  },
+  {
+    "id": "go",
+    "packageId": "IntuneGet.Curated.Go",
+    "wingetId": "GoLang.Go",
+    "name": "Go",
+    "publisher": "Google LLC",
+    "channel": "Latest stable",
+    "category": "developer-tools",
+    "homepage": "https://go.dev/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Google LLC"
+    ],
+    "releaseSource": "https://go.dev/dl/?mode=json",
+    "discovery": "golang",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://dl.google.com",
+        "pathPrefix": "/go/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Go Programming Language amd64 go[0-9.]+$",
+      "executablePaths": [
+        "Go/bin/go.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 machine MSI from the go.dev release index, which also supplies the publisher SHA256. The newest stable release of the previous supported minor version is used for upgrade QA."
+  },
+  {
+    "id": "cmake",
+    "packageId": "IntuneGet.Curated.CMake",
+    "wingetId": "Kitware.CMake",
+    "name": "CMake",
+    "publisher": "Kitware, Inc.",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://cmake.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Kitware, Inc."
+    ],
+    "releaseSource": "https://api.github.com/repos/Kitware/CMake/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^cmake-[0-9.]+-windows-x86_64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/Kitware/CMake/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^CMake$",
+      "executablePaths": [
+        "CMake/bin/cmake.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x86_64 machine MSI with GitHub asset SHA-256. Release candidates are excluded. PATH is left at the installer default."
+  },
+  {
+    "id": "github-cli",
+    "packageId": "IntuneGet.Curated.GitHubCLI",
+    "wingetId": "GitHub.cli",
+    "name": "GitHub CLI",
+    "publisher": "GitHub, Inc.",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://cli.github.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "GitHub, Inc."
+    ],
+    "releaseSource": "https://api.github.com/repos/cli/cli/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^gh_[0-9.]+_windows_amd64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/cli/cli/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^GitHub CLI$",
+      "executablePaths": [
+        "GitHub CLI/gh.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher amd64 machine MSI with GitHub asset SHA-256."
+  },
+  {
+    "id": "azure-cli",
+    "packageId": "IntuneGet.Curated.AzureCLI",
+    "wingetId": "Microsoft.AzureCLI",
+    "name": "Azure CLI",
+    "publisher": "Microsoft Corporation",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://learn.microsoft.com/cli/azure/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "releaseSource": "https://api.github.com/repos/Azure/azure-cli/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^azure-cli-[0-9.]+-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/Azure/azure-cli/releases/download/"
+      }
+    ],
+    "releaseTagPrefix": "azure-cli-",
+    "installedIdentity": {
+      "displayNamePattern": "^Microsoft Azure CLI \\(64-bit\\)$",
+      "executablePaths": [
+        "Microsoft SDKs/Azure/CLI2/python.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 machine MSI from the official GitHub release, with asset SHA-256. The 32-bit MSI is excluded. The bundled x64 Python runtime is the installed executable checked by QA."
+  },
+  {
+    "id": "azure-functions-core-tools",
+    "packageId": "IntuneGet.Curated.AzureFunctionsCoreTools",
+    "wingetId": "Microsoft.Azure.FunctionsCoreTools",
+    "name": "Azure Functions Core Tools",
+    "publisher": "Microsoft Corporation",
+    "channel": "v4",
+    "category": "developer-tools",
+    "homepage": "https://learn.microsoft.com/azure/azure-functions/functions-run-local",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "releaseSource": "https://api.github.com/repos/Azure/azure-functions-core-tools/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^func-cli-[0-9.]+-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/Azure/azure-functions-core-tools/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Azure Functions Core Tools - [0-9.]+ \\(x64\\)$",
+      "executablePaths": [
+        "Microsoft/Azure Functions Core Tools/func.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 machine MSI from the official GitHub release, with asset SHA-256. The 32-bit MSI is excluded. Its upgrade table removes every earlier release, and func.exe is self-contained, so no .NET runtime is required."
+  },
+  {
+    "id": "neovim",
+    "packageId": "IntuneGet.Curated.Neovim",
+    "wingetId": "Neovim.Neovim",
+    "name": "Neovim",
+    "publisher": "Neovim",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://neovim.io/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Neovim"
+    ],
+    "releaseSource": "https://api.github.com/repos/neovim/neovim/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^nvim-win64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/neovim/neovim/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Neovim$",
+      "executablePaths": [
+        "Neovim/bin/nvim.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher win64 machine MSI with GitHub asset SHA-256. The moving \"stable\" and nightly tags are never versions, so only numbered releases qualify."
+  },
+  {
+    "id": "vscodium",
+    "packageId": "IntuneGet.Curated.VSCodium",
+    "wingetId": "VSCodium.VSCodium",
+    "name": "VSCodium",
+    "publisher": "VSCodium",
+    "channel": "Stable system installer",
+    "category": "developer-tools",
+    "homepage": "https://vscodium.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode",
+    "signaturePublishers": [
+      "VSCodium"
+    ],
+    "releaseSource": "https://api.github.com/repos/VSCodium/vscodium/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^VSCodiumSetup-x64-[0-9.]+\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/VSCodium/vscodium/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "VSCodium",
+      "key": "{88DA3577-054F-4CA1-8122-7D820494CFFB}_is1"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^VSCodium$",
+      "executablePaths": [
+        "VSCodium/VSCodium.exe"
+      ]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "System x64 setup only; the user setup and MSI variants are excluded. GitHub asset SHA-256. The application updater remains enabled."
+  },
+  {
+    "id": "dbeaver",
+    "packageId": "IntuneGet.Curated.DBeaver",
+    "wingetId": "DBeaver.DBeaver.Community",
+    "name": "DBeaver Community",
+    "publisher": "DBeaver Corp",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://dbeaver.io/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S /allusers",
+    "signaturePublishers": [
+      "DBeaver Corp"
+    ],
+    "releaseSource": "https://api.github.com/repos/dbeaver/dbeaver/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^dbeaver-ce-[0-9.]+-windows-x86_64\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/dbeaver/dbeaver/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "DBeaver",
+      "key": "DBeaver"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^DBeaver(?: [0-9.]+)?$",
+      "executablePaths": [
+        "DBeaver/dbeaver.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x86_64 setup with GitHub asset SHA-256 and the documented all-users switch. The bundled Java runtime is part of the package. The current-user registration is a different product and is never matched."
+  },
+  {
+    "id": "mongodb-compass",
+    "packageId": "IntuneGet.Curated.MongoDBCompass",
+    "wingetId": "MongoDB.Compass.Full",
+    "name": "MongoDB Compass",
+    "publisher": "MongoDB, Inc.",
+    "channel": "Stable full edition",
+    "category": "developer-tools",
+    "homepage": "https://www.mongodb.com/products/tools/compass",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "MongoDB, Inc."
+    ],
+    "releaseSource": "https://api.github.com/repos/mongodb-js/compass/releases?per_page=10",
+    "discovery": "github-channel",
+    "releaseVersionPattern": "^1\\.[0-9]+\\.[0-9]+$",
+    "assetPattern": "^mongodb-compass-[0-9.]+-win32-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/mongodb-js/compass/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^MongoDB Compass$",
+      "executablePaths": [
+        "MongoDB Compass/MongoDBCompass.exe"
+      ]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Full edition x64 machine MSI with GitHub asset SHA-256; the isolated and read-only editions and beta releases are excluded. The application updater remains enabled."
+  },
+  {
+    "id": "azure-storage-explorer",
+    "packageId": "IntuneGet.Curated.AzureStorageExplorer",
+    "wingetId": "Microsoft.Azure.StorageExplorer",
+    "name": "Microsoft Azure Storage Explorer",
+    "publisher": "Microsoft Corporation",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://azure.microsoft.com/products/storage/storage-explorer/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "releaseSource": "https://api.github.com/repos/microsoft/AzureStorageExplorer/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^StorageExplorer-windows-x64\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/microsoft/AzureStorageExplorer/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "Microsoft Azure Storage Explorer",
+      "key": "{746B270C-5E45-41AA-BB5E-E81793FBD404}_is1"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^Microsoft Azure Storage Explorer(?: version [0-9.]+)?$",
+      "executablePaths": [
+        "Microsoft Azure Storage Explorer/StorageExplorer.exe"
+      ]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher x64 setup with GitHub asset SHA-256, installed for all users. The application updater remains enabled."
+  },
+  {
+    "id": "keepassxc",
+    "packageId": "IntuneGet.Curated.KeePassXC",
+    "wingetId": "KeePassXCTeam.KeePassXC",
+    "name": "KeePassXC",
+    "publisher": "KeePassXC Team",
+    "channel": "Stable",
+    "category": "security",
+    "homepage": "https://keepassxc.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "DroidMonkey Apps, LLC"
+    ],
+    "releaseSource": "https://api.github.com/repos/keepassxreboot/keepassxc/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^KeePassXC-[0-9.]+-Win64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/keepassxreboot/keepassxc/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^KeePassXC$",
+      "executablePaths": [
+        "KeePassXC/KeePassXC.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher Win64 machine MSI with GitHub asset SHA-256. The LegacyWindows build is excluded."
+  },
+  {
+    "id": "nextcloud",
+    "packageId": "IntuneGet.Curated.Nextcloud",
+    "wingetId": "Nextcloud.NextcloudDesktop",
+    "name": "Nextcloud Desktop",
+    "publisher": "Nextcloud GmbH",
+    "channel": "Stable",
+    "category": "productivity",
+    "homepage": "https://nextcloud.com/install/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart REBOOT=ReallySuppress",
+    "signaturePublishers": [
+      "Nextcloud GmbH"
+    ],
+    "releaseSource": "https://api.github.com/repos/nextcloud-releases/desktop/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^Nextcloud-[0-9.]+-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/nextcloud-releases/desktop/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Nextcloud$",
+      "executablePaths": [
+        "Nextcloud/nextcloud.exe"
+      ],
+      "versionComponents": 3
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher x64 machine MSI with GitHub asset SHA-256. The MSI appends a build date to the three-part public release; QA compares three components and binds the exact build by hash. Restart is suppressed. The client updater remains enabled."
+  },
+  {
+    "id": "mattermost",
+    "packageId": "IntuneGet.Curated.Mattermost",
+    "wingetId": "Mattermost.MattermostDesktop",
+    "name": "Mattermost Desktop",
+    "publisher": "Mattermost, Inc.",
+    "channel": "Stable",
+    "category": "communication",
+    "homepage": "https://mattermost.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Mattermost, Inc."
+    ],
+    "releaseSource": "https://api.github.com/repos/mattermost/desktop/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^mattermost-desktop-[0-9.]+-win-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/mattermost/desktop/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Mattermost$",
+      "executablePaths": [
+        "Mattermost/Mattermost.exe"
+      ]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher x64 machine MSI with GitHub asset SHA-256. No server URL is preconfigured. The application updater remains enabled."
+  },
+  {
+    "id": "starship",
+    "packageId": "IntuneGet.Curated.Starship",
+    "wingetId": "Starship.Starship",
+    "name": "Starship",
+    "publisher": "Starship Contributors",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://starship.rs/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "SignPath Foundation"
+    ],
+    "releaseSource": "https://api.github.com/repos/starship/starship/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^starship-x86_64-pc-windows-msvc\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/starship/starship/releases/download/"
+      }
+    ],
+    "releaseTagPrefix": "v",
+    "installedIdentity": {
+      "displayNamePattern": "^starship$",
+      "executablePaths": [
+        "starship/bin/starship.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x86_64 machine MSI with GitHub asset SHA-256; the i686 and ARM64 builds are excluded. The MSI performs a major upgrade under a stable upgrade code."
+  },
+  {
+    "id": "obs-studio",
+    "packageId": "IntuneGet.Curated.OBSStudio",
+    "wingetId": "OBSProject.OBSStudio",
+    "name": "OBS Studio",
+    "publisher": "OBS Project",
+    "channel": "Stable",
+    "category": "multimedia",
+    "homepage": "https://obsproject.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": [
+      "Wizards of OBS LLC"
+    ],
+    "releaseSource": "https://api.github.com/repos/obsproject/obs-studio/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^OBS-Studio-[0-9.]+-Windows-x64-Installer\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/obsproject/obs-studio/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "OBS Studio",
+      "key": "OBS Studio"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^OBS Studio$",
+      "executablePaths": [
+        "obs-studio/bin/64bit/obs64.exe"
+      ]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher x64 setup with GitHub asset SHA-256; betas and release candidates are excluded. The application updater remains enabled."
+  },
+  {
+    "id": "musescore",
+    "packageId": "IntuneGet.Curated.MuseScore",
+    "wingetId": "MuseScore.MuseScore",
+    "name": "MuseScore Studio",
+    "publisher": "MuseScore Limited",
+    "channel": "Stable",
+    "category": "multimedia",
+    "homepage": "https://musescore.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "MuseCY Limited"
+    ],
+    "releaseSource": "https://api.github.com/repos/musescore/MuseScore/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^MuseScore-Studio-[0-9.]+-x86_64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/musescore/MuseScore/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^MuseScore Studio [0-9]+$",
+      "executablePaths": [
+        "MuseScore 4/bin/MuseScore4.exe"
+      ],
+      "versionComponents": 3
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x86_64 machine MSI with GitHub asset SHA-256. The MSI appends a build number to the three-part public release; QA compares three components and binds the exact build by hash. Muse Hub and sound libraries are separate products."
+  },
+  {
+    "id": "calibre",
+    "packageId": "IntuneGet.Curated.Calibre",
+    "wingetId": "calibre.calibre",
+    "name": "calibre",
+    "publisher": "Kovid Goyal",
+    "channel": "Stable",
+    "category": "productivity",
+    "homepage": "https://calibre-ebook.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Kovid Goyal"
+    ],
+    "releaseSource": "https://api.github.com/repos/kovidgoyal/calibre/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^calibre-64bit-[0-9.]+\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/kovidgoyal/calibre/releases/download/"
+      },
+      {
+        "origin": "https://download.calibre-ebook.com",
+        "pathPrefix": "/"
+      }
+    ],
+    "initialUpgradeBaseline": {
+      "version": "9.14.0",
+      "installerUrl": "https://download.calibre-ebook.com/9.14.0/calibre-64bit-9.14.0.msi"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^calibre 64bit$",
+      "executablePaths": [
+        "Calibre2/calibre.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher 64-bit machine MSI with GitHub asset SHA-256; the portable installer is excluded. The publisher removes installers from older GitHub releases, so the reviewed 9.14.0 MSI on the publisher download host is the initial upgrade baseline, hash measured in the isolated VM."
+  },
+  {
+    "id": "pdfsam",
+    "packageId": "IntuneGet.Curated.PDFsam",
+    "wingetId": "PDFsam.PDFsam",
+    "name": "PDFsam Basic",
+    "publisher": "Sober Lemur S.r.l.",
+    "channel": "Stable",
+    "category": "productivity",
+    "homepage": "https://pdfsam.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart SKIPTHANKSPAGE=Yes",
+    "signaturePublishers": [
+      "Sober Lemur S.r.l."
+    ],
+    "releaseSource": "https://api.github.com/repos/torakiki/pdfsam/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^pdfsam-basic-[0-9.]+-windows-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/torakiki/pdfsam/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^PDFsam Basic$",
+      "executablePaths": [
+        "PDFsam Basic/pdfsam.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 machine MSI with GitHub asset SHA-256. The thank-you web page after installation is suppressed."
+  },
+  {
+    "id": "flameshot",
+    "packageId": "IntuneGet.Curated.Flameshot",
+    "wingetId": "Flameshot.Flameshot",
+    "name": "Flameshot",
+    "publisher": "Flameshot",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://flameshot.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Flameshot"
+    ],
+    "releaseSource": "https://api.github.com/repos/flameshot-org/flameshot/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^Flameshot-[0-9.]+-win64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/flameshot-org/flameshot/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Flameshot$",
+      "executablePaths": [
+        "Flameshot/bin/flameshot.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher win64 machine MSI with GitHub asset SHA-256."
+  },
+  {
+    "id": "sharex",
+    "packageId": "IntuneGet.Curated.ShareX",
+    "wingetId": "ShareX.ShareX",
+    "name": "ShareX",
+    "publisher": "ShareX Team",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://getsharex.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NORUN",
+    "signaturePublishers": [
+      "ShareX Team"
+    ],
+    "releaseSource": "https://api.github.com/repos/ShareX/ShareX/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^ShareX-[0-9.]+-setup-x64\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/ShareX/ShareX/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "ShareX",
+      "key": "82E6AC09-0FEF-4390-AD9F-0DD3F5561EFC_is1"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^ShareX$",
+      "executablePaths": [
+        "ShareX/ShareX.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 setup with GitHub asset SHA-256. The application is not started after installation."
+  },
+  {
+    "id": "windirstat",
+    "packageId": "IntuneGet.Curated.WinDirStat",
+    "wingetId": "WinDirStat.WinDirStat",
+    "name": "WinDirStat",
+    "publisher": "WinDirStat Team",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://windirstat.net/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "WinDirStat Team"
+    ],
+    "releaseSource": "https://api.github.com/repos/windirstat/windirstat/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^WinDirStat-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/windirstat/windirstat/releases/download/"
+      }
+    ],
+    "releaseTagPrefix": "release/",
+    "installedIdentity": {
+      "displayNamePattern": "^WinDirStat [0-9.]+$",
+      "executablePaths": [
+        "WinDirStat/WinDirStat.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 machine MSI with GitHub asset SHA-256. The publisher tags releases as release/vX.Y.Z."
+  },
+  {
+    "id": "winmerge",
+    "packageId": "IntuneGet.Curated.WinMerge",
+    "wingetId": "WinMerge.WinMerge",
+    "name": "WinMerge",
+    "publisher": "WinMerge",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://winmerge.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+    "signaturePublishers": [
+      "Takashi Sawanaka"
+    ],
+    "releaseSource": "https://api.github.com/repos/WinMerge/winmerge/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^WinMerge-[0-9.]+-x64-Setup\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/WinMerge/winmerge/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "WinMerge",
+      "key": "WinMerge_is1"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^WinMerge(?: [0-9.]+)?(?: x64)?$",
+      "executablePaths": [
+        "WinMerge/WinMergeU.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 all-users setup with GitHub asset SHA-256; the per-user, x86 and ARM64 setups are excluded."
+  },
+  {
+    "id": "peazip",
+    "packageId": "IntuneGet.Curated.PeaZip",
+    "wingetId": "Giorgiotani.Peazip",
+    "name": "PeaZip",
+    "publisher": "Giorgio Tani",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://peazip.github.io/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+    "signaturePublishers": [
+      "Giorgio Tani"
+    ],
+    "releaseSource": "https://api.github.com/repos/peazip/PeaZip/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^peazip-[0-9.]+\\.WIN64\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/peazip/PeaZip/releases/download/"
+      }
+    ],
+    "registeredUninstall": {
+      "displayName": "PeaZip",
+      "key": "{5A2BC38A-406C-4A5B-BF45-6991F9A05325}_is1"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^PeaZip(?: [0-9.]+)?(?: \\(WIN64\\))?$",
+      "executablePaths": [
+        "PeaZip/peazip.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher WIN64 setup with GitHub asset SHA-256; the 32-bit setup and portable archives are excluded."
+  },
+  {
+    "id": "qbittorrent",
+    "packageId": "IntuneGet.Curated.qBittorrent",
+    "wingetId": "qBittorrent.qBittorrent",
+    "name": "qBittorrent",
+    "publisher": "qBittorrent Project",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://www.qbittorrent.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": [
+      "qBittorrent Project"
+    ],
+    "releaseSource": "https://api.github.com/repos/qbittorrent/qBittorrent/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^qbittorrent_[0-9.]+_x64_setup\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/qbittorrent/qBittorrent/releases/download/"
+      }
+    ],
+    "releaseTagPrefix": "release-",
+    "registeredUninstall": {
+      "displayName": "qBittorrent",
+      "key": "qBittorrent"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^qBittorrent$",
+      "executablePaths": [
+        "qBittorrent/qbittorrent.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 setup from the official GitHub release with asset SHA-256; the libtorrent 2.0 variant is excluded. SourceForge mirrors are never used."
+  },
+  {
+    "id": "k6",
+    "packageId": "IntuneGet.Curated.K6",
+    "wingetId": "GrafanaLabs.k6",
+    "name": "k6",
+    "publisher": "Grafana Labs",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://grafana.com/docs/k6/latest/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Grafana Labs"
+    ],
+    "releaseSource": "https://api.github.com/repos/grafana/k6/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^k6-v[0-9.]+-windows-amd64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/grafana/k6/releases/download/"
+      }
+    ],
+    "releaseTagPrefix": "v",
+    "installedIdentity": {
+      "displayNamePattern": "^k6$",
+      "executablePaths": [
+        "k6/k6.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher amd64 MSI with GitHub asset SHA-256. The MSI declares no ALLUSERS value, so the shared packager installs it for the machine. It performs a major upgrade under a stable upgrade code; maintenance releases of an older major line sort below the current release."
+  },
+  {
+    "id": "imageglass",
+    "packageId": "IntuneGet.Curated.ImageGlass",
+    "wingetId": "DuongDieuPhap.ImageGlass",
+    "name": "ImageGlass",
+    "publisher": "Duong Dieu Phap",
+    "channel": "Stable",
+    "category": "multimedia",
+    "homepage": "https://imageglass.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Duong Dieu Phap"
+    ],
+    "releaseSource": "https://api.github.com/repos/d2phap/ImageGlass/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^ImageGlass_[0-9.]+_win-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/d2phap/ImageGlass/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^ImageGlass [0-9.]+$",
+      "executablePaths": [
+        "ImageGlass/ImageGlass.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher x64 MSI with GitHub asset SHA-256, installed for all users; the Pro and Business editions and MSIX packages are excluded."
+  },
+  {
+    "id": "arduino-ide",
+    "packageId": "IntuneGet.Curated.ArduinoIDE",
+    "wingetId": "ArduinoSA.IDE.stable",
+    "name": "Arduino IDE",
+    "publisher": "Arduino SA",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://www.arduino.cc/en/software",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Arduino SA"
+    ],
+    "releaseSource": "https://api.github.com/repos/arduino/arduino-ide/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^arduino-ide_[0-9.]+_Windows_64bit\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/arduino/arduino-ide/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Arduino IDE$",
+      "executablePaths": [
+        "arduino-ide/Arduino IDE.exe"
+      ]
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher 64-bit MSI with GitHub asset SHA-256, installed for all users. Board drivers are installed by the IDE on demand and are not part of this package."
+  },
+  {
+    "id": "db-browser-sqlite",
+    "packageId": "IntuneGet.Curated.DBBrowserForSQLite",
+    "wingetId": "DBBrowserForSQLite.DBBrowserForSQLite",
+    "name": "DB Browser for SQLite",
+    "publisher": "DB Browser for SQLite Team",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://sqlitebrowser.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "allowUnsigned": false,
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "DB Browser for SQLite Team"
+    ],
+    "releaseSource": "https://api.github.com/repos/sqlitebrowser/sqlitebrowser/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^DB\\.Browser\\.for\\.SQLite-v[0-9.]+-win64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/sqlitebrowser/sqlitebrowser/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^DB Browser for SQLite$",
+      "executablePaths": [
+        "DB Browser for SQLite/DB Browser for SQLite.exe"
+      ]
+    },
+    "excludedUpgradeBaselines": [
+      "3.13.0"
+    ],
+    "initialUpgradeBaseline": {
+      "version": "3.12.2",
+      "installerUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.12.2/DB.Browser.for.SQLite-3.12.2-win64.msi"
+    },
+    "autoUpdate": "none",
+    "notes": "Publisher win64 machine MSI from the official GitHub release. The publisher asset has no GitHub digest, so the hash measured in the isolated VM is pinned. The 3.13.0 MSI registers itself as 3.13.99, so upgrade QA starts from 3.12.2, which shares the 3.13.1 upgrade code."
+  }
+]

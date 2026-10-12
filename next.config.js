@@ -30,11 +30,31 @@ const nextConfig = {
     // in production; AppIcon renders icons at quality 90.
     qualities: [75, 90],
   },
+  async redirects() {
+    return [
+      {
+        // The changelog page was retired; the header bell's panel opens from this hash.
+        source: "/changelog",
+        destination: "/#changelog",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
         // Cache app icons for 1 year (immutable assets)
         source: "/icons/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        // Self-hosted fonts; rename the files if they are ever re-subset.
+        source: "/fonts/:path*",
         headers: [
           {
             key: "Cache-Control",

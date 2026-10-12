@@ -12,10 +12,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
+import { NOTIFICATION_SETUP_GUIDE_URL } from '@/types/notifications';
 import type {
   NotificationPreferences,
   EmailFrequency,
+  EmailSetupRequirement,
 } from '@/types/notifications';
+
+const EMAIL_SETUP_MESSAGES: Record<EmailSetupRequirement, string> = {
+  supabase:
+    'Email notifications need Supabase on this server. A deployment that uses only SQLite cannot store email preferences.',
+  resend:
+    'Email delivery is not configured on this server. An administrator needs to set RESEND_API_KEY and RESEND_FROM_EMAIL, then restart IntuneGet.',
+};
 
 interface NotificationSettingsProps {
   className?: string;
@@ -29,6 +38,7 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isEmailConfigured, setIsEmailConfigured] = useState(false);
+  const [emailSetupRequirement, setEmailSetupRequirement] = useState<EmailSetupRequirement | null>(null);
 
   const [preferences, setPreferences] = useState<Partial<NotificationPreferences>>({
     email_enabled: false,
@@ -54,6 +64,7 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
           const data = await response.json();
           setPreferences(data.preferences);
           setIsEmailConfigured(data.isEmailConfigured);
+          setEmailSetupRequirement(data.emailSetupRequirement ?? null);
         }
       } catch (err) {
         console.error('Failed to fetch preferences:', err);
@@ -158,7 +169,17 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
         <div className="mb-6 p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-status-warning flex-shrink-0 mt-0.5" />
           <p className="text-sm text-status-warning">
-            Email notifications are not configured. Contact the administrator to enable this feature.
+            {emailSetupRequirement
+              ? EMAIL_SETUP_MESSAGES[emailSetupRequirement]
+              : 'Email notifications are not configured. Contact the administrator to enable this feature.'}{' '}
+            <a
+              href={NOTIFICATION_SETUP_GUIDE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:no-underline"
+            >
+              See the notification setup guide
+            </a>
           </p>
         </div>
       )}

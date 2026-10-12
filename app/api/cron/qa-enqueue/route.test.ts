@@ -1,0 +1,1899 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  getPackageCompatibilityBlockMock,
+  createServerClientMock,
+  createManifestClientMock,
+  detectWingetChangesMock,
+  resolveManifestMock,
+  resolveDependenciesMock,
+} = vi.hoisted(() => ({
+  getPackageCompatibilityBlockMock: vi.fn(),
+  createServerClientMock: vi.fn(),
+  createManifestClientMock: vi.fn(() => ({ kind: 'manifest-client' })),
+  detectWingetChangesMock: vi.fn(),
+  resolveManifestMock: vi.fn(),
+  resolveDependenciesMock: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
+vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
+vi.mock('@/lib/qa/winget-changes', () => ({ detectWingetChanges: detectWingetChangesMock }));
+vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
+  createWingetManifestClient: createManifestClientMock,
+  resolveWingetManifest: resolveManifestMock,
+}));
+vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/winget-dependencies')>();
+  return {
+    ...original,
+    resolveWingetPackageDependencies: resolveDependenciesMock,
+  };
+});
+
+import { GET } from './route';
+import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
+import { prioritizeToolchainBackfill } from '@/lib/qa/toolchain-backfill';
+import {
+  buildQaPackageIdentity,
+  canonicalQaJson,
+  QA_PSADT_TOOLCHAIN,
+  qaSha256,
+} from '@/lib/qa/package-profile';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
+
+type QueryResult = {
+  data: unknown;
+  error: { message: string; code?: string } | null;
+  count?: number | null;
+};
+
+function query(result: QueryResult) {
+  const builder: Record<string, unknown> = {};
+  for (const method of [
+    'select',
+    'eq',
+    'neq',
+    'not',
+    'in',
+    'order',
+    'limit',
+    'or',
+    'contains',
+  ]) {
+    builder[method] = vi.fn(() => builder);
+  }
+  builder.single = vi.fn(async () => result);
+  builder.maybeSingle = vi.fn(async () => result);
+  builder.then = (
+    onFulfilled?: (value: QueryResult) => unknown,
+    onRejected?: (reason: unknown) => unknown
+  ) => Promise.resolve(result).then(onFulfilled, onRejected);
+  return builder;
+}
+
+function createSupabaseStub(options: {
+  paused?: boolean;
+  requiredPackagerCommit?: string | null;
+  coverage?: number;
+  coverageError?: string;
+  supportedApps?: Array<Record<string, unknown>>;
+  recipes?: Array<Record<string, unknown>>;
+  candidates?: Array<Record<string, unknown>>;
+  candidatePages?: Array<Array<Record<string, unknown>>>;
+  backfillCheckpoint?: { after: string; pending: string[] };
+  backfillError?: string;
+  demandBackfillApps?: string[];
+  catalogBackfillApps?: string[];
+  deployedApps?: string[];
+  customerQaJobs?: string[];
+  pollState?: Record<string, unknown>;
+  packageResults?: Array<Record<string, unknown>>;
+  installerHealth?: Array<Record<string, unknown>>;
+  candidateInsertResult?: QueryResult;
+}) {
+  const pollRunInserts: Array<Record<string, unknown>> = [];
+  const pollRunUpdates: Array<Record<string, unknown>> = [];
+  const cursorUpdates: Array<Record<string, unknown>> = [];
+  const candidateInserts: Array<Record<string, unknown>> = [];
+  const candidateUpdates: Array<Record<string, unknown>> = [];
+  const compatibilityBlocks: Array<Record<string, unknown>> = [];
+  const catalogReconciliations: Array<Record<string, unknown>> = [];
+  const pipelineControlUpdates: Array<Record<string, unknown>> = [];
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const checkpoints: Array<Record<string, unknown>> = [];
+  let candidatePageIndex = 0;
+
+  const client = {
+    rpc: vi.fn((name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      if (name === 'insert_qa_candidate_if_absent') {
+        candidateInserts.push(args.p_candidate as Record<string, unknown>);
+        if (options.candidateInsertResult) return Promise.resolve(options.candidateInsertResult);
+        return Promise.resolve({ data: { outcome: 'inserted', candidate: { id: `candidate-${candidateInserts.length}` } }, error: null });
+      }
+      if (name === 'qa_toolchain_backfill_page') return Promise.resolve({
+        data: options.candidatePages ? options.candidatePages[candidatePageIndex++] || [] : options.candidates || [],
+        error: options.backfillError ? { message: options.backfillError } : null,
+      });
+      if (name === 'record_qa_demand_backfill_selection') {
+        return Promise.resolve({ data: null, error: null });
+      }
+      if (name === 'qa_idle_catalog_backfill_ids') {
+        return Promise.resolve({
+          data: (options.catalogBackfillApps || []).map((winget_id) => ({ winget_id })),
+          error: null,
+        });
+      }
+      if (name !== 'qa_missing_demand_backfill_ids') {
+        throw new Error(`Unexpected RPC: ${name}`);
+      }
+      return Promise.resolve({
+        data: (options.demandBackfillApps || []).map((winget_id) => ({ winget_id })),
+        error: null,
+      });
+    }),
+    from: vi.fn((table: string) => {
+      if (table === 'qa_automation_state') {
+        const builder = query({ data: { value: options.backfillCheckpoint || {} }, error: null });
+        builder.upsert = vi.fn((value: Record<string, unknown>) => {
+          checkpoints.push(value);
+          return query({ data: null, error: null });
+        });
+        return builder;
+      }
+      if (table === 'qa_pipeline_control') {
+        const builder = query({
+          data: {
+            paused: options.paused === true,
+            reason: options.paused ? 'Golden VM maintenance' : null,
+            required_packager_commit: options.requiredPackagerCommit ?? null,
+            scheduler_packager_commit: null,
+            scheduler_seen_at: null,
+            updated_at: '2026-08-11T12:00:00.000Z',
+          },
+          error: null,
+        });
+        builder.update = vi.fn((values: Record<string, unknown>) => {
+          pipelineControlUpdates.push(values);
+          return query({ data: null, error: null });
+        });
+        return builder;
+      }
+      if (table === 'qa_poll_runs') {
+        return {
+          insert: vi.fn((row: Record<string, unknown>) => {
+            pollRunInserts.push(row);
+            return query({ data: { id: 'poll-run-1' }, error: null });
+          }),
+          update: vi.fn((row: Record<string, unknown>) => {
+            pollRunUpdates.push(row);
+            return query({ data: null, error: null });
+          }),
+        };
+      }
+      if (table === 'curated_apps') {
+        return {
+          select: vi.fn((_columns: string, selectOptions?: { head?: boolean }) =>
+            query(
+              selectOptions?.head
+                ? {
+                    data: null,
+                    count: options.coverage ?? 14_062,
+                    error: options.coverageError ? { message: options.coverageError } : null,
+                  }
+                : { data: options.supportedApps || [], error: null }
+            )
+          ),
+        };
+      }
+      if (table === 'qa_winget_poll_state') {
+        return {
+          select: vi.fn(() => query({
+            data: options.pollState || {
+              head_sha: 'a'.repeat(40),
+              last_checked_at: null,
+              github_etag: null,
+              github_rate_limited_until: null,
+            },
+            error: null,
+          })),
+          update: vi.fn((row: Record<string, unknown>) => {
+            cursorUpdates.push(row);
+            return query({ data: null, error: null });
+          }),
+        };
+      }
+      if (table === 'qa_recipes') {
+        return query({ data: options.recipes || [], error: null });
+      }
+      if (table === 'upload_history') {
+        return query({
+          data: (options.deployedApps || (options.supportedApps || []).map((app) => String(app.winget_id)))
+            .map((winget_id) => ({ winget_id })),
+          error: null,
+        });
+      }
+      if (table === 'packaging_jobs') {
+        return query({
+          data: (options.customerQaJobs || []).map((winget_id) => ({ winget_id })),
+          error: null,
+        });
+      }
+      if (table === 'app_update_policies') {
+        return query({ data: [], error: null });
+      }
+      if (table === 'qa_package_results') {
+        return query({ data: options.packageResults || [], error: null });
+      }
+      if (table === 'installer_health') {
+        return query({ data: options.installerHealth || [], error: null });
+      }
+      if (table === 'qa_package_blocks') {
+        return {
+          upsert: vi.fn((row: Record<string, unknown>) => {
+            compatibilityBlocks.push(row);
+            return query({ data: null, error: null });
+          }),
+        };
+      }
+      if (table === 'qa_catalog_reconciliations') {
+        return {
+          upsert: vi.fn((row: Record<string, unknown>) => {
+            catalogReconciliations.push(row);
+            return query({ data: null, error: null });
+          }),
+        };
+      }
+      if (table === 'qa_candidates') {
+        return {
+          update: vi.fn((values: Record<string, unknown>) => {
+            candidateUpdates.push(values);
+            return query({ data: null, error: null });
+          }),
+          select: vi.fn(() =>
+            query({
+              data: options.candidatePages
+                ? options.candidatePages[candidatePageIndex++] || []
+                : options.candidates || [],
+              error: null,
+            })
+          ),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    }),
+  };
+  return {
+    client,
+    pollRunInserts,
+    pollRunUpdates,
+    cursorUpdates,
+    candidateInserts,
+    candidateUpdates,
+    compatibilityBlocks,
+    catalogReconciliations,
+    pipelineControlUpdates,
+    rpcCalls,
+    checkpoints,
+  };
+}
+
+const CURRENT_PACKAGER_COMMIT = QA_PSADT_TOOLCHAIN.packagerCommit;
+
+function profileCandidate(options: {
+  id: string;
+  wingetId: string;
+  packagerCommit: string;
+  enqueuedAt?: string;
+  profileKind?: string;
+  toolchainOverrides?: Record<string, unknown>;
+  interactive?: boolean;
+  status?: string;
+  priority?: number;
+  demandSource?: string;
+}): Record<string, unknown> {
+  const profileKind = options.profileKind || 'catalog-default';
+  const version = '1.0.0';
+  const architecture = 'x64';
+  const installerSha256 = 'A'.repeat(64);
+  const psadtConfig = options.interactive === false
+    ? DEFAULT_PSADT_CONFIG
+    : {
+        ...DEFAULT_PSADT_CONFIG,
+        deployMode: 'Auto' as const,
+        progressDialog: {
+          ...DEFAULT_PSADT_CONFIG.progressDialog,
+          enabled: true,
+          windowLocation: 'BottomRight' as const,
+        },
+      };
+  const identity = buildQaPackageIdentity({
+    profileKind: profileKind as 'catalog-default' | 'deployment-config',
+    wingetId: options.wingetId,
+    displayName: 'Example',
+    publisher: 'Contoso',
+    version,
+    architecture,
+    installerSha256,
+    sourceInstallerType: 'nullsoft',
+    silentArgs: '/S',
+    uninstallCommand: '',
+    installScope: 'machine',
+    nestedInstallerType: '',
+    nestedInstallerFiles: [],
+    psadtConfig,
+    detectionRules: [],
+  });
+  const canonicalJson = canonicalQaJson({
+    ...identity.profile,
+    toolchain: {
+      ...QA_PSADT_TOOLCHAIN,
+      packagerCommit: options.packagerCommit,
+      ...(options.toolchainOverrides || {}),
+    },
+  });
+  const packageProfileSha256 = qaSha256(canonicalJson);
+  return {
+    id: options.id,
+    winget_id: options.wingetId,
+    version,
+    architecture,
+    installer_sha256: installerSha256,
+    enqueued_at: options.enqueuedAt || '2026-08-08T10:00:00.000Z',
+    status: options.status || 'superseded',
+    priority: options.priority ?? 1,
+    demand_source: options.demandSource || 'managed',
+    package_profile_sha256: packageProfileSha256,
+    test_config: {
+      profileKind,
+      packageProfileCanonicalJson: canonicalJson,
+      packageProfileSha256,
+    },
+  };
+}
+
+function resolvedManifest() {
+  return {
+    status: 'resolved',
+    version: '1.0.0',
+    manifest: {
+      InstallerType: 'nullsoft',
+      Installers: [
+        {
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/setup.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'nullsoft',
+        },
+      ],
+    },
+  };
+}
+
+function cronRequest(query = ''): Request {
+  return new Request(`https://intuneget.com/api/cron/qa-enqueue${query}`, {
+    headers: {
+      authorization: 'Bearer test-cron-secret',
+      'x-vercel-id': 'fra1::request-1',
+    },
+  });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getPackageCompatibilityBlockMock.mockReset().mockResolvedValue(null);
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  process.env.CRON_SECRET = 'test-cron-secret';
+  detectWingetChangesMock.mockResolvedValue({
+    baseSha: 'a'.repeat(40),
+    headSha: 'b'.repeat(40),
+    changedFiles: 0,
+    changedPackageIds: [],
+    initialized: false,
+    etag: '"next"',
+    rateLimitedUntil: null,
+  });
+  resolveDependenciesMock.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  delete process.env.QA_MAINTENANCE_MODE;
+  delete process.env.CRON_SECRET;
+  vi.restoreAllMocks();
+});
+
+describe('GET /api/cron/qa-enqueue', () => {
+  it('resumes a persisted cursor and stops after two bounded pages', async () => {
+    const pages = [0, 1].map(page => Array.from({ length: 100 }, (_, index) =>
+      profileCandidate({ id: `current-${page}-${index}`, wingetId: `Page${page}.App${String(index).padStart(3, '0')}`,
+        packagerCommit: CURRENT_PACKAGER_COMMIT })));
+    const { client, rpcCalls, checkpoints } = createSupabaseStub({
+      backfillCheckpoint: { after: 'Previous.App', pending: [] }, candidatePages: pages,
+    });
+    createServerClientMock.mockReturnValue(client);
+    await GET(cronRequest());
+    expect(rpcCalls.filter(call => call.name === 'qa_toolchain_backfill_page')).toEqual([
+      { name: 'qa_toolchain_backfill_page', args: expect.objectContaining({ p_after: 'Previous.App', p_limit: 100, p_terminal_retry_ids: expect.any(Array) }) },
+      { name: 'qa_toolchain_backfill_page', args: expect.objectContaining({ p_after: 'Page0.App099', p_limit: 100 }) },
+    ]);
+    expect(checkpoints.at(-1)).toMatchObject({ value: { after: 'Page1.App099', pending: [] } });
+  });
+
+  it('drains pending checkpoint IDs before scanning another page', async () => {
+    const { client, rpcCalls, checkpoints } = createSupabaseStub({
+      backfillCheckpoint: { after: 'Previous.App', pending: ['A.App', 'B.App', 'C.App', 'D.App'] },
+    });
+    createServerClientMock.mockReturnValue(client);
+    await GET(cronRequest());
+    expect(rpcCalls.some(call => call.name === 'qa_toolchain_backfill_page')).toBe(false);
+    expect(checkpoints.at(-1)).toMatchObject({ value: { after: 'Previous.App', pending: ['D.App'] } });
+  });
+
+  it('still enqueues discovered updates when the historical scan times out', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      backfillError: 'statement timeout',
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    detectWingetChangesMock.mockResolvedValue({ baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40),
+      changedFiles: 1, changedPackageIds: ['Example.App'], initialized: false, etag: null, rateLimitedUntil: null });
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest());
+    expect(await response.json()).toMatchObject({ queued: 1, errorCount: 1 });
+    expect(candidateInserts).toHaveLength(1);
+  });
+
+  it('keeps quarantined and packaging-ineligible superseded tuples dormant', () => {
+    expect(shouldReactivateSupersededCandidate(
+      'superseded',
+      'Installer source quarantined before QA: HASH_MISMATCH. Publisher bytes changed.',
+      true,
+    )).toBe(false);
+    expect(shouldReactivateSupersededCandidate(
+      'superseded',
+      'Superseded before dispatch: wrong-toolchain.',
+      true,
+    )).toBe(true);
+    expect(shouldReactivateSupersededCandidate(
+      'superseded',
+      'Packaging preflight: explicit silent installer switches are required.',
+      false,
+    )).toBe(false);
+    expect(shouldReactivateSupersededCandidate('queued', null, true)).toBe(false);
+  });
+
+  it('does not poll or mutate the queue while maintenance is paused', async () => {
+    const { client, pollRunInserts, candidateInserts, pipelineControlUpdates } =
+      createSupabaseStub({ paused: true });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      paused: true,
+      reason: 'maintenance_paused',
+      maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(pollRunInserts).toHaveLength(0);
+    expect(candidateInserts).toHaveLength(0);
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+    expect(pipelineControlUpdates).toEqual([
+      expect.objectContaining({
+        scheduler_packager_commit: QA_PSADT_TOOLCHAIN.packagerCommit,
+        scheduler_seen_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it('queues only an explicit recovery target while paused without advancing background scans', async () => {
+    const { client, candidateInserts, cursorUpdates, pipelineControlUpdates, rpcCalls } = createSupabaseStub({
+      paused: true,
+      supportedApps: [
+        { winget_id: 'Opera.Opera', name: 'Opera', publisher: 'Opera', latest_version: '1.0.0' },
+        { winget_id: 'Unrelated.App', name: 'Unrelated', publisher: 'Example', latest_version: '1.0.0' },
+      ],
+      deployedApps: ['Opera.Opera', 'Unrelated.App'],
+      demandBackfillApps: ['Unrelated.App'],
+      catalogBackfillApps: ['Unrelated.App'],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest('?id=Opera.Opera'));
+    expect(response.status).toBe(200);
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Opera.Opera', status: 'queued' });
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+    expect(cursorUpdates).toEqual([]);
+    expect(rpcCalls.some((call) => call.name === 'record_qa_demand_backfill_selection')).toBe(false);
+    expect(pipelineControlUpdates.some((update) => update.paused === false)).toBe(false);
+  });
+
+  it.each(['', '?id=Opera.Opera'])('keeps server maintenance authoritative for request %s', async (search) => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
+    const { client, pollRunInserts, candidateInserts, pipelineControlUpdates } =
+      createSupabaseStub({ paused: false });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest(search));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      paused: true,
+      reason: 'maintenance_paused',
+      maintenanceReason: null,
+    });
+    expect(pollRunInserts).toHaveLength(0);
+    expect(candidateInserts).toHaveLength(0);
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+    expect(pipelineControlUpdates).toEqual([
+      expect.objectContaining({
+        scheduler_packager_commit: QA_PSADT_TOOLCHAIN.packagerCommit,
+        scheduler_seen_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it.each(['', '?id=Opera.Opera'])('keeps the required release authoritative for request %s', async (search) => {
+    const { client, pollRunInserts, candidateInserts } = createSupabaseStub({
+      requiredPackagerCommit: 'F'.repeat(40),
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest(search));
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      success: true,
+      paused: true,
+      reason: 'packager_release_pending',
+    });
+    expect(pollRunInserts).toHaveLength(0);
+    expect(candidateInserts).toHaveLength(0);
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+  });
+
+  it('persists a successful full-catalog poll and advances its cursor', async () => {
+    const { client, pollRunInserts, pollRunUpdates, cursorUpdates, rpcCalls } =
+      createSupabaseStub({});
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      runId: 'poll-run-1',
+      coveredApps: 14_062,
+      checked: 0,
+      errorCount: 0,
+    });
+    expect(pollRunInserts).toEqual([expect.objectContaining({ request_id: 'fra1::request-1' })]);
+    expect(cursorUpdates).toEqual([
+      expect.objectContaining({
+        head_sha: 'b'.repeat(40),
+        github_etag: '"next"',
+        github_rate_limited_until: null,
+      }),
+    ]);
+    expect(rpcCalls).toEqual([
+      { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 20 } },
+      { name: 'qa_idle_catalog_backfill_ids', args: { p_limit: 20 } },
+      { name: 'qa_toolchain_backfill_page', args: expect.objectContaining({ p_after: '', p_limit: 100, p_terminal_retry_ids: expect.any(Array) }) },
+    ]);
+    expect(pollRunUpdates).toEqual([
+      expect.objectContaining({
+        status: 'succeeded',
+        recipe_count: 14_062,
+        changed_package_count: 0,
+        supported_changed_count: 0,
+        demand_backfill_requested_count: 0,
+        demand_backfill_count: 0,
+        catalog_backfill_requested_count: 0,
+        catalog_backfill_count: 0,
+      }),
+    ]);
+  });
+
+  it('persists GitHub rate-limit deferral and does not advance the change cursor', async () => {
+    const resetAt = '2026-08-10T09:00:00.000Z';
+    detectWingetChangesMock.mockResolvedValue({
+      baseSha: 'a'.repeat(40),
+      headSha: 'a'.repeat(40),
+      changedFiles: 0,
+      changedPackageIds: [],
+      initialized: false,
+      etag: '"current"',
+      rateLimitedUntil: resetAt,
+    });
+    const { client, cursorUpdates, pollRunUpdates } = createSupabaseStub({
+      pollState: {
+        head_sha: 'a'.repeat(40),
+        last_checked_at: null,
+        github_etag: '"current"',
+        github_rate_limited_until: null,
+      },
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(207);
+    expect(body).toMatchObject({
+      success: false,
+      checked: 0,
+      errorCount: 1,
+      errors: [`system: WinGet GitHub change feed paused until ${resetAt}`],
+    });
+    expect(cursorUpdates).toEqual([
+      expect.objectContaining({ github_rate_limited_until: resetAt }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({ status: 'partial', error_count: 1 });
+  });
+
+  it.each(['exact_conflict', 'active_conflict'])('retains a known candidate on %s without inserting another lifecycle', async outcome => {
+    const { client, candidateInserts, candidateUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Missing.App'],
+      supportedApps: [{ winget_id: 'Missing.App', name: 'Missing', publisher: 'Contoso', latest_version: '1.0.0' }],
+      candidateInsertResult: { data: { outcome, candidate: { id: 'existing-run', status: 'running', priority: 2000 } }, error: null },
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest());
+    expect(await response.json()).toMatchObject({ queued: 0, alreadyKnown: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateUpdates).toEqual([]);
+  });
+
+  it('reports an unavailable enqueue RPC and keeps the pipeline running', async () => {
+    const { client, pipelineControlUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Missing.App'],
+      supportedApps: [{ winget_id: 'Missing.App', name: 'Missing', publisher: 'Contoso', latest_version: '1.0.0' }],
+      candidateInsertResult: { data: null, error: { code: 'PGRST202', message: 'Missing QA enqueue function' } },
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest());
+    expect(response.status).toBe(207);
+    expect(await response.json()).toMatchObject({ queued: 0, errorCount: 1 });
+    expect(pipelineControlUpdates).not.toContainEqual(expect.objectContaining({ paused: true }));
+  });
+
+  it('queues a demanded app missing latest-version catalog QA without a WinGet change', async () => {
+    const { client, candidateInserts, pollRunUpdates, rpcCalls } = createSupabaseStub({
+      demandBackfillApps: ['Missing.App'],
+      supportedApps: [
+        {
+          winget_id: 'Missing.App',
+          name: 'Missing',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      changedPackageCount: 0,
+      demandBackfillRequestedCount: 1,
+      demandBackfillCount: 1,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(rpcCalls).toContainEqual({
+      name: 'record_qa_demand_backfill_selection',
+      args: { p_winget_ids: ['Missing.App'] },
+    });
+    expect(rpcCalls).toContainEqual({
+      name: 'qa_idle_catalog_backfill_ids',
+      args: { p_limit: 20 },
+    });
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Missing.App',
+      version: '1.0.0',
+      status: 'queued',
+      priority: 1,
+      demand_source: 'managed',
+      catalog_version_at_enqueue: '1.0.0',
+      test_config: { profileKind: 'catalog-default' },
+    });
+    expect(pollRunUpdates[0]).toMatchObject({
+      demand_backfill_requested_count: 1,
+      demand_backfill_count: 1,
+      catalog_backfill_requested_count: 0,
+      catalog_backfill_count: 0,
+    });
+  });
+
+  it('queues popularity-ranked catalog coverage when higher-priority demand is empty', async () => {
+    const { client, candidateInserts, pollRunUpdates, rpcCalls } = createSupabaseStub({
+      catalogBackfillApps: ['Popular.CatalogApp'],
+      supportedApps: [
+        {
+          winget_id: 'Popular.CatalogApp',
+          name: 'Popular Catalog App',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      deployedApps: [],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      demandBackfillRequestedCount: 0,
+      catalogBackfillRequestedCount: 1,
+      catalogBackfillCount: 1,
+    });
+    expect(rpcCalls).toContainEqual({
+      name: 'qa_idle_catalog_backfill_ids',
+      args: { p_limit: 20 },
+    });
+    expect(candidateInserts).toEqual([
+      expect.objectContaining({
+        winget_id: 'Popular.CatalogApp',
+        status: 'queued',
+        priority: 0,
+        demand_source: 'catalog',
+        catalog_version_at_enqueue: '1.0.0',
+        test_config: expect.objectContaining({ profileKind: 'catalog-default' }),
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({
+      catalog_backfill_requested_count: 1,
+      catalog_backfill_count: 1,
+    });
+  });
+
+  it('keeps customer demand ahead of catalog work selected during the same idle poll', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Customer.App'],
+      catalogBackfillApps: ['Catalog.App'],
+      supportedApps: [
+        {
+          winget_id: 'Customer.App',
+          name: 'Customer App',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+        {
+          winget_id: 'Catalog.App',
+          name: 'Catalog App',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      deployedApps: ['Customer.App'],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 2,
+      queued: 2,
+      demandBackfillCount: 1,
+      catalogBackfillCount: 1,
+    });
+    expect(candidateInserts.find((row) => row.winget_id === 'Customer.App')).toMatchObject({
+      priority: 1,
+      demand_source: 'managed',
+    });
+    expect(candidateInserts.find((row) => row.winget_id === 'Catalog.App')).toMatchObject({
+      priority: 0,
+      demand_source: 'catalog',
+    });
+  });
+
+  it.each([false, true])('refuses an exact held payload even for targeted requests (lookup error: %s)', async (lookupError) => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Microsoft.SQLServerManagementStudio.22', name: 'SSMS', publisher: 'Microsoft', latest_version: '22.10.2' }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    const manifest = resolvedManifest();
+    manifest.version = '22.10.2';
+    manifest.manifest.Installers[0].InstallerSha256 = 'E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2';
+    resolveManifestMock.mockResolvedValue(manifest);
+    if (lookupError) getPackageCompatibilityBlockMock.mockRejectedValueOnce(new Error('Compatibility gate unavailable'));
+    else getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'failed_managed_lifecycle' });
+    const response = await GET(cronRequest('?id=Microsoft.SQLServerManagementStudio.22'));
+    const body = await response.json();
+    expect(body.queued).toBe(0);
+    expect(lookupError ? body.errorCount : body.unavailable).toBe(1);
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveDependenciesMock).not.toHaveBeenCalled();
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, {
+      wingetId: 'Microsoft.SQLServerManagementStudio.22', version: '22.10.2', architecture: 'x64',
+      installerSha256: 'E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2',
+    });
+  });
+
+  it('immediately rebuilds a targeted customer-deployed app through the catalog QA path', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        {
+          winget_id: 'Opera.Opera',
+          name: 'Opera',
+          publisher: 'Opera Software',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest('?ids=Opera.Opera'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      targetedRequestedCount: 1,
+      targetedCount: 1,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Opera.Opera',
+      status: 'queued',
+      priority: 1_000,
+      demand_source: 'operator',
+      test_config: {
+        profileKind: 'catalog-default',
+        psadtConfig: {
+          processesToClose: [{ name: 'opera', description: 'Opera browser' }],
+          reviewedExactUninstall: {
+            executablePath: '%ProgramFiles%\\Opera\\opera.exe',
+            arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+      },
+    });
+  });
+
+  it('does not let a targeted request expand QA beyond customer-deployed apps', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        {
+          winget_id: 'Undeployed.App',
+          name: 'Undeployed',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      deployedApps: [],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest('?id=Undeployed.App'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 0,
+      queued: 0,
+      targetedRequestedCount: 1,
+      targetedCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('allows a protected targeted rerun for a prior failed catalog package', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{
+        winget_id: 'Failed.CatalogApp',
+        name: 'Failed Catalog App',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      deployedApps: [],
+      packageResults: [{
+        winget_id: 'Failed.CatalogApp',
+        tested_version: '1.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        outcome: 'Failed',
+        tested_at_utc: '2026-08-25T10:00:00.000Z',
+        package_profile_sha256: 'B'.repeat(64),
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest('?id=Failed.CatalogApp'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      targetedRequestedCount: 1,
+      targetedCount: 1,
+    });
+    expect(candidateInserts).toEqual([
+      expect.objectContaining({
+        winget_id: 'Failed.CatalogApp',
+        status: 'queued',
+        priority: 1_000,
+        demand_source: 'operator',
+      }),
+    ]);
+  });
+
+  it('records a current-head reconciliation when the live installer manifest is unavailable', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Unavailable.App'],
+      supportedApps: [{
+        winget_id: 'Unavailable.App',
+        name: 'Unavailable',
+        publisher: 'Contoso',
+        latest_version: '2.0.0',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'unavailable',
+      reason: 'installer_manifest_missing',
+      version: '2.0.0',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Unavailable.App',
+        catalog_version: '2.0.0',
+        observed_live_version: '2.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_manifest_missing',
+      }),
+    ]);
+  });
+
+  it('records a current-head reconciliation when no installer can run on the QA VM', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Unsupported.Architecture'],
+      supportedApps: [{
+        winget_id: 'Unsupported.Architecture',
+        name: 'Unsupported',
+        publisher: 'Contoso',
+        latest_version: '3.0.0',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'resolved',
+      version: '3.0.0',
+      manifest: { InstallerType: 'exe', Installers: [] },
+      source: 'live',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Unsupported.Architecture',
+        catalog_version: '3.0.0',
+        observed_live_version: '3.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'no_compatible_vm_installer',
+      }),
+    ]);
+  });
+
+  it('skips only an exact quarantined installer tuple for the current WinGet head', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Quarantined.App'],
+      supportedApps: [{
+        winget_id: 'Quarantined.App',
+        name: 'Quarantined',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      installerHealth: [{
+        winget_id: 'Quarantined.App',
+        version: '1.0.0',
+        architecture: 'x64',
+        installer_url: 'https://example.com/setup.exe',
+        expected_sha256: 'A'.repeat(64),
+        status: 'quarantined',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Quarantined.App',
+        catalog_version: '1.0.0',
+        observed_live_version: '1.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_hash_quarantined',
+      }),
+    ]);
+  });
+
+  it('keeps an exact VirusTotal-flagged installer dormant across package profile changes', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Flagged.App'],
+      supportedApps: [{
+        winget_id: 'Flagged.App',
+        name: 'Flagged',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      packageResults: [{
+        winget_id: 'Flagged.App',
+        tested_version: '1.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        outcome: 'Failed',
+        tested_at_utc: '2026-08-30T12:00:00.000Z',
+        package_profile_sha256: 'B'.repeat(64),
+        virustotal_malicious: 2,
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveDependenciesMock).not.toHaveBeenCalled();
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Flagged.App',
+        catalog_version: '1.0.0',
+        observed_live_version: '1.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_hash_quarantined',
+      }),
+    ]);
+  });
+
+  it('keeps a fresh manifest-changed installer tuple out of the queue', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Changed.ManifestApp'],
+      supportedApps: [{
+        winget_id: 'Changed.ManifestApp',
+        name: 'Changed Manifest App',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      installerHealth: [{
+        winget_id: 'Changed.ManifestApp',
+        version: '1.0.0',
+        architecture: 'x64',
+        installer_url: 'https://example.com/setup.exe',
+        expected_sha256: 'A'.repeat(64),
+        status: 'error',
+        reason_code: 'MANIFEST_CHANGED',
+        expires_at: '2099-01-01T00:00:00.000Z',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Changed.ManifestApp',
+        reason_code: 'installer_hash_quarantined',
+      }),
+    ]);
+  });
+
+  it('persists a user-scope dependency compatibility block without degrading polling', async () => {
+    const {
+      client,
+      candidateInserts,
+      compatibilityBlocks,
+      catalogReconciliations,
+      pollRunUpdates,
+    } =
+      createSupabaseStub({
+        demandBackfillApps: ['Blocked.App'],
+        supportedApps: [
+          {
+            winget_id: 'Blocked.App',
+            name: 'Blocked',
+            publisher: 'Contoso',
+            latest_version: '1.0.0',
+          },
+        ],
+      });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    resolveDependenciesMock.mockRejectedValueOnce(
+      new WingetDependencyCompatibilityError(
+        'Blocked.App declares machine-wide package dependencies that cannot be installed safely in user scope.'
+      )
+    );
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(compatibilityBlocks).toEqual([
+      expect.objectContaining({
+        winget_id: 'Blocked.App',
+        version: '1.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        block_code: 'user_scope_machine_dependencies',
+      }),
+    ]);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Blocked.App',
+        catalog_version: '1.0.0',
+        observed_live_version: '1.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'package_compatibility_blocked',
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({
+      status: 'succeeded',
+      unavailable_count: 1,
+      error_count: 0,
+    });
+  });
+
+  it('persists an unsupported dependency shape without degrading polling', async () => {
+    const { client, candidateInserts, compatibilityBlocks, pollRunUpdates } =
+      createSupabaseStub({
+        demandBackfillApps: ['Feature.App'],
+        supportedApps: [
+          {
+            winget_id: 'Feature.App',
+            name: 'Feature App',
+            publisher: 'Contoso',
+            latest_version: '1.0.0',
+          },
+        ],
+      });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    resolveDependenciesMock.mockRejectedValueOnce(
+      new WingetDependencyCompatibilityError(
+        'Feature.App declares unsupported dependencies: Windows feature NetFx3',
+        'unsupported_dependency_shape'
+      )
+    );
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(compatibilityBlocks).toEqual([
+      expect.objectContaining({
+        winget_id: 'Feature.App',
+        block_code: 'unsupported_dependency_shape',
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({
+      status: 'succeeded',
+      unavailable_count: 1,
+      error_count: 0,
+    });
+  });
+
+  it('treats missing trusted installer metadata as unavailable, not a poll failure', async () => {
+    const { client, candidateInserts, pollRunUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Broken.Manifest'],
+      supportedApps: [
+        {
+          winget_id: 'Broken.Manifest',
+          name: 'Broken Manifest',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      ...resolvedManifest(),
+      manifest: {
+        InstallerType: 'nullsoft',
+        Installers: [
+          {
+            Architecture: 'x64',
+            InstallerUrl: '',
+            InstallerSha256: '',
+            InstallerType: 'nullsoft',
+          },
+        ],
+      },
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveDependenciesMock).not.toHaveBeenCalled();
+    expect(pollRunUpdates[0]).toMatchObject({
+      status: 'succeeded',
+      unavailable_count: 1,
+      error_count: 0,
+    });
+  });
+
+  it('logs the reason when a WinGet manifest cannot be resolved', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Missing.Manifest'],
+      supportedApps: [
+        {
+          winget_id: 'Missing.Manifest',
+          name: 'Missing Manifest',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'unavailable',
+      reason: 'installer_manifest_missing',
+      version: '1.0.0',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    const entries = vi.mocked(console.log).mock.calls.map(([entry]) => JSON.parse(String(entry)));
+    expect(entries).toContainEqual(expect.objectContaining({
+      message: 'qa_manifest_resolution_unavailable',
+      wingetId: 'Missing.Manifest',
+      version: '1.0.0',
+      reason: 'installer_manifest_missing',
+    }));
+  });
+
+  it('does not queue an app payload that already passed under another PSADT profile', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Covered.App'],
+      supportedApps: [
+        {
+          winget_id: 'Covered.App',
+          name: 'Covered',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      packageResults: [
+        {
+          winget_id: 'Covered.App',
+          tested_version: '1.0.0',
+          architecture: 'x64',
+          installer_sha256: 'A'.repeat(64),
+          outcome: 'Passed',
+          tested_at_utc: '2026-08-10T12:00:00.000Z',
+          package_profile_sha256: 'B'.repeat(64),
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, alreadyKnown: 1 });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Covered.App',
+      version: '1.0.0',
+      status: 'passed',
+    });
+    expect(candidateInserts[0].package_profile_sha256).not.toBe('B'.repeat(64));
+  });
+
+  it('supersedes a plain EXE with no declared silent install contract before dispatch', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Canon.GPCL6_V4_PrinterDriver_V21.00'],
+      supportedApps: [{
+        winget_id: 'Canon.GPCL6_V4_PrinterDriver_V21.00',
+        name: 'Canon PCL6 Driver',
+        publisher: 'Canon',
+        latest_version: '2.72',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'resolved',
+      version: '2.72',
+      manifest: {
+        InstallerType: 'exe',
+        Installers: [{
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/canon-driver.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'exe',
+        }],
+      },
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, alreadyKnown: 1 });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Canon.GPCL6_V4_PrinterDriver_V21.00',
+      status: 'superseded',
+      failure_summary: expect.stringContaining('explicit silent installer switches'),
+    });
+  });
+
+  it('records a changed supported app failure and advances the completed comparison cursor', async () => {
+    detectWingetChangesMock.mockResolvedValue({
+      baseSha: 'a'.repeat(40),
+      headSha: 'b'.repeat(40),
+      changedFiles: 2,
+      changedPackageIds: ['Example.App'],
+      initialized: false,
+    });
+    const { client, pollRunUpdates, cursorUpdates } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockRejectedValue(new Error('GitHub returned HTTP 503'));
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(207);
+    expect(body).toMatchObject({
+      success: false,
+      checked: 1,
+      supportedChangedCount: 1,
+      errorCount: 1,
+      errors: ['Example.App: GitHub returned HTTP 503'],
+    });
+    expect(cursorUpdates).toEqual([
+      expect.objectContaining({
+        head_sha: 'b'.repeat(40),
+        github_rate_limited_until: null,
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({ status: 'partial', error_count: 1 });
+  });
+
+  it('persists systemic catalog failures with a 500 response', async () => {
+    const { client, pollRunUpdates } = createSupabaseStub({ coverageError: 'database unavailable' });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.errors).toEqual([
+      'system: Could not count the supported QA catalog: database unavailable',
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({ status: 'failed', error_count: 1 });
+  });
+
+  it('does not replay a shared-runtime failure after its scoped release has passed', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{
+        winget_id: 'Microsoft.EdgeWebView2Runtime',
+        name: 'Microsoft Edge WebView2 Runtime',
+        publisher: 'Microsoft',
+      }],
+      candidates: [
+        profileCandidate({
+          id: 'old-candidate',
+          wingetId: 'Microsoft.EdgeWebView2Runtime',
+          packagerCommit: 'bafea79a8dde42be074c385c35b4887fb5833aa0',
+          status: 'failed',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 0,
+      queued: 0,
+      toolchainBackfillCount: 0,
+      toolchainBackfillPagesScanned: 1,
+    });
+    expect(candidateInserts).toHaveLength(0);
+  });
+
+  it('preserves an unrelated terminal failure across a packager release', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'unrelated-failed-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
+          status: 'failed',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('retries a reviewed customer failure before the first successful upload', async () => {
+    const wingetId = 'RedisInsight.RedisInsight';
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: wingetId, name: 'Redis Insight', publisher: 'Redis' }],
+      deployedApps: [],
+      customerQaJobs: [wingetId],
+      candidates: [
+        profileCandidate({
+          id: 'redisinsight-customer-failure',
+          wingetId,
+          packagerCommit: '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
+          profileKind: 'deployment-config',
+          status: 'failed',
+          priority: 2000,
+          demandSource: 'customer',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: wingetId,
+      priority: 1000,
+      demand_source: 'operator',
+    });
+    const canonical = JSON.parse(
+      String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
+    );
+    expect(canonical.installer.installScope).toBe('user');
+  });
+
+  it('reuses a passing release from the immediately preceding compatible packager', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'compatible-passed-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: '7d389dbd6e55b719e3d71772717cda0c8f724469',
+          status: 'passed',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('does not backfill an app that already has a current catalog profile', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'current-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+          enqueuedAt: '2026-08-08T10:01:00.000Z',
+        }),
+        profileCandidate({
+          id: 'old-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: '1'.repeat(40),
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('backfills a self-consistent Silent profile so every catalog QA run is interactive', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'silent-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+          interactive: false,
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    const canonical = JSON.parse(
+      String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
+    );
+    expect(canonical.psadtConfig).toMatchObject({
+      deployMode: 'Auto',
+      progressDialog: { enabled: true },
+    });
+  });
+
+  it('backfills a matching commit when another toolchain pin is stale', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'stale-template-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+          toolchainOverrides: { templateSha256: 'B'.repeat(64) },
+          status: 'passed',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Example.App' });
+  });
+
+  it('uses only the newest catalog profile when deciding whether an app is stale', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'newest-stale-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: '1'.repeat(40),
+          enqueuedAt: '2026-08-08T10:01:00.000Z',
+        }),
+        profileCandidate({
+          id: 'older-current-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Example.App' });
+  });
+
+  it('continues keyset pagination until it finds a stale catalog profile', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      profileCandidate({
+        id: `irrelevant-${String(100 - index).padStart(4, '0')}`,
+        wingetId: `Irrelevant.App.${index}`,
+        packagerCommit: '1'.repeat(40),
+        enqueuedAt: '2026-08-08T10:00:00.000Z',
+        profileKind: 'deployment-config',
+      })
+    );
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Paged.App', name: 'Paged', publisher: 'Contoso' }],
+      candidatePages: [
+        firstPage,
+        [
+          profileCandidate({
+            id: 'paged-old-candidate',
+            wingetId: 'Paged.App',
+            packagerCommit: '1'.repeat(40),
+            enqueuedAt: '2026-08-08T09:59:59.000Z',
+          }),
+        ],
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      toolchainBackfillCount: 1,
+      toolchainBackfillPagesScanned: 2,
+    });
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Paged.App' });
+  });
+
+  it('does not let unsupported stale apps consume the backfill batch', async () => {
+    const unsupportedPage = Array.from({ length: 100 }, (_, index) =>
+      profileCandidate({
+        id: `unsupported-${String(100 - index).padStart(4, '0')}`,
+        wingetId: `Unsupported.App.${index}`,
+        packagerCommit: '1'.repeat(40),
+        enqueuedAt: '2026-08-08T10:00:00.000Z',
+      })
+    );
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        { winget_id: 'Supported.App', name: 'Supported', publisher: 'Contoso' },
+      ],
+      candidatePages: [
+        unsupportedPage,
+        [
+          profileCandidate({
+            id: 'supported-old-candidate',
+            wingetId: 'Supported.App',
+            packagerCommit: '1'.repeat(40),
+            enqueuedAt: '2026-08-08T09:59:59.000Z',
+          }),
+        ],
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      toolchainBackfillCount: 1,
+      toolchainBackfillPagesScanned: 2,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Supported.App' });
+  });
+
+  it('does not rebuild a stale queued duplicate when its exact profile already passed', async () => {
+    const staleCandidate = profileCandidate({
+      id: 'covered-queued-duplicate',
+      wingetId: 'Covered.App',
+      packagerCommit: 'ca77e52dc65a404eb81679c5188378bf4d69a692',
+      enqueuedAt: '2026-08-15T07:20:00.000Z',
+      status: 'queued',
+    });
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        { winget_id: 'Covered.App', name: 'Covered', publisher: 'Contoso' },
+      ],
+      deployedApps: ['Covered.App'],
+      candidatePages: [[staleCandidate]],
+      packageResults: [
+        {
+          winget_id: 'Covered.App',
+          tested_version: staleCandidate.version,
+          architecture: staleCandidate.architecture,
+          installer_sha256: staleCandidate.installer_sha256,
+          outcome: 'Passed',
+          tested_at_utc: '2026-08-15T07:10:00.000Z',
+          package_profile_sha256: staleCandidate.package_profile_sha256,
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('does not stop before an older deployed terminal retry target is scanned', async () => {
+    const firstPage = [
+      ...['Recent.One', 'Recent.Two', 'Recent.Three'].map((wingetId, index) =>
+        profileCandidate({
+          id: `recent-stale-${index}`,
+          wingetId,
+          packagerCommit: '1'.repeat(40),
+          enqueuedAt: '2026-08-08T10:00:00.000Z',
+        })
+      ),
+      ...Array.from({ length: 997 }, (_, index) =>
+        profileCandidate({
+          id: `irrelevant-${String(997 - index).padStart(4, '0')}`,
+          wingetId: `Irrelevant.App.${index}`,
+          packagerCommit: '1'.repeat(40),
+          enqueuedAt: '2026-08-08T10:00:00.000Z',
+          profileKind: 'deployment-config',
+        })
+      ),
+    ];
+    const supportedApps = [
+      ...['Recent.One', 'Recent.Two', 'Recent.Three'].map((winget_id) => ({
+        winget_id,
+        name: winget_id,
+        publisher: 'Contoso',
+      })),
+      { winget_id: 'PDFsam.PDFsam', name: 'PDFsam', publisher: 'Sober Lemur' },
+    ];
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps,
+      deployedApps: supportedApps.map((app) => app.winget_id),
+      candidatePages: [
+        firstPage,
+        [
+          profileCandidate({
+            id: 'pdfsam-terminal-failure',
+            wingetId: 'PDFsam.PDFsam',
+            packagerCommit: '1'.repeat(40),
+            enqueuedAt: '2026-08-08T09:59:59.000Z',
+            status: 'failed',
+          }),
+        ],
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 4,
+      queued: 4,
+      toolchainBackfillCount: 3,
+      toolchainBackfillPagesScanned: 2,
+    });
+    expect(candidateInserts).toContainEqual(
+      expect.objectContaining({ winget_id: 'PDFsam.PDFsam' })
+    );
+  });
+
+  it('prioritizes failed stale profiles before ordinary toolchain backfill', async () => {
+    expect(prioritizeToolchainBackfill([
+      {
+        wingetId: 'Newest.App',
+        status: 'superseded',
+        priority: 1,
+        enqueuedAt: '2026-08-08T10:04:00.000Z',
+      },
+      {
+        wingetId: 'Failed.Low',
+        status: 'failed',
+        priority: 1,
+        enqueuedAt: '2026-08-08T10:01:00.000Z',
+      },
+      {
+        wingetId: 'Failed.High',
+        status: 'failed',
+        priority: 2,
+        enqueuedAt: '2026-08-08T10:00:00.000Z',
+      },
+      {
+        wingetId: 'Error.App',
+        status: 'error',
+        priority: 1,
+        enqueuedAt: '2026-08-08T10:03:00.000Z',
+      },
+    ])).toEqual([
+      'Failed.High',
+      'Failed.Low',
+      'Error.App',
+      'Newest.App',
+    ]);
+  });
+});

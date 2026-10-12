@@ -29,6 +29,111 @@ describe('applyInstallerUrlOverride', () => {
     );
   });
 
+  it('routes Blender 4.2 LTS x64 to Blender official mirror service', () => {
+    const url = applyInstallerUrlOverride(
+      'BlenderFoundation.Blender.LTS.4.2',
+      '4.2.16',
+      'x64',
+      'https://download.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi',
+    );
+
+    expect(url).toBe(
+      'https://mirror.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi',
+    );
+  });
+
+  it('does not guess a Blender mirror payload for another architecture', () => {
+    const original = 'https://download.blender.org/release/Blender4.2/setup-arm64.msi';
+    expect(applyInstallerUrlOverride(
+      'BlenderFoundation.Blender.LTS.4.2',
+      '4.2.16',
+      'arm64',
+      original,
+    )).toBe(original);
+  });
+
+  it.each(['5.2.1', '5.2.2'])('routes the affected Blender %s x64 source to the official mirror', (version) => {
+    const original = `https://download.blender.org/release/Blender5.2/blender-${version}-windows-x64.msi`;
+    expect(applyInstallerUrlOverride('BlenderFoundation.Blender', version, 'x64', original))
+      .toBe(`https://mirror.blender.org/release/Blender5.2/blender-${version}-windows-x64.msi`);
+  });
+
+  it.each([
+    ['5.2.2', 'arm64'], ['5.2.2', 'x86'], ['5.2', 'x64'],
+    ['5.2.2-beta', 'x64'], ['5.3.0', 'x64'],
+  ])('keeps the manifest source for an unreviewed Blender tuple %s %s', (version, architecture) => {
+    const original = 'https://download.blender.org/unreviewed-installer.msi';
+    expect(applyInstallerUrlOverride('BlenderFoundation.Blender', version, architecture, original)).toBe(original);
+  });
+
+  it('routes the affected ImageGlass x64 release to its renamed official asset', () => {
+    const url = applyInstallerUrlOverride(
+      'DuongDieuPhap.ImageGlass',
+      '10.0.4.819',
+      'x64',
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64.msi',
+    );
+
+    expect(url).toBe(
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64_pro-business.msi',
+    );
+  });
+
+  it('does not guess ImageGlass asset names for other versions or architectures', () => {
+    const original = 'https://github.com/d2phap/ImageGlass/releases/download/setup.msi';
+
+    expect(applyInstallerUrlOverride(
+      'DuongDieuPhap.ImageGlass',
+      '10.0.5.900',
+      'x64',
+      original,
+    )).toBe(original);
+    expect(applyInstallerUrlOverride(
+      'DuongDieuPhap.ImageGlass',
+      '10.0.4.819',
+      'arm64',
+      original,
+    )).toBe(original);
+  });
+
+  it('routes the affected MariaDB release to its official archive', () => {
+    const original =
+      'https://downloads.mariadb.org/rest-api/mariadb/12.3.3/mariadb-12.3.3-winx64.msi';
+    expect(applyInstallerUrlOverride(
+      'MariaDB.Server',
+      '12.3.3.0',
+      'x64',
+      original,
+    )).toBe(
+      'https://archive.mariadb.org/mariadb-12.3.3/winx64-packages/mariadb-12.3.3-winx64.msi',
+    );
+    expect(applyInstallerUrlOverride(
+      'MariaDB.Server',
+      '12.3.4.0',
+      'x64',
+      original,
+    )).toBe(original);
+  });
+
+  it('routes the affected PostgresPro release to its official international repository', () => {
+    const original =
+      'https://repo.postgrespro.ru/win/64/PostgreSQL_17.7_64bit_Setup.exe';
+    expect(applyInstallerUrlOverride(
+      'PostgresPro.Standard.17',
+      '17.7',
+      'x64',
+      original,
+    )).toBe(
+      'https://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    );
+    expect(applyInstallerUrlOverride(
+      'PostgresPro.Standard.17',
+      '17.7',
+      'arm64',
+      original,
+    )).toBe(original);
+  });
+
   it('interpolates the version into the Freeplane GitHub Releases URL', () => {
     const url = applyInstallerUrlOverride(
       'Freeplane.Freeplane',
@@ -63,5 +168,18 @@ describe('applyInstallerUrlOverride', () => {
 describe('INSTALLER_URL_OVERRIDES', () => {
   it('contains the Freeplane entry', () => {
     expect(INSTALLER_URL_OVERRIDES['Freeplane.Freeplane']).toBeDefined();
+  });
+
+  it('contains the Blender 4.2 LTS entry', () => {
+    expect(INSTALLER_URL_OVERRIDES['BlenderFoundation.Blender.LTS.4.2']).toBeDefined();
+  });
+
+  it('contains the ImageGlass entry', () => {
+    expect(INSTALLER_URL_OVERRIDES['DuongDieuPhap.ImageGlass']).toBeDefined();
+  });
+
+  it('contains the MariaDB and PostgresPro entries', () => {
+    expect(INSTALLER_URL_OVERRIDES['MariaDB.Server']).toBeDefined();
+    expect(INSTALLER_URL_OVERRIDES['PostgresPro.Standard.17']).toBeDefined();
   });
 });

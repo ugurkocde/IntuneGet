@@ -1,0 +1,5 @@
+{
+  "title": "Reliable removal for archived installers",
+  "summary": "Fixed packaging for applications such as Adobe Acrobat whose ZIP archive contains an executable installer. Packages now retain the manifest's exact installed product identity for installation verification and managed removal.",
+  "type": "fixed"
+}

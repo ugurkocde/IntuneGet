@@ -92,8 +92,14 @@ export interface IntuneAppAssignment {
   } | null;
 }
 
+/** Why an assignment group's display name could not be read from Graph. */
+export type AssignmentGroupLookupFailure = 'not_found' | 'access_denied';
+
 export interface IntuneAppWithAssignments extends IntuneWin32App {
   assignments: IntuneAppAssignment[];
+  assignmentGroupNames?: Record<string, string>;
+  /** Present only when at least one group lookup failed definitively. */
+  assignmentGroupLookupFailures?: Record<string, AssignmentGroupLookupFailure>;
 }
 
 export interface InventoryFilters {
@@ -121,3 +127,9 @@ export interface AppUpdateInfo {
   // provenance); false when matched only by fuzzy name/heuristics.
   isManaged: boolean;
 }
+
+/** Lightweight inventory row. Full configuration and icons load on demand. */
+export type InventoryListApp = Pick<IntuneWin32App,
+  'id' | 'displayName' | 'description' | 'publisher' | 'displayVersion' |
+  'createdDateTime' | 'lastModifiedDateTime' | 'installExperience' | 'size'
+> & { hasIcon: boolean };

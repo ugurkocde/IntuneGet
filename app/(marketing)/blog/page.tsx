@@ -9,13 +9,13 @@ export const metadata: Metadata = {
   description:
     "Guides, tutorials, and best practices for deploying Winget apps to Microsoft Intune. Learn from real-world IT deployment workflows.",
   alternates: {
-    canonical: "https://intuneget.com/blog",
+    canonical: "https://www.intuneget.com/blog",
   },
   openGraph: {
     title: "IntuneGet Blog - Winget to Intune Deployment Guides",
     description:
       "Practical guides and tutorials for IT admins deploying Winget apps to Microsoft Intune.",
-    url: "https://intuneget.com/blog",
+    url: "https://www.intuneget.com/blog",
     type: "website",
   },
   twitter: {
@@ -34,13 +34,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Blog",
-      item: "https://intuneget.com/blog",
+      item: "https://www.intuneget.com/blog",
     },
   ],
 };
@@ -51,13 +51,13 @@ const collectionPageJsonLd = {
   name: "IntuneGet Blog - Winget to Intune Deployment Guides",
   description:
     "Practical guides and tutorials for IT admins deploying Winget apps to Microsoft Intune.",
-  url: "https://intuneget.com/blog",
+  url: "https://www.intuneget.com/blog",
   mainEntity: {
     "@type": "ItemList",
     itemListElement: blogPosts.map((post, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      url: `https://intuneget.com/blog/${post.slug}`,
+      url: `https://www.intuneget.com/blog/${post.slug}`,
       name: post.title,
     })),
   },

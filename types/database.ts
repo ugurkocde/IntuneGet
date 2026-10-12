@@ -23,14 +23,733 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      qa_automation_state: {
+        Row: { id: string; value: Json; updated_at: string };
+        Insert: { id: string; value: Json; updated_at?: string };
+        Update: { value?: Json; updated_at?: string };
+        Relationships: GenericRelationship[];
+      };
+      qa_repair_requests: {
+        Row: {
+          id: string; candidate_id: string; winget_id: string; version: string; architecture: string;
+          failure_class: 'app_lifecycle' | 'security';
+          status: 'pending' | 'in_progress' | 'requeued' | 'blocked' | 'resolved';
+          prior_requeues: number; failure_summary: string | null; resolution: string | null;
+          created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; candidate_id: string; winget_id: string; version: string; architecture: string;
+          failure_class: 'app_lifecycle' | 'security';
+          status?: 'pending' | 'in_progress' | 'requeued' | 'blocked' | 'resolved';
+          prior_requeues?: number; failure_summary?: string | null; resolution?: string | null;
+          created_at?: string; updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_repair_requests']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_source_backoff: {
+        Row: { source_key: string; failure_count: number; next_retry_at: string; last_candidate_id: string; last_attempt: number; updated_at: string };
+        Insert: { source_key: string; failure_count: number; next_retry_at: string; last_candidate_id: string; last_attempt: number; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['qa_source_backoff']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      installer_health: {
+        Row: {
+          cache_key: string;
+          winget_id: string;
+          version: string;
+          architecture: string;
+          installer_url: string;
+          expected_sha256: string;
+          actual_sha256: string | null;
+          status: 'checking' | 'healthy' | 'quarantined' | 'error';
+          reason_code: string | null;
+          reason_message: string | null;
+          checked_at: string | null;
+          expires_at: string | null;
+          lease_expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['installer_health']['Row'],
+          'actual_sha256' | 'reason_code' | 'reason_message' | 'checked_at' |
+          'expires_at' | 'lease_expires_at' | 'created_at' | 'updated_at'
+        > & {
+          actual_sha256?: string | null;
+          reason_code?: string | null;
+          reason_message?: string | null;
+          checked_at?: string | null;
+          expires_at?: string | null;
+          lease_expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['installer_health']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_results: {
+        Row: {
+          winget_id: string;
+          display_name: string;
+          publisher: string;
+          tested_version: string;
+          architecture: string;
+          installer_sha256: string | null;
+          test_level: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256: string | null;
+          psadt_version: string | null;
+          psadt_template_sha256: string | null;
+          psadt_config_sha256: string | null;
+          detection_rules_sha256: string | null;
+          packager_commit: string | null;
+          package_content_sha256: string | null;
+          outcome: string;
+          tested_at_utc: string;
+          overall_duration_seconds: number | null;
+          installer_type: string | null;
+          install_command: string;
+          uninstall_command: string;
+          detection: Json;
+          phase_results: Json;
+          changes: Json | null;
+          relevant_event_count: number | null;
+          environment: Json | null;
+          effective_configuration: Json | null;
+          test_id: string | null;
+          github_run_id: string | null;
+          github_run_attempt: number | null;
+          qa_schema_version: number;
+          virustotal_status: string | null;
+          virustotal_malicious: number | null;
+          virustotal_suspicious: number | null;
+          virustotal_total_engines: number | null;
+          virustotal_scanned_at_utc: string | null;
+          synced_at: string;
+        };
+        Insert: {
+          winget_id: string;
+          display_name: string;
+          publisher: string;
+          tested_version: string;
+          architecture: string;
+          installer_sha256?: string | null;
+          test_level?: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256?: string | null;
+          psadt_version?: string | null;
+          psadt_template_sha256?: string | null;
+          psadt_config_sha256?: string | null;
+          detection_rules_sha256?: string | null;
+          packager_commit?: string | null;
+          package_content_sha256?: string | null;
+          outcome: string;
+          tested_at_utc: string;
+          overall_duration_seconds?: number | null;
+          installer_type?: string | null;
+          install_command: string;
+          uninstall_command: string;
+          detection: Json;
+          phase_results: Json;
+          changes?: Json | null;
+          relevant_event_count?: number | null;
+          environment?: Json | null;
+          effective_configuration?: Json | null;
+          test_id?: string | null;
+          github_run_id?: string | null;
+          github_run_attempt?: number | null;
+          qa_schema_version?: number;
+          virustotal_status?: string | null;
+          virustotal_malicious?: number | null;
+          virustotal_suspicious?: number | null;
+          virustotal_total_engines?: number | null;
+          virustotal_scanned_at_utc?: string | null;
+          synced_at?: string;
+        };
+        Update: {
+          winget_id?: string;
+          display_name?: string;
+          publisher?: string;
+          tested_version?: string;
+          architecture?: string;
+          installer_sha256?: string | null;
+          test_level?: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256?: string | null;
+          psadt_version?: string | null;
+          psadt_template_sha256?: string | null;
+          psadt_config_sha256?: string | null;
+          detection_rules_sha256?: string | null;
+          packager_commit?: string | null;
+          package_content_sha256?: string | null;
+          outcome?: string;
+          tested_at_utc?: string;
+          overall_duration_seconds?: number | null;
+          installer_type?: string | null;
+          install_command?: string;
+          uninstall_command?: string;
+          detection?: Json;
+          phase_results?: Json;
+          changes?: Json | null;
+          relevant_event_count?: number | null;
+          environment?: Json | null;
+          effective_configuration?: Json | null;
+          test_id?: string | null;
+          github_run_id?: string | null;
+          github_run_attempt?: number | null;
+          qa_schema_version?: number;
+          virustotal_status?: string | null;
+          virustotal_malicious?: number | null;
+          virustotal_suspicious?: number | null;
+          virustotal_total_engines?: number | null;
+          virustotal_scanned_at_utc?: string | null;
+          synced_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      qa_recipes: {
+        Row: {
+          winget_id: string;
+          definition_path: string;
+          architecture: string;
+          installer_type: string;
+          active: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          winget_id: string;
+          definition_path: string;
+          architecture: string;
+          installer_type: string;
+          active?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          winget_id?: string;
+          definition_path?: string;
+          architecture?: string;
+          installer_type?: string;
+          active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      qa_candidates: {
+        Row: {
+          next_retry_at: string | null;
+          recovery_attempts: number;
+          recovery_history: Json;
+          id: string;
+          winget_id: string;
+          definition_path: string | null;
+          version: string;
+          architecture: string;
+          installer_url: string;
+          installer_sha256: string;
+          installer_type: string;
+          installer_file_name: string;
+          test_config: Json;
+          test_level: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256: string | null;
+          catalog_version_at_enqueue: string | null;
+          status: string;
+          priority: number;
+          attempts: number;
+          enqueued_at: string;
+          dispatched_at: string | null;
+          started_at: string | null;
+          finished_at: string | null;
+          github_run_id: string | null;
+          github_run_url: string | null;
+          failure_summary: string | null;
+          phase: string | null;
+          phase_started_at: string | null;
+          phase_updated_at: string | null;
+          live_activity: Json | null;
+          activity_updated_at: string | null;
+          live_log: Json | null;
+          log_updated_at: string | null;
+          demand_source: 'customer' | 'auto_update' | 'managed' | 'operator' | 'catalog';
+          updated_at: string;
+        };
+        Insert: {
+          next_retry_at?: string | null;
+          recovery_attempts?: number;
+          recovery_history?: Json;
+          id?: string;
+          winget_id: string;
+          definition_path?: string | null;
+          version: string;
+          architecture: string;
+          installer_url: string;
+          installer_sha256: string;
+          installer_type: string;
+          installer_file_name: string;
+          test_config?: Json;
+          test_level?: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256?: string | null;
+          catalog_version_at_enqueue?: string | null;
+          status?: string;
+          priority?: number;
+          attempts?: number;
+          enqueued_at?: string;
+          dispatched_at?: string | null;
+          started_at?: string | null;
+          finished_at?: string | null;
+          github_run_id?: string | null;
+          github_run_url?: string | null;
+          failure_summary?: string | null;
+          phase?: string | null;
+          phase_started_at?: string | null;
+          phase_updated_at?: string | null;
+          live_activity?: Json | null;
+          activity_updated_at?: string | null;
+          live_log?: Json | null;
+          log_updated_at?: string | null;
+          demand_source?: 'customer' | 'auto_update' | 'managed' | 'operator' | 'catalog';
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_package_results: {
+        Row: {
+          package_profile_sha256: string;
+          winget_id: string;
+          display_name: string | null;
+          publisher: string | null;
+          tested_version: string;
+          architecture: string;
+          installer_sha256: string;
+          outcome: 'Passed' | 'Failed';
+          tested_at_utc: string;
+          overall_duration_seconds: number | null;
+          installer_type: string | null;
+          install_command: string | null;
+          uninstall_command: string | null;
+          detection: Json | null;
+          phase_results: Json | null;
+          changes: Json | null;
+          relevant_event_count: number | null;
+          environment: Json | null;
+          effective_configuration: Json | null;
+          qa_schema_version: number | null;
+          profile_kind: 'catalog-default' | 'deployment-config';
+          psadt_version: string;
+          psadt_template_sha256: string;
+          psadt_config_sha256: string;
+          detection_rules_sha256: string;
+          packager_commit: string;
+          package_content_sha256: string;
+          github_run_id: string | null;
+          github_run_url: string | null;
+          virustotal_status: string | null;
+          virustotal_malicious: number | null;
+          virustotal_suspicious: number | null;
+          virustotal_total_engines: number | null;
+          virustotal_scanned_at_utc: string | null;
+          synced_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['qa_package_results']['Row'], 'synced_at'> & {
+          synced_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_package_results']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_package_blocks: {
+        Row: {
+          winget_id: string;
+          version: string;
+          architecture: 'x64' | 'x86' | 'arm64';
+          installer_sha256: string;
+          block_code:
+            | 'user_scope_machine_dependencies'
+            | 'user_scope_elevation_required'
+            | 'machine_scope_system_profile_install'
+            | 'missing_authoritative_install_identity'
+            | 'failed_managed_lifecycle'
+            | 'unverified_file_reputation'
+            | 'trusted_installer_tuple_unavailable'
+            | 'unsupported_dependency_shape'
+            | 'expired_signing_certificate'
+            | 'unreviewed_dependency';
+          detail: string;
+          observed_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['qa_package_blocks']['Row'],
+          'observed_at' | 'updated_at'
+        > & {
+          observed_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_package_blocks']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_catalog_reconciliations: {
+        Row: {
+          winget_id: string;
+          catalog_version: string;
+          observed_head_sha: string;
+          observed_live_version: string | null;
+          reason_code:
+            | 'package_or_version_missing'
+            | 'installer_manifest_missing'
+            | 'no_compatible_vm_installer'
+            | 'missing_trusted_installer_metadata'
+            | 'installer_hash_quarantined'
+            | 'package_compatibility_blocked';
+          observed_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['qa_catalog_reconciliations']['Row'],
+          'observed_at' | 'updated_at'
+        > & {
+          observed_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['qa_catalog_reconciliations']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      curated_excluded_apps: {
+        Row: {
+          winget_id: string;
+          reason: string;
+          source: string;
+          excluded_at: string;
+          excluded_by: string | null;
+          notes: string | null;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['curated_excluded_apps']['Row'],
+          'source' | 'excluded_at' | 'excluded_by' | 'notes'
+        > & {
+          source?: string;
+          excluded_at?: string;
+          excluded_by?: string | null;
+          notes?: string | null;
+        };
+        Update: Partial<
+          Database['public']['Tables']['curated_excluded_apps']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      curated_licence_attestations: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          app_id: string;
+          attestation_id: string;
+          attestation_version: string;
+          accepted_by_user_id: string;
+          accepted_by_email: string | null;
+          accepted_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['curated_licence_attestations']['Row'],
+          'id' | 'accepted_at'
+        > & {
+          id?: string;
+          accepted_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['curated_licence_attestations']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      curated_verification_queue: {
+        Row: {
+          id: string; verification_key: string; app_id: string; version: string;
+          kind: 'release' | 'config'; inputs: Json; priority: number;
+          status: 'queued' | 'dispatched' | 'completed' | 'superseded';
+          enqueued_at: string; dispatched_at: string | null; finished_at: string | null;
+          github_run_id: string | null; updated_at: string;
+        };
+        Insert: {
+          id?: string; verification_key: string; app_id: string; version: string;
+          kind: 'release' | 'config'; inputs: Json; priority?: number; status?: string;
+          enqueued_at?: string; dispatched_at?: string | null; finished_at?: string | null;
+          github_run_id?: string | null; updated_at?: string;
+        };
+        Update: {
+          status?: 'queued' | 'dispatched' | 'completed' | 'superseded';
+          github_run_id?: string | null; dispatched_at?: string | null;
+          finished_at?: string | null; updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      curated_config_verifications: {
+        Row: {
+          id: string;
+          release_id: string;
+          app_id: string;
+          winget_id: string;
+          version: string;
+          psadt_config_sha256: string;
+          psadt_config: Json;
+          status: 'requested' | 'verifying' | 'passed' | 'failed';
+          github_run_id: string | null;
+          execution_profile_sha256: string | null;
+          packager_commit: string | null;
+          failure_detail: string | null;
+          tenant_id: string | null;
+          requested_by_user_id: string | null;
+          requested_at: string;
+          updated_at: string;
+          verified_at: string | null;
+        };
+        Insert: Pick<
+          Database['public']['Tables']['curated_config_verifications']['Row'],
+          'release_id' | 'app_id' | 'winget_id' | 'version' | 'psadt_config_sha256' | 'psadt_config'
+        > & Partial<Database['public']['Tables']['curated_config_verifications']['Row']>;
+        Update: Partial<
+          Database['public']['Tables']['curated_config_verifications']['Row']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      curated_qa_runs: {
+        Row: {
+          github_run_id: string;
+          github_run_attempt: number;
+          kind: 'release' | 'config';
+          winget_id: string;
+          app_id: string;
+          display_name: string;
+          publisher: string;
+          tested_version: string;
+          architecture: string;
+          outcome: 'Passed' | 'Failed';
+          tested_at_utc: string;
+          candidate_id: string;
+          config_verification_id: string | null;
+          installer_type: string | null;
+          installer_url: string | null;
+          installer_sha256: string | null;
+          install_command: string | null;
+          uninstall_command: string | null;
+          silent_args: string | null;
+          detection: Json;
+          phase_results: Json;
+          psadt_config: Json | null;
+          psadt_config_sha256: string | null;
+          package_profile_sha256: string | null;
+          packager_commit: string | null;
+          upgrade_from_version: string | null;
+          upgrade_tested: boolean | null;
+          signature_status: string | null;
+          signer: string | null;
+          defender_status: string | null;
+          defender_signature_version: string | null;
+          failed_phase: string | null;
+          failed_step: string | null;
+          failed_message: string | null;
+          failed_lifecycle: string | null;
+          failed_signature: string | null;
+          failed_location: string | null;
+          workflow_commit: string | null;
+          website_commit: string | null;
+          github_run_url: string;
+          synced_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['curated_qa_runs']['Row'], 'synced_at'> & { synced_at?: string };
+        Update: Partial<Database['public']['Tables']['curated_qa_runs']['Row']>;
+        Relationships: GenericRelationship[];
+      };
+      package_eligibility_blocks: {
+        Row: {
+          winget_id: string;
+          block_code:
+            | 'vendor_retired'
+            | 'upstream_removed'
+            | 'unsupported_managed_uninstall';
+          detail: string;
+          source_url: string;
+          blocked_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['package_eligibility_blocks']['Row'],
+          'blocked_at' | 'updated_at'
+        > & {
+          blocked_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['package_eligibility_blocks']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      qa_demand_backfill_selections: {
+        Row: {
+          winget_id: string;
+          last_selected_at: string;
+        };
+        Insert: {
+          winget_id: string;
+          last_selected_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['qa_demand_backfill_selections']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      qa_pipeline_control: {
+        Row: {
+          id: string;
+          paused: boolean;
+          reason: string | null;
+          required_packager_commit: string | null;
+          scheduler_packager_commit: string | null;
+          scheduler_seen_at: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id: string;
+          paused?: boolean;
+          reason?: string | null;
+          required_packager_commit?: string | null;
+          scheduler_packager_commit?: string | null;
+          scheduler_seen_at?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['qa_pipeline_control']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_poll_runs: {
+        Row: {
+          id: string;
+          request_id: string | null;
+          status: 'running' | 'succeeded' | 'partial' | 'failed';
+          started_at: string;
+          finished_at: string | null;
+          duration_ms: number | null;
+          recipe_count: number;
+          checked_count: number;
+          updates_found_count: number;
+          queued_count: number;
+          already_known_count: number;
+          unavailable_count: number;
+          error_count: number;
+          errors: Json;
+          alert_delivery: Json | null;
+          base_sha: string | null;
+          head_sha: string | null;
+          changed_package_count: number;
+          supported_changed_count: number;
+          demand_backfill_requested_count: number;
+          demand_backfill_count: number;
+          catalog_backfill_requested_count: number;
+          catalog_backfill_count: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id?: string | null;
+          status?: 'running' | 'succeeded' | 'partial' | 'failed';
+          started_at?: string;
+          finished_at?: string | null;
+          duration_ms?: number | null;
+          recipe_count?: number;
+          checked_count?: number;
+          updates_found_count?: number;
+          queued_count?: number;
+          already_known_count?: number;
+          unavailable_count?: number;
+          error_count?: number;
+          errors?: Json;
+          alert_delivery?: Json | null;
+          base_sha?: string | null;
+          head_sha?: string | null;
+          changed_package_count?: number;
+          supported_changed_count?: number;
+          demand_backfill_requested_count?: number;
+          demand_backfill_count?: number;
+          catalog_backfill_requested_count?: number;
+          catalog_backfill_count?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_poll_runs']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_live_sessions: {
+        Row: {
+          id: string; run_kind: 'curated'; queue_id: string; verification: 'release' | 'custom-settings';
+          app_id: string; version: string; architecture: string; upgrade_planned: boolean; public_frames: boolean;
+          github_run_id: number; github_run_attempt: number; state: 'active' | 'ended';
+          end_reason: 'ended' | 'superseded' | 'dispatch_inactive' | 'expired' | null;
+          phase: string | null; phase_started_at: string | null; started_at: string; heartbeat_at: string; ended_at: string | null;
+          frames_cleaned_at: string | null;
+        };
+        Insert: {
+          id?: string; run_kind?: 'curated'; queue_id: string; verification: 'release' | 'custom-settings';
+          app_id: string; version: string; architecture: string; upgrade_planned: boolean; public_frames: boolean;
+          github_run_id: number; github_run_attempt: number; state?: 'active' | 'ended';
+          end_reason?: 'ended' | 'superseded' | 'dispatch_inactive' | 'expired' | null;
+          phase?: string | null; phase_started_at?: string | null; started_at?: string; heartbeat_at?: string; ended_at?: string | null;
+          frames_cleaned_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['qa_live_sessions']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_live_session_frames: {
+        Row: { session_id: string; object_path: string; sequence: number; captured_at: string; width: number; height: number; byte_size: number; updated_at: string };
+        Insert: { session_id: string; object_path: string; sequence: number; captured_at: string; width: number; height: number; byte_size: number; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['qa_live_session_frames']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_live_frames: {
+        Row: {
+          candidate_id: string;
+          object_path: string;
+          sequence: number;
+          captured_at: string;
+          width: number;
+          height: number;
+          byte_size: number;
+          updated_at: string;
+        };
+        Insert: {
+          candidate_id: string;
+          object_path: string;
+          sequence: number;
+          captured_at: string;
+          width: number;
+          height: number;
+          byte_size: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_live_frames']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_winget_poll_state: {
+        Row: {
+          id: string;
+          head_sha: string | null;
+          github_etag: string | null;
+          github_rate_limited_until: string | null;
+          last_checked_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          head_sha?: string | null;
+          github_etag?: string | null;
+          github_rate_limited_until?: string | null;
+          last_checked_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_winget_poll_state']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       user_profiles: {
         Row: {
           id: string;
           email: string | null;
           name: string | null;
-          microsoft_access_token: string | null;
-          microsoft_refresh_token: string | null;
-          token_expires_at: string | null;
           intune_tenant_id: string | null;
           tenant_name: string | null;
           profile_image: string | null;
@@ -41,9 +760,6 @@ export interface Database {
           id: string;
           email?: string | null;
           name?: string | null;
-          microsoft_access_token?: string | null;
-          microsoft_refresh_token?: string | null;
-          token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
           profile_image?: string | null;
@@ -54,9 +770,6 @@ export interface Database {
           id?: string;
           email?: string | null;
           name?: string | null;
-          microsoft_access_token?: string | null;
-          microsoft_refresh_token?: string | null;
-          token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
           profile_image?: string | null;
@@ -268,6 +981,9 @@ export interface Database {
           status: string;
           status_message: string | null;
           progress_percent: number;
+          error_stage: string | null;
+          error_category: string | null;
+          error_code: string | null;
           error_message: string | null;
           created_at: string;
           updated_at: string;
@@ -280,6 +996,11 @@ export interface Database {
           archived_at: string | null;
           is_auto_update: boolean;
           auto_update_policy_id: string | null;
+          execution_profile_sha256: string | null;
+          presentation_profile_sha256: string | null;
+          qa_candidate_id: string | null;
+          qa_requested_at: string | null;
+          qa_completed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -312,6 +1033,9 @@ export interface Database {
           status?: string;
           status_message?: string | null;
           progress_percent?: number;
+          error_stage?: string | null;
+          error_category?: string | null;
+          error_code?: string | null;
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -324,6 +1048,11 @@ export interface Database {
           archived_at?: string | null;
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
+          execution_profile_sha256?: string | null;
+          presentation_profile_sha256?: string | null;
+          qa_candidate_id?: string | null;
+          qa_requested_at?: string | null;
+          qa_completed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -356,6 +1085,9 @@ export interface Database {
           status?: string;
           status_message?: string | null;
           progress_percent?: number;
+          error_stage?: string | null;
+          error_category?: string | null;
+          error_code?: string | null;
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -368,6 +1100,11 @@ export interface Database {
           archived_at?: string | null;
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
+          execution_profile_sha256?: string | null;
+          presentation_profile_sha256?: string | null;
+          qa_candidate_id?: string | null;
+          qa_requested_at?: string | null;
+          qa_completed_at?: string | null;
         };
         Relationships: GenericRelationship[];
       };
@@ -998,6 +1735,7 @@ export interface Database {
           winget_id: string;
           display_name: string;
           version: string;
+          architecture: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
           total_tenants: number;
           completed_tenants: number;
           failed_tenants: number;
@@ -1018,6 +1756,7 @@ export interface Database {
           winget_id: string;
           display_name: string;
           version: string;
+          architecture?: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
           total_tenants: number;
           completed_tenants?: number;
           failed_tenants?: number;
@@ -1038,6 +1777,7 @@ export interface Database {
           winget_id?: string;
           display_name?: string;
           version?: string;
+          architecture?: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
           total_tenants?: number;
           completed_tenants?: number;
           failed_tenants?: number;
@@ -1063,8 +1803,6 @@ export interface Database {
           error_message: string | null;
           started_at: string | null;
           completed_at: string | null;
-          created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -1076,8 +1814,6 @@ export interface Database {
           error_message?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -1089,8 +1825,6 @@ export interface Database {
           error_message?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Relationships: GenericRelationship[];
       };
@@ -1115,6 +1849,10 @@ export interface Database {
           curation_notes: string | null;
           manually_mapped: boolean;
           is_verified: boolean;
+          is_winget_verified: boolean | null;
+          is_locale_variant: boolean | null;
+          app_source: string | null;
+          upstream_miss_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -1138,6 +1876,10 @@ export interface Database {
           curation_notes?: string | null;
           manually_mapped?: boolean;
           is_verified?: boolean;
+          is_winget_verified?: boolean | null;
+          is_locale_variant?: boolean | null;
+          app_source?: string | null;
+          upstream_miss_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -1161,6 +1903,10 @@ export interface Database {
           curation_notes?: string | null;
           manually_mapped?: boolean;
           is_verified?: boolean;
+          is_winget_verified?: boolean | null;
+          is_locale_variant?: boolean | null;
+          app_source?: string | null;
+          upstream_miss_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -1873,6 +2619,92 @@ export interface Database {
       };
     };
     Functions: {
+      begin_qa_live_curated_session: {
+        Args: { p_app_id: string; p_version: string; p_architecture: string; p_upgrade_planned: boolean; p_host_custom_config: boolean; p_run_id: number | string; p_run_attempt: number };
+        Returns: Json;
+      };
+      publish_qa_live_curated_phase: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number; p_phase: string; p_observed_at: string };
+        Returns: boolean;
+      };
+      authorize_qa_live_curated_frame: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number; p_captured_at: string };
+        Returns: boolean;
+      };
+      publish_qa_live_curated_frame_metadata: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number; p_object_path: string; p_sequence: number; p_captured_at: string; p_width: number; p_height: number; p_byte_size: number };
+        Returns: boolean;
+      };
+      end_qa_live_curated_session: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number };
+        Returns: Json;
+      };
+      insert_qa_candidate_if_absent: {
+        Args: { p_candidate: Json };
+        Returns: Json;
+      };
+      claim_qa_work: {
+        Args: { p_kind: 'ordinary' | 'curated'; p_id: string; p_packager_commit: string };
+        Returns: Json;
+      };
+      qa_toolchain_backfill_page: {
+        Args: { p_after?: string; p_limit?: number; p_terminal_retry_ids?: string[] };
+        Returns: Json;
+      };
+      record_qa_source_failure: {
+        Args: { p_source_key: string; p_candidate_id: string; p_attempt: number };
+        Returns: string;
+      };
+      authorize_qa_live_frame_ingest: {
+        Args: {
+          p_secret: string;
+          p_candidate_id: string;
+          p_captured_at: string;
+        };
+        Returns: boolean;
+      };
+      authorize_qa_live_frame_cleanup: {
+        Args: {
+          p_secret: string;
+          p_candidate_id: string;
+        };
+        Returns: boolean;
+      };
+      publish_qa_live_frame_metadata: {
+        Args: {
+          p_secret: string;
+          p_candidate_id: string;
+          p_object_path: string;
+          p_sequence: number;
+          p_captured_at: string;
+          p_width: number;
+          p_height: number;
+          p_byte_size: number;
+        };
+        Returns: boolean;
+      };
+      qa_missing_demand_backfill_ids: {
+        Args: {
+          p_limit?: number;
+        };
+        Returns: Array<{
+          winget_id: string;
+        }>;
+      };
+      qa_idle_catalog_backfill_ids: {
+        Args: {
+          p_limit?: number;
+        };
+        Returns: Array<{
+          winget_id: string;
+        }>;
+      };
+      record_qa_demand_backfill_selection: {
+        Args: {
+          p_winget_ids: string[];
+        };
+        Returns: void;
+      };
       increment_usage: {
         Args: {
           p_org_id: string;

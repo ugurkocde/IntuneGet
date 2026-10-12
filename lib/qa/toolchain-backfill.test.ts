@@ -1,0 +1,2150 @@
+import { describe, expect, it } from 'vitest';
+import { QA_PSADT_TOOLCHAIN } from './package-profile';
+import {
+  shouldRetryTerminalToolchainCandidate,
+  terminalToolchainRetryTargets,
+} from './toolchain-backfill';
+
+describe('QA toolchain targeted retries', () => {
+  it('adds only Wacom while carrying approved unconsumed retry targets', () => {
+    const previous = '60395492a3d51b2ff6f14b50ed7cd0c7f558be70';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'Wacom.WacomTabletDriver', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous, { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Wacom.OtherDriver', status: 'failed' })).toBe(false);
+  });
+  it('retries Bandizip only on the reviewed silent-removal release', () => {
+    const previous = '4b4637967c6e2b0188f5713d262dd1219a02465e';
+    expect(terminalToolchainRetryTargets('60395492a3d51b2ff6f14b50ed7cd0c7f558be70')).toEqual([
+      'Bandisoft.Bandizip', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous, { wingetId: 'Bandisoft.Bandizip', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Bandisoft.Bandizip', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Bandisoft.Bandizip.MSE', status: 'failed' })).toBe(false);
+  });
+  it('adds only ZWCAD 2026 to the bounded retry targets', () => {
+    const previous = 'e7410e97df040bd38f11842ccf259abd9bc757f7';
+    expect(terminalToolchainRetryTargets('4b4637967c6e2b0188f5713d262dd1219a02465e')).toEqual([
+      'ZWSOFT.ZWCAD.2026', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'ZWSOFT.ZWCAD.2026', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    for (const wingetId of ['ZWSOFT.ZWCAD.2027', 'ZWSOFT.ZWCAD.Mechanical.2026', 'ZWSOFT.NetworkLicenseManager']) {
+      expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId, status: 'failed' })).toBe(false);
+    }
+  });
+  it('adds only ZWCAD 2025 to the bounded retry targets', () => {
+    const previous = '5e561aeff961e42e63eba4fee4696c15a0cbff71';
+    expect(terminalToolchainRetryTargets('e7410e97df040bd38f11842ccf259abd9bc757f7')).toEqual([
+      'ZWSOFT.ZWCAD.2025', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'ZWSOFT.ZWCAD.2025', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate('e7410e97df040bd38f11842ccf259abd9bc757f7', candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('e7410e97df040bd38f11842ccf259abd9bc757f7',
+      { wingetId: 'ZWSOFT.ZWCAD.2026', status: 'failed' })).toBe(false);
+  });
+  it('adds only ZCode to the bounded retry targets', () => {
+    const previous = 'c861e3a90f8bbf28842b86ab0070230efecaf3a9';
+    expect(terminalToolchainRetryTargets('5e561aeff961e42e63eba4fee4696c15a0cbff71')).toEqual([
+      'ZhipuAI.ZCode', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'ZhipuAI.ZCode', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate('5e561aeff961e42e63eba4fee4696c15a0cbff71', candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('5e561aeff961e42e63eba4fee4696c15a0cbff71',
+      { wingetId: 'ZhipuAI.Other', status: 'failed' })).toBe(false);
+  });
+  it('adds only the repaired tl;dv identity to the bounded retry targets', () => {
+    const previous = 'e79da0398e3cf3c6874e53b6304a2aef54b5770f';
+    expect(terminalToolchainRetryTargets('c861e3a90f8bbf28842b86ab0070230efecaf3a9')).toEqual([
+      'tldx.tldv', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'tldx.tldv', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'tldx.Other', status: 'failed' })).toBe(false);
+  });
+  it('adds only the repaired Kiwix Electron identity to the bounded retry targets', () => {
+    const previous = 'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4';
+    expect(terminalToolchainRetryTargets('e79da0398e3cf3c6874e53b6304a2aef54b5770f')).toEqual([
+      'Kiwix.Wikivoyage.Electron', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'Kiwix.Wikivoyage.Electron', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate('e79da0398e3cf3c6874e53b6304a2aef54b5770f', candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('e79da0398e3cf3c6874e53b6304a2aef54b5770f',
+      { wingetId: 'Kiwix.Other', status: 'failed' })).toBe(false);
+  });
+  it('adds only LPub3D to the managed-context release retry targets', () => {
+    const previous = 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803';
+    const current = '6dfeaea03893e63cf7aba747638d7ea1768ac6b7';
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'trevorsandy.lpub3d', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'trevorsandy.lpub3d', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'trevorsandy.lpub3d', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'trevorsandy.Other', status: 'failed' })).toBe(false);
+  });
+  it('retries Product Portal only on its unattended uninstall release', () => {
+    const previous = '305b9c41a4ccbd271a9873a4fd858d2515586b76';
+    const current = 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803';
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'iZotope.ProductPortal', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'iZotope.ProductPortal', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'iZotope.ProductPortal', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'iZotope.Other', status: 'failed' })).toBe(false);
+  });
+  it('retries only WireSock CLI in addition to the prior release targets', () => {
+    const previous = '9e51c9ab6cc3a28346f13266e566c9896fa4101b';
+    const current = '305b9c41a4ccbd271a9873a4fd858d2515586b76';
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'NTKERNEL.WireSockVPNClientCLI', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'NTKERNEL.WireSockVPNClientCLI', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'NTKERNEL.WireSockVPNClientCLI', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'NTKERNEL.WireSockVPNClient', status: 'failed' })).toBe(false);
+  });
+  it('retries RackSight only after its exact identity repair and preserves older targets', () => {
+    const previous = '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba';
+    const current = '9e51c9ab6cc3a28346f13266e566c9896fa4101b';
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'AuthorityGate.RackSight', status: 'failed' })).toBe(false);
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'AuthorityGate.RackSight', ...terminalToolchainRetryTargets(previous),
+    ]);
+  });
+  it('retries AirUSB only on its repaired release while preserving existing targets', () => {
+    const previous = '5fdfc187c77c3223dc76287b41232770108ee7be';
+    const current = '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba';
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'AirUSB.Client', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'AirUSB.Client', status: 'failed' })).toBe(true);
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'AirUSB.Client', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'AirUSB.Other', status: 'failed' })).toBe(false);
+  });
+  it('retries Philips only after the exact NSIS identity repair', () => {
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Philips.SmartControl', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('7238616608f888449fa2e132fffc8d7314c26745',
+      { wingetId: 'Philips.SmartControl', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Philips.Other', status: 'failed' })).toBe(false);
+  });
+  it('retries Acrobat only after its archive MSI identity repair', () => {
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Adobe.Acrobat.Pro', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('6bdefc387d1402c71d30a6fbfcf850038f60f37a',
+      { wingetId: 'Adobe.Acrobat.Pro', status: 'failed' })).toBe(false);
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit))
+      .not.toContain('Adobe.CreativeCloud');
+  });
+  it('retries WithSecure only on the reviewed silent-removal release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'WithSecure.ElementsAgent', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+      { wingetId: 'WithSecure.ElementsAgent', status: 'failed' }
+    )).toBe(false);
+  });
+  it('retries SketchUp 2025 only after its unattended removal activation', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Trimble.SketchUp.2025', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd33825c2b786af7c3f22f4b828108c4129299ef9',
+      { wingetId: 'Trimble.SketchUp.2025', status: 'failed' }
+    )).toBe(false);
+  });
+  it('retries Retoolkit after activating the 45-minute bounded install wait', () => {
+    const wingetId = 'mentebinaria.retoolkit';
+    expect(shouldRetryTerminalToolchainCandidate(
+      '96c197e74589388d9091d89e1385bbbd318f7bf8',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'aafd4a7dd0787ea603c1c53bb8166369f81e39a7',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '92ddbf527ab5e698bb81937b97efc96523622a96',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '738d9f19baa44d2e1f0cf49c4fea5658915cefc9',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Notesnook only after activating its per-user lifecycle', () => {
+    const wingetId = ' streetwriters.notesnook ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      '52e078efa416c2de3edbbe23eecd62079ce04223',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '96c197e74589388d9091d89e1385bbbd318f7bf8',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries DSH Desktop only after activating its exact NSIS identity', () => {
+    const wingetId = ' justgenius-s.dshdesktop ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '52e078efa416c2de3edbbe23eecd62079ce04223',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Arvis only after activating its reviewed user scope', () => {
+    const wingetId = ' jopemachine.arvis ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f6bff5d1879b5cd11e285b1f1f0d140349d82215',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the JS8Call-improved retry available after the Arvis activation', () => {
+    const wingetId = ' js8call-improved.js8call-improved ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the exhausted Quassel retry scoped to its release', () => {
+    const wingetId = 'Quassel.QuasselIRC';
+    expect(shouldRetryTerminalToolchainCandidate(
+      '738d9f19baa44d2e1f0cf49c4fea5658915cefc9',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the exhausted MPLAB XC16 retry scoped to its release', () => {
+    const wingetId = 'Microchip.MPLABXC16CCompiler';
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b1f9ded94342bd3e27fe17b50e17f5b9474c01a3',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'ReceitaFederaldoBrasil.ReceitanetBX',
+    'Microlife.WatchBPAnalyzer',
+  ])('keeps the exhausted %s retry scoped to its release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '450123ff0f740dce8a4f7deee067dadd18739134',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries ARES Commander only after activating bounded install heartbeats', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '02334f8bff1ee97e68c81ef44fd4ed256df81397',
+      { wingetId: ' GRAEBERT.ARESCOMMANDER.2022 ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Graebert.AresCommander.2022', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the exhausted SSMS 21 Preview retry scoped to its release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2a1930a201bef41c313606cf44ecd71ce1238c7a',
+      { wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not replay the exhausted .NET Native Runtime retry at the next pin', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.DotNet.Native.Runtime', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
+      { wingetId: ' MICROSOFT.DOTNET.NATIVE.RUNTIME ', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('does not replay the exhausted Service Fabric Runtime retry at the next pin', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.ServiceFabricRuntime', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f48e73742c96773e2b4c8c2fed200363c7b5a805',
+      { wingetId: ' MICROSOFT.SERVICEFABRICRUNTIME ', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries UniFi OS Server only after activating its machine-wide lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' UBIQUITI.UNIFIOSSERVER ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '772c3aae1cc5b4f13219c216bfc1220cab2bbd23',
+      { wingetId: 'Ubiquiti.UniFiOSServer', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries AionUi Community only after activating its exact upstream identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' LUMYSIA.AIONUICOMMUNITY ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd7d0c2dc287851f151cc037022137bb3506f368d',
+      { wingetId: 'Lumysia.AionUiCommunity', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries G.SKILL Trident Z only after activating its exact Inno identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' GSKILL.TRIDENTZLIGHTINGCONTROL ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272',
+      { wingetId: 'GSKILL.TridentZLightingControl', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries zyfun only after activating reviewed all-users mode', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' HIRAMWONG.ZYFUN ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f1664e5b6c12d95c6ecde7b0999bb75582307f11',
+      { wingetId: 'HiramWong.zyfun', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries MaxTo only after activating its reviewed per-user installer heartbeat', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' DOMINO.MAXTO ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '617c3f8801dac600fd86c4c743aa2b44a1a5061b',
+      { wingetId: 'Domino.MaxTo', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries GreenTunnel only under the repaired shared scope release', () => {
+    expect(terminalToolchainRetryTargets('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146')).toEqual([
+      'SadeghHayeri.GreenTunnel',
+      ...terminalToolchainRetryTargets('6dfeaea03893e63cf7aba747638d7ea1768ac6b7'),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' sadeghhayeri.greentunnel ', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('6dfeaea03893e63cf7aba747638d7ea1768ac6b7',
+      { wingetId: 'SadeghHayeri.GreenTunnel', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' })).toBe(false);
+  });
+
+  it('retries Ente Photos only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' ENTE-IO.PHOTOS-DESKTOP ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '24ee5fb123c9817f4d2dabcbe11817472c82d1e1',
+      { wingetId: 'ente-io.photos-desktop', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not retry ROBOTC after its managed-uninstall block release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' robomatter.robotc.legomindstorms ', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3a1a14e69d4d290515e8617339dab5717cc83629',
+      { wingetId: 'Robomatter.ROBOTC.LEGOMindstorms', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('robomatter.robotc.legomindstorms');
+  });
+
+  it('does not retry League LA1 after its managed-install block release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' RiotGames.LeagueOfLegends.LA1 ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('riotgames.leagueoflegends.la1');
+  });
+
+  it('retries Zoho Mail only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' zoho.mail ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf',
+      { wingetId: 'Zoho.Mail', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries BarryCarlyon Extension Tools only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' barrycarlyon.barrycarlyonextensiontools ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3d10fde499ebe5f2987a44db5df35c3801a519ea',
+      { wingetId: 'BarryCarlyon.BarryCarlyonExtensionTools', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries FightPlanner only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' shatteredchaos.fightplanner ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f47779dbec9572a0ad72e59413b81dee8e0d13f7',
+      { wingetId: 'ShatteredChaos.FightPlanner', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Olive only after activating its reviewed non-ARP lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' oliveteam.olivevideoeditor ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47',
+      { wingetId: 'OliveTeam.OliveVideoEditor', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Teradata ODBC only after activating its reviewed archive uninstall', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' teradata.ttuodbc ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3f417a26c57c689b57c9f50914f254c3898c3356',
+      { wingetId: 'Teradata.TTUOdbc', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Somiibo only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' itwcreativeworks.somiibo ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'c96b0c7605388a652d05e226bb566d6e62f3c268',
+      { wingetId: 'ITWCreativeWorks.Somiibo', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Seewo after activating resolved UTF-8 BOM deployment output', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' seewo.easicare ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '493b141d093be4d3fa25b550c41d47f7b9a91a67',
+      { wingetId: 'Seewo.EasiCare', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries iFun Screenshot only after activating exact captured-identity recovery', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' iobit.ifunscreenshot ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '6d2de2aff5f192fe397a4ca2f53fb3f941d797d3',
+      { wingetId: 'IObit.iFunScreenshot', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not retry MD Editor after its managed install was disproven', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' rushabhpasad.mdeditor ', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
+      { wingetId: 'rushabhpasad.MDEditor', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries NammaAgent only after activating registered PowerShell uninstall resolution', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' santhoshreddy352.nammaagent ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '80675c437cc4fe894c8b65a08b8e98ed80a25138',
+      { wingetId: 'SanthoshReddy352.NammaAgent', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Datto only after activating reboot-required uninstall handling', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' datto.windowsagent ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '105adee4044b86a29f824581c8383cbd06101eae',
+      { wingetId: 'Datto.WindowsAgent', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Brity Meeting only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' samsungsds.britymeeting ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8712fc3a1a0239d34083952cda0f0a6676d0bb18',
+      { wingetId: 'SamsungSDS.BrityMeeting', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries SeaMeet Snap Recorder only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' seasaltai.seameetsnaprecorder ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '12fed0efb16de79951e9d3761c737aa382560e12',
+      { wingetId: 'SeasaltAI.SeaMeetSnapRecorder', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries the catalog-scoped August 26 packaging fixes only after activation', () => {
+    for (const wingetId of [
+      ' Trimble.SketchUpViewer ',
+      ' SeqLens.SeqLens ',
+      ' Segger.EmbeddedStudioARM ',
+    ]) {
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+      expect(shouldRetryTerminalToolchainCandidate(
+        '3887e769d1e6bfdea2027b73c1e287203aa8f3f7',
+        { wingetId, status: 'failed' }
+      )).toBe(false);
+    }
+  });
+
+  it('does not replay eligibility-blocked Ximalaya Live', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' ximalaya.ximalayalive ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('ximalaya.ximalayalive');
+  });
+
+  it('does not replay Q-Dir after activating its managed-uninstall block', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' softwareok.q-dir ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('softwareok.q-dir');
+  });
+
+  it('does not replay DesktopOK after activating its managed-uninstall block', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' softwareok.desktopok ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('softwareok.desktopok');
+  });
+
+  it('retries Switchbar only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' webcatalogltd.switchbar ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0dfe1593dbf19ef43beceb2574c440287eaf1dc8',
+      { wingetId: 'WebCatalogLtd.Switchbar', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries WowUp Beta only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' wowup.wowup.beta ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '54f0c26d3dbda39f78367178345c7d33eb214ec3',
+      { wingetId: 'WowUp.Wowup.Beta', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Android Apps Manager only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' simsdev.androidappsmanager ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8127bf1923e4a4863758acdebbe7f28f6a999790',
+      { wingetId: 'SIMSDEV.AndroidAppsManager', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('carries the Logitech LGS retry into its exact silent uninstall release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' logitech.lgs ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd019be69468b73ca47974c25e47932c589976624',
+      { wingetId: 'Logitech.LGS', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b09111db20f3aa13aced140d1bddbc83c437d459',
+      { wingetId: 'Logitech.LGS', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries RedisInsight only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' redisinsight.redisinsight ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
+      { wingetId: 'RedisInsight.RedisInsight', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Atlassian only after activating its documented quiet uninstall', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' atlassian.servicemanagementlts ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '326eafef044af8579bc0089c9556a3d59e26cbe0',
+      { wingetId: 'Atlassian.ServiceManagementLTS', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('carries Surfshark through diagnostics, visible-primary, and leaf-only releases', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' surfshark.surfshark ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1',
+      { wingetId: 'Surfshark.Surfshark', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'bb762159825bb59be2649f4cff4bf25fbbaef8b8',
+      { wingetId: 'Surfshark.Surfshark', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '228cd9def01122182631c91910554c05e9181edb',
+      { wingetId: 'Surfshark.Surfshark', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not carry blocked Bria into the PotPlayer release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'bria.bria', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
+      { wingetId: 'Bria.Bria', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries PotPlayer only on its reviewed all-users release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'daum.potplayer', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
+      { wingetId: 'Daum.PotPlayer', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Autodesk Licensing Service only on its dedicated lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'autodesk.licensingservice', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '12831539c9dc30678c6f16367faab76820502d2a',
+      { wingetId: 'Autodesk.LicensingService', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries CutePDF once with its vendor-specific silent removal adapter', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'acrosoftware.cutepdfwriter', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '6af0cfac18f3c4653a69a01f41bc1170c1237807',
+      { wingetId: 'AcroSoftware.CutePDFWriter', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Ubuntu on the Appx provisioning heartbeat release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'canonical.ubuntu.2404', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '77735e28d450c6b1c4f14a9a667bc5336eeeb3ea',
+      { wingetId: 'Canonical.Ubuntu.2404', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('exposes a defensive copy of current terminal retry targets', () => {
+    const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
+    expect(targets).toEqual(expect.arrayContaining([
+      'jopemachine.Arvis',
+      'JS8Call-improved.JS8Call-improved',
+      'HiramWong.zyfun',
+      'Domino.MaxTo',
+      'Logitech.LGS',
+      'IrfanSkiljan.IrfanView',
+      'Jamovi.Desktop.Current',
+      'Poly.PolyLens',
+      'Ghisler.TotalCommander',
+      'Tricentis.NeoLoad',
+      'Piriform.Recuva',
+      'Trimble.SketchUp.2022',
+      'MiKTeX.MiKTeX',
+      'Y-ASLant.ElegantClipboard',
+      'Amazon.Music',
+      'Greenshot.Greenshot.Preview',
+      'ABB.RobotStudio',
+      'Microsoft.msodbcsql.13',
+      'Microsoft.WindowsAppRuntime.1.8',
+      '8x8.Work',
+      'Microsoft.FSLogix',
+      'AvaCC.AvaDesktop',
+      'Microsoft.RMSClient',
+      'Movavi.MovaviPhotoFocus',
+      'RedHat.Podman-Desktop',
+      'PDFsam.PDFsam',
+      'Mega.MEGASync',
+      'AOMEI.PartitionAssistant',
+      'Ringler.SnapformViewer',
+      'Cisco.Jabber',
+      'IPEVO.Visualizer',
+      'IPEVO.VisualizerLTSE',
+      'Sonos.Controller',
+      'karakun.OpenWebStart',
+      'MSYS2.MSYS2',
+      'Insta360.Link.Controller',
+      'Logitech.SetPoint',
+      'Timely.Memory',
+      'Blizzard.BattleNet',
+      'DATEV.SicherheitspaketCompact',
+      'Autodesk.LicensingService',
+      'Daum.PotPlayer',
+      'Wiris.MathType.7',
+      'Microsoft.AzureMonitorAgent',
+      'Logitech.LogiBolt',
+      'BlueJTeam.BlueJ',
+      'Autodesk.DesignReview',
+      'AppiumDevelopers.AppiumInspector',
+      'Google.Chrome.Beta.EXE',
+      'Microsoft.VisualStudio.BuildTools',
+      'Microsoft.VisualStudio.2017.BuildTools',
+      'Microsoft.VisualStudio.2019.BuildTools',
+      'Microsoft.VisualStudio.2022.BuildTools',
+      'Surfshark.Surfshark',
+      'Waterfox.Waterfox',
+      'Playnite.Playnite',
+      'Tonec.InternetDownloadManager',
+      'IObit.Uninstaller',
+      'Autodesk.DesktopConnector',
+      'Egnyte.EgnyteDesktopApp',
+    ]));
+    expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
+    expect(targets).not.toContain('Tencent.QQ.NT');
+    expect(targets).not.toContain('Webroot.SecureAnywhere');
+    expect(targets).not.toContain('Speek.Speek');
+
+    targets.length = 0;
+
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
+      expect.arrayContaining([
+        'jopemachine.Arvis',
+        'JS8Call-improved.JS8Call-improved',
+        'HiramWong.zyfun',
+        'Logitech.LGS',
+        'IrfanSkiljan.IrfanView',
+        'Jamovi.Desktop.Current',
+        'Poly.PolyLens',
+        'Ghisler.TotalCommander',
+        'Tricentis.NeoLoad',
+        'Piriform.Recuva',
+        'Trimble.SketchUp.2022',
+        'MiKTeX.MiKTeX',
+        'Y-ASLant.ElegantClipboard',
+        'Amazon.Music',
+        'Greenshot.Greenshot.Preview',
+        'ABB.RobotStudio',
+        'Microsoft.msodbcsql.13',
+        'Microsoft.WindowsAppRuntime.1.8',
+        '8x8.Work',
+        'Microsoft.FSLogix',
+        'Google.Chrome.Beta.EXE',
+        'Microsoft.RMSClient',
+        'Movavi.MovaviPhotoFocus',
+        'RedHat.Podman-Desktop',
+        'PDFsam.PDFsam',
+        'Mega.MEGASync',
+        'AOMEI.PartitionAssistant',
+        'Ringler.SnapformViewer',
+        'Cisco.Jabber',
+        'IPEVO.Visualizer',
+        'IPEVO.VisualizerLTSE',
+        'Sonos.Controller',
+        'karakun.OpenWebStart',
+        'MSYS2.MSYS2',
+        'Insta360.Link.Controller',
+        'Logitech.SetPoint',
+        'Timely.Memory',
+        'Blizzard.BattleNet',
+        'DATEV.SicherheitspaketCompact',
+        'Autodesk.LicensingService',
+        'Daum.PotPlayer',
+        'Wiris.MathType.7',
+        'Microsoft.AzureMonitorAgent',
+        'Logitech.LogiBolt',
+        'BlueJTeam.BlueJ',
+        'Autodesk.DesignReview',
+        'AppiumDevelopers.AppiumInspector',
+        'Microsoft.VisualStudio.BuildTools',
+        'Microsoft.VisualStudio.2017.BuildTools',
+        'Microsoft.VisualStudio.2019.BuildTools',
+        'Microsoft.VisualStudio.2022.BuildTools',
+        'Waterfox.Waterfox',
+        'Playnite.Playnite',
+        'Tonec.InternetDownloadManager',
+        'IObit.Uninstaller',
+        'Autodesk.DesktopConnector',
+        'Egnyte.EgnyteDesktopApp',
+      ])
+    );
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+    ).not.toContain('Acronis.CyberProtectHomeOffice');
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+    ).not.toContain('Tencent.QQ.NT');
+  });
+
+  it('retries Waterfox only after activating its silent helper contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' waterfox.waterfox ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '44c38ddec97b546c7423374e09387d812e2386cc',
+      { wingetId: 'Waterfox.Waterfox', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Playnite only after activating its process-close contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' playnite.playnite ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '937a4d51d8c62885f76cb896fa3d742069436ee2',
+      { wingetId: 'Playnite.Playnite', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Internet Download Manager only after activating its silent uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' tonec.internetdownloadmanager ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5',
+      { wingetId: 'Tonec.InternetDownloadManager', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries IObit only after activating its Inno silent uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' iobit.uninstaller ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '943851a66f72cf115e2d97058a6415ee71e3f50f',
+      { wingetId: 'IObit.Uninstaller', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Desktop Connector only after activating its ODIS registration wait', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' autodesk.desktopconnector ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3400509334e29c78e960ba3b05ba3e4bec408b87',
+      { wingetId: 'Autodesk.DesktopConnector', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Egnyte only after activating its update-on-boot contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' egnyte.egnytedesktopapp ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b798917a85465cb2fe7b55582322d1e30b20e088',
+      { wingetId: 'Egnyte.EgnyteDesktopApp', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not retry blocked Stream Deck after removing the disproven guard', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' elgato.streamdeck ', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '63219f1fe5c953c8fd799c79030176444ba637b4',
+      { wingetId: 'Elgato.StreamDeck', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Windows App Runtime 1.3 only after activating exact shared Appx evidence', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' microsoft.windowsappruntime.1.3 ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
+      { wingetId: 'Microsoft.WindowsAppRuntime.1.3', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Total Commander only after activating its unattended uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' ghisler.totalcommander ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '384d36477200c3410f47645e376fe2dfd3682a9e',
+      { wingetId: 'Ghisler.TotalCommander', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Poly Lens only after activating its renamed Poly Studio identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' poly.polylens ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '5636cda74d31de95d9ee5689050ba04e432ede61',
+      { wingetId: 'Poly.PolyLens', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Jamovi only after activating its observed registered identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' jamovi.desktop.current ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '085de20195dacc66c0d465945f93c6a780cc14c4',
+      { wingetId: 'Jamovi.Desktop.Current', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries IrfanView only after activating its documented silent uninstall', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' irfanskILJan.irfanview ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'e029c0e9f7884eb07ba8f277413298ec354fb597',
+      { wingetId: 'IrfanSkiljan.IrfanView', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries ElegantClipboard only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' y-aslant.elegantclipboard ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'ffb7638dd870b188654c84673663b8ff151a7985',
+      { wingetId: 'Y-ASLant.ElegantClipboard', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries MiKTeX only after activating its unattended setup lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' miktex.miktex ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
+      { wingetId: 'MiKTeX.MiKTeX', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not retry blocked Webroot on the current release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' webroot.secureanywhere ', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '49775d3657a1b11b4ec1603e80ba8f78882b174f',
+      { wingetId: 'Webroot.SecureAnywhere', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Chrome Beta EXE only after activating its exact vendor ARP identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' google.chrome.beta.exe ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '00983d36128aef319cc36f901beeff6dd03d847f',
+      { wingetId: 'Google.Chrome.Beta.EXE', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries every Build Tools generation after activating its deterministic install path', () => {
+    for (const wingetId of [
+      'Microsoft.VisualStudio.BuildTools',
+      'Microsoft.VisualStudio.2017.BuildTools',
+      'Microsoft.VisualStudio.2019.BuildTools',
+      'Microsoft.VisualStudio.2022.BuildTools',
+    ]) {
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+    }
+    expect(shouldRetryTerminalToolchainCandidate(
+      '20fbdeff5e6a4dc9d911019a244f7e46ab19b708',
+      { wingetId: 'Microsoft.VisualStudio.2017.BuildTools', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'c1c9410f58318d055c09a60bc067996a4b9b4597',
+      { wingetId: 'Microsoft.VisualStudio.2019.BuildTools', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries SketchUp 2022 only after activating its reviewed silent removal argument', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' trimble.sketchup.2022 ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b67135eb2f947485e54c2583cfb6083b1e2f24ba',
+      { wingetId: 'Trimble.SketchUp.2022', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      'b67135eb2f947485e54c2583cfb6083b1e2f24ba'
+    )).toContain('Webroot.SecureAnywhere');
+  });
+
+  it('retries Recuva only after activating full-width WinGet success codes', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' piriform.recuva ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'dde6e9ae4e569568b4a15c087ba711d1bb3a8895',
+      { wingetId: 'Piriform.Recuva', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      'dde6e9ae4e569568b4a15c087ba711d1bb3a8895'
+    )).toEqual(expect.arrayContaining([
+      'Trimble.SketchUp.2022',
+      'Webroot.SecureAnywhere',
+    ]));
+  });
+
+  it('retries NeoLoad only after activating its reviewed install4j quiet argument', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' tricentis.neoload ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d',
+      { wingetId: 'Tricentis.NeoLoad', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d'
+    )).toEqual(expect.arrayContaining([
+      'Piriform.Recuva',
+      'Trimble.SketchUp.2022',
+      'Webroot.SecureAnywhere',
+    ]));
+  });
+
+  it('does not retry blocked QQ NT after removing its ineffective adapter', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' tencent.qq.nt ', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '765d02a3041cc304d2df403aafc18b6f14258f59',
+      { wingetId: 'Tencent.QQ.NT', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('carries FSLogix from its reviewed identity release into nested-EXE disambiguation', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'microsoft.fslogix', status: 'error' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '31faef7cae75613243bc36c9bb0af38c88761437',
+      { wingetId: 'Microsoft.FSLogix', status: 'error' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f79b14647328d39bca04dada822a07f70573aa49',
+      { wingetId: 'Microsoft.FSLogix', status: 'error' }
+    )).toBe(false);
+  });
+
+  it('retries the saved custom marker profile only after activating marker recovery', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: '8X8.work', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'bd61ef8e81dac8b16289a4a572022d4d1702b333',
+      { wingetId: '8x8.Work', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not replay Speek after activating its managed-install block', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'speek.speek', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd64f6815b43c16428d83cde1b909e6503d7cc40f',
+      { wingetId: 'Speek.Speek', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it.each([
+    'Microsoft.RMSClient',
+    'Movavi.MovaviPhotoFocus',
+  ])('retries %s only on the combined lifecycle release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4918638adf111a664f2589ce79d8aefe79c33936',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps DesktopOK retries confined to its retired repair releases', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'softwareok.desktopok', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f79b14647328d39bca04dada822a07f70573aa49',
+      { wingetId: 'SoftwareOK.DesktopOK', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0a3741207b9fbab73f108b0b6f214ab9d2ffedfa',
+      { wingetId: 'SoftwareOK.DesktopOK', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not repeat the consumed .NET Framework retry in the Sonos releases', () => {
+    expect(terminalToolchainRetryTargets(
+      '5569c16d136f464cbc014f40c70645414c601751'
+    )).toContain('Microsoft.DotNet.Framework.Runtime');
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).not.toContain('Microsoft.DotNet.Framework.Runtime');
+  });
+
+  it('carries Sonos into the administrative-image retry after failed extraction', () => {
+    expect(terminalToolchainRetryTargets(
+      'e6dfe920d82e0b62c5d5e420fb603f61acdb5a42'
+    )).toContain('Sonos.Controller');
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Sonos.Controller');
+  });
+
+  it('retries PDFsam once with its documented managed MSI command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '404c9718a2c977722850bc9d70a02772a9bd1c7a',
+      { wingetId: 'pdfsam.pdfsam', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'pdfsam.pdfsam', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries MEGAsync once with its reviewed all-users command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'mega.megasync', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries PTC Creo View Express with the corrected MSI-forwarding command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ptc.creoview.express', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Battle.net with its required WinGet install location', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'blizzard.battlenet', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries ZeeDrive with its reviewed no-ARP managed lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'thinkscape.zeedrive', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '20546b8280874ba955b8d14182ad69bde8eacb58',
+      { wingetId: 'Thinkscape.ZeeDrive', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Docker Desktop Edge only with the registered-identity release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'docker.dockerdesktopedge', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b6254d8fdf1dd50ccc95fbb3e137a5ef5717cce5',
+      { wingetId: 'Docker.DockerDesktopEdge', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the Office Deployment Tool managed lifecycle retry scoped to its release', () => {
+    const wingetId = 'Microsoft.OfficeDeploymentTool';
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2e68a941d3410e4eb7c6ed1e73fbc0eff290c807',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Microsoft.SQLServerManagementStudio.21',
+    'Microsoft.SQLServerManagementStudio.22',
+    'Microsoft.SQLServerManagementStudio.22.Preview',
+  ])('keeps the SSMS retry scoped to its historical toolchain release for %s', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '072dc26c5c25369bf01f265af5af17c47c0e50e5',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not replay the already-resolved xTool failure on the current pin', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b3b2729bab6959a554c0e6d41af0a841d6177386',
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e',
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not replay the already-resolved LTspice failure on the current pin', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e',
+      { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
+      { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Opera once on the reviewed immediate-uninstall release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '681b7510f7f30bec92c17581213c9ebc7f72765a',
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9ff409ddabd3b1b4f8c65ad03b1f9e37778589fc',
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8235887e7126972b89c264e2053c1c4f7418ea74',
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Opera GX on its reviewed machine-wide removal release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5',
+      { wingetId: 'Opera.OperaGX', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4ca2932ca8ff26578cade36457f0fcc150513e4c',
+      { wingetId: 'Opera.OperaGX', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries HP Image Assistant on its managed extracted-payload release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '34189c6876f0fe4539b971ba1b9e962ff66cd259',
+      { wingetId: 'HP.ImageAssistant', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5',
+      { wingetId: 'HP.ImageAssistant', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Evernote and the pending HP validation on the process-close release', () => {
+    for (const wingetId of ['Evernote.Evernote', 'HP.ImageAssistant']) {
+      expect(shouldRetryTerminalToolchainCandidate(
+        '1490844284f84f807e207fb9970bddc499bbe446',
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(false);
+    }
+    expect(shouldRetryTerminalToolchainCandidate(
+      '34189c6876f0fe4539b971ba1b9e962ff66cd259',
+      { wingetId: 'Evernote.Evernote', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the Viber retry scoped to its user-scope release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9214e4b5b71508bfba9aa1a2d4de5c3c771d3fea',
+      { wingetId: 'Rakuten.Viber', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Rakuten.Viber', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Anthropic.ClaudeCode',
+    'Google.PlatformTools',
+  ])('retries %s once on the portable archive release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3fce249f5021c120a23ed0ab5dc726baaf060f3e',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the registered-command Dell retry scoped to its release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4ca55ff8ac8d4d5f6d07665adbe06a07f0110006',
+      { wingetId: 'Dell.Optimizer', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Dell Optimizer on the packaged Dell Update removal release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4ca2932ca8ff26578cade36457f0fcc150513e4c',
+      { wingetId: 'Dell.Optimizer', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Dell.Optimizer', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps WebView2 replay scoped to its shared-runtime lifecycle releases', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f4bc37886e490ece525c701562869734a7e366d5',
+      { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
+      { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the Granola diagnostics replay scoped to its historical releases', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
+      { wingetId: 'Granola.Granola', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f4bc37886e490ece525c701562869734a7e366d5',
+      { wingetId: 'Granola.Granola', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Granola.Granola', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Microsoft.VisualStudio.2019.Community',
+    'Microsoft.VisualStudio.2019.Enterprise',
+    'Microsoft.VisualStudio.2019.Professional',
+    'Mozilla.Firefox.de',
+  ])(
+    'keeps the terminal %s retry scoped to its historical toolchain release',
+    (wingetId) => {
+      expect(shouldRetryTerminalToolchainCandidate(
+        'bbd8948f2bbefeaba9caf51f6e36ce5d26fdff35',
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(false);
+    }
+  );
+
+  it.each([
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+  ])('retries terminal %s through the current reviewed instance root', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries OpenWebStart once with its install4j unattended uninstaller', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'karakun.openwebstart', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries MSYS2 once with its reviewed product identity and uninstaller', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'msys2.msys2', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('keeps the VirtualBox retry scoped to its historical toolchain release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'bafea79a8dde42be074c385c35b4887fb5833aa0',
+      { wingetId: 'Oracle.VirtualBox', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Oracle.VirtualBox', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the resolved Greenshot retry on its tool-cache release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99',
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '681b7510f7f30bec92c17581213c9ebc7f72765a',
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Greenshot Preview only through its exact Inno identity release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot.Preview', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '21fbdbc5a29ca42ac0d2dd1c5939b9ad1f94adc2',
+      { wingetId: 'Greenshot.Greenshot.Preview', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Amazon Music only through the empty EXE argument release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Amazon.Music', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'c2af5b6dfdd0a6bf44d344366abc23878c23d48b',
+      { wingetId: 'Amazon.Music', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Qfinder Pro once with its runtime and process lifecycle fix', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7e83c363bcbafca153f00113b12ede2e332b2d2d',
+      { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '681b7510f7f30bec92c17581213c9ebc7f72765a',
+      { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries VisualCppRedist once with reviewed multi-product evidence', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '670357c92fefa433036d8667dd5f382731d8326e',
+      { wingetId: 'ABBODI1406.VCREDIST', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7e83c363bcbafca153f00113b12ede2e332b2d2d',
+      { wingetId: 'abbodi1406.vcredist', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('adds PostgreSQL 16 to the bounded removal release without arbitrary retries', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+      { wingetId: 'PostgreSQL.PostgreSQL.16', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+      { wingetId: 'Example.UnreviewedApp', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries PostgreSQL 13 once with the family unattended lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2c40f49e2cb0b5a1f7a1c27996f5aee72553a074',
+      { wingetId: 'postgresql.postgresql.13', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '670357c92fefa433036d8667dd5f382731d8326e',
+      { wingetId: 'PostgreSQL.PostgreSQL.13', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries EA Desktop once with the registered Burn helper lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'e6a4ae2f4f9a3a672c6912ab8e309483f53003b7',
+      { wingetId: 'electronicarts.eadesktop', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2c40f49e2cb0b5a1f7a1c27996f5aee72553a074',
+      { wingetId: 'ElectronicArts.EADesktop', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries EA Desktop once after adding its process-close lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2dca138ee2fe27dc45166dba536511aa80d8937e',
+      { wingetId: 'ELECTRONICARTS.EADESKTOP', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'e6a4ae2f4f9a3a672c6912ab8e309483f53003b7',
+      { wingetId: 'ElectronicArts.EADesktop', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries MPC-BE once after strengthening Inno quiet uninstall arguments', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '54515b6566ff4e7c9040fa24a8eba6b6347ef09e',
+      { wingetId: 'mpc-be.mpc-be', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'MPC-BE.MPC-BE', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Camera Hub once after guarding its MSI pre-uninstall helper', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'cf24633576b6c5efcca5fbde8ffe7fb4f0f57272',
+      { wingetId: 'elgato.camerahub', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'elgato.camerahub', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries VSTO once with its reviewed external-installer removal switches', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '54515b6566ff4e7c9040fa24a8eba6b6347ef09e',
+      { wingetId: 'microsoft.vstor', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.VSTOR', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the OCS retry scoped to its historical toolchain release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'fc18fffd40f6d362be251e05e2bc784373dfc735',
+      { wingetId: 'OCSInventoryNG.WindowsAgent', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'OCSInventoryNG.WindowsAgent', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('does not replay an unrelated terminal failure', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Horizon Client after suppressing Burn uninstall restarts', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'af4dfb94c9109ca598abc16a4b8cad57f6790066',
+      { wingetId: 'OMNISSA.HORIZONCLIENT', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'OMNISSA.HORIZONCLIENT', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Ecosia once with Chromium silent removal', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '94c8f81e38ac180048f86dbf2df7f987fa448676',
+      { wingetId: 'ECOSIA.ECOSIABROWSER', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ECOSIA.ECOSIABROWSER', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries IntelliJ Ultimate with its exact named ARP key', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'af4dfb94c9109ca598abc16a4b8cad57f6790066',
+      { wingetId: 'jetbrains.intellijidea.ultimate', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'jetbrains.intellijidea.ultimate', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Snapform Viewer with install4j unattended removal', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ringler.snapformviewer', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it.each([
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+  ])('retries %s after bypassing empty EXE path parsing for exact MSI removal', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Visualizer LTSE with exact version-suffixed ARP identity matching', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ipevo.visualizerltse', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Sonos with its reviewed embedded-MSI lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'sonos.controller', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Logitech Presentation after replacing its UAC-blocked user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'logitech.presentation', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries NVM after replacing its UAC-blocked user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'coreybutler.nvmforwindows', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Autodesk Access with the exact ODIS quiet uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'autodesk.autodeskaccess', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '81f443163ffb9f437be3901b44b6da74032032c4',
+      { wingetId: 'Autodesk.AutodeskAccess', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Logitech G HUB only after activating its reviewed lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'logitech.ghub', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7b2938c853d9a799ac76957bd122c5c7eb5406f5',
+      { wingetId: 'Logitech.GHUB', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Wiris.MathType.7',
+    'Microsoft.AzureMonitorAgent',
+  ])('retries %s only after activating its reviewed uninstall repair', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Logi Bolt only after activating its exact /silent uninstaller', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'logitech.logibolt', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f5d7258e504f10679f54f025cebf11bfe9584221',
+      { wingetId: 'Logitech.LogiBolt', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Arduino IDE only after activating machine-scope MSI normalization', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'arduinosa.ide.stable', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4537454fe9f0f942d59a7b748505b2318cf13a6c',
+      { wingetId: 'ArduinoSA.IDE.stable', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries OpenOffice only after activating exact-version prefix identity capture', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'apache.openoffice', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7c74dc4412c3e6834da9935cc74ab8371a7ed71f',
+      { wingetId: 'Apache.OpenOffice', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries BankID only after preserving the nested MSI product identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'financialid.bankid', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '82de31f37d7977906153135fde2eb12cf30909c7',
+      { wingetId: 'FinancialID.BankID', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Visual Studio 2017 only after activating its instance lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'microsoft.visualstudio.2017.enterprise', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
+      { wingetId: 'Microsoft.VisualStudio.2017.Enterprise', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('carries the bounded BlueJ retry into its explicit per-user MSI release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ad6cdec44cd8ec47ce12c9ae59487f2fa9dda52',
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f91af4469ba113dac1524f8764c4a03d535eb188',
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8ed88e9a9889fec478235b1623e313f9fd86bd59',
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Design Review only on its bounded ODIS lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'autodesk.designreview', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd7293535636c41b795088f4d265e4e085445a05c',
+      { wingetId: 'Autodesk.DesignReview', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Appium Inspector only on its user-scope lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'appiumdevelopers.appiuminspector', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '06b92432e61d66eab624085dfd6db138d3778862',
+      { wingetId: 'AppiumDevelopers.AppiumInspector', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps historical darktable retries scoped away from the blocked current release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'darktable.darktable', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7391c73a8eacb01becfc76682bfbb37b1d60b17f',
+      { wingetId: 'darktable.darktable', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '5569c16d136f464cbc014f40c70645414c601751',
+      { wingetId: 'microsoft.dotnet.framework.runtime', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'microsoft.dotnet.framework.runtime', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Autodesk.NavisworksFreedom.2026',
+    'Autodesk.NavisworksFreedom.2027',
+  ])('retries %s with its reviewed ODIS lifecycle', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'ca77e52dc65a404eb81679c5188378bf4d69a692',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('still rebuilds a non-terminal stale candidate', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'superseded' }
+    )).toBe(true);
+  });
+
+  it('retries iFun Screenshot with the install-observed publisher release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'iobit.ifunscreenshot', status: 'failed' }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      '4d9de9f4e1650f4ee5e9d428db88744a6f5e491a'
+    )).toContain('IObit.iFunScreenshot');
+  });
+
+  it('retries QTTabBar with the install-observed ARP identity release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'indiff.qttabbar', status: 'failed' }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('indiff.QTTabBar');
+    expect(terminalToolchainRetryTargets(
+      '8e2e4217be6bd233907b879cc8c1c53c18fdf918'
+    )).not.toContain('indiff.QTTabBar');
+  });
+
+  it('retries Macabacus with the trusted MSI argument release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'macabacus.macabacus', status: 'failed' }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Macabacus.Macabacus');
+    expect(terminalToolchainRetryTargets(
+      'ac0ccd9c0bd0c400a82cf2a0c729804e4c4c4162'
+    )).not.toContain('Macabacus.Macabacus');
+  });
+
+  it('retries TeamSpeak 6 Beta with the reviewed machine-scope release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      {
+        wingetId: 'teamspeaksystems.teamspeakclient.beta.6',
+        status: 'failed',
+      }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
+    expect(terminalToolchainRetryTargets(
+      '953d2ca467b8e800a143150871c5220682106aa2'
+    )).not.toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
+  });
+
+  it('does not automatically retry the security-gated IJe installer', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ije.ije', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).not.toContain('IJe.IJe');
+  });
+
+  it('retries Simple Hydraulic Calculator with its bounded confirmation release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      {
+        wingetId: 'igneus.simplehydrauliccalculator',
+        status: 'failed',
+      }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Igneus.SimpleHydraulicCalculator');
+    expect(terminalToolchainRetryTargets(
+      '5998b0deba83c1e274e8a4249a7962f67dcb6073'
+    )).toContain('Igneus.SimpleHydraulicCalculator');
+    expect(terminalToolchainRetryTargets(
+      'e139e4cc222576f34ca905b7180ac47ea548cbab'
+    )).not.toContain('Igneus.SimpleHydraulicCalculator');
+  });
+  it('retries Zermelo only after its exact registry identity release', () => {
+    expect(terminalToolchainRetryTargets('cb3e4501fa7c4470330a1b6031dd5799fee8f9e4')).toEqual([
+      'ZermeloSoftwareBV.ZermeloDesktop',
+      ...terminalToolchainRetryTargets('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146'),
+    ]);
+    const candidate = { wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146', candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Example.Other', status: 'failed' })).toBe(false);
+  });
+
+});

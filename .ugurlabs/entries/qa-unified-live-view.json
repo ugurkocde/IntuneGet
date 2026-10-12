@@ -1,0 +1,5 @@
+{
+  "title": "Live QA now includes catalog verification",
+  "summary": "Follow catalog verification on the QA page alongside ordinary application tests. See the active application, lifecycle progress and elapsed time, with a live VM view for default release checks. Custom settings remain private, and queued tests are shown as waiting until they actually start.",
+  "type": "improved"
+}

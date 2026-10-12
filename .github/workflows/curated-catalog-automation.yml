@@ -1,0 +1,98 @@
+name: Curated catalog automation
+run-name: Curated catalog automation${{ inputs.withdraw_release_id && format(' - withdraw {0}', inputs.withdraw_release_id) || '' }}
+
+# Every 30 minutes: read publisher release metadata, enqueue priority VM
+# verification for new releases, then sign passing releases into the catalog
+# and open a PR for automated final patch review by the QA owner thread.
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      withdraw_release_id:
+        description: Optional emergency withdrawal of an approved release ID
+        required: false
+        type: string
+      withdraw_reason:
+        description: Reason for the withdrawal (at least 20 characters)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curated-catalog-automation
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # Allow the API helper's shared 65-minute quota wait budget plus job work.
+    timeout-minutes: 85
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      approvals: ${{ steps.plan.outputs.approvals }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/build-curated-runtime.mjs
+      - name: Discover releases, queue priority verification and select passing runs
+        id: plan
+        env:
+          # CURATED_QA_TOKEN reads the private QA verification
+          # workflow and keeps the alert issue there current. The workflow token
+          # only authenticates public GitHub release metadata reads.
+          GH_TOKEN: ${{ secrets.PAT }}
+          CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          # Records every curated QA run in curated_qa_runs and drives custom
+          # PSADT configuration verification (curated_config_verifications).
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
+          CURATED_SYNC_ISSUE: 'true'
+        run: node scripts/curated-automation.mjs plan
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    # Holds the signing key. Restricted to protected branches; no reviewer gate.
+    environment: curated-catalog-approval
+    runs-on: ubuntu-24.04
+    # Publication uses the same bounded GitHub quota retry helper as planning.
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/build-curated-runtime.mjs
+      - name: Re-authenticate evidence, sign and open the catalog review PR
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
+          CURATED_CATALOG_SIGNING_KEY: ${{ secrets.CURATED_CATALOG_SIGNING_KEY }}
+          CURATED_APPROVALS: ${{ needs.plan.outputs.approvals }}
+          CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
+          CURATED_WITHDRAW_REASON: ${{ inputs.withdraw_reason }}
+        run: node scripts/curated-automation.mjs publish
+      - name: Retain publication review metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: curated-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/curated/automation/publication.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { formatQaDuration } from '@/lib/qa/presentation';
 
 interface UseElapsedTimeOptions {
   startTime: string | null;
   endTime?: string | null;
+  serverTime?: string | null;
   updateInterval?: number;
 }
 
@@ -14,42 +16,17 @@ interface UseElapsedTimeReturn {
 }
 
 /**
- * Format seconds into human readable time string
- */
-function formatElapsedTime(seconds: number): string {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-
-  if (minutes < 60) {
-    return remainingSeconds > 0
-      ? `${minutes}m ${remainingSeconds}s`
-      : `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (remainingMinutes > 0) {
-    return `${hours}h ${remainingMinutes}m`;
-  }
-
-  return `${hours}h`;
-}
-
-/**
  * Hook to track elapsed time from a start timestamp
  */
 export function useElapsedTime({
   startTime,
   endTime,
+  serverTime,
   updateInterval = 1000,
 }: UseElapsedTimeOptions): UseElapsedTimeReturn {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const activeStartRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Clear any existing interval
@@ -59,16 +36,21 @@ export function useElapsedTime({
     }
 
     if (!startTime) {
+      activeStartRef.current = null;
       setElapsedSeconds(0);
       return;
     }
 
     const startDate = new Date(startTime).getTime();
+    const parsedServerTime = serverTime ? new Date(serverTime).getTime() : Number.NaN;
+    const serverOffsetMs = Number.isFinite(parsedServerTime) ? parsedServerTime - Date.now() : 0;
+    const isNewStart = activeStartRef.current !== startTime;
+    activeStartRef.current = startTime;
 
     const calculateElapsed = () => {
-      const endDate = endTime ? new Date(endTime).getTime() : Date.now();
+      const endDate = endTime ? new Date(endTime).getTime() : Date.now() + serverOffsetMs;
       const elapsed = Math.max(0, Math.floor((endDate - startDate) / 1000));
-      setElapsedSeconds(elapsed);
+      setElapsedSeconds((previous) => isNewStart ? elapsed : Math.max(previous, elapsed));
     };
 
     // Calculate initial value
@@ -85,10 +67,10 @@ export function useElapsedTime({
         intervalRef.current = null;
       }
     };
-  }, [startTime, endTime, updateInterval]);
+  }, [startTime, endTime, serverTime, updateInterval]);
 
   return {
     elapsedSeconds,
-    formattedTime: formatElapsedTime(elapsedSeconds),
+    formattedTime: formatQaDuration(elapsedSeconds),
   };
 }

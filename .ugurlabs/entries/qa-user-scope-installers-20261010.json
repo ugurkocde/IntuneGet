@@ -1,0 +1,5 @@
+{
+  "title": "Per-user installers pass the installation check",
+  "summary": "Deployments of apps whose WinGet installer installs for the current user no longer stop at the installation check with a manifest changed error. The installer is still verified against the trusted WinGet manifest before testing, and deployments blocked by this error recover after a fresh verification.",
+  "type": "fixed"
+}

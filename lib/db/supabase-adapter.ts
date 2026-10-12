@@ -4,7 +4,24 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
+import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, AnalyticsJob, AnalyticsJobScope } from './types';
+import { collectAnalyticsJobs } from '@/lib/analytics/complete-job-pages';
+import type {
+  AppUpdatePolicy,
+  AutoUpdateHistory,
+  AutoUpdateHistoryWithPolicy,
+  AutoUpdateStatus,
+} from '@/types/update-policies';
+import type {
+  ClaimedAppInput,
+  ClaimedAppRecord,
+  CuratedLicenceAttestationInput,
+  CuratedLicenceAttestationRecord,
+  UpdateCheckQuery,
+  UpdateCheckResult,
+} from './types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -176,6 +193,29 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]> {
+      const key = scope.tenantId === undefined ? 'user_id' : 'tenant_id';
+      const identity = scope.tenantId ?? scope.userId;
+      if (!identity) throw new Error('Statistics identity required');
+      const supabase = createServerClient();
+      let archiveSupported = true;
+      const deadline = AbortSignal.timeout(15000);
+      return collectAnalyticsJobs(async offset => {
+        const readPage = () => {
+          let query = supabase.from('packaging_jobs')
+            .select('id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url', { count: 'exact' })
+            .eq(key, identity);
+          if (archiveSupported) query = query.is('archived_at', null);
+          return query.order('created_at', { ascending: false }).order('id', { ascending: false })
+            .range(offset, offset + 999).abortSignal(deadline);
+        };
+        let result = await readPage();
+        if (isMissingArchiveColumn(result.error)) { archiveSupported = false; result = await readPage(); }
+        if (result.error) throw new Error('Statistics read failed');
+        return { data: (result.data ?? []) as AnalyticsJob[], count: result.count };
+      });
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const supabase = createServerClient();
 
@@ -193,6 +233,30 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
+      let query = createServerClient().from('packaging_jobs').select('*')
+        .eq('tenant_id', tenantId);
+      query = curated ? query.ilike('winget_id', wingetId) : query.eq('winget_id', wingetId);
+      query = query.in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
+        .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
+      if (cursor) {
+        // Cursor values come from database rows, but validate before using filter syntax.
+        if (!/^[0-9T:.+Z-]+$/.test(cursor.createdAt) ||
+            !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(cursor.id)) {
+          throw new Error('Invalid approval checkpoint cursor');
+        }
+        query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+      }
+      const { data, error } = await query;
+      if (error) throw new Error('Approval checkpoints unavailable');
+      return (data || []) as unknown as PackagingJob[];
     },
 
     /**
@@ -222,7 +286,16 @@ export const supabaseDb: DatabaseAdapter = {
         package_config: job.package_config,
         app_source: job.app_source || 'win32',
         status: job.status || 'queued',
+        status_message: job.status_message,
         progress_percent: job.progress_percent || 0,
+        error_stage: job.error_stage,
+        error_category: job.error_category,
+        error_code: job.error_code,
+        execution_profile_sha256: job.execution_profile_sha256,
+        presentation_profile_sha256: job.presentation_profile_sha256,
+        qa_candidate_id: job.qa_candidate_id,
+        qa_requested_at: job.qa_requested_at,
+        qa_completed_at: job.qa_completed_at,
       };
 
       const { data, error } = await query
@@ -505,6 +578,554 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return data || [];
+    },
+
+    async getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null> {
+      const supabase = createServerClient();
+      const query = getUploadHistoryQuery(supabase);
+
+      const { data, error } = await query
+        .select('*')
+        .eq('user_id', userId)
+        .eq('intune_tenant_id', tenantId)
+        .eq('winget_id', wingetId)
+        .order('deployed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error fetching latest upload history:', error);
+        throw error;
+      }
+
+      return data ?? null;
+    },
+
+    async listAll(limit: number = 1000): Promise<UploadHistoryRecord[]> {
+      const supabase = createServerClient();
+      const query = getUploadHistoryQuery(supabase);
+      const { data, error } = await query
+        .select('*')
+        .order('deployed_at', { ascending: false })
+        .limit(limit);
+      if (isError(error)) {
+        console.error('Error fetching upload history:', error);
+        throw error;
+      }
+      return data ?? [];
+    },
+  },
+
+  updatePolicies: {
+    async list(userId: string, tenantId?: string): Promise<AppUpdatePolicy[]> {
+      const supabase = createServerClient();
+      let query = supabase.from('app_update_policies').select('*').eq('user_id', userId);
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      const { data, error } = await query.order('updated_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing update policies:', error);
+        throw error;
+      }
+      return (data ?? []) as unknown as AppUpdatePolicy[];
+    },
+
+    async getById(id: string, userId: string): Promise<AppUpdatePolicy | null> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error fetching update policy:', error);
+        throw error;
+      }
+      return (data as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
+        .eq('winget_id', wingetId)
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error fetching update policy:', error);
+        throw error;
+      }
+      return (data as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async listAll(): Promise<AppUpdatePolicy[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing update policies:', error);
+        throw error;
+      }
+      return (data ?? []) as unknown as AppUpdatePolicy[];
+    },
+
+    async upsert(
+      policy: Partial<AppUpdatePolicy> & Pick<AppUpdatePolicy, 'user_id' | 'tenant_id' | 'winget_id' | 'policy_type'>
+    ): Promise<AppUpdatePolicy> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .upsert(
+          {
+            user_id: policy.user_id,
+            tenant_id: policy.tenant_id,
+            winget_id: policy.winget_id,
+            policy_type: policy.policy_type,
+            pinned_version: policy.pinned_version ?? null,
+            deployment_config: (policy.deployment_config ?? null) as never,
+            original_upload_history_id: policy.original_upload_history_id ?? null,
+            is_enabled: policy.is_enabled ?? true,
+            updated_at: policy.updated_at || new Date().toISOString(),
+          },
+          { onConflict: 'user_id,tenant_id,winget_id' }
+        )
+        .select()
+        .single();
+
+      if (isError(error)) {
+        console.error('Error upserting update policy:', error);
+        throw error;
+      }
+      if (!data) {
+        throw new Error('No data returned from upsert');
+      }
+      return data as unknown as AppUpdatePolicy;
+    },
+
+    async update(id: string, userId: string, data: Partial<AppUpdatePolicy>): Promise<AppUpdatePolicy | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('app_update_policies')
+        .update({ ...data, updated_at: data.updated_at || new Date().toISOString() } as never)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error updating update policy:', error);
+        throw error;
+      }
+      return (updated as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async delete(id: string, userId: string): Promise<boolean> {
+      const supabase = createServerClient();
+      const { count, error } = await supabase
+        .from('app_update_policies')
+        .delete({ count: 'exact' })
+        .eq('id', id)
+        .eq('user_id', userId);
+      if (isError(error)) {
+        console.error('Error deleting update policy:', error);
+        throw error;
+      }
+      return (count ?? 0) > 0;
+    },
+  },
+
+  autoUpdateHistory: {
+    async create(
+      record: Partial<AutoUpdateHistory> &
+        Pick<AutoUpdateHistory, 'policy_id' | 'from_version' | 'to_version' | 'update_type'>
+    ): Promise<AutoUpdateHistory> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('auto_update_history')
+        .insert({
+          policy_id: record.policy_id,
+          packaging_job_id: record.packaging_job_id ?? null,
+          from_version: record.from_version,
+          to_version: record.to_version,
+          update_type: record.update_type,
+          status: record.status ?? 'pending',
+          error_message: record.error_message ?? null,
+          triggered_at: record.triggered_at || new Date().toISOString(),
+          completed_at: record.completed_at ?? null,
+        })
+        .select()
+        .single();
+      if (isError(error)) {
+        console.error('Error creating auto-update history:', error);
+        throw error;
+      }
+      if (!data) {
+        throw new Error('No data returned from insert');
+      }
+      return data as unknown as AutoUpdateHistory;
+    },
+
+    async update(id: string, data: Partial<AutoUpdateHistory>): Promise<AutoUpdateHistory | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('auto_update_history')
+        .update(data as never)
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error updating auto-update history:', error);
+        throw error;
+      }
+      return (updated as unknown as AutoUpdateHistory) ?? null;
+    },
+
+    async list(userId: string, query: Parameters<DatabaseAdapter['autoUpdateHistory']['list']>[1]): Promise<AutoUpdateHistoryWithPolicy[]> {
+      const supabase = createServerClient();
+
+      let policyQuery = supabase
+        .from('app_update_policies')
+        .select('id, winget_id, tenant_id')
+        .eq('user_id', userId);
+      if (query.tenantId) policyQuery = policyQuery.eq('tenant_id', query.tenantId);
+      if (query.wingetId) policyQuery = policyQuery.eq('winget_id', query.wingetId);
+
+      const { data: policies, error: policyError } = await policyQuery;
+      if (isError(policyError)) {
+        console.error('Error fetching update policy ids:', policyError);
+        throw policyError;
+      }
+      const policyIds = (policies ?? []).map((policy) => policy.id);
+      if (policyIds.length === 0) {
+        return [];
+      }
+
+      let historyQuery = supabase
+        .from('auto_update_history')
+        .select(
+          `*, policy:app_update_policies!policy_id(winget_id, tenant_id), packaging_job:packaging_jobs!packaging_job_id(display_name)`
+        )
+        .in('policy_id', policyIds)
+        .order('triggered_at', { ascending: false })
+        .range(query.offset, query.offset + query.limit - 1);
+      if (query.status) historyQuery = historyQuery.eq('status', query.status);
+
+      const { data, error } = await historyQuery;
+      if (isError(error)) {
+        console.error('Error listing auto-update history:', error);
+        throw error;
+      }
+
+      interface JoinedHistory extends AutoUpdateHistory {
+        policy: { winget_id: string; tenant_id: string } | null;
+        packaging_job: { display_name: string } | null;
+      }
+      return ((data ?? []) as unknown as JoinedHistory[]).map((row) => ({
+        id: row.id,
+        policy_id: row.policy_id,
+        packaging_job_id: row.packaging_job_id,
+        from_version: row.from_version,
+        to_version: row.to_version,
+        update_type: row.update_type,
+        status: row.status,
+        error_message: row.error_message,
+        triggered_at: row.triggered_at,
+        completed_at: row.completed_at,
+        policy: {
+          winget_id: row.policy?.winget_id ?? '',
+          tenant_id: row.policy?.tenant_id ?? '',
+        },
+        display_name: row.packaging_job?.display_name,
+      }));
+    },
+
+    async countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number> {
+      if (policyIds.length === 0) return 0;
+      const supabase = createServerClient();
+      let query = supabase
+        .from('auto_update_history')
+        .select('id', { count: 'exact', head: true })
+        .in('policy_id', policyIds)
+        .gte('triggered_at', since);
+      if (status) query = query.eq('status', status);
+      const { count, error } = await query;
+      if (isError(error)) {
+        console.error('Error counting auto-update history:', error);
+        throw error;
+      }
+      return count ?? 0;
+    },
+  },
+
+  updateCheckResults: {
+    async list(userId: string, query: UpdateCheckQuery): Promise<UpdateCheckResult[]> {
+      const supabase = createServerClient();
+      let builder = supabase.from('update_check_results').select('*').eq('user_id', userId);
+      if (query.tenantId) builder = builder.eq('tenant_id', query.tenantId);
+      if (!query.includeDismissed) builder = builder.is('dismissed_at', null);
+      if (query.criticalOnly) builder = builder.eq('is_critical', true);
+
+      const { data, error } = await builder.order('detected_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing update check results:', error);
+        throw error;
+      }
+      return (data ?? []) as unknown as UpdateCheckResult[];
+    },
+
+    async upsert(
+      record: Partial<UpdateCheckResult> &
+        Pick<
+          UpdateCheckResult,
+          'user_id' | 'tenant_id' | 'winget_id' | 'intune_app_id' | 'display_name' | 'current_version' | 'latest_version'
+        >
+    ): Promise<UpdateCheckResult> {
+      const supabase = createServerClient();
+      const now = new Date().toISOString();
+
+      const { data: existing, error: selectError } = await supabase
+        .from('update_check_results')
+        .select('id')
+        .eq('user_id', record.user_id)
+        .eq('tenant_id', record.tenant_id)
+        .eq('winget_id', record.winget_id)
+        .eq('intune_app_id', record.intune_app_id)
+        .maybeSingle();
+      if (isError(selectError) && selectError.code !== 'PGRST116') {
+        console.error('Error reading update check result:', selectError);
+        throw selectError;
+      }
+
+      // A PostgREST upsert overwrites every supplied column, so use an explicit
+      // update that leaves dismissed_at, notified_at, and detected_at intact.
+      if (existing) {
+        const { data, error } = await supabase
+          .from('update_check_results')
+          .update({
+            display_name: record.display_name,
+            current_version: record.current_version,
+            latest_version: record.latest_version,
+            is_critical: record.is_critical ?? false,
+            is_managed: record.is_managed ?? true,
+            updated_at: now,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (isError(error)) {
+          console.error('Error updating update check result:', error);
+          throw error;
+        }
+        if (!data) throw new Error('No data returned from update');
+        return data as unknown as UpdateCheckResult;
+      }
+
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .insert({
+          user_id: record.user_id,
+          tenant_id: record.tenant_id,
+          winget_id: record.winget_id,
+          intune_app_id: record.intune_app_id,
+          display_name: record.display_name,
+          current_version: record.current_version,
+          latest_version: record.latest_version,
+          is_critical: record.is_critical ?? false,
+          is_managed: record.is_managed ?? true,
+          large_icon_type: record.large_icon_type ?? null,
+          large_icon_value: record.large_icon_value ?? null,
+          notified_at: record.notified_at ?? null,
+          dismissed_at: record.dismissed_at ?? null,
+          detected_at: record.detected_at || now,
+          updated_at: record.updated_at || now,
+        })
+        .select()
+        .single();
+      if (isError(error)) {
+        console.error('Error inserting update check result:', error);
+        throw error;
+      }
+      if (!data) throw new Error('No data returned from insert');
+      return data as unknown as UpdateCheckResult;
+    },
+
+    async setDismissed(ids: string[], userId: string, dismissedAt: string | null): Promise<number> {
+      if (ids.length === 0) return 0;
+      const supabase = createServerClient();
+      const { count, error } = await supabase
+        .from('update_check_results')
+        .update({ dismissed_at: dismissedAt, updated_at: new Date().toISOString() }, { count: 'exact' })
+        .eq('user_id', userId)
+        .in('id', ids);
+      if (isError(error)) {
+        console.error('Error dismissing update check results:', error);
+        throw error;
+      }
+      return count ?? 0;
+    },
+
+    async deleteMissing(
+      userId: string,
+      tenantId: string,
+      keep: Array<{ wingetId: string; intuneAppId: string }>
+    ): Promise<number> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .select('id, winget_id, intune_app_id')
+        .eq('user_id', userId)
+        .eq('tenant_id', tenantId);
+      if (isError(error)) {
+        console.error('Error reading update check results:', error);
+        throw error;
+      }
+      const keepSet = new Set(keep.map((entry) => `${entry.wingetId}:${entry.intuneAppId}`));
+      const staleIds = (data ?? [])
+        .filter((row) => !keepSet.has(`${row.winget_id}:${row.intune_app_id}`))
+        .map((row) => row.id);
+      if (staleIds.length === 0) return 0;
+
+      const { error: deleteError } = await supabase
+        .from('update_check_results')
+        .delete()
+        .in('id', staleIds);
+      if (isError(deleteError)) {
+        console.error('Error deleting stale update check results:', deleteError);
+        throw deleteError;
+      }
+      return staleIds.length;
+    },
+  },
+
+  curatedLicenceAttestations: {
+    async get(
+      tenantId: string,
+      attestationId: string,
+      attestationVersion: string
+    ): Promise<CuratedLicenceAttestationRecord | null> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('curated_licence_attestations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('attestation_id', attestationId)
+        .eq('attestation_version', attestationVersion)
+        .maybeSingle();
+      if (isError(error)) {
+        console.error('Error reading licence acceptance:', error);
+        throw error;
+      }
+      return (data as CuratedLicenceAttestationRecord | null) ?? null;
+    },
+
+    async listByTenant(tenantId: string): Promise<CuratedLicenceAttestationRecord[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('curated_licence_attestations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('accepted_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing licence acceptances:', error);
+        throw error;
+      }
+      return (data ?? []) as CuratedLicenceAttestationRecord[];
+    },
+
+    async accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord> {
+      const supabase = createServerClient();
+      // The first acceptance of an agreement version is the audit record;
+      // a repeated acceptance (unique violation) leaves it unchanged.
+      const { error } = await supabase.from('curated_licence_attestations').insert(record);
+      if (isError(error) && error.code !== '23505') {
+        console.error('Error recording licence acceptance:', error);
+        throw error;
+      }
+      const stored = await supabaseDb.curatedLicenceAttestations.get(
+        record.tenant_id,
+        record.attestation_id,
+        record.attestation_version
+      );
+      if (!stored) throw new Error('Failed to record licence acceptance');
+      return stored;
+    },
+  },
+
+  claimedApps: {
+    async upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord> {
+      const supabase = createServerClient();
+      const { data: existing, error: readError } = await supabase
+        .from('claimed_apps')
+        .select('id')
+        .eq('tenant_id', claim.tenant_id)
+        .eq('discovered_app_id', claim.discovered_app_id)
+        .maybeSingle();
+      if (isError(readError)) {
+        console.error('Error reading claim:', readError);
+        throw readError;
+      }
+      const result = existing
+        ? await supabase
+            .from('claimed_apps')
+            .update({
+              user_id: claim.user_id,
+              winget_package_id: claim.winget_package_id,
+              device_count_at_claim: claim.device_count_at_claim ?? 0,
+              status: 'pending',
+              claimed_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+            .select()
+            .single()
+        : await supabase
+            .from('claimed_apps')
+            .insert({ ...claim, device_count_at_claim: claim.device_count_at_claim ?? 0, status: 'pending' })
+            .select()
+            .single();
+      if (isError(result.error) || !result.data) {
+        console.error('Error recording claim:', result.error);
+        throw result.error ?? new Error('Failed to record claim');
+      }
+      return result.data as ClaimedAppRecord;
+    },
+
+    async listByTenant(tenantId: string): Promise<ClaimedAppRecord[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('claimed_apps')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('claimed_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing claims:', error);
+        throw error;
+      }
+      return (data ?? []) as ClaimedAppRecord[];
+    },
+
+    async update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('claimed_apps')
+        .update(data)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select()
+        .maybeSingle();
+      if (isError(error)) {
+        console.error('Error updating claim:', error);
+        throw error;
+      }
+      return (updated as ClaimedAppRecord | null) ?? null;
     },
   },
 };

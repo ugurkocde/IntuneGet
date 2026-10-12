@@ -4,8 +4,10 @@ import { ArrowRight } from "lucide-react";
 import { T, Var } from "gt-next";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/sections/Footer";
-import { AppIcon } from "@/components/AppIcon";
+import { CatalogAppCard } from "@/components/catalog/CatalogAppCard";
+import { CatalogCta } from "@/components/catalog/CatalogCta";
 import { getCatalogSource } from "@/lib/catalog";
+import { mergeCategoryCounts } from "@/lib/catalog/seo";
 import { formatAppCountLabel } from "@/lib/stats/public-stats";
 import { CatalogSearch } from "./CatalogSearch";
 
@@ -17,7 +19,7 @@ export const metadata: Metadata = {
   description:
     "Browse the Winget catalog IntuneGet deploys to Microsoft Intune - popular apps, publishers, and categories. No sign-in required.",
   alternates: {
-    canonical: "https://intuneget.com/apps",
+    canonical: "https://www.intuneget.com/apps",
   },
   openGraph: {
     title: "Browse the App Catalog - IntuneGet",
@@ -34,28 +36,30 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "App Catalog",
-      item: "https://intuneget.com/apps",
+      item: "https://www.intuneget.com/apps",
     },
   ],
 };
 
 export default async function AppsPage() {
   const source = getCatalogSource();
-  const [popular, stats] = await Promise.all([
+  const [popular, stats, categories] = await Promise.all([
     source
       .getPopularApps({ limit: 24, offset: 0, sort: "popular" })
       .catch(() => null),
     source.getCatalogStats().catch(() => ({ totalApps: 0 })),
+    source.getCategories().catch(() => []),
   ]);
 
   const apps = popular?.data ?? [];
   const countLabel = formatAppCountLabel(stats.totalApps);
+  const mergedCategories = mergeCategoryCounts(categories);
 
   return (
     <div className="min-h-screen bg-bg-deepest flex flex-col">
@@ -95,6 +99,8 @@ export default async function AppsPage() {
             )}
           </div>
 
+          <Link href="/apps/releases" className="inline-flex items-center gap-2 text-sm font-medium text-accent-cyan hover:underline"><T>Explore catalog release history</T><ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
+
           {/* Search */}
           <CatalogSearch />
 
@@ -107,28 +113,8 @@ export default async function AppsPage() {
               <T>Popular apps</T>
             </h2>
             {apps.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {apps.map((app) => (
-                  <div
-                    key={app.winget_id}
-                    className="flex items-center gap-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-4"
-                  >
-                    <AppIcon
-                      packageId={app.winget_id}
-                      packageName={app.name}
-                      iconPath={app.icon_path ?? undefined}
-                      size="lg"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-text-primary">
-                        {app.name}
-                      </p>
-                      <p className="truncate text-sm text-text-muted">
-                        {app.publisher}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {apps.map((app) => <CatalogAppCard key={app.winget_id} app={app} />)}
               </div>
             ) : (
               <p className="text-text-secondary">
@@ -140,25 +126,40 @@ export default async function AppsPage() {
             )}
           </section>
 
-          {/* Closing CTA band */}
-          <section className="rounded-2xl border border-overlay/10 bg-bg-elevated p-8 text-center space-y-4">
-            <h2 className="text-2xl font-bold text-text-primary">
-              <T>Ready to deploy these apps to Intune?</T>
-            </h2>
-            <p className="mx-auto max-w-xl text-text-secondary">
-              <T>
-                Sign in with your Microsoft work account, pick your apps, and
-                deploy your first one in about 5 minutes.
-              </T>
-            </p>
+          <section aria-labelledby="browse-category-heading" className="space-y-6">
+            <h2 id="browse-category-heading" className="text-xl font-semibold text-text-primary"><T>Browse by category</T></h2>
+            {mergedCategories.length > 0 ? (
+              <div className="flex flex-wrap gap-3">
+                {mergedCategories.map(({ slug, name, count }) => (
+                  <Link
+                    key={slug}
+                    href={`/apps/category/${slug}`}
+                    className="group inline-flex items-center gap-2.5 rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-2.5 transition-colors hover:border-accent-cyan/40"
+                  >
+                    <span className="text-sm font-medium text-text-primary group-hover:text-accent-cyan">
+                      <Var>{name}</Var>
+                    </span>
+                    <span className="rounded-full bg-bg-surface px-2 py-0.5 text-xs tabular-nums text-text-muted">
+                      <Var>{count.toLocaleString("en-US")}</Var>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="text-text-secondary"><T>Categories are temporarily unavailable. You can still browse the full catalog.</T></p>}
             <Link
-              href="/auth/signin"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-white bg-accent-cyan rounded-xl hover:bg-accent-cyan-dim transition-all duration-300 shadow-glow-cyan hover:shadow-glow-cyan-lg"
+              href="/apps/browse"
+              className="inline-flex items-center gap-2 rounded-xl border border-accent-cyan/40 px-6 py-3 text-base font-semibold text-accent-cyan transition-colors hover:bg-accent-cyan/10"
             >
-              <T>Start Deploying Free</T>
-              <ArrowRight className="h-5 w-5" />
+              {countLabel ? (
+                <T>Browse all <Var>{countLabel}</Var> apps</T>
+              ) : (
+                <T>Browse all apps</T>
+              )}
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
+
+          <CatalogCta />
         </div>
       </main>
 

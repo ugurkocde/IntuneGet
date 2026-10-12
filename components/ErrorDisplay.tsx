@@ -11,6 +11,7 @@ import {
   Server,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { INTUNE_APPROVAL_PENDING_MESSAGE } from '@/lib/intune-approval';
 
 interface ErrorDetails {
   expectedHash?: string;
@@ -46,6 +47,7 @@ const stageConfig: Record<string, { icon: typeof Download; label: string }> = {
   authenticate: { icon: Key, label: 'Authentication' },
   finalize: { icon: CheckCircle, label: 'Finalize' },
   duplicate_check: { icon: CheckCircle, label: 'Duplicate Check' },
+  validation: { icon: CheckCircle, label: 'Validation' },
   unknown: { icon: Server, label: 'Unknown' },
 };
 
@@ -53,6 +55,9 @@ const categoryHints: Record<string, { message: string; showReVerify?: boolean }>
   permission: {
     message: 'This appears to be a permissions issue. Your Global Administrator may need to grant admin consent with Intune permissions.',
     showReVerify: true,
+  },
+  approval: {
+    message: INTUNE_APPROVAL_PENDING_MESSAGE,
   },
   network: {
     message: 'This is a network-related error. The download server may be unavailable or rate-limiting requests. You can try again later or package a different version.',
@@ -65,6 +70,9 @@ const categoryHints: Record<string, { message: string; showReVerify?: boolean }>
   },
   intune_api: {
     message: 'The Intune API returned an error. This could be a temporary issue with Microsoft services.',
+  },
+  tenant_config: {
+    message: 'Microsoft Intune does not appear to be set up in this tenant. Confirm the tenant has an Intune license and the MDM authority is set to Intune, then deploy again.',
   },
   system: {
     message: 'An unexpected system error occurred. Please try again or contact support if the issue persists.',
@@ -93,6 +101,8 @@ const errorCodeMessages: Record<string, string> = {
   AUTH_NO_CONSENT: 'Admin consent has not been granted for the required permissions',
   INTUNE_UNAUTHORIZED: 'Microsoft Graph rejected the service principal credentials (401)',
   INTUNE_FORBIDDEN: 'Access denied (403) - missing DeviceManagementApps.ReadWrite.All permission',
+  INTUNE_APPROVAL_REQUIRED: 'Your organization requires administrator approval before Intune can apply this app change.',
+  INTUNE_APPROVAL_PENDING: INTUNE_APPROVAL_PENDING_MESSAGE,
   INTUNE_SERVICE_TRANSIENT: 'Intune returned a temporary backend error. A safe retry is recommended.',
   INTUNE_BAD_REQUEST: 'Intune rejected the app or content request. Review the workflow log for the rejected field.',
   INTUNE_API_ERROR: 'The Intune API returned an unexpected error',
@@ -102,6 +112,7 @@ const errorCodeMessages: Record<string, string> = {
   INTUNE_COMMIT_FAILED: 'Failed to commit the uploaded file to Intune',
   WORKFLOW_DISPATCH_FAILED: 'The packaging workflow could not be started. No upload was performed.',
   DUPLICATE_CHECK_FAILED: 'Intune could not confirm whether this app already exists. Retry when Microsoft Graph is available.',
+  TENANT_NOT_INTUNE_PROVISIONED: 'This tenant rejected Intune API requests as not applicable. Intune is likely unlicensed here or the MDM authority is not set.',
   UNEXPECTED_ERROR: 'An unexpected error occurred during the pipeline',
 };
 
@@ -141,9 +152,17 @@ export function ErrorDisplay({
     );
   }
 
-  const stage = stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
+  const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
+  const stage = qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
-  const hint = categoryHints[errorCategory || ''];
+  // Older QA failures were stored with the installer category, whose hint
+  // describes package creation. The exact QA code identifies the real stage.
+  const hint = qaFailed ? {
+    message: errorMessage?.includes('MANIFEST_CHANGED')
+      ? 'Refresh the app catalog and select the current version. The selected installer no longer matches the trusted manifest, so it was blocked before testing or packaging.'
+      : 'This package did not pass the installation check. Review the failure details above before trying another version or configuration.',
+    showReVerify: false,
+  } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
   const details = errorDetails as ErrorDetails | null;
 

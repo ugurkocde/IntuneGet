@@ -199,15 +199,35 @@ async function callOpenAI(batch) {
   };
 
   for (let attempt = 1; attempt <= RETRIES; attempt += 1) {
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      signal: AbortSignal.timeout(60_000),
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    // Content-level defects (missing text, invalid JSON, an incomplete
+    // classification set) and transport failures are as transient as a 429:
+    // a fresh request usually succeeds. Retrying them here is what keeps one
+    // bad sample from failing the batch, and the batch from failing the
+    // whole weekly run.
+    const retryContent = async (reason) => {
+      if (attempt < RETRIES) {
+        console.warn(`Batch attempt ${attempt} rejected (${reason}); retrying`);
+        await sleep(RETRY_DELAY_MS * attempt);
+        return true;
+      }
+      return false;
+    };
+
+    let response;
+    try {
+      response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        signal: AbortSignal.timeout(60_000),
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      if (await retryContent(`request failed: ${error.message}`)) continue;
+      throw new Error(`OpenAI request failed: ${error.message}`);
+    }
 
     if (!response.ok) {
       const body = await response.text();
@@ -219,9 +239,21 @@ async function callOpenAI(batch) {
       throw new Error(`OpenAI request failed (${response.status}): ${body.slice(0, 600)}`);
     }
 
-    const parsed = await response.json();
+    let parsed;
+    try {
+      parsed = await response.json();
+    } catch (error) {
+      if (await retryContent(`unparseable response body: ${error.message}`)) continue;
+      throw new Error(`OpenAI response body was not valid JSON: ${error.message}`);
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      if (await retryContent('response body was not an object')) continue;
+      throw new Error('OpenAI response body was not an object');
+    }
+
     const text = extractTextResponse(parsed);
     if (!text) {
+      if (await retryContent('missing output_text')) continue;
       throw new Error('OpenAI response did not include output_text');
     }
 
@@ -229,6 +261,7 @@ async function callOpenAI(batch) {
     try {
       decoded = JSON.parse(text);
     } catch (error) {
+      if (await retryContent(`invalid JSON: ${error.message}`)) continue;
       throw new Error(`Invalid JSON in OpenAI output: ${error.message}`);
     }
 
@@ -240,6 +273,7 @@ async function callOpenAI(batch) {
       returnedIds.size !== expectedIds.size ||
       [...expectedIds].some((id) => !returnedIds.has(id))
     ) {
+      if (await retryContent('incomplete classification set')) continue;
       throw new Error('OpenAI response did not contain exactly one classification for every requested winget_id');
     }
     return {

@@ -1,0 +1,6 @@
+{
+  "title": "The updates bell stays product-wide",
+  "summary": "The product updates bell no longer lists single-application catalog maintenance, such as the packaging, detection, or removal notes for one app. Those stay in the app catalog, while the bell focuses on changes that affect IntuneGet itself.",
+  "type": "fixed",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/1232"
+}

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "Terms of Use for IntuneGet - the Winget to Intune deployment tool.",
   alternates: {
-    canonical: "https://intuneget.com/terms",
+    canonical: "https://www.intuneget.com/terms",
   },
   openGraph: {
     title: "Terms of Use | IntuneGet",
@@ -26,13 +26,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Terms of Use",
-      item: "https://intuneget.com/terms",
+      item: "https://www.intuneget.com/terms",
     },
   ],
 };
@@ -47,7 +47,7 @@ export default function TermsPage() {
       />
 
       {/* Content */}
-      <main className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28">
+      <main className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28 w-full">
         <div className="space-y-8">
           <div>
             <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">

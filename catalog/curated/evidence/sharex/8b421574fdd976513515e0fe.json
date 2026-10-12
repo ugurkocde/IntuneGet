@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowCommit": "dd2c2846c91150965bf5295e558cc07f479021dd",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "runId": "37816719582",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "sharex",
+    "version": "21.0.0",
+    "installerUrl": "https://github.com/ShareX/ShareX/releases/download/v21.0.0/ShareX-21.0.0-setup-x64.exe",
+    "vendorSha256": "f213aca04d30e0e2dc7c43bc79acae8622be291cee6014a90962ed87ea5f10cc",
+    "releaseNotesUrl": "https://github.com/ShareX/ShareX/releases/tag/v21.0.0",
+    "discoveredAt": "2026-10-08T13:29:07.443Z",
+    "id": "8b421574fdd976513515e0fe"
+  },
+  "previous": {
+    "appId": "sharex",
+    "version": "20.2.0",
+    "installerUrl": "https://github.com/ShareX/ShareX/releases/download/v20.2.0/ShareX-20.2.0-setup-x64.exe",
+    "vendorSha256": "7c0dcaa05806de80cfb5829d243a62496d64bf2ed5cecc10185d9e769f365621",
+    "releaseNotesUrl": "https://github.com/ShareX/ShareX/releases/tag/v20.2.0",
+    "discoveredAt": "2026-10-08T13:29:33.812Z",
+    "id": "f360a8dd8ebfdc20ff84dc7f"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "8b421574fdd976513515e0fe",
+      "installerSha256": "f213aca04d30e0e2dc7c43bc79acae8622be291cee6014a90962ed87ea5f10cc",
+      "sourceUrl": "https://github.com/ShareX/ShareX/releases/download/v21.0.0/ShareX-21.0.0-setup-x64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "malicious": 0,
+        "scannedAt": "2026-10-08T17:33:54.8386807Z",
+        "suspicious": 0,
+        "installerSha256": "f213aca04d30e0e2dc7c43bc79acae8622be291cee6014a90962ed87ea5f10cc",
+        "scanner": "defender",
+        "status": "clean",
+        "signatureVersion": "1.459.601.0",
+        "engineVersion": "1.1.26080.3"
+      }
+    },
+    "previous": {
+      "candidateId": "f360a8dd8ebfdc20ff84dc7f",
+      "installerSha256": "7c0dcaa05806de80cfb5829d243a62496d64bf2ed5cecc10185d9e769f365621",
+      "sourceUrl": "https://github.com/ShareX/ShareX/releases/download/v20.2.0/ShareX-20.2.0-setup-x64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "malicious": 0,
+        "scannedAt": "2026-10-08T17:34:11.8516994Z",
+        "suspicious": 0,
+        "installerSha256": "7c0dcaa05806de80cfb5829d243a62496d64bf2ed5cecc10185d9e769f365621",
+        "scanner": "defender",
+        "status": "clean",
+        "signatureVersion": "1.459.601.0",
+        "engineVersion": "1.1.26080.3"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "8b421574fdd976513515e0fe",
+    "packageId": "IntuneGet.Curated.ShareX",
+    "installerUrl": "https://github.com/ShareX/ShareX/releases/download/v21.0.0/ShareX-21.0.0-setup-x64.exe",
+    "installerSha256": "f213aca04d30e0e2dc7c43bc79acae8622be291cee6014a90962ed87ea5f10cc",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.ShareX",
+      "displayName": "ShareX",
+      "publisher": "ShareX Team",
+      "version": "21.0.0",
+      "architecture": "x64",
+      "installerSha256": "f213aca04d30e0e2dc7c43bc79acae8622be291cee6014a90962ed87ea5f10cc",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NORUN",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:82E6AC09-0FEF-4390-AD9F-0DD3F5561EFC_is1:ShareX",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ShareX\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"21.0.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ShareX\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"21.0.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "690F462B4442748AB99BC147DD87A08E22E4F82EF2AFA0D099FE5ED163E05948",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.ShareX\",\"publisher\":\"IntuneGet QA\",\"version\":\"21.0.0\",\"wingetId\":\"IntuneGet.Curated.ShareX\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"21.0.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ShareX\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"0EBBFA4A314654A489060A68E774F6DEE9D35C57241DE0D1C5F03DADF716D5D1\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"F213ACA04D30E0E2DC7C43BC79ACAE8622BE291CEE6014A90962ED87EA5F10CC\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NORUN\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:82E6AC09-0FEF-4390-AD9F-0DD3F5561EFC_is1:ShareX\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"21.0.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ShareX\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"B8242C9F5A8C1EE607C468830CA7328C08D2E1C406EECF8F95E1FAC68149D0CA\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "b8242c9f5a8c1ee607c468830ca7328c08d2e1c406eecf8f95e1fac68149d0ca",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "candidateId": "8b421574fdd976513515e0fe",
+    "testedAt": "2026-10-08T17:37:45.4174293Z",
+    "architecture": "x64",
+    "previousInstallerSha256": "7c0dcaa05806de80cfb5829d243a62496d64bf2ed5cecc10185d9e769f365621",
+    "executionProfileSha256": "690F462B4442748AB99BC147DD87A08E22E4F82EF2AFA0D099FE5ED163E05948",
+    "executionContext": "LocalSystem",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testLevel": "psadt-package",
+    "installerSha256": "f213aca04d30e0e2dc7c43bc79acae8622be291cee6014a90962ed87ea5f10cc",
+    "upgradeFromVersion": "20.2.0",
+    "installerVersion": "21.0.0",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc"
+  },
+  "verifiedAt": "2026-10-08T17:37:51.0395606Z",
+  "authenticatedArtifact": {
+    "id": 11567289041,
+    "sha256": "14fda09411062cf6a46cf653efbb52491eab29cb7476e3691531be64c4ef1797"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "title": "QA keeps testing when one app fails",
+  "summary": "A failed installation test no longer pauses the whole QA queue. The failing app is repaired and tested again on its own while every other deployment keeps moving. Apps that fail repeatedly or receive a security verdict are blocked with a clear reason instead of retried forever.",
+  "type": "improved",
+  "sourceUrl": "https://www.intuneget.com/qa"
+}

@@ -1,0 +1,5 @@
+{
+  "title": "Recover unavailable app versions before deployment",
+  "summary": "App selection checks which versions are still available. Older cart selections can be refreshed for review while retaining deployment settings, and removed versions show a clear recovery action instead of a temporary error.",
+  "type": "fixed"
+}

@@ -13,6 +13,8 @@ const navItemsMap: Record<string, string> = {
   "/docs/api-reference": "API Reference",
   "/docs/sccm-migration": "SCCM Migration",
   "/docs/updates-policies": "Updates & Policies",
+  "/docs/packaging": "Packaging & Verification",
+  "/docs/catalog": "Catalog & Supply Chain",
   "/docs/inventory-reports-uploads": "Inventory/Reports/Uploads",
   "/docs/unmanaged-apps": "Unmanaged Apps",
   "/docs/msp": "MSP Features",
@@ -28,13 +30,13 @@ export function DocsBreadcrumbJsonLd() {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Documentation",
-      item: "https://intuneget.com/docs",
+      item: "https://www.intuneget.com/docs",
     },
   ];
 
@@ -44,7 +46,7 @@ export function DocsBreadcrumbJsonLd() {
       "@type": "ListItem",
       position: 3,
       name: navItemsMap[pathname],
-      item: `https://intuneget.com${pathname}`,
+      item: `https://www.intuneget.com${pathname}`,
     });
   }
 

@@ -1,13 +1,46 @@
 import { MetadataRoute } from "next";
 import { blogPosts } from "@/lib/data/blog-data";
+import { getCatalogSource } from "@/lib/catalog";
+import { absoluteAppCatalogUrl, mergeCategoryCounts } from "@/lib/catalog/seo";
 
-const BASE_URL = "https://intuneget.com";
+const BASE_URL = "https://www.intuneget.com";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export function generateSitemaps() {
+  return [{ id: 0 }, { id: 1 }, { id: 2 }];
+}
+
+export default async function sitemap({ id }: { id: Promise<number> }): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  // At request time Next resolves the [id] URL segment as a string, so coerce
+  // before comparing; otherwise every segment falls through to the static set.
+  const sitemapId = Number(await id);
+
+  if (sitemapId === 1) {
+    const apps = await getCatalogSource().getVerifiedAppIds().catch(() => []);
+    return apps.map((app) => {
+      const updated = app.updated_at ? new Date(app.updated_at) : null;
+      return {
+        url: absoluteAppCatalogUrl(app.winget_id),
+        lastModified: updated && !Number.isNaN(updated.getTime()) ? updated : now,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+      };
+    });
+  }
+
+  if (sitemapId === 2) {
+    const categories = await getCatalogSource().getCategories().catch(() => []);
+    return mergeCategoryCounts(categories).map(({ slug }) => ({
+      url: `${BASE_URL}/apps/category/${slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
+  }
 
   // Static public pages
   const staticPages: MetadataRoute.Sitemap = [
+    { url: `${BASE_URL}/apps/releases`, changeFrequency: "daily", priority: 0.7 },
     {
       url: BASE_URL,
       lastModified: now,
@@ -18,6 +51,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${BASE_URL}/apps`,
       lastModified: now,
       changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/qa`,
+      lastModified: now,
+      changeFrequency: "daily",
       priority: 0.8,
     },
     {
@@ -33,9 +72,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
-      url: `${BASE_URL}/changelog`,
+      url: `${BASE_URL}/roadmap`,
       lastModified: now,
-      changeFrequency: "weekly",
+      changeFrequency: "monthly",
       priority: 0.6,
     },
     {
@@ -70,6 +109,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/api-reference",
     "/sccm-migration",
     "/updates-policies",
+    "/packaging",
+    "/catalog",
     "/inventory-reports-uploads",
     "/unmanaged-apps",
     "/msp",

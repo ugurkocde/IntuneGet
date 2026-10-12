@@ -97,7 +97,7 @@ export function AppSearch({ value, onChange, isLoading = false }: AppSearchProps
         <Input
           ref={inputRef}
           type="text"
-          placeholder="Search curated Winget packages..."
+          placeholder="Search Winget applications..."
           value={inputValue}
           onChange={(e) => {
             setInputValue(e.target.value);

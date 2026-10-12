@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   description:
     "Available updates, update trigger flow, policy types, and history for IntuneGet.",
   alternates: {
-    canonical: "https://intuneget.com/docs/updates-policies",
+    canonical: "https://www.intuneget.com/docs/updates-policies",
   },
   openGraph: {
     title: "Updates & Policies | IntuneGet Docs",

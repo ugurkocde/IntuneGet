@@ -24,6 +24,7 @@ vi.mock('@/lib/supabase', () => ({
   // getCatalogSource() now branches on isSupabaseConfigured(); the route
   // imports it transitively, so the mock must provide it (Supabase mode).
   isSupabaseConfigured: () => true,
+  isSupabaseServerConfigured: () => true,
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
@@ -123,6 +124,22 @@ describe('GET /api/intune/apps/updates', () => {
     resolveTargetTenantIdMock.mockResolvedValue({
       tenantId: 'tenant-1',
       errorResponse: null,
+    });
+  });
+
+  it('preserves a Graph permission rejection without suggesting a retry', async () => {
+    createServerClientMock.mockReturnValue(createSupabaseMock([]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ access_token: 'graph-token' }))
+      .mockResolvedValueOnce(new Response('private Graph error details', { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = await GET(new NextRequest('http://localhost:3000/api/intune/apps/updates', {
+      headers: { Authorization: 'Bearer mock-token' },
+    }));
+    expect(response.status).toBe(403);
+    expect(response.headers.get('Retry-After')).toBeNull();
+    expect(await response.json()).toEqual({
+      error: 'Microsoft Graph rejected the update scan request.', code: 'UPDATE_SCAN_GRAPH_REJECTED',
     });
   });
 

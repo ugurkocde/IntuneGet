@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   normalizeInstaller,
+  normalizeManifestInstallers,
   fetchLocaleManifest,
   getFullManifest,
+  getLiveInstallers,
   clearManifestCache,
+  fetchAvailableVersionsLive,
 } from '../manifest-api';
 import type { WingetInstaller, NormalizedInstaller } from '@/types/winget';
 
@@ -28,7 +31,7 @@ describe('normalizeInstaller', () => {
       sha256: 'abc123def456',
       type: 'exe',
       scope: undefined,
-      silentArgs: '/S',
+      silentArgs: '',
       productCode: undefined,
       packageFamilyName: undefined,
     });
@@ -66,6 +69,53 @@ describe('normalizeInstaller', () => {
     expect(result.silentArgs).toBe('/S /passive');
   });
 
+  it('substitutes a required default install location into the vendor switch', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x86',
+      InstallerUrl: 'https://example.com/bootstrapper.exe',
+      InstallerSha256: 'abc123',
+      InstallerType: 'exe',
+      InstallLocationRequired: true,
+      DefaultInstallLocation: '%PROGRAMFILES(X86)%\\Contoso',
+      InstallerSwitches: {
+        Custom: '--lang=enUS',
+        InstallLocation: '--installpath="<INSTALLPATH>"',
+      },
+    };
+
+    const result = normalizeInstaller(installer);
+
+    expect(result.silentArgs).toBe(
+      '--lang=enUS --installpath="%PROGRAMFILES(X86)%\\Contoso"'
+    );
+    expect(result.installLocationRequired).toBe(true);
+    expect(result.defaultInstallLocation).toBe('%PROGRAMFILES(X86)%\\Contoso');
+  });
+
+  it('inherits required install-location metadata from the manifest root', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallLocationRequired: true,
+      InstallerSwitches: {
+        InstallLocation: '--installpath="<INSTALLPATH>"',
+      },
+      InstallationMetadata: {
+        DefaultInstallLocation: '%PROGRAMFILES%\\Contoso',
+      },
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/bootstrapper.exe',
+        InstallerSha256: 'abc123',
+      }],
+    });
+
+    expect(installer.InstallLocationRequired).toBe(true);
+    expect(installer.DefaultInstallLocation).toBe('%PROGRAMFILES%\\Contoso');
+    expect(normalizeInstaller(installer).silentArgs).toBe(
+      '--installpath="%PROGRAMFILES%\\Contoso"'
+    );
+  });
+
   it('should include scope when provided', () => {
     const installer: WingetInstaller = {
       Architecture: 'x64',
@@ -78,6 +128,49 @@ describe('normalizeInstaller', () => {
     const result = normalizeInstaller(installer);
 
     expect(result.scope).toBe('user');
+  });
+
+  it('enforces declared machine scope for a dual-purpose MSI package', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x64',
+      InstallerUrl: 'https://example.com/dual-purpose.msi',
+      InstallerSha256: 'abc123',
+      InstallerType: 'wix',
+      Scope: 'machine',
+    };
+
+    expect(normalizeInstaller(installer).silentArgs).toBe(
+      '/qn /norestart ALLUSERS=1'
+    );
+  });
+
+  it('does not override a manifest-owned MSI ALLUSERS contract', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x64',
+      InstallerUrl: 'https://example.com/dual-purpose.msi',
+      InstallerSha256: 'abc123',
+      InstallerType: 'msi',
+      Scope: 'machine',
+      InstallerSwitches: {
+        Custom: 'ALLUSERS=2 MSIINSTALLPERUSER=""',
+      },
+    };
+
+    expect(normalizeInstaller(installer).silentArgs).toBe(
+      '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=""'
+    );
+  });
+
+  it('keeps user-scope MSI arguments unchanged', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x64',
+      InstallerUrl: 'https://example.com/per-user.msi',
+      InstallerSha256: 'abc123',
+      InstallerType: 'msi',
+      Scope: 'user',
+    };
+
+    expect(normalizeInstaller(installer).silentArgs).toBe('/qn /norestart');
   });
 
   it('should include productCode for MSI installers', () => {
@@ -123,7 +216,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS');
     });
 
     it('should append Custom after Silent when both are provided', () => {
@@ -236,7 +329,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
     });
 
     it('should use default args for Nullsoft (NSIS)', () => {
@@ -324,8 +417,8 @@ describe('normalizeInstaller', () => {
       expect(result.type).toBe('zip');
       expect(result.nestedInstallerType).toBe('exe');
       expect(result.nestedInstallerPath).toBe('paint.net.5.1.12.install.x64.exe');
-      // Default silent switch comes from the NESTED type, not zip
-      expect(result.silentArgs).toBe('/S');
+      // A nested plain EXE still requires declared vendor switches.
+      expect(result.silentArgs).toBe('');
     });
 
     it('should pick the nested-type default switch for zip with nested inno', () => {
@@ -340,7 +433,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
     });
 
     it('should prefer declared Silent switches over nested-type defaults', () => {
@@ -373,7 +466,7 @@ describe('normalizeInstaller', () => {
 
       expect(result.nestedInstallerType).toBeUndefined();
       expect(result.nestedInstallerPath).toBeUndefined();
-      expect(result.silentArgs).toBe('/S');
+      expect(result.silentArgs).toBe('');
     });
 
     it('should yield undefined nestedInstallerPath for zip without NestedInstallerFiles', () => {
@@ -524,6 +617,180 @@ describe('normalizeInstaller', () => {
       };
 
       expect(normalizeInstaller(installer).architecture).toBe('neutral');
+    });
+  });
+});
+
+describe('normalizeManifestInstallers', () => {
+  it('merges root and installer-specific switch fields like WinGet', () => {
+    const installers = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallerSwitches: {
+        Silent: '--vivaldi-silent',
+        SilentWithProgress: '--vivaldi-silent',
+      },
+      Installers: [{
+        Architecture: 'x64',
+        Scope: 'user',
+        InstallerUrl: 'https://downloads.vivaldi.com/stable/Vivaldi.exe',
+        InstallerSha256: 'abc123',
+        InstallerSwitches: { Custom: '--do-not-launch-chrome' },
+      }],
+    });
+
+    expect(installers[0].InstallerSwitches).toEqual({
+      Silent: '--vivaldi-silent',
+      SilentWithProgress: '--vivaldi-silent',
+      Custom: '--do-not-launch-chrome',
+    });
+    expect(normalizeInstaller(installers[0]).silentArgs).toBe(
+      '--vivaldi-silent --do-not-launch-chrome'
+    );
+  });
+
+  it('inherits root MSI and MSIX identity fields', () => {
+    const msiInstallers = normalizeManifestInstallers({
+      InstallerType: 'wix',
+      ProductCode: '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}',
+      Installers: [{
+        Architecture: 'x86',
+        InstallerUrl: 'https://example.com/exclaimer.msi',
+        InstallerSha256: 'abc123',
+      }],
+    });
+    const msixInstallers = normalizeManifestInstallers({
+      InstallerType: 'msix',
+      PackageFamilyName: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/terminal.msixbundle',
+        InstallerSha256: 'def456',
+      }],
+    });
+
+    expect(msiInstallers[0].ProductCode).toBe(
+      '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}'
+    );
+    expect(msixInstallers[0].PackageFamilyName).toBe(
+      'Microsoft.WindowsTerminal_8wekyb3d8bbwe'
+    );
+  });
+
+  it('preserves manifest-declared installer success codes', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallerSuccessCodes: [1168, 1168, '3010', 3221225477, 3221226505],
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/installer.exe',
+        InstallerSha256: 'abc123',
+      }],
+    });
+    expect(installer.InstallerSuccessCodes).toEqual([
+      1168,
+      3010,
+      -1073741819,
+      -1073740791,
+    ]);
+    expect(normalizeInstaller(installer).installerSuccessCodes).toEqual([
+      1168,
+      3010,
+      -1073741819,
+      -1073740791,
+    ]);
+  });
+
+  it('normalizes installer and root AppsAndFeatures product identities', () => {
+    const installerIdentity = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/reader.exe',
+        InstallerSha256: 'abc123',
+        AppsAndFeaturesEntries: [{
+          ProductCode: 'ac76ba86-1033-ff00-7760-bc15014ea700',
+        }],
+      }],
+    });
+    const inheritedIdentity = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      AppsAndFeaturesEntries: [{
+        ProductCode: '{97b6de30-6082-48d1-9bb4-9f43296531a4}',
+      }],
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/bundle.exe',
+        InstallerSha256: 'def456',
+      }],
+    });
+
+    expect(installerIdentity[0].ProductCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(normalizeInstaller(installerIdentity[0]).productCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(inheritedIdentity[0].ProductCode).toBe(
+      '{97B6DE30-6082-48D1-9BB4-9F43296531A4}'
+    );
+  });
+
+  it('preserves an explicit non-GUID installer identity instead of replacing it', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'inno',
+      ProductCode: '{11111111-1111-1111-1111-111111111111}',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/setup.exe',
+        InstallerSha256: 'abc123',
+        ProductCode: '{22222222-2222-2222-2222-222222222222}_is1',
+      }],
+    });
+
+    expect(installer.ProductCode).toBe(
+      '{22222222-2222-2222-2222-222222222222}_is1'
+    );
+    expect(normalizeInstaller(installer).productCode).toBe(
+      '{22222222-2222-2222-2222-222222222222}_is1'
+    );
+  });
+
+  it('preserves a named non-MSI ARP key inherited from the manifest root', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'nullsoft',
+      ProductCode: 'IntelliJ IDEA 2025.2.5',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/idea.exe',
+        InstallerSha256: 'abc123',
+      }],
+    });
+
+    expect(installer.ProductCode).toBe('IntelliJ IDEA 2025.2.5');
+    expect(normalizeInstaller(installer).productCode).toBe(
+      'IntelliJ IDEA 2025.2.5'
+    );
+  });
+
+  it('inherits root nested installer semantics before normalization', () => {
+    const installers = normalizeManifestInstallers({
+      InstallerType: 'zip',
+      NestedInstallerType: 'inno',
+      Scope: 'machine',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/app.zip',
+        InstallerSha256: 'abc123',
+        NestedInstallerFiles: [{ RelativeFilePath: 'setup.exe' }],
+      }],
+    });
+
+    expect(installers[0].NestedInstallerType).toBe('inno');
+    expect(normalizeInstaller(installers[0])).toMatchObject({
+      type: 'zip',
+      nestedInstallerType: 'inno',
+      nestedInstallerPath: 'setup.exe',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     });
   });
 });
@@ -761,6 +1028,143 @@ function notFound() {
   return { ok: false, status: 404, text: async () => '' };
 }
 
+function liveInstallerYaml(id = 'Foo.Bar', version = '1.0.0') {
+  return `PackageIdentifier: ${id}\nPackageVersion: ${version}\nInstallers:\n  - Architecture: x64\n    InstallerUrl: https://example.test/setup.exe\n    InstallerSha256: ${'A'.repeat(64)}\n`;
+}
+
+describe('getLiveInstallers trust semantics', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('uses the authenticated GitHub Contents API raw media endpoint', async () => {
+    mockFetch.mockResolvedValue(
+      yamlResponse(liveInstallerYaml('Foo.Bar', '1.0+build'))
+    );
+
+    await expect(getLiveInstallers('Foo.Bar', '1.0+build')).resolves.toMatchObject([{ architecture: 'x64' }]);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/f/Foo/Bar/1.0%2Bbuild/Foo.Bar.installer.yaml?ref=master',
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          Accept: 'application/vnd.github.raw+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        }),
+      })
+    );
+  });
+
+  it('returns an empty list for an authoritative missing manifest', async () => {
+    mockFetch.mockResolvedValue(notFound());
+
+    await expect(getLiveInstallers('Foo.Missing', '1.0.0')).resolves.toEqual([]);
+  });
+
+  it('propagates GitHub throttling instead of treating it as a missing manifest', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 429, text: async () => '' });
+
+    await expect(getLiveInstallers('Foo.Throttled', '1.0.0')).rejects.toThrow(
+      'GitHub fetch error: 429'
+    );
+  });
+
+  it('falls back to an anonymous raw fetch when the Contents API is throttled', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.startsWith('https://api.github.com/')) {
+        return { ok: false, status: 403, text: async () => '' };
+      }
+      return yamlResponse(
+        liveInstallerYaml()
+      );
+    });
+
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toMatchObject([{ architecture: 'x64' }]);
+
+    const rawCall = mockFetch.mock.calls.find((call) =>
+      String(call[0]).startsWith('https://raw.githubusercontent.com/')
+    );
+    expect(rawCall?.[0]).toBe(
+      'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/f/Foo/Bar/1.0.0/Foo.Bar.installer.yaml'
+    );
+    const rawHeaders = (rawCall?.[1] as { headers?: Record<string, string> })?.headers;
+    expect(rawHeaders?.Authorization).toBeUndefined();
+  });
+
+  it('reports a retryable outage when both GitHub hosts fail', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403, text: async () => '' });
+
+    const attempt = getLiveInstallers('Foo.Down', '1.0.0');
+    await expect(attempt).rejects.toThrow('GitHub fetch error: 403');
+    await expect(attempt).rejects.toMatchObject({
+      name: 'GitHubUnavailableError',
+      status: 403,
+    });
+  });
+
+  it('does not treat a fallback 404 as an authoritative missing manifest', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.startsWith('https://api.github.com/')) {
+        return { ok: false, status: 403, text: async () => '' };
+      }
+      return notFound();
+    });
+
+    await expect(getLiveInstallers('Foo.Ambiguous', '1.0.0')).rejects.toMatchObject({
+      name: 'GitHubUnavailableError',
+      status: 403,
+    });
+  });
+
+  it('propagates network failures instead of creating a compatibility block', async () => {
+    mockFetch.mockRejectedValue(new Error('network unavailable'));
+
+    await expect(getLiveInstallers('Foo.Offline', '1.0.0')).rejects.toMatchObject({
+      name: 'GitHubUnavailableError', status: 0,
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers from a primary timeout using the anonymous fallback with bounded requests', async () => {
+    mockFetch.mockRejectedValueOnce(new DOMException('Timed out', 'TimeoutError'))
+      .mockResolvedValueOnce(yamlResponse(liveInstallerYaml()));
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toMatchObject([{ architecture: 'x64' }]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    for (const call of mockFetch.mock.calls) expect(call[1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('recovers when reading the primary response body fails', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: async () => { throw new Error('stream reset'); } })
+      .mockResolvedValueOnce(yamlResponse(liveInstallerYaml()));
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toHaveLength(1);
+  });
+
+  it.each([
+    'PackageIdentifier: Foo.Bar\nPackageVersion: 1.0.0\nInstallers: []\n',
+    liveInstallerYaml('Foo.Bar', '2.0.0'),
+    liveInstallerYaml('Other.App'),
+  ])('does not label a malformed or wrong-identity response as a removed version', async (yaml) => {
+    mockFetch.mockResolvedValue(yamlResponse(yaml));
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).rejects.toMatchObject({
+      name: 'GitHubUnavailableError', status: 502,
+    });
+  });
+
+  it('excludes channel directories from available versions', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ['Beta', 'EXE', '1.0', '2.0', 'v3.0'].map(name => ({ type: 'dir', name })) });
+    await expect(fetchAvailableVersionsLive('Google.Chrome', { strict: true })).resolves.toEqual(['v3.0', '2.0', '1.0']);
+  });
+
+  it('keeps strict version-list outages distinct from an empty catalog', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 429 });
+    await expect(fetchAvailableVersionsLive('Google.Chrome', { strict: true })).rejects.toMatchObject({ status: 429 });
+    await expect(fetchAvailableVersionsLive('Google.Chrome')).resolves.toEqual([]);
+  });
+});
+
 describe('fetchLocaleManifest locale resolution', () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -884,7 +1288,7 @@ describe('getFullManifest description order', () => {
   it('prefers ShortDescription over Description, matching the catalog syncs', async () => {
     mockFetch.mockImplementation(async (input: unknown) => {
       const url = String(input);
-      if (url.endsWith('Foo.App.installer.yaml')) {
+      if (url.includes('Foo.App.installer.yaml')) {
         return yamlResponse(
           [
             'PackageIdentifier: Foo.App',
@@ -914,9 +1318,10 @@ describe('getFullManifest description order', () => {
 
     // Common case stays at 3 parallel GitHub fetches (installer + en-US
     // locale + version manifest) with no extra DefaultLocale request
-    const githubCalls = mockFetch.mock.calls.filter((call) =>
-      String(call[0]).includes('raw.githubusercontent.com')
-    );
+    const githubCalls = mockFetch.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      return url.includes('api.github.com') || url.includes('raw.githubusercontent.com');
+    });
     expect(githubCalls).toHaveLength(3);
   });
 });

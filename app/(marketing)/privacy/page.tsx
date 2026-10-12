@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "Privacy Policy for IntuneGet - learn how we handle your data when using the Winget to Intune deployment tool.",
   alternates: {
-    canonical: "https://intuneget.com/privacy",
+    canonical: "https://www.intuneget.com/privacy",
   },
   openGraph: {
     title: "Privacy Policy | IntuneGet",
@@ -26,13 +26,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Privacy Policy",
-      item: "https://intuneget.com/privacy",
+      item: "https://www.intuneget.com/privacy",
     },
   ],
 };
@@ -47,7 +47,7 @@ export default function PrivacyPage() {
       />
 
       {/* Content */}
-      <main className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28">
+      <main className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28 w-full">
         <div className="space-y-8">
           <div>
             <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">

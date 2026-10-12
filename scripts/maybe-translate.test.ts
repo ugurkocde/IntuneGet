@@ -39,20 +39,23 @@ describe('maybe-translate build policy', () => {
   it('does not fail the application build when the translation provider fails', () => {
     const fakeBin = mkdtempSync(join(tmpdir(), 'intuneget-translate-'));
     tempDirectories.push(fakeBin);
-    const fakeNpx = join(fakeBin, 'npx');
-    writeFileSync(fakeNpx, '#!/bin/sh\nexit 23\n', 'utf8');
-    chmodSync(fakeNpx, 0o755);
+    const fakeNpx = join(fakeBin, process.platform === 'win32' ? 'npx.cmd' : 'npx');
+    writeFileSync(fakeNpx, process.platform === 'win32' ? '@exit /b 23\r\n' : '#!/bin/sh\nexit 23\n', 'utf8');
+    if (process.platform !== 'win32') chmodSync(fakeNpx, 0o755);
 
     const result = spawnSync(process.execPath, [scriptPath], {
+      cwd: fakeBin,
       env: {
         ...process.env,
         GT_API_KEY: 'test-key',
+        npm_config_offline: 'true',
         PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ''}`,
       },
       encoding: 'utf8',
     });
 
     expect(result.status).toBe(0);
+    expect(result.stderr).toContain('exited with code 23');
     expect(result.stderr).toContain(
       'continuing with committed translations',
     );

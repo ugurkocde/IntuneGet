@@ -1,0 +1,5 @@
+{
+  "title": "Choose Required, Available or Uninstall when adding groups",
+  "summary": "Assignment settings now ask how each new group should be assigned before you add it, so a group can go straight to Available in Company Portal or Uninstall instead of starting as Required. Each group can still be changed in the assignment list.",
+  "type": "improved"
+}

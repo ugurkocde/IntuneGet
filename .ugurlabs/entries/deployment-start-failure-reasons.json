@@ -1,0 +1,5 @@
+{
+  "title": "Clearer deployment start errors",
+  "summary": "The cart identifies affected apps and explains known setup failures when a deployment cannot start, while keeping upstream diagnostic details private.",
+  "type": "fixed"
+}

@@ -23,7 +23,6 @@ import {
   Lightbulb,
   PanelLeftClose,
   PanelLeftOpen,
-  History,
 } from 'lucide-react';
 import { T } from 'gt-next';
 import { cn } from '@/lib/utils';
@@ -107,15 +106,23 @@ export function Sidebar({ user, onSignOut }: SidebarProps) {
   const closeMobile = () => setMobileOpen(false);
 
   // NEXT_PUBLIC_DISABLE_SCCM=true hides the SCCM Migration nav item
-  const { sccm: sccmEnabled } = getClientFeatureFlags();
+  const { sccm: sccmEnabled, hostedServices } = getClientFeatureFlags();
   const managementItems = sccmEnabled
     ? managementNav
     : managementNav.filter((item) => item.href !== '/dashboard/sccm');
+  const visibleManagementItems = hostedServices
+    ? managementItems
+    : managementItems.filter((item) => item.href !== '/dashboard/updates');
 
   const navGroups: NavGroup[] = [
     { items: coreNav },
-    { label: 'Management', items: managementItems },
-    { label: 'Analytics', items: analyticsNav },
+    { label: 'Management', items: visibleManagementItems },
+    {
+      label: 'Analytics',
+      items: hostedServices
+        ? analyticsNav
+        : analyticsNav.filter((item) => item.href !== '/dashboard/app-requests'),
+    },
     ...(isMspUser
       ? [{ label: 'MSP', items: mspNav }]
       : [{ label: 'MSP', items: [{ name: 'MSP Dashboard', href: '/dashboard/msp', icon: Building2 }] }]),
@@ -231,17 +238,6 @@ export function Sidebar({ user, onSignOut }: SidebarProps) {
             </>
           )}
         </button>
-      </div>
-
-      {/* Changelog link */}
-      <div className="px-3 pb-1">
-        <SidebarNavItem
-          name={<T>Changelog</T>}
-          href="/changelog"
-          icon={History}
-          isCollapsed={isCollapsed}
-          onClick={closeMobile}
-        />
       </div>
 
       {/* User section */}

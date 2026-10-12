@@ -184,6 +184,11 @@ export interface PSADTConfig {
   // Detection
   detectionRules: DetectionRule[];
 
+  // When true, detectionRules are customer-authored registry, file or MSI
+  // rules that replace the generated version marker rules. They stay fixed
+  // until the customer edits them. Absent means generated rules (default).
+  customDetection?: boolean;
+
   // Registry marker root: subpath under the hive (HKLM/HKCU) where the
   // IntuneGet detection marker key is written, without a hive prefix.
   // Example: 'SOFTWARE\\Contoso\\Apps'. Absent/empty means the default
@@ -193,6 +198,165 @@ export interface PSADTConfig {
   // Install commands (can override defaults)
   installCommand?: string;
   uninstallCommand?: string;
+
+  // Internal, reviewed vendor arguments appended to the manifest-derived
+  // install command. Application adapters populate this field; it is not a
+  // customer-facing free-form command surface.
+  reviewedInstallArguments?: string[];
+
+  // Internal, reviewed replacement for manifest-derived silent arguments when
+  // a vendor documents a proprietary unattended command line. Application
+  // adapters populate this field; customers cannot supply it directly.
+  reviewedInstallArgumentsOverride?: string;
+
+  // Internal attestation for a reviewed vendor bootstrapper whose unattended
+  // contract intentionally uses no command-line arguments. Application
+  // adapters populate this field; customers cannot supply it directly.
+  reviewedArgumentlessInstall?: boolean;
+
+  // Internal completion window for a reviewed silent bootstrapper that keeps
+  // working without producing console output. The generated PSADT package
+  // emits bounded progress heartbeats while it waits, so QA and Intune use the
+  // same observable install lifecycle. Customers cannot supply this directly.
+  reviewedInstallCompletionTimeoutMinutes?: number;
+
+  // Internal administrative-image contract for a reviewed InstallShield
+  // launcher whose embedded MSI is the only reliable LocalSystem deployment
+  // path. The generated package validates the exact MSI filename and its
+  // manifest-owned product code before installation. Customers cannot supply
+  // this directly.
+  reviewedInstallShieldAdministrativeImage?: {
+    expectedMsiFileName: string;
+  };
+
+  // Internal, reviewed vendor arguments appended to an exact registered
+  // uninstaller. Application adapters populate this field; it is intentionally
+  // not exposed as a customer-facing free-form command surface.
+  reviewedUninstallArguments?: string[];
+
+  // Internal window-control contract for a reviewed vendor uninstaller that
+  // exposes no reliable silent command line. The generated package restricts
+  // automation to a newly started exact process name and fixed Button class
+  // indices. Application adapters are the only trusted source.
+  reviewedUninstallWindowAutomation?: {
+    processName: string;
+    steps: Array<{
+      windowText?: string;
+      buttonIndex: number;
+      timeoutSeconds: number;
+    }>;
+  };
+
+  // Internal guard for a reviewed vendor MSI custom-action helper that can
+  // remain alive indefinitely during removal. The packager only accepts this
+  // value from an application adapter and matches both the executable name and
+  // command line before ending a recently created helper after a grace period.
+  // The optional lookback remains bounded and is supplied only by an adapter.
+  reviewedUninstallProcessGuard?: {
+    processName: string;
+    argumentsPattern: string;
+    graceSeconds: number;
+    creationLookbackSeconds?: number;
+  };
+
+  // Internal list of exact Windows service names that a reviewed vendor
+  // requires to be stopped before removal. Application adapters are the only
+  // trusted source; the packager validates every literal before emitting it.
+  reviewedUninstallServiceNames?: string[];
+
+  // Internal completion window for vendor uninstallers that hand work to a
+  // child process. Application adapters may extend the five-minute default;
+  // the exact registry identity remains the authoritative completion signal.
+  uninstallCompletionTimeoutMinutes?: number;
+
+  // Internal lifecycle policy for shared Windows runtimes that must remain on
+  // the device when Intune relinquishes management. Application adapters are
+  // the only trusted source for this value; it is not customer-configurable.
+  preserveVendorInstallationOnUninstall?: boolean;
+
+  // Internal ARP identity policy for a reviewed package that registers one
+  // visible primary application and a hidden system component under the same
+  // exact display name. The shared packager narrows only an already-matched
+  // identity set and still requires exactly one visible result. Application
+  // adapters are the only trusted source for this value.
+  reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
+
+  // Internal ARP recovery policy for a reviewed package whose vendor replaces
+  // its exact uninstall registry key after installation. The shared packager
+  // may recover only one visible non-MSI entry matching both the exact
+  // install-observed display name and the manifest publisher. Application
+  // adapters are the only trusted source for this value.
+  reviewedRecoverCapturedUninstallByExactIdentity?: boolean;
+
+  // Internal exact ARP display identity for a reviewed package whose current
+  // vendor installer no longer registers the MSI ProductCode or catalog name
+  // published by WinGet. The shared packager still captures exactly one
+  // observed install delta and persists its exact registry key for removal.
+  // Application adapters are the only trusted source for this value.
+  reviewedRegistryUninstallDisplayName?: string;
+
+  // Internal lifecycle contract for reviewed self-extracting packages that do
+  // not register an application in Add/Remove Programs. The generated package
+  // verifies this exact directory after install and removes it on uninstall.
+  // Application adapters are the only trusted source for this value.
+  reviewedManagedInstallDirectory?: string;
+  reviewedManagedInstallEvidenceFile?: string;
+  reviewedManagedInstallCompletionProcess?: string;
+  reviewedManagedInstallCompletionTimeoutMinutes?: number;
+  reviewedManagedUninstall?: {
+    // A reviewed adapter may use one literal <VERSION> path segment. The
+    // packager replaces it with the validated package version before emitting
+    // the PSADT script; customer-controlled configuration cannot supply it.
+    executablePath: string;
+    arguments: string[];
+    completionTimeoutMinutes: number;
+  };
+
+  // Internal exact-command contract for a reviewed vendor uninstaller whose
+  // registered command is interactive or syntactically incorrect. The normal
+  // captured ARP identity remains the authoritative completion signal.
+  reviewedExactUninstall?: {
+    executablePath: string;
+    arguments: string[];
+    completionTimeoutMinutes: number;
+  };
+
+  // Internal exact-command contract for a reviewed ZIP package whose vendor
+  // ships a suite-specific silent uninstall batch file in the signed archive.
+  // The shared packager extracts the retained archive to a bounded temporary
+  // directory and invokes only this validated relative path. Application
+  // adapters are the only trusted source for this value.
+  reviewedArchiveUninstall?: {
+    relativePath: string;
+    arguments: string[];
+    completionTimeoutMinutes: number;
+  };
+
+  // Internal install-evidence contract for reviewed bundles that intentionally
+  // install several independently registered products. The generated package
+  // requires multiple matching ARP entries instead of weakening the ordinary
+  // single-product identity rule. Application adapters are the only source.
+  reviewedMultiProductInstallDisplayNamePrefixes?: string[];
+  reviewedMultiProductInstallMinimumCount?: number;
+
+  // Internal install-evidence contract for reviewed Windows runtimes whose
+  // authoritative presence signal is a fixed registry value rather than one
+  // Add/Remove Programs entry. Application adapters are the only source.
+  reviewedRegistryInstallEvidence?: {
+    keyPath: string;
+    valueName: string;
+    minimumDword: number;
+  };
+
+  // Internal install-evidence contract for reviewed shared Appx/MSIX
+  // frameworks. The generated package requires an exact package identity,
+  // Microsoft-style publisher ID, framework flag, and minimum package
+  // version. Application adapters are the only source.
+  reviewedAppxInstallEvidence?: {
+    packageName: string;
+    publisherId: string;
+    minimumVersion: string;
+  };
 
   // Additional commands run as extra PSADT steps after the main install /
   // uninstall (e.g. delete a desktop shortcut after installing). Each entry is a
@@ -272,6 +436,18 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   // Commands will be auto-generated based on installer type
   installCommand: undefined,
   uninstallCommand: undefined,
+  reviewedInstallArguments: [],
+  reviewedInstallArgumentsOverride: undefined,
+  reviewedArgumentlessInstall: undefined,
+  reviewedInstallCompletionTimeoutMinutes: undefined,
+  reviewedInstallShieldAdministrativeImage: undefined,
+  reviewedUninstallArguments: [],
+  reviewedUninstallWindowAutomation: undefined,
+  reviewedUninstallProcessGuard: undefined,
+  reviewedUninstallServiceNames: undefined,
+  reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
+  reviewedRecoverCapturedUninstallByExactIdentity: undefined,
+  reviewedRegistryUninstallDisplayName: undefined,
 };
 
 /**
@@ -355,4 +531,31 @@ export function getDefaultProcessesToClose(
   }
 
   return processes;
+}
+
+/**
+ * The packaging pipeline rejects close-process entries without an executable
+ * name, so validate before save or dispatch: drop rows with no content at
+ * all, and report rows that still lack a usable name (for example a filled
+ * description with an empty name) so callers can block instead of shipping a
+ * config the packager will fail on. Kept rows are returned unchanged; the
+ * packager itself trims and strips a trailing .exe, and rewriting names here
+ * would needlessly change QA execution-profile hashes.
+ */
+export function sanitizeProcessesToClose(
+  processes: ProcessToClose[] | undefined
+): { processes: ProcessToClose[]; invalid: ProcessToClose[] } {
+  const kept: ProcessToClose[] = [];
+  const invalid: ProcessToClose[] = [];
+  for (const process of processes || []) {
+    const name = (process.name || '').trim().replace(/\.exe$/i, '');
+    const description = (process.description || '').trim();
+    if (!name && !description) continue;
+    if (!name) {
+      invalid.push(process);
+      continue;
+    }
+    kept.push(process);
+  }
+  return { processes: kept, invalid };
 }

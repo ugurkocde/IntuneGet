@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PublicThemeProvider } from "@/components/providers/theme-context";
@@ -11,20 +10,15 @@ import { getLocale } from "gt-next/server";
 // Analytics configuration
 const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
 
-const inter = localFont({
-  src: "./fonts/InterVariable.woff2",
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const jetbrainsMono = localFont({
-  src: "./fonts/JetBrainsMono-Variable.woff2",
-  variable: "--font-mono",
-  display: "swap",
-});
+// Fonts are self-hosted from /public/fonts with @font-face rules in
+// globals.css. next/font was dropped because it failed to emit the font
+// preload links in this setup, leaving the fonts to load after CSS parse
+// (late swap = slow LCP and occasional layout shift). The explicit preloads
+// live in the <head> below; metric-adjusted fallbacks in globals.css keep
+// the swap shift-free.
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://intuneget.com"),
+  metadataBase: new URL("https://www.intuneget.com"),
   title: "IntuneGet | Free Intune App Deployment Tool - Deploy Winget Apps in Minutes",
   description:
     "Deploy any Winget app to Microsoft Intune in about 5 minutes. Free, open-source tool. No scripting, no IntuneWin packaging, no per-device licensing.",
@@ -46,12 +40,12 @@ export const metadata: Metadata = {
   creator: "Ugur Koc",
   publisher: "IntuneGet",
   alternates: {
-    canonical: "https://intuneget.com",
+    canonical: "https://www.intuneget.com",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://intuneget.com",
+    url: "https://www.intuneget.com",
     title: "IntuneGet - Deploy Winget Apps to Intune for Free",
     description:
       "Deploy any Winget app to Microsoft Intune in about 5 minutes. Free, open-source tool with no scripting required.",
@@ -109,8 +103,8 @@ const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "IntuneGet",
-  url: "https://intuneget.com",
-  logo: "https://intuneget.com/logo-512.png",
+  url: "https://www.intuneget.com",
+  logo: "https://www.intuneget.com/logo-512.png",
   description:
     "IntuneGet is a free, open-source tool for deploying Winget applications to Microsoft Intune. Deploy any Winget app in about 5 minutes with no scripting required.",
   sameAs: ["https://github.com/ugurkocde/IntuneGet", "https://intunebrew.com"],
@@ -158,7 +152,7 @@ const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "IntuneGet",
-  url: "https://intuneget.com",
+  url: "https://www.intuneget.com",
   description:
     "Free, open-source Intune app deployment tool. Deploy any Winget app to Microsoft Intune in about 5 minutes.",
   publisher: {
@@ -169,7 +163,7 @@ const websiteJsonLd = {
     "@type": "SearchAction",
     target: {
       "@type": "EntryPoint",
-      urlTemplate: "https://intuneget.com/dashboard?search={search_term_string}",
+      urlTemplate: "https://www.intuneget.com/dashboard?search={search_term_string}",
     },
     "query-input": "required name=search_term_string",
   },
@@ -205,6 +199,13 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
+        <link
+          rel="preload"
+          href="/fonts/Inter-latin-v1.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <link rel="preconnect" href="https://plausible.io" />
         <script
           dangerouslySetInnerHTML={{
@@ -255,7 +256,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+        className="font-sans antialiased"
       >
         {content}
       </body>

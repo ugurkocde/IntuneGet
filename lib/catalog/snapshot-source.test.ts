@@ -11,8 +11,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { buildSqlite } from '../../scripts/build-catalog-snapshot.mjs';
-import { SnapshotCatalogSource } from './snapshot-source';
+import { hasCompatibleQaResultsTable, SnapshotCatalogSource } from './snapshot-source';
 import { _resetSnapshotStoreForTest } from './snapshot-store';
 
 let tmpDir: string;
@@ -59,6 +60,17 @@ const curatedApps = [
     is_verified: true,
     is_locale_variant: false,
     popularity_rank: 5,
+  },
+  {
+    id: 5,
+    winget_id: 'Example.Unverified',
+    name: 'Unverified Example',
+    publisher: 'Example',
+    latest_version: '1.0',
+    category: 'Utilities',
+    is_verified: false,
+    is_locale_variant: false,
+    popularity_rank: 99,
   },
   {
     id: 4,
@@ -110,10 +122,62 @@ const sccmMappings = [
   },
 ];
 
+const qaResults = [
+  {
+    winget_id: 'Google.Chrome',
+    display_name: 'Google Chrome',
+    publisher: 'Google LLC',
+    tested_version: '120.0',
+    architecture: 'x64',
+    outcome: 'Passed',
+    installer_sha256: 'A'.repeat(64),
+    tested_at_utc: '2026-01-03T00:00:00Z',
+    overall_duration_seconds: 12.5,
+    installer_type: 'msi',
+    install_command: 'msiexec /i chrome.msi /qn',
+    uninstall_command: 'msiexec /x {PRODUCT} /qn',
+    detection: { type: 'fileVersion', path: 'C:\\Program Files\\Chrome\\chrome.exe', minimumVersion: '120.0' },
+    phase_results: {
+      install: { exitCode: 0, durationSeconds: 3, timedOut: false },
+      detectionAfterInstall: { exitCode: 0, durationSeconds: 1, timedOut: false },
+      uninstall: { exitCode: 0, durationSeconds: 2, timedOut: false },
+      detectionAfterUninstall: { exitCode: 1, durationSeconds: 1, timedOut: false },
+    },
+    changes: null,
+    relevant_event_count: 0,
+    environment: { executionContext: 'LocalSystem' },
+    effective_configuration: {
+      deployMode: 'Silent',
+      vendorSilentArguments: '/qn',
+      restartBehavior: 'Suppress',
+      promptConfiguration: {
+        closePrompt: false,
+        deferral: false,
+        progressDialog: false,
+        customPromptCount: 0,
+        restartPrompt: false,
+        balloonTipCount: 0,
+      },
+      processCloseCount: 0,
+      uiEvidenceExpected: false,
+    },
+    qa_schema_version: 1,
+    synced_at: '2026-01-03T00:01:00Z',
+    test_level: 'psadt-package',
+    package_profile_sha256: 'B'.repeat(64),
+    psadt_version: '4.1.8',
+    psadt_template_sha256: 'C'.repeat(64),
+    psadt_config_sha256: 'D'.repeat(64),
+    detection_rules_sha256: 'E'.repeat(64),
+    packager_commit: 'f'.repeat(40),
+    package_content_sha256: 'F'.repeat(64),
+  },
+];
+
 beforeAll(() => {
   tmpDir = mkdtempSync(path.join(tmpdir(), 'snapshot-source-test-'));
   dbPath = path.join(tmpDir, 'catalog.sqlite');
-  buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings });
+  buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings, qaResults });
   process.env.CATALOG_SNAPSHOT_FILE = dbPath;
   _resetSnapshotStoreForTest();
 });
@@ -169,6 +233,23 @@ describe('SnapshotCatalogSource', () => {
     expect((data || [])[0].winget_id).toBe('Google.Chrome');
   });
 
+  it('getPopularApps can include the full non-variant catalog', async () => {
+    const result = await source.getPopularApps({
+      limit: 10,
+      offset: 0,
+      sort: 'name',
+      verifiedOnly: false,
+    });
+    expect(result?.data.map((app) => app.winget_id)).toContain('Example.Unverified');
+    expect(result?.data.map((app) => app.winget_id)).not.toContain('Google.Chrome.de');
+    expect(result?.total).toBe(4);
+  });
+
+  it('getVerifiedAppIds returns canonical apps in popularity order', async () => {
+    const ids = await source.getVerifiedAppIds(2);
+    expect(ids.map((row) => row.winget_id)).toEqual(['Google.Chrome', 'Mozilla.Firefox']);
+  });
+
   it('getCategories returns per-category counts', async () => {
     const cats = await source.getCategories();
     const browsers = cats.find((c) => c.category === 'Browsers');
@@ -202,6 +283,25 @@ describe('SnapshotCatalogSource', () => {
 
   it('getInstallationChangelog returns null (not shipped in snapshot)', async () => {
     expect(await source.getInstallationChangelog('Google.Chrome')).toBeNull();
+  });
+
+  it('returns compact QA statuses and lazy full details from the snapshot', async () => {
+    const statuses = await source.getQaStatuses(['Google.Chrome', 'Mozilla.Firefox']);
+    expect(statuses).toEqual([
+      expect.objectContaining({
+        winget_id: 'Google.Chrome',
+        outcome: 'Passed',
+        tested_version: '120.0',
+      }),
+    ]);
+
+    const result = await source.getQaResult('Google.Chrome');
+    expect(result?.detection.minimumVersion).toBe('120.0');
+    expect(result?.phase_results.detectionAfterUninstall?.exitCode).toBe(1);
+    expect(result?.effective_configuration?.deployMode).toBe('Silent');
+    expect(await source.getQaResult('Google.Chrome', 'B'.repeat(64))).not.toBeNull();
+    expect(await source.getQaResult('Google.Chrome', 'A'.repeat(64))).toBeNull();
+    expect(await source.getQaResult('Mozilla.Firefox')).toBeNull();
   });
 
   it('getAllLatestVersions returns rows with non-null latest_version', async () => {
@@ -253,11 +353,61 @@ describe('SnapshotCatalogSource', () => {
 
   it('getCatalogStats counts all curated apps', async () => {
     const stats = await source.getCatalogStats();
-    expect(stats.totalApps).toBe(4);
+    expect(stats.totalApps).toBe(5);
   });
 
   it('getCategoryCount respects verifiedOnly', async () => {
     expect(await source.getCategoryCount({ verifiedOnly: true })).toBe(4);
-    expect(await source.getCategoryCount({ verifiedOnly: false })).toBe(4);
+    expect(await source.getCategoryCount({ verifiedOnly: false })).toBe(5);
+  });
+});
+
+describe('snapshot QA schema compatibility', () => {
+  it('does not query PSADT fields from a legacy QA table', () => {
+    const legacy = new Database(':memory:');
+    legacy.exec('CREATE TABLE qa_results (winget_id TEXT PRIMARY KEY)');
+    expect(hasCompatibleQaResultsTable(legacy)).toBe(false);
+    legacy.close();
+
+    const current = new Database(':memory:');
+    current.exec(`CREATE TABLE qa_results (
+      winget_id TEXT PRIMARY KEY,
+      test_level TEXT,
+      package_profile_sha256 TEXT,
+      psadt_version TEXT,
+      package_content_sha256 TEXT
+    )`);
+    expect(hasCompatibleQaResultsTable(current)).toBe(true);
+    current.close();
+  });
+});
+
+
+describe('catalog release history', () => {
+  it('filters observations and retains the previous version across month/type filters', async () => {
+    const source = new SnapshotCatalogSource();
+    const result = await source.getReleaseHistory({ query: 'Chrome', month: '2026-01', kind: 'updated', page: 1 });
+    expect(result.total).toBe(1);
+    expect(result.apps).toBe(1);
+    expect(result.firstTracked).toBe(0);
+    expect(result.rows[0]).toMatchObject({ version: '120.0', previous_version: '119.0', detected_at: '2026-01-02T00:00:00Z' });
+    expect(result.months).toEqual(['2026-01']);
+    expect(result.sync).toBeNull();
+  });
+  it('does not treat wildcard search characters as SQL patterns', async () => {
+    const result = await new SnapshotCatalogSource().getReleaseHistory({ query: '%', month: '', kind: 'all', page: 1 });
+    expect(result.rows).toEqual([]);
+    expect(result.total).toBe(0);
+  });
+});
+
+describe('release history filtering', () => {
+  it('filters exact app, date and architecture before counting while preserving predecessor', async () => {
+    const result = await new SnapshotCatalogSource().getReleaseHistory({query: '', month: '', kind: 'all', page: 1, app: 'google.chrome', from: '2026-01-02', to: '2026-01-02', architecture: 'x64'});
+    expect(result.total).toBe(1);
+    expect(result.apps).toBe(1);
+    expect(result.rows[0].winget_id).toBe('Google.Chrome');
+    const empty = await new SnapshotCatalogSource().getReleaseHistory({query: '', month: '', kind: 'all', page: 1, app: 'Google.Chrome', architecture: 'arm64'});
+    expect(empty.total).toBe(0);
   });
 });

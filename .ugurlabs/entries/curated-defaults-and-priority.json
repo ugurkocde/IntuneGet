@@ -1,0 +1,5 @@
+{
+  "title": "Deploy curated apps with tested defaults",
+  "summary": "Curated apps now use tested deployment settings by default, with custom behaviour available as an explicit choice. Customer uploads and new app updates share priority ahead of background QA, while newer curated releases replace only older queued tests for the same app.",
+  "type": "improved"
+}

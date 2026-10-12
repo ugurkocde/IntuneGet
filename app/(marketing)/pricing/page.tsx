@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "IntuneGet is completely free. Deploy the full Winget catalog to Microsoft Intune at no cost. See how IntuneGet compares to manual deployment.",
   alternates: {
-    canonical: "https://intuneget.com/pricing",
+    canonical: "https://www.intuneget.com/pricing",
   },
   openGraph: {
     title: "IntuneGet Pricing - Free & Open Source",
@@ -28,13 +28,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Pricing",
-      item: "https://intuneget.com/pricing",
+      item: "https://www.intuneget.com/pricing",
     },
   ],
 };

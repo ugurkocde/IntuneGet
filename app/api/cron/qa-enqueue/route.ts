@@ -1,0 +1,1395 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { insertQaCandidate } from '@/lib/qa/candidate-insert';
+import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
+import {
+  emitQaPollAlert,
+  qaPollRunStatus,
+  structuredQaPollLog,
+  type QaPollAlertDelivery,
+  type QaPollRunStatus,
+  type QaPollSummary,
+} from '@/lib/qa/poll-observability';
+import {
+  normalizeInstallerSha256,
+  normalizeQaInstallerType,
+  qaInstallerFileName,
+  selectQaVmInstaller,
+  selectWingetInstaller,
+} from '@/lib/qa/candidate';
+import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
+import { evaluatePackagingContract } from '@/lib/packaging-contract';
+import {
+  isWingetDependencyCompatibilityError,
+  resolveWingetPackageDependencies,
+} from '@/lib/winget-dependencies';
+import {
+  QA_PSADT_TOOLCHAIN,
+  buildQaPackageIdentity,
+  validateCompatiblePassedCatalogQaProfile,
+  validateCurrentQaPackageProfile,
+} from '@/lib/qa/package-profile';
+import {
+  prioritizeToolchainBackfill,
+  shouldRetryTerminalToolchainCandidate,
+  terminalToolchainRetryTargets,
+  type QaToolchainBackfillCandidate,
+} from '@/lib/qa/toolchain-backfill';
+import {
+  getQaPipelineControl,
+  isQaPackagerReleaseReady,
+  recordQaSchedulerHeartbeat,
+} from '@/lib/qa/pipeline-control';
+import { detectWingetChanges } from '@/lib/qa/winget-changes';
+import {
+  createWingetManifestClient,
+  resolveWingetManifest,
+} from '@/lib/winget-sync-resolution.mjs';
+import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
+import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
+
+const BATCH_SIZE = 3;
+const POLL_STATE_ID = 'microsoft/winget-pkgs';
+const INITIAL_LOOKBACK_MINUTES = 30;
+const MAX_RECORDED_ERRORS = 100;
+const MAX_ERROR_LENGTH = 1_000;
+const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
+const TOOLCHAIN_BACKFILL_PAGE_SIZE = 100;
+const TOOLCHAIN_BACKFILL_MAX_PAGES = 2;
+// Reconciliation is metadata-only until an immutable installer payload is
+// found without a prior pass. Keep VM execution serialized, but scan enough
+// deployed-app demand per poll to avoid spending hours reclassifying known
+// payloads three at a time.
+const DEMAND_BACKFILL_BATCH_SIZE = 20;
+// Many catalog rows cannot currently resolve to a trusted Windows installer.
+// Probe enough idle candidates to keep the serialized VM supplied, while the
+// loop below still resolves manifests in bounded groups of BATCH_SIZE and the
+// database continues to enforce a single active lifecycle.
+const IDLE_CATALOG_BACKFILL_BATCH_SIZE = 20;
+const MAX_TARGETED_PACKAGE_IDS = 20;
+const TARGETED_QA_PRIORITY = 1_000;
+
+type QaCatalogReconciliationReason =
+  | 'package_or_version_missing'
+  | 'installer_manifest_missing'
+  | 'no_compatible_vm_installer'
+  | 'missing_trusted_installer_metadata'
+  | 'installer_hash_quarantined'
+  | 'package_compatibility_blocked';
+
+function installerTupleKey(input: {
+  wingetId: string;
+  version: string;
+  architecture: string;
+  installerUrl: string;
+  installerSha256: string;
+}): string {
+  return [
+    input.wingetId.trim().toLowerCase(),
+    input.version.trim(),
+    input.architecture.trim().toLowerCase(),
+    input.installerUrl.trim(),
+    input.installerSha256.trim().toUpperCase(),
+  ].join('\0');
+}
+
+function packagePayloadKey(input: {
+  wingetId: string;
+  version: string;
+  architecture: string;
+  installerSha256: string;
+}): string {
+  return [
+    input.wingetId.trim().toLowerCase(),
+    input.version.trim(),
+    input.architecture.trim().toLowerCase(),
+    input.installerSha256.trim().toUpperCase(),
+  ].join('|');
+}
+
+function targetedPackageIds(request: Request): string[] {
+  const url = new URL(request.url);
+  const values = [
+    ...url.searchParams.getAll('id'),
+    ...url.searchParams.getAll('ids').flatMap((value) => value.split(',')),
+  ];
+  const ids = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  if (ids.length > MAX_TARGETED_PACKAGE_IDS) {
+    throw new Error(`At most ${MAX_TARGETED_PACKAGE_IDS} targeted package IDs are allowed.`);
+  }
+  const invalid = ids.find((id) => !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(id));
+  if (invalid) throw new Error(`Invalid targeted WinGet package ID: ${invalid}`);
+  return ids;
+}
+
+interface QaCandidateProfileRow {
+  id: string;
+  winget_id: string;
+  version: string;
+  architecture: string;
+  installer_sha256: string;
+  enqueued_at: string;
+  package_profile_sha256: string | null;
+  test_config: unknown;
+  status: string;
+  priority: number;
+  demand_source: string;
+}
+
+interface QaPackagePassRow {
+  winget_id: string;
+  tested_version: string;
+  architecture: string;
+  installer_sha256: string | null;
+  outcome: string;
+  package_profile_sha256: string | null;
+}
+
+function packagePassKey(value: {
+  winget_id: string;
+  tested_version?: string;
+  version?: string;
+  architecture: string;
+  installer_sha256: string | null;
+  package_profile_sha256: string | null;
+}): string {
+  return [
+    value.winget_id.trim().toLowerCase(),
+    (value.tested_version || value.version || '').trim().toLowerCase(),
+    value.architecture.trim().toLowerCase(),
+    (value.installer_sha256 || '').trim().toUpperCase(),
+    (value.package_profile_sha256 || '').trim().toUpperCase(),
+  ].join('|');
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function hasInteractiveCatalogQaProfile(testConfig: unknown): boolean {
+  const canonicalJson = object(testConfig).packageProfileCanonicalJson;
+  if (typeof canonicalJson !== 'string') return false;
+  try {
+    const canonical = object(JSON.parse(canonicalJson));
+    const psadtConfig = object(canonical.psadtConfig);
+    const progressDialog = object(psadtConfig.progressDialog);
+    return psadtConfig.deployMode === 'Auto' && progressDialog.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+async function findToolchainBackfillIds(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<{ ids: string[]; pagesScanned: number }> {
+  const stateId = `toolchain-backfill:${QA_PSADT_TOOLCHAIN.packagerCommit}`;
+  const { data: saved, error: stateError } = await supabase.from('qa_automation_state')
+    .select('value').eq('id', stateId).maybeSingle();
+  if (stateError) throw new Error(`Could not read QA backfill checkpoint: ${stateError.message}`);
+  const checkpoint = object(saved?.value);
+  let after = typeof checkpoint.after === 'string' ? checkpoint.after : '';
+  const pending = Array.isArray(checkpoint.pending)
+    ? checkpoint.pending.filter((id): id is string => typeof id === 'string') : [];
+  const finish = async (ids: string[], pagesScanned: number) => {
+    const { error } = await supabase.from('qa_automation_state').upsert({
+      id: stateId,
+      value: { after, pending: ids.slice(TOOLCHAIN_BACKFILL_BATCH_SIZE) },
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(`Could not save QA backfill checkpoint: ${error.message}`);
+    return { ids: ids.slice(0, TOOLCHAIN_BACKFILL_BATCH_SIZE), pagesScanned };
+  };
+  if (pending.length) return finish(pending, 0);
+  const decidedIds = new Set<string>();
+  const supportedStaleCandidates: QaToolchainBackfillCandidate[] = [];
+  const retryTargets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
+  const terminalRetryIds = new Set(retryTargets.map((id) => id.trim().toLowerCase()));
+  let pendingTerminalRetryIds = new Set<string>();
+  if (retryTargets.length > 0) {
+    const [deployedRetryResult, customerRetryResult] = await Promise.all([
+      supabase
+        .from('upload_history')
+        .select('winget_id')
+        .in('winget_id', retryTargets),
+      supabase
+        .from('packaging_jobs')
+        .select('winget_id')
+        .in('winget_id', retryTargets)
+        .in('status', ['awaiting_qa', 'qa_failed']),
+    ]);
+    const { data: deployedRetryTargets, error: deployedRetryTargetsError } = deployedRetryResult;
+    if (deployedRetryTargetsError) {
+      throw new Error(
+        `Could not read deployed QA toolchain retry targets: ${deployedRetryTargetsError.message}`
+      );
+    }
+    if (customerRetryResult.error) {
+      throw new Error(
+        `Could not read customer QA toolchain retry targets: ${customerRetryResult.error.message}`
+      );
+    }
+    pendingTerminalRetryIds = new Set(
+      [
+        ...(deployedRetryTargets || []),
+        ...(customerRetryResult.data || []),
+      ].map((row) => row.winget_id.trim().toLowerCase())
+    );
+  }
+  let pagesScanned = 0;
+
+  while (pagesScanned < TOOLCHAIN_BACKFILL_MAX_PAGES) {
+    const { data, error } = await supabase.rpc('qa_toolchain_backfill_page', {
+      p_after: after, p_limit: TOOLCHAIN_BACKFILL_PAGE_SIZE,
+      p_terminal_retry_ids: [...terminalRetryIds],
+    });
+    if (error) throw new Error(`Could not scan prior QA toolchains: ${error.message}`);
+    const rows = (data || []) as unknown as QaCandidateProfileRow[];
+    pagesScanned++;
+
+    let pageStaleRows: QaCandidateProfileRow[] = [];
+    for (const row of rows) {
+      const config = object(row.test_config);
+      const normalizedWingetId = row.winget_id.trim().toLowerCase();
+      const isReviewedCustomerTerminalRetry =
+        config.profileKind === 'deployment-config' &&
+        row.demand_source === 'customer' &&
+        ['failed', 'error'].includes(row.status) &&
+        terminalRetryIds.has(normalizedWingetId);
+      if (
+        (config.profileKind !== 'catalog-default' && !isReviewedCustomerTerminalRetry) ||
+        decidedIds.has(normalizedWingetId)
+      ) continue;
+      decidedIds.add(normalizedWingetId);
+      pendingTerminalRetryIds.delete(normalizedWingetId);
+      const validation = validateCurrentQaPackageProfile({
+        testConfig: row.test_config,
+        candidatePackageProfileSha256: row.package_profile_sha256,
+        candidateWingetId: row.winget_id,
+        candidateVersion: row.version,
+        candidateArchitecture: row.architecture,
+        candidateInstallerSha256: row.installer_sha256,
+      });
+      const compatiblePassedValidation = row.status === 'passed'
+        ? validateCompatiblePassedCatalogQaProfile({
+            testConfig: row.test_config,
+            candidatePackageProfileSha256: row.package_profile_sha256,
+            candidateWingetId: row.winget_id,
+            candidateVersion: row.version,
+            candidateArchitecture: row.architecture,
+            candidateInstallerSha256: row.installer_sha256,
+          })
+        : null;
+      const hasCompatiblePassedProfile = compatiblePassedValidation?.valid === true;
+      if (
+        !shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, {
+          wingetId: row.winget_id,
+          status: row.status,
+        })
+      ) {
+        continue;
+      }
+      if (
+        (!validation.valid && !hasCompatiblePassedProfile) ||
+        !hasInteractiveCatalogQaProfile(row.test_config)
+      ) {
+        pageStaleRows.push(row);
+      }
+    }
+
+    if (pageStaleRows.length > 0) {
+      // A queued or superseded duplicate can be newer than a genuine pass and
+      // would otherwise hide that reusable evidence during a toolchain rollout.
+      // Match the immutable payload and old execution profile, then run the
+      // normal release-aware compatibility check before scheduling any rebuild.
+      const { data: priorPasses, error: priorPassesError } = await supabase
+        .from('qa_package_results')
+        .select(
+          'winget_id, tested_version, architecture, installer_sha256, outcome, package_profile_sha256'
+        )
+        .in('winget_id', pageStaleRows.map((row) => row.winget_id))
+        .eq('outcome', 'Passed');
+      if (priorPassesError) {
+        throw new Error(`Could not read prior QA toolchain passes: ${priorPassesError.message}`);
+      }
+      const passedProfiles = new Set(
+        ((priorPasses || []) as QaPackagePassRow[]).map(packagePassKey)
+      );
+      pageStaleRows = pageStaleRows.filter((row) => {
+        if (!passedProfiles.has(packagePassKey(row))) return true;
+        return !validateCompatiblePassedCatalogQaProfile({
+          testConfig: row.test_config,
+          candidatePackageProfileSha256: row.package_profile_sha256,
+          candidateWingetId: row.winget_id,
+          candidateVersion: row.version,
+          candidateArchitecture: row.architecture,
+          candidateInstallerSha256: row.installer_sha256,
+        }).valid;
+      });
+    }
+
+    if (pageStaleRows.length > 0) {
+      const pageStaleIds = pageStaleRows.map((row) => row.winget_id);
+      const [supportedResult, deployedResult, customerJobResult] = await Promise.all([
+        supabase
+          .from('curated_apps')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds)
+          .eq('is_verified', true)
+          .eq('is_winget_verified', true)
+          .eq('app_source', 'win32')
+          .eq('is_locale_variant', false),
+        supabase
+          .from('upload_history')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds),
+        supabase
+          .from('packaging_jobs')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds)
+          .in('status', ['awaiting_qa', 'qa_failed']),
+      ]);
+      const { data: supported, error: supportedError } = supportedResult;
+      if (supportedError) {
+        throw new Error(`Could not filter QA toolchain backfill apps: ${supportedError.message}`);
+      }
+      if (deployedResult.error) {
+        throw new Error(
+          `Could not filter QA toolchain backfill demand: ${deployedResult.error.message}`
+        );
+      }
+      if (customerJobResult.error) {
+        throw new Error(
+          `Could not filter QA toolchain customer demand: ${customerJobResult.error.message}`
+        );
+      }
+      const supportedIds = new Set((supported || []).map((app) => app.winget_id));
+      // Toolchain refreshes consume the same single-VM queue as new tests.
+      // An auto-update policy may raise priority. A completed tenant deployment
+      // or a still-recorded customer packaging request may put an app into a
+      // reviewed terminal retry; both are durable customer demand.
+      const demandedIds = new Set(
+        [
+          ...(deployedResult.data || []),
+          ...(customerJobResult.data || []),
+        ].map((row) => row.winget_id)
+      );
+      for (const row of pageStaleRows) {
+        if (supportedIds.has(row.winget_id) && demandedIds.has(row.winget_id)) {
+          supportedStaleCandidates.push({
+            wingetId: row.winget_id,
+            status: typeof row.status === 'string' ? row.status : '',
+            priority: Number.isFinite(row.priority) ? row.priority : 0,
+            enqueuedAt: row.enqueued_at,
+          });
+        }
+      }
+    }
+
+    const last = rows.at(-1);
+    after = rows.length < TOOLCHAIN_BACKFILL_PAGE_SIZE ? '' : last?.winget_id || after;
+    if (
+      supportedStaleCandidates.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE &&
+      pendingTerminalRetryIds.size === 0
+    ) {
+      return finish(prioritizeToolchainBackfill(supportedStaleCandidates), pagesScanned);
+    }
+    if (rows.length < TOOLCHAIN_BACKFILL_PAGE_SIZE) {
+      return finish(prioritizeToolchainBackfill(supportedStaleCandidates), pagesScanned);
+    }
+    if (!last?.winget_id) {
+      throw new Error('Could not advance the QA toolchain backfill cursor.');
+    }
+  }
+  return finish(prioritizeToolchainBackfill(supportedStaleCandidates), pagesScanned);
+}
+
+function errorMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
+}
+
+function recordPollError(summary: QaPollSummary, scope: string, error: unknown): void {
+  summary.errorCount++;
+  if (summary.errors.length < MAX_RECORDED_ERRORS) {
+    summary.errors.push(`${scope}: ${errorMessage(error)}`);
+  }
+}
+
+async function findDemandBackfillIds(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc('qa_missing_demand_backfill_ids', {
+    p_limit: DEMAND_BACKFILL_BATCH_SIZE,
+  });
+  if (error) throw new Error(`Could not select demanded-app QA backfill: ${error.message}`);
+  return Array.from(
+    new Set(
+      ((data || []) as Array<{ winget_id?: unknown }>)
+        .map((row) => (typeof row.winget_id === 'string' ? row.winget_id.trim() : ''))
+        .filter(Boolean)
+    )
+  );
+}
+
+async function findIdleCatalogBackfillIds(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc('qa_idle_catalog_backfill_ids', {
+    p_limit: IDLE_CATALOG_BACKFILL_BATCH_SIZE,
+  });
+  if (error) throw new Error(`Could not select idle catalog QA backfill: ${error.message}`);
+  return Array.from(
+    new Set(
+      ((data || []) as Array<{ winget_id?: unknown }>)
+        .map((row) => (typeof row.winget_id === 'string' ? row.winget_id.trim() : ''))
+        .filter(Boolean)
+    )
+  );
+}
+
+async function persistQaCatalogReconciliation(
+  supabase: ReturnType<typeof createServerClient>,
+  input: {
+    wingetId: string;
+    catalogVersion: string;
+    observedHeadSha: string | null;
+    reasonCode: QaCatalogReconciliationReason;
+    observedLiveVersion?: string;
+  }
+): Promise<void> {
+  if (!input.observedHeadSha || !/^[a-f0-9]{40}$/.test(input.observedHeadSha)) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('qa_catalog_reconciliations')
+    .upsert({
+      winget_id: input.wingetId,
+      catalog_version: input.catalogVersion,
+      observed_head_sha: input.observedHeadSha,
+      observed_live_version: input.observedLiveVersion || null,
+      reason_code: input.reasonCode,
+      observed_at: now,
+      updated_at: now,
+    }, {
+      onConflict: 'winget_id,catalog_version',
+    });
+  if (error) {
+    throw new Error(`Could not persist the QA catalog reconciliation: ${error.message}`);
+  }
+}
+
+export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  let requestedPackageIds: string[];
+  try {
+    requestedPackageIds = targetedPackageIds(request);
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
+  }
+
+  const startedAt = new Date().toISOString();
+  const startedAtMs = Date.now();
+  const requestId = request.headers.get('x-vercel-id');
+  const summary: QaPollSummary = {
+    checked: 0,
+    updatesFound: 0,
+    queued: 0,
+    alreadyKnown: 0,
+    unavailable: 0,
+    errorCount: 0,
+    errors: [],
+  };
+  let recipeCount = 0;
+  let changedPackageCount = 0;
+  let supportedChangedCount = 0;
+  let toolchainBackfillCount = 0;
+  let toolchainBackfillPagesScanned = 0;
+  let demandBackfillRequestedCount = 0;
+  let demandBackfillCount = 0;
+  let catalogBackfillRequestedCount = 0;
+  let catalogBackfillCount = 0;
+  let targetedCount = 0;
+  let baseSha: string | null = null;
+  let headSha: string | null = null;
+  let runId: string | null = null;
+  let supabase: ReturnType<typeof createServerClient> | null = null;
+
+  const persistRun = async (
+    status: QaPollRunStatus,
+    durationMs: number,
+    alertDelivery: QaPollAlertDelivery | null
+  ) => {
+    if (!supabase || !runId) return;
+    const { error } = await supabase
+      .from('qa_poll_runs')
+      .update({
+        status,
+        finished_at: new Date().toISOString(),
+        duration_ms: durationMs,
+        recipe_count: recipeCount,
+        checked_count: summary.checked,
+        updates_found_count: summary.updatesFound,
+        queued_count: summary.queued,
+        already_known_count: summary.alreadyKnown,
+        unavailable_count: summary.unavailable,
+        error_count: summary.errorCount,
+        errors: summary.errors,
+        alert_delivery: alertDelivery,
+        base_sha: baseSha,
+        head_sha: headSha,
+        changed_package_count: changedPackageCount,
+        supported_changed_count: supportedChangedCount,
+        demand_backfill_requested_count: demandBackfillRequestedCount,
+        demand_backfill_count: demandBackfillCount,
+        catalog_backfill_requested_count: catalogBackfillRequestedCount,
+        catalog_backfill_count: catalogBackfillCount,
+      })
+      .eq('id', runId);
+    if (error) throw new Error(`Could not finalize QA poll run ${runId}: ${error.message}`);
+  };
+
+  try {
+    supabase = createServerClient();
+    await recordQaSchedulerHeartbeat(
+      supabase,
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      startedAt
+    );
+    const control = await getQaPipelineControl(supabase);
+    // Authenticated, explicitly targeted recovery may prepare a queue row while
+    // dispatch remains paused. Never advance background scans in this mode.
+    const targetedRecovery = control.paused && requestedPackageIds.length > 0;
+    if ((control.paused && !targetedRecovery) || isQaMaintenanceMode()) {
+      return NextResponse.json({
+        success: true,
+        paused: true,
+        reason: 'maintenance_paused',
+        maintenanceReason: control.reason,
+        pausedAt: control.updatedAt,
+      });
+    }
+    if (!isQaPackagerReleaseReady(control, QA_PSADT_TOOLCHAIN.packagerCommit)) {
+      return NextResponse.json({
+        success: true,
+        paused: true,
+        reason: 'packager_release_pending',
+      });
+    }
+    const { data: pollRun, error: pollRunError } = await supabase
+      .from('qa_poll_runs')
+      .insert({ request_id: requestId, started_at: startedAt })
+      .select('id')
+      .single();
+    if (pollRunError) throw new Error(`Could not create QA poll run: ${pollRunError.message}`);
+    runId = pollRun.id;
+
+    const [coverageResult, stateResult] = await Promise.all([
+      supabase
+        .from('curated_apps')
+        .select('winget_id', { count: 'exact', head: true })
+        .eq('is_verified', true)
+        .eq('is_winget_verified', true)
+        .eq('app_source', 'win32')
+        .eq('is_locale_variant', false),
+      supabase
+        .from('qa_winget_poll_state')
+        .select('head_sha, last_checked_at, github_etag, github_rate_limited_until')
+        .eq('id', POLL_STATE_ID)
+        .maybeSingle(),
+    ]);
+    if (coverageResult.error) {
+      throw new Error(`Could not count the supported QA catalog: ${coverageResult.error.message}`);
+    }
+    if (stateResult.error) {
+      throw new Error(`Could not read the WinGet poll cursor: ${stateResult.error.message}`);
+    }
+    recipeCount = coverageResult.count || 0;
+    baseSha = stateResult.data?.head_sha || null;
+
+    const lookbackStart = new Date(
+      Date.now() - INITIAL_LOOKBACK_MINUTES * 60 * 1000
+    ).toISOString();
+    const changes = targetedRecovery ? {
+      baseSha,
+      headSha: baseSha || '',
+      changedPackageIds: [] as string[],
+      etag: stateResult.data?.github_etag || null,
+      rateLimitedUntil: null,
+      comparisonTruncated: false,
+    } : await detectWingetChanges({
+      token: process.env.GITHUB_PAT,
+      baseSha,
+      since: stateResult.data?.last_checked_at || lookbackStart,
+      etag: stateResult.data?.github_etag || null,
+      rateLimitedUntil: stateResult.data?.github_rate_limited_until || null,
+    });
+    baseSha = changes.baseSha;
+    headSha = changes.headSha;
+    changedPackageCount = changes.changedPackageIds.length;
+    if (changes.comparisonTruncated) {
+      structuredQaPollLog('info', 'qa_winget_compare_reanchored', {
+        runId,
+        requestId,
+        baseSha,
+        headSha,
+        sampledChangedPackageCount: changedPackageCount,
+        recovery: 'demanded_app_reconciliation',
+      });
+    }
+    if (changes.rateLimitedUntil) {
+      const { error: rateLimitStateError } = await supabase
+        .from('qa_winget_poll_state')
+        .update({
+          github_rate_limited_until: changes.rateLimitedUntil,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', POLL_STATE_ID);
+      if (rateLimitStateError) {
+        throw new Error(`Could not persist the GitHub rate-limit reset: ${rateLimitStateError.message}`);
+      }
+      recordPollError(
+        summary,
+        'system',
+        `WinGet GitHub change feed paused until ${changes.rateLimitedUntil}`
+      );
+    }
+    // Historical reconciliation must not discard successfully discovered updates.
+    // A failed lane is retried from its checkpoint on the next poll.
+    const [backfill, demandBackfillIds, catalogBackfillIds] = await Promise.all([
+      targetedRecovery ? { ids: [] as string[], pagesScanned: 0 } : findToolchainBackfillIds(supabase)
+        .catch((error) => { recordPollError(summary, 'toolchain-backfill', error); return { ids: [] as string[], pagesScanned: 0 }; }),
+      targetedRecovery ? [] as string[] : findDemandBackfillIds(supabase)
+        .catch((error) => { recordPollError(summary, 'demand-backfill', error); return [] as string[]; }),
+      targetedRecovery ? [] as string[] : findIdleCatalogBackfillIds(supabase)
+        .catch((error) => { recordPollError(summary, 'catalog-backfill', error); return [] as string[]; }),
+    ]);
+    toolchainBackfillPagesScanned = backfill.pagesScanned;
+    demandBackfillRequestedCount = demandBackfillIds.length;
+    catalogBackfillRequestedCount = catalogBackfillIds.length;
+    if (demandBackfillIds.length > 0) {
+      const { error: demandSelectionError } = await supabase.rpc(
+        'record_qa_demand_backfill_selection',
+        { p_winget_ids: demandBackfillIds }
+      );
+      if (demandSelectionError) {
+        throw new Error(
+          `Could not advance demanded-app QA reconciliation: ${demandSelectionError.message}`
+        );
+      }
+    }
+    const changedIds = new Set(changes.changedPackageIds);
+    const backfillIds = new Set(backfill.ids);
+    const terminalBackfillIds = new Set(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((id) => id.trim().toLowerCase())
+    );
+    const demandBackfillIdSet = new Set(demandBackfillIds);
+    const catalogBackfillIdSet = new Set(catalogBackfillIds);
+    const targetedIdSet = new Set(requestedPackageIds);
+    const targetPackageIds = Array.from(
+      new Set([
+        ...changedIds,
+        ...backfillIds,
+        ...demandBackfillIdSet,
+        ...catalogBackfillIdSet,
+        ...targetedIdSet,
+      ])
+    );
+
+    structuredQaPollLog('info', 'qa_poll_started', {
+      runId,
+      requestId,
+      startedAt,
+      coveredApps: recipeCount,
+      baseSha,
+      headSha,
+      changedPackageCount,
+      toolchainBackfillRequestedCount: backfill.ids.length,
+      toolchainBackfillPagesScanned,
+      demandBackfillRequestedCount,
+      catalogBackfillRequestedCount,
+      targetedRequestedCount: requestedPackageIds.length,
+    });
+
+    let supportedApps: Array<{
+      winget_id: string;
+      name: string;
+      publisher: string;
+      latest_version: string | null;
+    }> = [];
+    if (targetPackageIds.length > 0) {
+      const { data, error } = await supabase
+        .from('curated_apps')
+        .select('winget_id, name, publisher, latest_version')
+        .in('winget_id', targetPackageIds)
+        .eq('is_verified', true)
+        .eq('is_winget_verified', true)
+        .eq('app_source', 'win32')
+        .eq('is_locale_variant', false);
+      if (error) throw new Error(`Could not filter changed WinGet packages: ${error.message}`);
+      supportedApps = data || [];
+    }
+    const supportedIds = supportedApps.map((app) => app.winget_id);
+    let recipes: Array<{
+      winget_id: string;
+      definition_path: string;
+      architecture: string;
+      installer_type: string;
+    }> = [];
+    let policies: Array<{ winget_id: string }> = [];
+    let deployedApps: Array<{ winget_id: string }> = [];
+    let results: Array<{
+      winget_id: string;
+      tested_version: string;
+      architecture: string;
+      installer_sha256: string | null;
+      outcome: string;
+      tested_at_utc: string;
+      package_profile_sha256: string | null;
+      virustotal_malicious: number | null;
+    }> = [];
+    let unavailableInstallerTuples = new Map<
+      string,
+      'HASH_MISMATCH' | 'MANIFEST_CHANGED'
+    >();
+    if (supportedIds.length > 0) {
+      const [recipeResult, policyResult, deployedResult, resultResult, healthResult] = await Promise.all([
+        supabase
+          .from('qa_recipes')
+          .select('winget_id, definition_path, architecture, installer_type')
+          .in('winget_id', supportedIds)
+          .eq('active', true),
+        supabase
+          .from('app_update_policies')
+          .select('winget_id')
+          .in('winget_id', supportedIds)
+          .eq('policy_type', 'auto_update')
+          .eq('is_enabled', true),
+        supabase
+          .from('upload_history')
+          .select('winget_id')
+          .in('winget_id', supportedIds),
+        supabase
+          .from('qa_package_results')
+          .select(
+            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, package_profile_sha256, virustotal_malicious'
+          )
+          .in('winget_id', supportedIds),
+        supabase
+          .from('installer_health')
+          .select(
+            'winget_id, version, architecture, installer_url, expected_sha256, status, reason_code, expires_at'
+          )
+          .in('winget_id', supportedIds)
+          .in('status', ['quarantined', 'error']),
+      ]);
+      if (recipeResult.error) {
+        throw new Error(`Could not read optional QA recipes: ${recipeResult.error.message}`);
+      }
+      if (policyResult.error) {
+        throw new Error(`Could not prioritize QA candidates: ${policyResult.error.message}`);
+      }
+      if (deployedResult.error) {
+        throw new Error(`Could not read deployed-app QA demand: ${deployedResult.error.message}`);
+      }
+      if (resultResult.error) {
+        throw new Error(`Could not read existing QA results: ${resultResult.error.message}`);
+      }
+      if (healthResult.error) {
+        throw new Error(`Could not read quarantined QA installers: ${healthResult.error.message}`);
+      }
+      recipes = recipeResult.data || [];
+      policies = policyResult.data || [];
+      deployedApps = deployedResult.data || [];
+      results = resultResult.data || [];
+      const observedAtMs = Date.parse(startedAt);
+      unavailableInstallerTuples = new Map((healthResult.data || []).flatMap((row) => {
+        const reasonCode = row.status === 'quarantined'
+          ? 'HASH_MISMATCH' as const
+          : row.status === 'error' &&
+              row.reason_code === 'MANIFEST_CHANGED' &&
+              typeof row.expires_at === 'string' &&
+              Date.parse(row.expires_at) > observedAtMs
+            ? 'MANIFEST_CHANGED' as const
+            : null;
+        if (!reasonCode) return [];
+        return [[installerTupleKey({
+          wingetId: row.winget_id,
+          version: row.version,
+          architecture: row.architecture,
+          installerUrl: row.installer_url,
+          installerSha256: row.expected_sha256,
+        }), reasonCode]];
+      }));
+    }
+
+    const priorities = new Map<string, number>();
+    for (const policy of policies) {
+      priorities.set(policy.winget_id, (priorities.get(policy.winget_id) || 0) + 1);
+    }
+    const demandedIds = new Set<string>(policies.map((policy) => policy.winget_id));
+    // Newly detected updates for deployed/managed apps join the urgent demand
+    // band, served oldest-first but strictly behind waiting customer uploads
+    // (QA_PRIORITY_CUSTOMER). Background backfill retains its lower priority.
+    for (const policy of policies) {
+      if (changedIds.has(policy.winget_id)) priorities.set(policy.winget_id, QA_PRIORITY_DEMAND);
+    }
+    for (const deployed of deployedApps) {
+      demandedIds.add(deployed.winget_id);
+      if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
+      if (changedIds.has(deployed.winget_id)) priorities.set(deployed.winget_id, QA_PRIORITY_DEMAND);
+    }
+    for (const wingetId of backfillIds) {
+      if (terminalBackfillIds.has(wingetId.trim().toLowerCase())) {
+        priorities.set(wingetId, Math.max(priorities.get(wingetId) || 0, TARGETED_QA_PRIORITY));
+      }
+    }
+    const failedCatalogQaIds = new Set(
+      results
+        .filter((result) => result.outcome === 'Failed')
+        .map((result) => result.winget_id)
+    );
+    supportedApps = supportedApps.filter((app) =>
+      (!targetedRecovery || targetedIdSet.has(app.winget_id)) && (
+        demandedIds.has(app.winget_id) ||
+        backfillIds.has(app.winget_id) ||
+        catalogBackfillIdSet.has(app.winget_id) ||
+        (targetedIdSet.has(app.winget_id) && failedCatalogQaIds.has(app.winget_id))
+      )
+    );
+    targetedCount = supportedApps.filter((app) => targetedIdSet.has(app.winget_id)).length;
+    for (const app of supportedApps) {
+      if (targetedIdSet.has(app.winget_id)) {
+        priorities.set(
+          app.winget_id,
+          Math.max(priorities.get(app.winget_id) || 0, TARGETED_QA_PRIORITY)
+        );
+      }
+    }
+    supportedChangedCount = supportedApps.filter((app) => changedIds.has(app.winget_id)).length;
+    toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
+    demandBackfillCount = supportedApps.filter((app) =>
+      demandBackfillIdSet.has(app.winget_id)
+    ).length;
+    catalogBackfillCount = supportedApps.filter((app) =>
+      catalogBackfillIdSet.has(app.winget_id)
+    ).length;
+    const recipeById = new Map(recipes.map((row) => [row.winget_id, row]));
+    const passedResultByPayload = new Map<string, (typeof results)[number]>();
+    const securityFlaggedPayloads = new Set<string>();
+    for (const result of results) {
+      if (!result.installer_sha256) continue;
+      const key = packagePayloadKey({
+        wingetId: result.winget_id,
+        version: result.tested_version,
+        architecture: result.architecture,
+        installerSha256: result.installer_sha256,
+      });
+      if ((result.virustotal_malicious || 0) >= 1) {
+        securityFlaggedPayloads.add(key);
+      }
+      if (result.outcome !== 'Passed') continue;
+      const existing = passedResultByPayload.get(key);
+      if (!existing || result.tested_at_utc > existing.tested_at_utc) {
+        passedResultByPayload.set(key, result);
+      }
+    }
+    const client = createWingetManifestClient({ token: process.env.GITHUB_PAT, maxRetries: 2 });
+
+    for (let index = 0; index < supportedApps.length; index += BATCH_SIZE) {
+      const batch = supportedApps.slice(index, index + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (app) => {
+          summary.checked++;
+          try {
+            const recipe = recipeById.get(app.winget_id);
+            const resolution = await resolveWingetManifest({
+              client,
+              wingetId: app.winget_id,
+              storedVersion: undefined,
+              preferLive: true,
+            });
+            if (resolution.status !== 'resolved') {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: resolution.reason === 'installer_manifest_missing'
+                  ? 'installer_manifest_missing'
+                  : 'package_or_version_missing',
+                observedLiveVersion: 'version' in resolution && typeof resolution.version === 'string'
+                  ? resolution.version
+                  : undefined,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_manifest_resolution_unavailable', {
+                runId,
+                wingetId: app.winget_id,
+                version: 'version' in resolution ? resolution.version : null,
+                reason: resolution.reason,
+              });
+              return;
+            }
+
+            const manifest = resolution.manifest as Record<string, unknown>;
+            const installers = (manifest.Installers || []) as Array<Record<string, unknown>>;
+            const selectedForVm = recipe
+              ? (() => {
+                  const installer = selectWingetInstaller(
+                    installers,
+                    recipe.architecture,
+                    undefined,
+                    app.winget_id,
+                  );
+                  return installer
+                    ? { installer, architecture: recipe.architecture as 'x64' | 'x86' | 'arm64' }
+                    : null;
+                })()
+              : selectQaVmInstaller(installers, app.winget_id);
+            if (!selectedForVm) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'no_compatible_vm_installer',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              return;
+            }
+            const selected = selectedForVm.installer as Record<string, unknown>;
+            const installerUrl = String(selected.InstallerUrl || '');
+            const installerSha256 = normalizeInstallerSha256(
+              String(selected.InstallerSha256 || '')
+            );
+            const sourceInstallerType = String(
+              selected.InstallerType || manifest.InstallerType || ''
+            );
+            const installerType = normalizeQaInstallerType(
+              sourceInstallerType,
+              recipe?.installer_type || 'exe'
+            );
+            if (!installerUrl.startsWith('https://') || !installerSha256) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'missing_trusted_installer_metadata',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_manifest_installer_unavailable', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                reason: 'missing_trusted_installer_metadata',
+              });
+              return;
+            }
+
+            const architecture = selectedForVm.architecture;
+            const payloadKey = packagePayloadKey({
+              wingetId: app.winget_id,
+              version: resolution.version,
+              architecture,
+              installerSha256,
+            });
+            if (securityFlaggedPayloads.has(payloadKey)) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'installer_hash_quarantined',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_installer_security_quarantined', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                installerSha256,
+              });
+              return;
+            }
+            const unavailableReasonCode = unavailableInstallerTuples.get(installerTupleKey({
+              wingetId: app.winget_id,
+              version: resolution.version,
+              architecture,
+              installerUrl,
+              installerSha256,
+            }));
+            if (unavailableReasonCode) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'installer_hash_quarantined',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_installer_source_quarantined', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                preflightReasonCode: unavailableReasonCode,
+              });
+              return;
+            }
+            const compatibilityBlock = await getPackageCompatibilityBlock(supabase!, {
+              wingetId: app.winget_id,
+              version: resolution.version,
+              architecture,
+              installerSha256,
+            });
+            if (compatibilityBlock) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'package_compatibility_blocked',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              return;
+            }
+            const testConfig = buildQaCatalogTestConfig({
+              app: { ...app, wingetId: app.winget_id, version: resolution.version },
+              manifest,
+              installer: selectedForVm.installer as never,
+            });
+            let packageDependencies: Awaited<
+              ReturnType<typeof resolveWingetPackageDependencies>
+            >;
+            try {
+              packageDependencies = await resolveWingetPackageDependencies({
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                installerSha256,
+                installScope: testConfig.scope,
+              });
+            } catch (error) {
+              if (!isWingetDependencyCompatibilityError(error)) throw error;
+              const { error: blockError } = await supabase!
+                .from('qa_package_blocks')
+                .upsert({
+                  winget_id: app.winget_id,
+                  version: resolution.version,
+                  architecture,
+                  installer_sha256: installerSha256,
+                  block_code: error.blockCode,
+                  detail: error.message,
+                  observed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }, {
+                  onConflict: 'winget_id,version,architecture,installer_sha256',
+                });
+              if (blockError) {
+                throw new Error(`Could not persist the QA compatibility block: ${blockError.message}`);
+              }
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'package_compatibility_blocked',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_package_compatibility_blocked', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                blockCode: error.blockCode,
+              });
+              return;
+            }
+            if (packageDependencies.length > 0) {
+              testConfig.packageDependencies = packageDependencies;
+            }
+            const packageIdentity = buildQaPackageIdentity({
+              profileKind: testConfig.profileKind,
+              wingetId: app.winget_id,
+              displayName: testConfig.displayName,
+              publisher: testConfig.publisher,
+              version: resolution.version,
+              architecture,
+              installerSha256,
+              sourceInstallerType: testConfig.sourceInstallerType,
+              silentArgs: testConfig.silentArgs,
+              successCodes: testConfig.successCodes,
+              uninstallCommand: testConfig.uninstallCommand,
+              installScope: testConfig.scope,
+              nestedInstallerType: testConfig.nestedInstallerType,
+              nestedInstallerFiles: testConfig.nestedInstallerFiles,
+              psadtConfig: testConfig.psadtConfig,
+              detectionRules: testConfig.detectionRules,
+              packageDependencies,
+            });
+            const packagingContract = evaluatePackagingContract({
+              wingetId: app.winget_id,
+              installerType: sourceInstallerType,
+              silentArgs: testConfig.silentArgs,
+              nestedInstallerType: testConfig.nestedInstallerType,
+              nestedInstallerFiles: testConfig.nestedInstallerFiles,
+            });
+            testConfig.packageProfileCanonicalJson = packageIdentity.canonicalJson;
+            testConfig.packageProfileSha256 = packageIdentity.packageProfileSha256;
+            testConfig.psadtConfigSha256 = packageIdentity.psadtConfigSha256;
+            testConfig.detectionRulesSha256 = packageIdentity.detectionRulesSha256;
+            const previous = passedResultByPayload.get(payloadKey);
+            // A successful QA run qualifies the immutable installer payload.
+            // Presentation-only PSADT profile changes must not schedule the same
+            // app version repeatedly.
+            const previousMatches = Boolean(previous);
+            const now = new Date().toISOString();
+            const initialStatus = !packagingContract.valid
+              ? 'superseded'
+              : previousMatches
+                ? 'passed'
+                : 'queued';
+            const { data: inserted, existing: conflictingCandidate, outcome, error: insertError } = await insertQaCandidate(supabase!, {
+                winget_id: app.winget_id,
+                definition_path: recipe?.definition_path || null,
+                version: resolution.version,
+                architecture,
+                installer_url: installerUrl,
+                installer_sha256: installerSha256,
+                installer_type: installerType,
+                installer_file_name: qaInstallerFileName(installerUrl, installerType),
+                test_level: 'psadt-package',
+                package_profile_sha256: packageIdentity.packageProfileSha256,
+                test_config: testConfig as never,
+                catalog_version_at_enqueue: app.latest_version,
+                status: initialStatus,
+                priority: priorities.get(app.winget_id) || 0,
+                demand_source: policies.some((policy) => policy.winget_id === app.winget_id)
+                  ? 'auto_update'
+                  : targetedIdSet.has(app.winget_id)
+                    ? 'operator'
+                    : terminalBackfillIds.has(app.winget_id.trim().toLowerCase())
+                      ? 'operator'
+                      : catalogBackfillIdSet.has(app.winget_id)
+                        ? 'catalog'
+                        : 'managed',
+                failure_summary: !packagingContract.valid
+                  ? `Packaging preflight: ${packagingContract.message}`
+                  : null,
+                finished_at: initialStatus === 'queued'
+                  ? null
+                  : !packagingContract.valid
+                    ? now
+                    : previous?.tested_at_utc || now,
+                updated_at: now,
+              });
+
+            if (insertError) throw insertError;
+            if (!inserted) {
+              summary.alreadyKnown++;
+              // A different active profile already owns this payload's lifecycle.
+              // Its run and configuration must remain untouched.
+              const existing = outcome === 'exact_conflict' ? conflictingCandidate : null;
+              if (existing && shouldReactivateSupersededCandidate(
+                existing.status,
+                existing.failure_summary,
+                packagingContract.valid,
+              )) {
+                const { error: reactivateError } = await supabase!
+                  .from('qa_candidates')
+                  .update({
+                    status: 'queued',
+                    priority: priorities.get(app.winget_id) || 0,
+                    attempts: 0,
+                    finished_at: null,
+                    failure_summary: null,
+                    test_config: testConfig as never,
+                    catalog_version_at_enqueue: app.latest_version,
+                    updated_at: now,
+                  })
+                  .eq('id', existing.id)
+                  .eq('status', 'superseded');
+                if (reactivateError) throw reactivateError;
+                const { error: supersedeError } = await supabase!
+                  .from('qa_candidates')
+                  .update({ status: 'superseded', finished_at: now, updated_at: now })
+                  .eq('winget_id', app.winget_id)
+                  .eq('architecture', architecture)
+                  .eq('test_level', 'psadt-package')
+                  .contains('test_config', { profileKind: 'catalog-default' })
+                  .eq('status', 'queued')
+                  .neq('id', existing.id);
+                if (supersedeError) throw supersedeError;
+                summary.queued++;
+              } else if (existing?.status === 'queued') {
+                const { error: priorityError } = await supabase!
+                  .from('qa_candidates')
+                  .update({
+                    priority: Math.max(existing.priority || 0, priorities.get(app.winget_id) || 0),
+                    test_config: testConfig as never,
+                    updated_at: now,
+                  })
+                  .eq('id', existing.id)
+                  .eq('status', 'queued');
+                if (priorityError) throw priorityError;
+              }
+              return;
+            }
+
+            summary.updatesFound++;
+            if (initialStatus !== 'queued') {
+              summary.alreadyKnown++;
+              return;
+            }
+
+            summary.queued++;
+            const { error: supersedeError } = await supabase!
+              .from('qa_candidates')
+              .update({ status: 'superseded', finished_at: now, updated_at: now })
+              .eq('winget_id', app.winget_id)
+              .eq('architecture', architecture)
+              .eq('test_level', 'psadt-package')
+              .contains('test_config', { profileKind: 'catalog-default' })
+              .eq('status', 'queued')
+              .neq('id', inserted.id);
+            if (supersedeError) throw supersedeError;
+          } catch (error) {
+            recordPollError(summary, app.winget_id, error);
+          }
+        })
+      );
+    }
+
+    // The change-feed cursor represents a successful GitHub comparison, not
+    // the outcome of every package inspected from that comparison. Advancing
+    // it must not be blocked by an isolated manifest, policy, or packaging
+    // error; demanded apps that still lack QA are retried by the bounded
+    // reconciliation query on subsequent polls. A GitHub rate-limit deferral
+    // is different: no new comparison was performed, so preserve the cursor.
+    if (!targetedRecovery && !changes.rateLimitedUntil) {
+      const { error: cursorError } = await supabase
+        .from('qa_winget_poll_state')
+        .update({
+          head_sha: headSha,
+          github_etag: changes.etag,
+          github_rate_limited_until: null,
+          last_checked_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', POLL_STATE_ID);
+      if (cursorError) throw new Error(`Could not advance the WinGet poll cursor: ${cursorError.message}`);
+    }
+
+    const status = qaPollRunStatus(summary);
+    const durationMs = Date.now() - startedAtMs;
+    const alertDelivery =
+      status === 'partial'
+        ? await emitQaPollAlert({
+            runId,
+            requestId,
+            status,
+            startedAt,
+            durationMs,
+            recipeCount,
+            summary,
+          })
+        : null;
+
+    await persistRun(status, durationMs, alertDelivery);
+    structuredQaPollLog('info', 'qa_poll_completed', {
+      runId,
+      requestId,
+      status,
+      durationMs,
+      coveredApps: recipeCount,
+      baseSha,
+      headSha,
+      changedPackageCount,
+      supportedChangedCount,
+      toolchainBackfillCount,
+      toolchainBackfillPagesScanned,
+      demandBackfillRequestedCount,
+      demandBackfillCount,
+      catalogBackfillRequestedCount,
+      catalogBackfillCount,
+      targetedRequestedCount: requestedPackageIds.length,
+      targetedCount,
+      ...summary,
+    });
+
+    return NextResponse.json(
+      {
+        success: status === 'succeeded',
+        runId,
+        coveredApps: recipeCount,
+        recipeCount,
+        durationMs,
+        baseSha,
+        headSha,
+        changedPackageCount,
+        supportedChangedCount,
+        toolchainBackfillCount,
+        toolchainBackfillPagesScanned,
+        demandBackfillRequestedCount,
+        demandBackfillCount,
+        catalogBackfillRequestedCount,
+        catalogBackfillCount,
+        targetedRequestedCount: requestedPackageIds.length,
+        targetedCount,
+        ...summary,
+      },
+      { status: status === 'succeeded' ? 200 : 207 }
+    );
+  } catch (error) {
+    recordPollError(summary, 'system', error);
+    const durationMs = Date.now() - startedAtMs;
+    const alertDelivery = await emitQaPollAlert({
+      runId,
+      requestId,
+      status: 'failed',
+      startedAt,
+      durationMs,
+      recipeCount,
+      summary,
+    });
+    try {
+      await persistRun('failed', durationMs, alertDelivery);
+    } catch (persistError) {
+      structuredQaPollLog('error', 'qa_poll_persistence_failed', {
+        runId,
+        requestId,
+        error: errorMessage(persistError),
+      });
+    }
+    return NextResponse.json(
+      {
+        success: false,
+        runId,
+        coveredApps: recipeCount,
+        recipeCount,
+        durationMs,
+        baseSha,
+        headSha,
+        changedPackageCount,
+        supportedChangedCount,
+        toolchainBackfillCount,
+        toolchainBackfillPagesScanned,
+        demandBackfillRequestedCount,
+        demandBackfillCount,
+        catalogBackfillRequestedCount,
+        catalogBackfillCount,
+        targetedRequestedCount: requestedPackageIds.length,
+        targetedCount,
+        ...summary,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export const maxDuration = 300;

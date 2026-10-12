@@ -1,0 +1,5 @@
+{
+  "title": "Dismiss finished deployments in SQLite",
+  "summary": "Self hosted installations using SQLite can dismiss finished deployments without configuring Supabase, while preserving their upload history.",
+  "type": "fixed"
+}

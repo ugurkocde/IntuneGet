@@ -4,6 +4,7 @@
  */
 
 import { getAppConfig } from "./config";
+import { isSupabaseServerConfigured } from "./supabase";
 
 export interface FeatureFlags {
   /** Analytics tracking enabled (Plausible) */
@@ -20,6 +21,9 @@ export interface FeatureFlags {
 
   /** SCCM Migration UI enabled (hidden when NEXT_PUBLIC_DISABLE_SCCM=true) */
   sccm: boolean;
+
+  /** Hosted services backed by Supabase */
+  hostedServices: boolean;
 }
 
 /**
@@ -38,6 +42,7 @@ export function getFeatureFlags(): FeatureFlags {
     pipeline: localPackager || githubPipeline,
     localPackager,
     sccm: process.env.NEXT_PUBLIC_DISABLE_SCCM !== "true",
+    hostedServices: isSupabaseServerConfigured(),
   };
 }
 
@@ -53,10 +58,14 @@ export function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
  * Client-side feature flags (safe to expose)
  * Only includes features detectable from public env vars
  */
-export function getClientFeatureFlags(): Pick<FeatureFlags, "analytics" | "newsletter" | "sccm"> {
+export function getClientFeatureFlags(): Pick<FeatureFlags, "analytics" | "newsletter" | "sccm" | "hostedServices"> {
   return {
     analytics: Boolean(process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN),
     newsletter: true, // Always show newsletter UI, API will handle if not configured
     sccm: process.env.NEXT_PUBLIC_DISABLE_SCCM !== "true",
+    hostedServices: Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ),
   };
 }

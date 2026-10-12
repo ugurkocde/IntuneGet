@@ -1,0 +1,5 @@
+{
+  "title": "Restore automatic curated release publication",
+  "summary": "Curated release approval can read verified QA evidence on the current automation runtime, allowing tested releases to publish automatically again.",
+  "type": "fixed"
+}

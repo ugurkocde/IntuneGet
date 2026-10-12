@@ -16,6 +16,7 @@
 import type { CatalogSource } from './types';
 import { SupabaseCatalogSource } from './supabase-source';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { withCuratedUpdates } from '@/lib/curated-catalog/catalog-source';
 
 let _source: CatalogSource | null = null;
 
@@ -45,7 +46,11 @@ function lazySnapshotSource(): CatalogSource {
 
 export function getCatalogSource(): CatalogSource {
   if (!_source) {
-    _source = isSupabaseConfigured() ? new SupabaseCatalogSource() : lazySnapshotSource();
+    const base = isSupabaseConfigured() ? new SupabaseCatalogSource() : lazySnapshotSource();
+    _source = withCuratedUpdates(base, async () => {
+      const { getCuratedLatestVersions } = await import('@/lib/curated-catalog/server');
+      return getCuratedLatestVersions();
+    });
   }
   return _source;
 }

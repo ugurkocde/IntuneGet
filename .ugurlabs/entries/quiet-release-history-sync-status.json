@@ -1,0 +1,5 @@
+{
+  "title": "Simpler release history status",
+  "summary": "Completed catalog checks now appear as a quiet Last checked timestamp. The persistent unavailable-package banner and explanatory paragraph have been removed from release history. Running syncs and actual failures still display their status.",
+  "type": "improved"
+}

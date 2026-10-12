@@ -1,3 +1,4 @@
+import { PopularAppLinks } from "@/components/catalog/PopularAppLinks";
 import { Metadata } from "next";
 import Link from "next/link";
 import { T } from "gt-next";
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
   description:
     "Complete step-by-step guide to self-hosting IntuneGet. Deploy your own Intune app deployment solution in about 2 hours.",
   alternates: {
-    canonical: "https://intuneget.com/docs/getting-started",
+    canonical: "https://www.intuneget.com/docs/getting-started",
   },
   openGraph: {
     title: "Getting Started | IntuneGet Docs",
@@ -321,7 +322,7 @@ docker-compose up -d`}
               <T>Install the packager service on a Windows machine to handle app packaging.</T>
             </p>
             <ol className="list-decimal list-inside mt-4 space-y-2 text-text-secondary">
-              <li><T>On your Windows machine, install Node.js 18+</T></li>
+              <li><T>On your Windows machine, install Node.js 22 or later</T></li>
               <li><T>Install the packager globally: <code className="text-accent-cyan">npm install -g @ugurkocde/intuneget-packager</code></T></li>
               <li><T>Set environment variables:</T></li>
             </ol>
@@ -429,7 +430,7 @@ set AZURE_CLIENT_SECRET=<from-azure>`}
             </h3>
             <ul className="list-disc list-inside space-y-2 text-text-secondary">
               <li><T>Windows 10/11 or Windows Server 2016+</T></li>
-              <li><T>Node.js 18 or higher</T></li>
+              <li><T>Node.js 22 or later</T></li>
               <li><T>Network access to the web app and Microsoft Graph API</T></li>
             </ul>
           </div>
@@ -504,6 +505,8 @@ nssm start IntuneGetPackager`}
           </li>
         </ul>
       </section>
+
+      <PopularAppLinks />
     </div>
   );
 }

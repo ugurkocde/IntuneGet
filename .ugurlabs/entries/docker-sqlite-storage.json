@@ -1,0 +1,5 @@
+{
+  "title": "Writable SQLite storage in Docker",
+  "summary": "New Docker Compose SQLite installs initialize their data volume for the application user, with image tests checking database access and persistence across container recreation.",
+  "type": "fixed"
+}

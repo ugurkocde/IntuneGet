@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+    "runId": "37283076957",
+    "websiteCommit": "5a56878f3e91b26d2a186854c83fe6bc9878598b"
+  },
+  "candidate": {
+    "appId": "winscp",
+    "version": "6.5.7",
+    "installerUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe",
+    "vendorSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+    "releaseNotesUrl": "https://winscp.net/",
+    "discoveredAt": "2026-10-05T08:20:48.87Z",
+    "id": "1d3c95281570016ff4e86dbf"
+  },
+  "previous": null,
+  "inspection": {
+    "current": {
+      "candidateId": "1d3c95281570016ff4e86dbf",
+      "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+      "sourceUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe",
+      "finalOrigin": "https://deac-ams.dl.sourceforge.net",
+      "signature": {
+        "status": "valid",
+        "publisher": "Martin Přikryl"
+      },
+      "security": {
+        "scanner": "defender",
+        "suspicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "malicious": 0,
+        "scannedAt": "2026-10-05T08:30:17.8572733Z",
+        "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+        "signatureVersion": "1.459.560.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "1d3c95281570016ff4e86dbf",
+    "packageId": "IntuneGet.Curated.WinSCP",
+    "installerUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe",
+    "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.WinSCP",
+      "displayName": "WinSCP",
+      "publisher": "Martin Prikryl",
+      "version": "6.5.7",
+      "architecture": "x86",
+      "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:winscp3_is1:WinSCP",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.5.7\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.5.7\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "25F9C425DA65DA36BC31C850D85FEFF11D5645D5CF2D9CA669AA7DD8C641EBD7",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x86\",\"displayName\":\"IntuneGet.Curated.WinSCP\",\"publisher\":\"IntuneGet QA\",\"version\":\"6.5.7\",\"wingetId\":\"IntuneGet.Curated.WinSCP\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.5.7\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"F4C79881610CA9382EE38FD6AD99710555C4F9966F77C5B5C49D67ECBF7A1A49\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"65103DAD94A907BF8B7B9B8DB8174DFB60010237D9125DB066F34D89817BCD99\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:winscp3_is1:WinSCP\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.5.7\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"7A6ED033C9D27C78DCCA38A9F62D209E4E7928C6307AE6A3F19C69A0134F2A12\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionProfileSha256": "25F9C425DA65DA36BC31C850D85FEFF11D5645D5CF2D9CA669AA7DD8C641EBD7",
+    "executionContext": "LocalSystem",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "architecture": "x86",
+    "installerVersion": "6.5.7",
+    "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "upgrade": {
+      "tested": false
+    },
+    "testLevel": "psadt-package",
+    "candidateId": "1d3c95281570016ff4e86dbf",
+    "testedAt": "2026-10-05T08:30:58.3025207Z"
+  },
+  "verifiedAt": "2026-10-05T08:31:01.4958976Z",
+  "authenticatedArtifact": {
+    "id": 11333407526,
+    "sha256": "7958d880594722d8864dd18a41a734ccb93157ee541cbb427428924f30e5cccd"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-05T08:42:39.259Z",
+    "unsignedException": null,
+    "upgradeException": "Automated policy: WinSCP is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+  }
+}

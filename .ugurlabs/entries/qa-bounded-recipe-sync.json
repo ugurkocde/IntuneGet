@@ -1,0 +1,5 @@
+{
+  "title": "Keep QA recipes synchronized without rewriting test evidence",
+  "summary": "Bounded QA synchronization can publish recipe metadata when test evidence has not changed. Recipe and result payloads remain limited, authenticated and nondeleting, and older results cannot replace newer evidence.",
+  "type": "fixed"
+}

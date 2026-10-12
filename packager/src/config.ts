@@ -84,10 +84,15 @@ export function loadConfig(): PackagerConfig {
   }
 
   // Determine communication mode based on available config
-  // If INTUNEGET_API_URL is set, use API mode; otherwise use Supabase mode
   const apiUrl = getEnvVar('INTUNEGET_API_URL');
   const apiKey = getEnvVar('PACKAGER_API_KEY');
-  const mode: 'supabase' | 'api' = (apiUrl && apiKey) ? 'api' : 'supabase';
+  const supabaseUrl = getEnvVar('SUPABASE_URL');
+  if ((!supabaseUrl && (!apiUrl || !apiKey)) || (apiKey && !apiUrl)) {
+    throw new Error(
+      'INTUNEGET_API_URL and PACKAGER_API_KEY are required for self-hosted (HTTP API) mode'
+    );
+  }
+  const mode: 'supabase' | 'api' = apiUrl && apiKey ? 'api' : 'supabase';
 
   // In Supabase mode, require Supabase credentials
   const requireSupabase = mode === 'supabase';

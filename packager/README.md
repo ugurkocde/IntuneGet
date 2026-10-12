@@ -15,7 +15,7 @@ The IntuneGet Packager is a Node.js application that runs on Windows and handles
 ## Requirements
 
 - Windows 10/11 or Windows Server 2019+
-- Node.js 18 or higher
+- Node.js 22 or later
 - Network access to:
   - Your IntuneGet web app API (API mode) or Supabase database (Supabase mode)
   - Microsoft Graph API (graph.microsoft.com)

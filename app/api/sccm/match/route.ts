@@ -8,6 +8,7 @@ import { createServerClient } from '@/lib/supabase';
 import { getAuthFromRequest } from '@/lib/auth/parse-token';
 import { logMigrationHistoryAsync, createSuccessEntry, createAppEntry } from '@/lib/sccm/history-logger';
 import { matchSccmApp, type SccmMatchResult } from '@/lib/matching/sccm-matcher';
+import { quotePostgrestLikePattern } from '@/lib/catalog/postgrest-filter';
 import type {
   SccmApplication,
   SccmMatchRequest,
@@ -375,7 +376,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query = query.or(`display_name.ilike.%${search}%,manufacturer.ilike.%${search}%`);
+      const searchPattern = quotePostgrestLikePattern(search);
+      query = query.or(
+        [
+          `display_name.ilike.${searchPattern}`,
+          `manufacturer.ilike.${searchPattern}`,
+        ].join(',')
+      );
     }
 
     query = query

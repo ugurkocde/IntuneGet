@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   description:
     "Configure IntuneGet settings including notifications, webhooks, export preferences, permissions, and data management.",
   alternates: {
-    canonical: "https://intuneget.com/docs/settings",
+    canonical: "https://www.intuneget.com/docs/settings",
   },
   openGraph: {
     title: "Settings & Webhooks | IntuneGet Docs",

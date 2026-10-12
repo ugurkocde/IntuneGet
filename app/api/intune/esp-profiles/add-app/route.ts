@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { acquireGraphToken } from '@/lib/graph-token';
@@ -50,7 +50,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'ESP profile updates require Supabase server configuration' },
+        { status: 503 }
+      );
+    }
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
     const tenantResolution = await resolveTargetTenantId({

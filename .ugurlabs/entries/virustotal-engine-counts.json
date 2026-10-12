@@ -1,0 +1,5 @@
+{
+  "title": "More accurate VirusTotal engine counts",
+  "summary": "VirusTotal totals now count engines that returned a verdict, excluding unsupported files, failures, and timeouts. Historical findings and report links remain available, while unverified old denominators are omitted until a report refreshes. Lookups retain the existing daily quota and recent-version window.",
+  "type": "fixed"
+}

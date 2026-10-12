@@ -13,12 +13,18 @@ import {
   Shield,
   Settings,
   RefreshCw,
+  ShieldAlert,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
 import { useCartStore } from '@/stores/cart-store';
-import { CartItemConfig } from '@/components/CartItemConfig';
-import type { CartItem } from '@/types/upload';
+import { describeDeploymentFailure } from '@/lib/deployment-failure-message';
+import dynamic from 'next/dynamic';
+const CartItemConfig = dynamic(() => import('@/components/CartItemConfig').then(m => m.CartItemConfig));
+const PackageConfig = dynamic(() => import('@/components/PackageConfig').then(m => m.PackageConfig));
+import type { CartItem, Win32CartItem } from '@/types/upload';
+import type { ManifestResponse } from '@/hooks/use-packages';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { usePermissionStatus } from '@/hooks/usePermissionStatus';
@@ -37,6 +43,11 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { useQaStatuses } from '@/hooks/use-qa';
+const QaDetailsDialog = dynamic(() => import('@/components/qa/QaDetailsDialog').then(m => m.QaDetailsDialog));
+import type { QaStatus } from '@/types/qa';
+import { useCuratedSettings } from '@/hooks/use-curated-settings';
+import { CuratedSettingsNotice } from '@/components/CuratedSettingsNotice';
 
 interface PackagingJob {
   id: string;
@@ -54,6 +65,8 @@ interface PackageApiResponse {
 }
 
 interface DeploymentError {
+  code?: string;
+  packageId?: string;
   title: string;
   message: string;
   retryable: boolean;
@@ -68,9 +81,20 @@ interface PackageApiErrorResponse {
   code?: string;
   retryable?: boolean;
   package?: {
+    wingetId?: string;
     displayName?: string;
     version?: string;
   };
+}
+
+function hasFailedQaForItem(item: CartItem, status: QaStatus | null | undefined): boolean {
+  return Boolean(
+    status &&
+      isWin32CartItem(item) &&
+      status.outcome === 'Failed' &&
+      status.testedVersion === item.version &&
+      status.architecture.toLowerCase() === item.architecture.toLowerCase()
+  );
 }
 
 export function UploadCart() {
@@ -86,12 +110,25 @@ export function UploadCart() {
   const [showLargeDeployConfirm, setShowLargeDeployConfirm] = useState(false);
   const [error, setError] = useState<DeploymentError | null>(null);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [recovery, setRecovery] = useState<{ item: Win32CartItem; manifest: ManifestResponse } | null>(null);
+  const blockedItem = error?.packageId
+    ? items.find((item) => item.wingetId === error.packageId && (!error.packageVersion || item.version === error.packageVersion))
+    : undefined;
+  const needsVersionReview = error?.code === 'MANIFEST_UNAVAILABLE' && !!blockedItem;
+  const [qaDetailsTarget, setQaDetailsTarget] = useState<{ wingetId: string; version: string } | null>(null);
+  const { data: qaStatusesData } = useQaStatuses(
+    items.filter(isWin32CartItem).map((item) => item.wingetId),
+    isOpen || isDeploying
+  );
   // winget id -> email of whoever already deployed it in this tenant, so we can
   // warn before a teammate's app is deployed a second time.
   const [tenantDeployedBy, setTenantDeployedBy] = useState<Map<string, string | null>>(new Map());
 
   const { isAuthenticated, getAccessToken, signIn, requestAdminConsent } = useMicrosoftAuth();
   const { isMspUser, selectedTenantId } = useMspOptional();
+  const curatedSettings = useCuratedSettings(items, isOpen || isDeploying);
+  const awaitingCuratedSettings = isAuthenticated && !curatedSettings.ready;
   const {
     status: permissionStatus,
     error: permissionError,
@@ -100,13 +137,7 @@ export function UploadCart() {
     verify,
     canDeploy,
   } = usePermissionStatus();
-
-  // Verify permissions when cart opens
-  useEffect(() => {
-    if (isOpen && isAuthenticated && permissionStatus !== 'verified') {
-      verify();
-    }
-  }, [isOpen, isAuthenticated, permissionStatus, verify]);
+  const needsPermissions = isAuthenticated && !canDeploy && permissionStatus !== 'checking';
 
   // Load tenant-wide deployments when the cart opens so we can flag apps a
   // teammate already deployed (non-fatal: on any failure we just skip warnings).
@@ -144,13 +175,34 @@ export function UploadCart() {
   // (item config, large-deploy confirm) is open - Escape should dismiss that
   // layer, not the whole cart.
   useEffect(() => {
-    if (!isOpen || editingItem || showLargeDeployConfirm) return;
+    if (!isOpen || editingItem || recovery || showLargeDeployConfirm) return;
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeCart();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, editingItem, showLargeDeployConfirm, closeCart]);
+  }, [isOpen, editingItem, recovery, showLargeDeployConfirm, closeCart]);
+
+  const handleReviewCurrentVersion = async () => {
+    if (!blockedItem || !isWin32CartItem(blockedItem) || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const response = await fetch(`/api/winget/manifest?id=${encodeURIComponent(blockedItem.wingetId)}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30_000),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not check the current version. Please try again.');
+      // Do not reopen an item removed or edited while the lookup was running.
+      const current = useCartStore.getState().items.find((item) => item.id === blockedItem.id);
+      if (!current || !isWin32CartItem(current) || current.version !== blockedItem.version) return;
+      setRecovery({ item: current, manifest: data as ManifestResponse });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not check the current version. Please try again.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleFixPermissions = () => {
     if (permissionError === 'network_error') {
@@ -161,7 +213,7 @@ export function UploadCart() {
   };
 
   const handleDeploy = async () => {
-    if (items.length === 0) return;
+    if (items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
 
     trackDeployment(items.length);
     setError(null);
@@ -191,6 +243,13 @@ export function UploadCart() {
     setIsDeploying(true);
 
     try {
+      // Recheck at the point of deployment, including after signing in. The
+      // server independently authorizes the exact profile again in /api/package.
+      if (curatedSettings.curatedItems.length > 0) {
+        const verification = await curatedSettings.refetch();
+        if (verification.isError || !verification.data || curatedSettings.curatedItems.some(item =>
+          !verification.data.items.some(status => status.itemId === item.id && status.status === 'ready'))) return;
+      }
       const response = await fetch('/api/package', {
         method: 'POST',
         headers: {
@@ -205,12 +264,20 @@ export function UploadCart() {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
           const errorData = await response.json() as PackageApiErrorResponse;
+          if (errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED' || errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED') {
+            await curatedSettings.refetch();
+            return;
+          }
           if (response.status === 409 || Boolean(errorData.code)) {
             const packageLabel = errorData.package?.displayName;
             const versionLabel = errorData.package?.version;
             const retryable = errorData.retryable === true;
             setError({
-              title: retryable
+              code: errorData.code,
+              packageId: errorData.package?.wingetId,
+              title: errorData.code === 'MANIFEST_UNAVAILABLE'
+                ? 'Selected version is no longer available'
+                : retryable
                 ? 'Installer verification temporarily unavailable'
                 : 'Deployment blocked before upload',
               message: errorData.message || errorData.error || 'The installer could not be verified safely.',
@@ -229,7 +296,7 @@ export function UploadCart() {
       const data: PackageApiResponse = await response.json();
 
       if (!data.success || !data.jobs || data.jobs.length === 0) {
-        throw new Error(data.message || 'No jobs were created');
+        throw new Error(describeDeploymentFailure(data, items));
       }
 
       const jobCount = data.jobs.length;
@@ -402,6 +469,9 @@ export function UploadCart() {
                                 Custom
                               </span>
                             )}
+                            {item.sourceType === 'curated' && (
+                              <span className="px-2 py-1 bg-accent-cyan/10 rounded text-accent-cyan text-xs font-medium border border-accent-cyan/20">Curated</span>
+                            )}
                           </>
                         ) : null}
                         {item.forceCreate && (
@@ -410,7 +480,42 @@ export function UploadCart() {
                             Redeploy
                           </span>
                         )}
+                        {item.qaOverride && (
+                          <span className="inline-flex items-center gap-1 rounded border border-status-warning/20 bg-status-warning/10 px-2 py-1 text-xs font-medium text-status-warning">
+                            <ShieldAlert className="h-3 w-3" />
+                            Test override
+                          </span>
+                        )}
                       </div>
+
+                      {hasFailedQaForItem(item, qaStatusesData?.statuses[item.wingetId]) && !item.qaOverride && (
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-status-error/20 bg-status-error/10 p-2.5">
+                          <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-error" />
+                          <div className="flex-1 text-xs">
+                            <p className="font-medium text-status-error">Installation test failed for this version</p>
+                            <p className="mt-0.5 text-text-secondary">
+                              Version {item.version} did not complete the install, detection, or uninstall checks. Review the result before deploying.
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setQaDetailsTarget({ wingetId: item.wingetId, version: item.version })}
+                                className="font-medium text-status-error underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-error"
+                              >
+                                View test details
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateItem(item.id, { qaOverride: true })}
+                                disabled={isDeploying}
+                                className="font-medium text-status-error underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-error disabled:opacity-50"
+                              >
+                                Deploy anyway
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Teammate-duplicate warning: this app was already
                           deployed to the tenant by someone. Deploying again
@@ -455,9 +560,20 @@ export function UploadCart() {
                   />
                 )}
 
+                {awaitingCuratedSettings && (
+                  <CuratedSettingsNotice
+                    items={curatedSettings.curatedItems}
+                    statuses={curatedSettings.data?.items}
+                    unavailable={curatedSettings.isError}
+                    checking={curatedSettings.isFetching}
+                    onRetry={() => { void curatedSettings.refetch(); }}
+                    onDefaults={(id, psadtConfig) => { updateItem(id, { psadtConfig, curatedSettingsMode: 'tested-defaults' }); setError(null); }}
+                  />
+                )}
+
                 {/* Error message */}
-                {error && (
-                  <div className="flex items-start gap-3 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
+                {error && (!error.packageId || blockedItem) && (
+                  <div role="alert" className="flex items-start gap-3 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
                     <AlertCircle className="w-5 h-5 text-status-error flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
                       <p className="text-status-error font-medium">{error.title}</p>
@@ -468,13 +584,27 @@ export function UploadCart() {
                             .join(' ')}
                         </p>
                       )}
-                      <p className="text-status-error/70 mt-1">{error.message}</p>
+                      <p className="text-status-error/70 mt-1 whitespace-pre-line break-words">{error.message}</p>
                       {error.blockedBeforeDispatch && (
                         <p className="text-text-muted mt-2">
                           No packaging pipeline was started and no changes were made in Intune.
                         </p>
                       )}
-                      {!error.retryable && (
+                      {needsVersionReview && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <Button size="sm" onClick={handleReviewCurrentVersion} disabled={isRefreshing || isDeploying}>
+                            {isRefreshing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            {isRefreshing ? 'Checking current version...' : 'Review current version'}
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={isRefreshing || isDeploying} onClick={() => {
+                            if (blockedItem) removeItem(blockedItem.id);
+                            setError(null);
+                          }}>
+                            Remove unavailable app
+                          </Button>
+                        </div>
+                      )}
+                      {!error.retryable && !needsVersionReview && (
                         <p className="text-text-muted mt-1">
                           Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.
                         </p>
@@ -526,8 +656,8 @@ export function UploadCart() {
                     </AlertDialogContent>
                   </AlertDialog>
                   <Button
-                    onClick={isAuthenticated && !canDeploy && permissionStatus !== 'checking' ? handleFixPermissions : handleDeployClick}
-                    disabled={isDeploying || (isAuthenticated && permissionStatus === 'checking')}
+                    onClick={needsPermissions ? handleFixPermissions : handleDeployClick}
+                    disabled={isDeploying || isRefreshing || needsVersionReview || (awaitingCuratedSettings && !needsPermissions) || (isAuthenticated && permissionStatus === 'checking')}
                     className={`flex-1 text-white border-0 disabled:opacity-50 ${
                       isAuthenticated && !canDeploy && permissionStatus !== 'checking'
                         ? 'bg-status-error hover:bg-status-error/90'
@@ -549,10 +679,15 @@ export function UploadCart() {
                         <Shield className="w-4 h-4 mr-2" />
                         {permissionError === 'network_error' ? 'Retry Check' : 'Grant Permissions'}
                       </>
+                    ) : awaitingCuratedSettings ? (
+                      <>
+                        <Clock className="w-4 h-4 mr-2" />
+                        Awaiting verification
+                      </>
                     ) : (
                       <>
                         <Upload className="w-4 h-4 mr-2" />
-                        Deploy to Intune
+                        {error?.retryable && (!error.packageId || blockedItem) ? 'Retry deployment' : 'Deploy to Intune'}
                         <ChevronRight className="w-4 h-4 ml-2" />
                       </>
                     )}
@@ -563,6 +698,24 @@ export function UploadCart() {
           </div>
 
           {/* Cart Item Config Modal */}
+          {recovery && items.some((item) => item.id === recovery.item.id) && (
+            <PackageConfig
+              package={{
+                id: recovery.item.wingetId,
+                name: recovery.item.displayName,
+                publisher: recovery.item.publisher,
+                version: recovery.manifest.manifest.version,
+                description: recovery.item.description,
+                iconPath: recovery.item.iconPath,
+              }}
+              installers={recovery.manifest.installers}
+              versions={recovery.manifest.versions}
+              deployedConfig={{ ...recovery.item, version: recovery.manifest.manifest.version }}
+              replaceCartItemId={recovery.item.id}
+              onAddedToCart={() => setError(null)}
+              onClose={() => setRecovery(null)}
+            />
+          )}
           {editingItem && (
             <CartItemConfig
               item={editingItem}
@@ -595,6 +748,16 @@ export function UploadCart() {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+      )}
+      {qaDetailsTarget && (
+        <QaDetailsDialog
+          wingetId={qaDetailsTarget.wingetId}
+          catalogVersion={qaDetailsTarget.version}
+          open={true}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setQaDetailsTarget(null);
+          }}
+        />
       )}
     </>
   );

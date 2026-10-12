@@ -1,0 +1,5 @@
+{
+  "title": "Explore catalog release history",
+  "summary": "Browse app versions by date, search by app or publisher, and filter monthly catalog history. Records distinguish the first tracked version from later version changes and show publisher release dates when available. Daily version discovery and a more efficient manifest sync improve catalog freshness, with incomplete syncs shown explicitly. Historical coverage reflects versions observed by IntuneGet and may contain gaps.",
+  "type": "new"
+}

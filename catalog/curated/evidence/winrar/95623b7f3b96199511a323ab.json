@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "37639165359",
+    "websiteCommit": "2038edf703a27944ec660fc50cf61eb218b676d1",
+    "runAttempt": "1",
+    "workflowCommit": "9cbcaf236c79093164c2088a87c4821bba9c6c5a",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml"
+  },
+  "candidate": {
+    "appId": "winrar",
+    "version": "7.23",
+    "installerUrl": "https://www.rarlab.com/rar/winrar-x64-723.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.rarlab.com/",
+    "discoveredAt": "2026-10-07T03:52:57.991Z",
+    "id": "95623b7f3b96199511a323ab"
+  },
+  "previous": {
+    "appId": "winrar",
+    "version": "7.22",
+    "installerUrl": "https://www.rarlab.com/rar/winrar-x64-722.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.rarlab.com/",
+    "discoveredAt": "2026-10-07T03:53:07.095Z",
+    "id": "1d828d7d6987001adc54bf4f"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "95623b7f3b96199511a323ab",
+      "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+      "sourceUrl": "https://www.rarlab.com/rar/winrar-x64-723.exe",
+      "finalOrigin": "https://www.rarlab.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "win.rar GmbH"
+      },
+      "security": {
+        "suspicious": 0,
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0,
+        "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "scannedAt": "2026-10-07T14:52:19.510891Z"
+      }
+    },
+    "previous": {
+      "candidateId": "1d828d7d6987001adc54bf4f",
+      "installerSha256": "d669f4e15e9b8fde6e6dcc47697fc5a38b77e1fd5c608cf6423e4eba8df62498",
+      "sourceUrl": "https://www.rarlab.com/rar/winrar-x64-722.exe",
+      "finalOrigin": "https://www.rarlab.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "win.rar GmbH"
+      },
+      "security": {
+        "suspicious": 0,
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0,
+        "installerSha256": "d669f4e15e9b8fde6e6dcc47697fc5a38b77e1fd5c608cf6423e4eba8df62498",
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "scannedAt": "2026-10-07T14:52:20.1777594Z"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "95623b7f3b96199511a323ab",
+    "packageId": "IntuneGet.Curated.WinRAR",
+    "installerUrl": "https://www.rarlab.com/rar/winrar-x64-723.exe",
+    "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.WinRAR",
+      "displayName": "WinRAR",
+      "publisher": "win.rar GmbH",
+      "version": "7.23",
+      "architecture": "x64",
+      "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+      "installerType": "exe",
+      "installScope": "machine",
+      "silentSwitches": "-s1",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:WinRAR archiver:WinRAR (64-bit)",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinRAR\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"7.23\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[\"/s\"],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinRAR\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"7.23\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "6776BD4562B091C249FC1BA513A23511DA1627D18E783CC3367D683F3995003D",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.WinRAR\",\"publisher\":\"IntuneGet QA\",\"version\":\"7.23\",\"wingetId\":\"IntuneGet.Curated.WinRAR\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"7.23\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinRAR\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"AAFC9007DC7E17EAFD02E7FFA200C4BE070FCD2010023BF87CA2AE2A78546174\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"8FF0DAF3ED564CC743C0E23FF2E253997FFC74460F9673F0B6DD037B2DB4CE7B\",\"silentArgs\":\"-s1\",\"sourceType\":\"exe\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:WinRAR archiver:WinRAR (64-bit)\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"7.23\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinRAR\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[\"/s\"],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"1F878605495CF2ABABBE5447233CF48F3ABC1A9F28F0703F9FBBF2317913BCBC\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "1f878605495cf2ababbe5447233cf48f3abc1a9f28f0703f9fbbf2317913bcbc",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testedAt": "2026-10-07T14:53:47.1695702Z",
+    "installerVersion": "7.23",
+    "architecture": "x64",
+    "executionContext": "LocalSystem",
+    "upgradeFromVersion": "7.22",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "candidateId": "95623b7f3b96199511a323ab",
+    "previousInstallerSha256": "d669f4e15e9b8fde6e6dcc47697fc5a38b77e1fd5c608cf6423e4eba8df62498",
+    "executionProfileSha256": "6776BD4562B091C249FC1BA513A23511DA1627D18E783CC3367D683F3995003D",
+    "testLevel": "psadt-package"
+  },
+  "verifiedAt": "2026-10-07T14:53:50.1078124Z",
+  "authenticatedArtifact": {
+    "id": 11491319883,
+    "sha256": "07d7e55280e19d40e397357569d265bec6ed9db69f0f0ad15d4a78e85491ed84"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-07T15:35:29.215Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

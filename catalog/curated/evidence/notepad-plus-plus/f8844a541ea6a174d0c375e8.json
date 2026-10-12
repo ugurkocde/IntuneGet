@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "37283316172",
+    "websiteCommit": "95f3950c25ea62389cebd3811525f74ff9de34b4",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "notepad-plus-plus",
+    "version": "8.9.8.1",
+    "installerUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8.1/npp.8.9.8.1.Installer.x64.exe",
+    "vendorSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+    "releaseNotesUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/tag/v8.9.8.1",
+    "discoveredAt": "2026-10-05T06:47:06.885Z",
+    "id": "f8844a541ea6a174d0c375e8"
+  },
+  "previous": {
+    "appId": "notepad-plus-plus",
+    "version": "8.9.8",
+    "installerUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8/npp.8.9.8.Installer.x64.exe",
+    "vendorSha256": "7b2a949bf460fb37a3888c9048698f43222a185a48323023df1c51e78a3ca1c2",
+    "releaseNotesUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/tag/v8.9.8",
+    "discoveredAt": "2026-10-05T06:47:18.445Z",
+    "id": "00cd7dcb4e0a79df198c8490"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "f8844a541ea6a174d0c375e8",
+      "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+      "sourceUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8.1/npp.8.9.8.1.Installer.x64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "NOTEPAD++"
+      },
+      "security": {
+        "status": "clean",
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+        "scannedAt": "2026-10-05T09:11:31.3202351Z",
+        "scanner": "defender",
+        "signatureVersion": "1.459.560.0",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "00cd7dcb4e0a79df198c8490",
+      "installerSha256": "7b2a949bf460fb37a3888c9048698f43222a185a48323023df1c51e78a3ca1c2",
+      "sourceUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8/npp.8.9.8.Installer.x64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "NOTEPAD++"
+      },
+      "security": {
+        "status": "clean",
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "7b2a949bf460fb37a3888c9048698f43222a185a48323023df1c51e78a3ca1c2",
+        "scannedAt": "2026-10-05T09:11:32.8483341Z",
+        "scanner": "defender",
+        "signatureVersion": "1.459.560.0",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "f8844a541ea6a174d0c375e8",
+    "packageId": "IntuneGet.Curated.NotepadPlusPlus",
+    "installerUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8.1/npp.8.9.8.1.Installer.x64.exe",
+    "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.NotepadPlusPlus",
+      "displayName": "Notepad++",
+      "publisher": "Notepad++",
+      "version": "8.9.8.1",
+      "architecture": "x64",
+      "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+      "installerType": "nullsoft",
+      "installScope": "machine",
+      "silentSwitches": "/S",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:Notepad++:Notepad++",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NotepadPlusPlus\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"8.9.8.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NotepadPlusPlus\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"8.9.8.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "C3EE59B00C68EE7DEE68A63C827DF8B0DFE17DE5733FF8D87B2814FABBA10994",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.NotepadPlusPlus\",\"publisher\":\"IntuneGet QA\",\"version\":\"8.9.8.1\",\"wingetId\":\"IntuneGet.Curated.NotepadPlusPlus\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"8.9.8.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NotepadPlusPlus\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"057E870C456CE152A623E5CBEA1FD6539BDF638FD42C53EFFAE0EBC9EB92A832\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"26F3BCCED788FADBAC4E7E577B430EA2CE6060CF3BCAD993EF4612ECD7D743DA\",\"silentArgs\":\"/S\",\"sourceType\":\"nullsoft\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:Notepad++:Notepad++\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"8.9.8.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NotepadPlusPlus\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"C3F1D69FF77E6A7154630C9F149B53BC798520BD257C2E28EBA6093D3CEF08F3\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "previousInstallerSha256": "7b2a949bf460fb37a3888c9048698f43222a185a48323023df1c51e78a3ca1c2",
+    "testedAt": "2026-10-05T09:13:40.4695197Z",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionContext": "LocalSystem",
+    "executionProfileSha256": "C3EE59B00C68EE7DEE68A63C827DF8B0DFE17DE5733FF8D87B2814FABBA10994",
+    "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+    "candidateId": "f8844a541ea6a174d0c375e8",
+    "architecture": "x64",
+    "testLevel": "psadt-package",
+    "installerVersion": "8.9.8.1",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "upgradeFromVersion": "8.9.8"
+  },
+  "verifiedAt": "2026-10-05T09:13:45.1530881Z",
+  "authenticatedArtifact": {
+    "id": 11335377045,
+    "sha256": "38782a9d0820f1d8a420d8c81f243f93aeeb2d3a5105a5c29d9c87a173e4b8ae"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-05T09:38:55.991Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

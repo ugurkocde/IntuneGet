@@ -7,6 +7,7 @@ import type { DetectionRule, RequirementRule, AppRelationship } from './intune';
 import type { WingetArchitecture, WingetScope, WingetInstallerType } from './winget';
 import type { PSADTConfig } from './psadt';
 import type { EspProfileSelection } from './esp';
+import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/types';
 
 // Staged package awaiting upload to Intune
 export interface StagedPackage {
@@ -25,6 +26,7 @@ export interface StagedPackage {
   intunewinSizeBytes?: number;
   installerUrl: string;
   installerSha256: string;
+  installerSuccessCodes?: number[];
 
   // Commands
   installCommand: string;
@@ -136,7 +138,7 @@ interface CartItemBase {
   id: string; // Unique cart item ID
   wingetId: string;
   // How the item was added to the cart; absent = winget catalog
-  sourceType?: 'winget' | 'custom';
+  sourceType?: 'winget' | 'custom' | 'curated';
   displayName: string;
   publisher: string;
   description?: string;
@@ -158,6 +160,22 @@ interface CartItemBase {
   // Redeploy flag - skip duplicate detection during deployment
   forceCreate?: boolean;
 
+  // Explicit acknowledgement of a failed QA result for this exact version.
+  qaOverride?: boolean;
+
+  // Update policy chosen during deployment configuration. Absent = "Notify"
+  // (default): no policy row is written on deploy, preserving any policy set
+  // earlier on the Updates page. Win32 only; the UI never sets it for Store apps.
+  updatePolicy?: 'auto_update' | 'ignore';
+
+  // Explicit per-app assignment carry-over for auto updates, set alongside
+  // updatePolicy === 'auto_update'. Absent = follow the user's global
+  // carryOverAssignments setting at update time.
+  assignmentMigration?: {
+    carryOverAssignments: boolean;
+    removeAssignmentsFromPreviousApp: boolean;
+  };
+
   // Cart metadata
   addedAt: string;
 }
@@ -165,6 +183,10 @@ interface CartItemBase {
 // Win32 LOB app - goes through packaging pipeline (PSADT + .intunewin + GitHub Actions)
 export interface Win32CartItem extends CartItemBase {
   appSource: 'win32';
+  curatedReleaseId?: string;
+  curatedSettingsMode?: 'tested-defaults' | 'custom';
+  // Server-set audit snapshot of the tenant's licence acceptance (curated apps)
+  curatedLicenceAcceptance?: CuratedLicenceAcceptanceSnapshot;
   localeCode?: string; // Selected locale for language variant packages
   architecture: WingetArchitecture;
   installScope: WingetScope;
@@ -173,6 +195,7 @@ export interface Win32CartItem extends CartItemBase {
   nestedInstallerPath?: string;
   installerUrl: string;
   installerSha256: string;
+  installerSuccessCodes?: number[];
   installCommand: string;
   uninstallCommand: string;
   detectionRules: DetectionRule[];

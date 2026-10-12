@@ -8,7 +8,13 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import type { DatabaseAdapter } from '@/lib/db/types';
 import { getCatalogSource } from '@/lib/catalog';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { normalizeInstaller } from '@/lib/manifest-api';
+import { selectWingetInstaller } from '@/lib/qa/candidate';
 import {
   generateDetectionRules,
   generateInstallCommand,
@@ -17,7 +23,7 @@ import {
 import type { DeploymentConfig } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship, DetectionRule, RequirementRule } from '@/types/intune';
-import type { NormalizedInstaller } from '@/types/winget';
+import type { NormalizedInstaller, WingetInstaller } from '@/types/winget';
 
 export interface PackageConfigWithAssignments {
   assignments?: PackageAssignment[];
@@ -265,6 +271,13 @@ export async function buildDefaultDeploymentConfig(
   wingetId: string,
   latestVersion: string
 ): Promise<DeploymentConfig | null> {
+  if (isCuratedPackageId(wingetId)) {
+    try {
+      const { app, release } = getApprovedCuratedRelease(wingetId, latestVersion);
+      const item = buildCuratedCartItem(app, release);
+      return { ...item, forceCreateNewApp: true };
+    } catch { return null; }
+  }
   // Get curated app info
   const curatedApp = await getCatalogSource().getAppNamePublisher(wingetId);
 
@@ -282,41 +295,39 @@ export async function buildDefaultDeploymentConfig(
     return null;
   }
 
-  // Resolve architecture-specific installer (prefer x64)
-  let installerUrl = versionInfo.installer_url;
-  let installerSha256 = versionInfo.installer_sha256 || '';
-  let installerType = versionInfo.installer_type || 'exe';
-  let architecture = 'x64';
+  // Resolve architecture and scope together. WinGet can publish separate x64
+  // user and machine entries whose URLs and hashes are identical but whose
+  // vendor switches differ.
+  const manifestInstallers = Array.isArray(versionInfo.installers)
+    ? versionInfo.installers as WingetInstaller[]
+    : [];
+  const selectedManifestInstaller = selectWingetInstaller(
+    manifestInstallers,
+    'x64',
+    undefined,
+    wingetId,
+  ) as WingetInstaller | null;
+  const normalizedInstaller: NormalizedInstaller = selectedManifestInstaller
+    ? normalizeInstaller({
+        ...selectedManifestInstaller,
+        InstallerSwitches: {
+          ...(versionInfo.silent_args ? { Silent: versionInfo.silent_args } : {}),
+          ...(selectedManifestInstaller.InstallerSwitches || {}),
+        },
+      })
+    : {
+        architecture: 'x64',
+        url: versionInfo.installer_url,
+        sha256: versionInfo.installer_sha256 || '',
+        type: (versionInfo.installer_type || 'exe') as NormalizedInstaller['type'],
+        scope: versionInfo.installer_scope === 'user' ? 'user' : 'machine',
+        silentArgs: versionInfo.silent_args || undefined,
+      };
+  const architecture = normalizedInstaller.architecture;
+  const installerType = normalizedInstaller.type;
+  const installScope = normalizedInstaller.scope || 'machine';
 
-  if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    type InstallerEntry = { Architecture?: string; InstallerUrl?: string; InstallerSha256?: string; InstallerType?: string };
-    const installers = versionInfo.installers as InstallerEntry[];
-    const x64Installer = installers.find(
-      (i) => i.Architecture === 'x64'
-    );
-    if (x64Installer) {
-      installerUrl = x64Installer.InstallerUrl || installerUrl;
-      installerSha256 = x64Installer.InstallerSha256 || installerSha256;
-      installerType = x64Installer.InstallerType || installerType;
-    } else if (installers.length > 0) {
-      // Use first available installer's architecture
-      const first = installers[0];
-      if (first?.Architecture) {
-        architecture = first.Architecture.toLowerCase();
-      }
-    }
-  }
-
-  // Build a NormalizedInstaller for detection rule generation
-  const normalizedInstaller: NormalizedInstaller = {
-    architecture: architecture as NormalizedInstaller['architecture'],
-    url: installerUrl,
-    sha256: installerSha256,
-    type: installerType as NormalizedInstaller['type'],
-    scope: 'machine',
-  };
-
-  const installCommand = generateInstallCommand(normalizedInstaller, 'machine');
+  const installCommand = generateInstallCommand(normalizedInstaller, installScope);
   const uninstallCommand = generateUninstallCommand(normalizedInstaller, curatedApp.name);
   const detectionRules = generateDetectionRules(
     normalizedInstaller,
@@ -332,7 +343,7 @@ export async function buildDefaultDeploymentConfig(
     installerType,
     installCommand,
     uninstallCommand,
-    installScope: 'system',
+    installScope,
     detectionRules,
     assignments: [],
     categories: [],
@@ -354,6 +365,54 @@ export type BuildDeploymentConfigResult =
   | { status: 'unavailable' };
 
 /**
+ * Assemble a deployment config from a stored packaging job. Shared by the
+ * Supabase and adapter-backed builders so both produce identical configs.
+ */
+function assembleDeploymentConfigFromJob(job: {
+  display_name: string;
+  publisher: string | null;
+  architecture: string | null;
+  installer_type: string | null;
+  install_command: string | null;
+  uninstall_command: string | null;
+  install_scope: string | null;
+  detection_rules: unknown;
+  package_config: unknown;
+}): DeploymentConfig {
+  const packageConfig = job.package_config;
+  const parsedAssignments = parsePackageAssignments(packageConfig);
+  const parsedCategories = parsePackageCategories(packageConfig);
+  const parsedRequirementRules = parseRequirementRules(packageConfig);
+  const parsedRelationships = parseAppRelationships(packageConfig);
+  // Explicit per-app choice only. When the packaging job stored no migration
+  // config, leave it undefined so the auto-update trigger falls back to the
+  // user's current global carryOverAssignments setting at update time.
+  const assignmentMigration = parseAssignmentMigration(packageConfig);
+
+  return {
+    displayName: job.display_name,
+    sourceType: isObject(packageConfig) && packageConfig.sourceType === 'curated' ? 'curated' : undefined,
+    curatedReleaseId: isObject(packageConfig) && typeof packageConfig.curatedReleaseId === 'string' ? packageConfig.curatedReleaseId : undefined,
+    curatedSettingsMode: isObject(packageConfig) && ['tested-defaults', 'custom'].includes(String(packageConfig.curatedSettingsMode))
+      ? packageConfig.curatedSettingsMode as 'tested-defaults' | 'custom' : undefined,
+    publisher: job.publisher || 'Unknown Publisher',
+    architecture: job.architecture || 'x64',
+    installerType: job.installer_type || 'exe',
+    installCommand: job.install_command || '',
+    uninstallCommand: job.uninstall_command || '',
+    installScope: job.install_scope || 'system',
+    detectionRules: parseDetectionRules(job.detection_rules),
+    assignments: parsedAssignments,
+    categories: parsedCategories,
+    requirementRules: parsedRequirementRules,
+    relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
+    psadtConfig: parsePsadtConfig(packageConfig),
+    forceCreateNewApp: true,
+    assignmentMigration,
+  };
+}
+
+/**
  * Orchestrator: build a deployment config for an app, replicating the
  * trigger route's "no policy yet" branch.
  */
@@ -364,10 +423,9 @@ export async function buildDeploymentConfigForApp(
     tenantId: string;
     wingetId: string;
     latestVersion: string;
-    globalCarryOver: boolean;
   }
 ): Promise<BuildDeploymentConfigResult> {
-  const { userId, tenantId, wingetId, latestVersion, globalCarryOver } = args;
+  const { userId, tenantId, wingetId, latestVersion } = args;
 
   // Get the original deployment config from upload_history
   const { data: uploadHistory } = await supabase
@@ -393,39 +451,7 @@ export async function buildDeploymentConfigForApp(
       return { status: 'orphaned_job' };
     }
 
-    const packageConfig = packagingJob.package_config;
-    const parsedAssignments = parsePackageAssignments(packageConfig);
-    const parsedCategories = parsePackageCategories(packageConfig);
-    const parsedRequirementRules = parseRequirementRules(packageConfig);
-    const parsedRelationships = parseAppRelationships(packageConfig);
-    let assignmentMigration = parseAssignmentMigration(packageConfig);
-
-    // If no explicit migration config was stored on the packaging job,
-    // fall back to the user's global carryOverAssignments setting.
-    if (!assignmentMigration) {
-      assignmentMigration = {
-        carryOverAssignments: globalCarryOver,
-        removeAssignmentsFromPreviousApp: globalCarryOver,
-      };
-    }
-
-    const deploymentConfig: DeploymentConfig = {
-      displayName: packagingJob.display_name,
-      publisher: packagingJob.publisher || 'Unknown Publisher',
-      architecture: packagingJob.architecture || 'x64',
-      installerType: packagingJob.installer_type || 'exe',
-      installCommand: packagingJob.install_command || '',
-      uninstallCommand: packagingJob.uninstall_command || '',
-      installScope: packagingJob.install_scope || 'system',
-      detectionRules: parseDetectionRules(packagingJob.detection_rules),
-      assignments: parsedAssignments,
-      categories: parsedCategories,
-      requirementRules: parsedRequirementRules,
-      relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
-      psadtConfig: parsePsadtConfig(packageConfig),
-      forceCreateNewApp: true,
-      assignmentMigration,
-    };
+    const deploymentConfig = assembleDeploymentConfigFromJob(packagingJob);
 
     return { status: 'ok', deploymentConfig, originalUploadHistoryId: uploadHistory.id };
   }
@@ -433,6 +459,50 @@ export async function buildDeploymentConfigForApp(
   // No prior deployment: build config from curated catalog data
   const defaultConfig = await buildDefaultDeploymentConfig(
     supabase,
+    wingetId,
+    latestVersion
+  );
+
+  if (!defaultConfig) {
+    return { status: 'unavailable' };
+  }
+
+  return { status: 'ok', deploymentConfig: defaultConfig, originalUploadHistoryId: null };
+}
+
+/**
+ * Adapter-backed variant of buildDeploymentConfigForApp. The self-hosted SQLite
+ * adapter has no Supabase client, so it reads the same prior deployment through
+ * the DatabaseAdapter interface and assembles an identical config.
+ */
+export async function buildDeploymentConfigFromAdapter(
+  db: DatabaseAdapter,
+  args: {
+    userId: string;
+    tenantId: string;
+    wingetId: string;
+    latestVersion: string;
+  }
+): Promise<BuildDeploymentConfigResult> {
+  const { userId, tenantId, wingetId, latestVersion } = args;
+
+  // Filtered in the query so a deployment older than a fixed window is still found.
+  const uploadHistory = await db.uploadHistory.getLatest(userId, tenantId, wingetId);
+
+  if (uploadHistory?.packaging_job_id) {
+    const packagingJob = await db.jobs.getById(uploadHistory.packaging_job_id);
+    if (!packagingJob) {
+      return { status: 'orphaned_job' };
+    }
+    return {
+      status: 'ok',
+      deploymentConfig: assembleDeploymentConfigFromJob(packagingJob),
+      originalUploadHistoryId: uploadHistory.id,
+    };
+  }
+
+  const defaultConfig = await buildDefaultDeploymentConfig(
+    null as unknown as ReturnType<typeof createServerClient>,
     wingetId,
     latestVersion
   );

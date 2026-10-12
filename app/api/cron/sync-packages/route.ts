@@ -5,6 +5,7 @@ import {
   createWingetManifestClient,
   resolveWingetManifest,
 } from '@/lib/winget-sync-resolution.mjs';
+import { normalizeInstaller, normalizeManifestInstallers } from '@/lib/manifest-api';
 import { selectAppsToSync } from './select-apps';
 
 const BATCH_SIZE = 10;
@@ -29,6 +30,7 @@ interface CuratedAppUpdate {
   homepage?: string;
   license?: string;
   updated_at: string;
+  upstream_miss_count: number;
 }
 
 export async function GET(request: Request) {
@@ -123,6 +125,26 @@ export async function GET(request: Request) {
                 id: winget_id,
                 reason: resolution.reason || 'upstream_unavailable',
               });
+              if (resolution.reason === 'package_or_version_missing') {
+                const missCount = (app.upstream_miss_count || 0) + 1;
+                if (missCount >= 3) {
+                  const { error: blockError } = await supabase
+                    .from('package_eligibility_blocks')
+                    .upsert({
+                      winget_id,
+                      block_code: 'upstream_removed',
+                      detail: `WinGet package resolution failed ${missCount} consecutive times with package_or_version_missing.`,
+                      source_url: `https://github.com/microsoft/winget-pkgs/tree/master/manifests/${winget_id[0].toLowerCase()}`,
+                      updated_at: new Date().toISOString(),
+                    }, { onConflict: 'winget_id' });
+                  if (blockError) throw new Error(`eligibility block upsert failed: ${blockError.message}`);
+                }
+                const { error: missError } = await supabase
+                  .from('curated_apps')
+                  .update({ upstream_miss_count: missCount, updated_at: new Date().toISOString() })
+                  .eq('winget_id', winget_id);
+                if (missError) throw new Error(`upstream miss update failed: ${missError.message}`);
+              }
               return;
             }
 
@@ -133,7 +155,7 @@ export async function GET(request: Request) {
             const localeManifest = await manifestClient.fetchLocaleManifest(winget_id, latestVersion);
 
             // Extract installer data
-            const installers = (installerManifest.Installers as Array<Record<string, unknown>>) || [];
+            const installers = normalizeManifestInstallers(installerManifest);
             const defaultInstaller = installers[0] || {};
 
             // Prepare version history record
@@ -146,10 +168,9 @@ export async function GET(request: Request) {
                 (defaultInstaller.InstallerType as string) ||
                 (installerManifest.InstallerType as string) ||
                 null,
-              silent_args:
-                (defaultInstaller.InstallerSwitches as Record<string, string>)?.Silent ||
-                (installerManifest.InstallerSwitches as Record<string, string>)?.Silent ||
-                null,
+              silent_args: defaultInstaller.Architecture
+                ? normalizeInstaller(defaultInstaller).silentArgs || null
+                : null,
               installers: JSON.stringify(installers),
               manifest_fetched_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -171,6 +192,7 @@ export async function GET(request: Request) {
             const appUpdate: CuratedAppUpdate = {
               winget_id,
               latest_version: latestVersion,
+              upstream_miss_count: 0,
               updated_at: new Date().toISOString(),
             };
 

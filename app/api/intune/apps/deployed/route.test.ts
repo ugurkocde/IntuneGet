@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const {
   parseAccessTokenMock,
-  createServerClientMock,
+  getServerClientOrNullMock,
   resolveTargetTenantIdMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
-  createServerClientMock: vi.fn(),
+  getServerClientOrNullMock: vi.fn(),
   resolveTargetTenantIdMock: vi.fn(),
 }));
 
@@ -15,7 +15,7 @@ vi.mock('@/lib/auth-utils', () => ({
 }));
 
 vi.mock('@/lib/supabase', () => ({
-  createServerClient: createServerClientMock,
+  getServerClientOrNull: getServerClientOrNullMock,
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
@@ -70,7 +70,7 @@ describe('GET /api/intune/apps/deployed', () => {
       operations
     );
 
-    createServerClientMock.mockReturnValue({
+    getServerClientOrNullMock.mockReturnValue({
       from: (table: string) => {
         if (table === 'upload_history') {
           return uploadHistoryQuery;
@@ -118,7 +118,7 @@ describe('GET /api/intune/apps/deployed', () => {
       []
     );
 
-    createServerClientMock.mockReturnValue({
+    getServerClientOrNullMock.mockReturnValue({
       from: () => uploadHistoryQuery,
     });
 
@@ -163,7 +163,7 @@ describe('GET /api/intune/apps/deployed', () => {
       userName: 'User',
     });
 
-    createServerClientMock.mockReturnValue({
+    getServerClientOrNullMock.mockReturnValue({
       from: vi.fn(),
     });
 
@@ -199,7 +199,7 @@ describe('GET /api/intune/apps/deployed', () => {
       []
     );
 
-    createServerClientMock.mockReturnValue({
+    getServerClientOrNullMock.mockReturnValue({
       from: () => uploadHistoryQuery,
     });
 

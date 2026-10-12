@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getEntraIDGroups } from '@/lib/intune-api';
@@ -25,15 +25,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the service principal access token from the database
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
+    const tenantResolution = supabase ? await resolveTargetTenantId({
       supabase,
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
-    });
+    }) : { tenantId: user.tenantId, errorResponse: null };
 
     if (tenantResolution.errorResponse) {
       return tenantResolution.errorResponse;
@@ -41,12 +41,12 @@ export async function GET(request: NextRequest) {
 
     const tenantId = tenantResolution.tenantId;
 
-    const { data: consentData, error: consentError } = await supabase
+    const { data: consentData, error: consentError } = supabase ? await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
-      .single();
+      .single() : { data: true, error: null };
 
     if (consentError || !consentData) {
       return NextResponse.json(

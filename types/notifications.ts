@@ -15,6 +15,17 @@ export type NotificationChannel = 'email' | 'webhook';
 // Notification status
 export type NotificationStatus = 'pending' | 'sent' | 'failed';
 
+// Server setup still needed before email notifications can be used
+export type EmailSetupRequirement = 'supabase' | 'resend';
+
+// Shown when a deployment has no Supabase storage for webhook settings
+export const WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE =
+  'Webhook notifications require Supabase to be configured for this deployment.';
+
+// Self hosting guide section that explains notification setup
+export const NOTIFICATION_SETUP_GUIDE_URL =
+  'https://github.com/ugurkocde/IntuneGet/blob/main/docs/SELF_HOSTING.md#notification-configuration';
+
 /**
  * Notification Preferences
  */

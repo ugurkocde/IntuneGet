@@ -1,0 +1,55 @@
+@property --qa-viewer-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.viewerBorder {
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: calc(0.75rem + 2px);
+  pointer-events: none;
+}
+
+.viewerBorder::before,
+.viewerBorder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--qa-viewer-angle),
+    rgb(6 182 212 / 35%),
+    #06b6d4 15%,
+    #a5f3fc 22%,
+    rgb(6 182 212 / 35%) 32%,
+    rgb(139 92 246 / 35%) 50%,
+    #8b5cf6 65%,
+    #c4b5fd 72%,
+    rgb(139 92 246 / 35%) 82%,
+    rgb(6 182 212 / 35%)
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: viewerBorderOrbit 6s linear infinite;
+}
+
+.viewerBorder::after {
+  filter: blur(4px);
+  opacity: 0.45;
+}
+
+@keyframes viewerBorderOrbit {
+  to {
+    --qa-viewer-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewerBorder::before,
+  .viewerBorder::after {
+    animation: none;
+  }
+}

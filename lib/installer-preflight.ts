@@ -1,15 +1,28 @@
 import { createHash } from 'node:crypto';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { assertCuratedInstaller } from '@/lib/curated-catalog/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getLiveInstallers } from '@/lib/manifest-api';
 import {
   hashRemoteInstaller,
+  probeInstallerSource,
+  type InstallerSourceDiagnostic,
   hashesEqual,
+  InstallerDownloadDeadlineError,
+  InstallerDownloadSizeLimitError,
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
+import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
+import { normalizeQaInstallerType } from '@/lib/qa/candidate';
+import { resolveApplicationInstallerSelectionScope } from '@/lib/packaging-adapters';
+import type { NormalizedInstaller } from '@/types/winget';
 
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
+const SIZE_LIMIT_TTL_MS = 24 * 60 * 60 * 1000;
+const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
+const PREFLIGHT_CACHE_SCHEMA_VERSION = '4';
 const LEASE_SECONDS = 240;
 const WAIT_FOR_CLAIM_MS = 240_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -37,10 +50,12 @@ export interface InstallerPreflightRequest {
   version: string;
   architecture?: string;
   installerUrl: string;
+  manifestInstallerUrl?: string;
   installerSha256: string;
   installerType?: string;
   installScope?: 'machine' | 'user';
-  sourceType?: 'winget' | 'custom';
+  sourceType?: 'winget' | 'custom' | 'curated';
+  curatedReleaseId?: string;
 }
 
 export interface InstallerPreflightResult {
@@ -70,6 +85,7 @@ let healthClient: SupabaseClient | null | undefined;
 export function resetInstallerPreflightStateForTests(): void {
   memoryHealth.clear();
   inFlight.clear();
+  diagnosticInFlight.clear();
   healthClient = undefined;
 }
 
@@ -94,15 +110,34 @@ function isHostedRuntime(): boolean {
 }
 
 export function createInstallerHealthKey(input: InstallerPreflightRequest): string {
+  const executionScope = normalizedRequestedScope(input.installScope);
+  const manifestScope = executionScope
+    ? resolveApplicationInstallerSelectionScope(input.wingetId, executionScope)
+    : undefined;
   return createHash('sha256')
     .update([
+      PREFLIGHT_CACHE_SCHEMA_VERSION,
       input.wingetId.trim().toLowerCase(),
       input.version.trim(),
       (input.architecture || 'x64').trim().toLowerCase(),
+      normalizePreflightInstallerType(input.installerType),
+      executionScope || '',
+      manifestScope || '',
       input.installerUrl.trim(),
       input.installerSha256.trim().toUpperCase(),
     ].join('\0'))
     .digest('hex');
+}
+
+function normalizedRequestedScope(
+  scope?: InstallerPreflightRequest['installScope']
+): 'machine' | 'user' | undefined {
+  const normalized = scope?.trim().toLowerCase();
+  return normalized === 'machine' || normalized === 'user' ? normalized : undefined;
+}
+
+function normalizePreflightInstallerType(type?: string): string {
+  return type?.trim() ? normalizeQaInstallerType(type) : '';
 }
 
 function assertTrustedInput(input: InstallerPreflightRequest): void {
@@ -125,7 +160,7 @@ function throwForRow(row: InstallerHealthRow): never {
   throw new InstallerPreflightError(
     row.reason_code || 'INSTALLER_QUARANTINED',
     row.reason_message || 'This installer tuple is quarantined and cannot be dispatched',
-    row.status === 'error',
+    row.status === 'error' && !['MANIFEST_CHANGED', 'MANIFEST_UNAVAILABLE', 'INSTALLER_TOO_LARGE'].includes(row.reason_code || ''),
     row.actual_sha256 || undefined,
   );
 }
@@ -219,16 +254,29 @@ function buildHealthRow(
   };
 }
 
-function installerExistsInManifest(input: InstallerPreflightRequest, installers: Awaited<ReturnType<typeof getLiveInstallers>>): boolean {
+function installerExistsInManifest(
+  input: InstallerPreflightRequest,
+  installers: NormalizedInstaller[],
+): boolean {
   const expectedHash = input.installerSha256.toUpperCase();
   const requestedArchitecture = (input.architecture || 'x64').toLowerCase();
-  const requestedType = input.installerType?.toLowerCase();
-  const requestedScope = input.installScope?.toLowerCase();
+  const requestedType = normalizePreflightInstallerType(input.installerType);
+  const executionScope = normalizedRequestedScope(input.installScope);
+  const requestedScope = executionScope
+    ? resolveApplicationInstallerSelectionScope(input.wingetId, executionScope)
+    : undefined;
+  const requestedUrl = (input.manifestInstallerUrl || input.installerUrl).trim();
 
   return installers.some((installer) => {
     if (!hashesEqual(installer.sha256 || '', expectedHash)) return false;
-    if (installer.architecture && installer.architecture.toLowerCase() !== requestedArchitecture) return false;
-    if (requestedType && installer.type && installer.type.toLowerCase() !== requestedType) return false;
+    if (installer.url?.trim() !== requestedUrl) return false;
+    if (
+      installer.architecture &&
+      installer.architecture.toLowerCase() !== requestedArchitecture &&
+      installer.architecture.toLowerCase() !== 'neutral'
+    ) return false;
+    const manifestType = normalizePreflightInstallerType(installer.type);
+    if (requestedType && manifestType && manifestType !== requestedType) return false;
     if (requestedScope && installer.scope && installer.scope.toLowerCase() !== requestedScope) return false;
     return true;
   });
@@ -266,15 +314,22 @@ async function waitForSharedResult(cacheKey: string): Promise<InstallerPreflight
 async function performLivePreflight(
   cacheKey: string,
   input: InstallerPreflightRequest,
+  trustedInstallers?: NormalizedInstaller[],
 ): Promise<InstallerPreflightResult> {
   try {
-    const installers = await getLiveInstallers(input.wingetId, input.version);
+    const installers = trustedInstallers ||
+      await getLiveInstallers(input.wingetId, input.version);
     if (installers.length === 0) {
-      throw new InstallerPreflightError(
+      const error = new InstallerPreflightError(
         'MANIFEST_UNAVAILABLE',
-        `The trusted WinGet installer manifest for ${input.wingetId} ${input.version} is unavailable`,
-        true,
+        `Version ${input.version} of ${input.wingetId} is no longer available from WinGet. Review the current version to update your selection.`,
       );
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
+        reason_code: error.code,
+        reason_message: error.message,
+        expires_at: new Date(Date.now() + ERROR_TTL_MS).toISOString(),
+      }));
+      throw error;
     }
 
     if (!installerExistsInManifest(input, installers)) {
@@ -282,9 +337,10 @@ async function performLivePreflight(
         'MANIFEST_CHANGED',
         `The selected installer for ${input.wingetId} ${input.version} no longer matches the trusted WinGet manifest`,
       );
-      await writeHealth(buildHealthRow(cacheKey, input, 'quarantined', {
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
         reason_code: error.code,
         reason_message: error.message,
+        expires_at: new Date(Date.now() + MANIFEST_CHANGED_TTL_MS).toISOString(),
       }));
       throw error;
     }
@@ -310,6 +366,12 @@ async function performLivePreflight(
       : HEALTHY_VERSIONED_TTL_MS;
     await writeHealth(buildHealthRow(cacheKey, input, 'healthy', {
       actual_sha256: downloaded.sha256,
+      reason_code: downloaded.verificationMethod === 'publisher-checksum'
+        ? 'PUBLISHER_CHECKSUM_ATTESTED'
+        : null,
+      reason_message: downloaded.verificationMethod === 'publisher-checksum'
+        ? 'The trusted WinGet SHA256 matched the publisher checksum and the installer source passed bounded byte-range probes. The packager will still hash the complete downloaded payload.'
+        : null,
       expires_at: new Date(Date.now() + ttl).toISOString(),
     }));
 
@@ -321,11 +383,26 @@ async function performLivePreflight(
       bytes: downloaded.bytes,
     };
   } catch (error) {
+    if (error instanceof InstallerDownloadSizeLimitError) {
+      const normalized = new InstallerPreflightError('INSTALLER_TOO_LARGE', error.message, false);
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
+        reason_code: normalized.code,
+        reason_message: normalized.message,
+        expires_at: new Date(Date.now() + SIZE_LIMIT_TTL_MS).toISOString(),
+      }));
+      throw normalized;
+    }
     if (error instanceof InstallerPreflightError && !error.retryable) throw error;
 
     const normalized = error instanceof InstallerPreflightError
       ? error
-      : new InstallerPreflightError(
+      : error instanceof InstallerDownloadDeadlineError
+        ? new InstallerPreflightError(
+            'PREFLIGHT_DEADLINE_EXCEEDED',
+            error.message,
+            true,
+          )
+        : new InstallerPreflightError(
           'PREFLIGHT_UNAVAILABLE',
           error instanceof Error ? error.message : 'Installer verification failed',
           true,
@@ -340,7 +417,10 @@ async function performLivePreflight(
   }
 }
 
-async function enforceInternal(input: InstallerPreflightRequest): Promise<InstallerPreflightResult> {
+async function enforceInternal(
+  input: InstallerPreflightRequest,
+  trustedInstallers?: NormalizedInstaller[],
+): Promise<InstallerPreflightResult> {
   assertTrustedInput(input);
   const cacheKey = createInstallerHealthKey(input);
   const cached = await readHealth(cacheKey);
@@ -357,13 +437,19 @@ async function enforceInternal(input: InstallerPreflightRequest): Promise<Instal
 
   const claimed = await claimHealth(cacheKey, input);
   if (!claimed) return waitForSharedResult(cacheKey);
-  return performLivePreflight(cacheKey, input);
+  return performLivePreflight(cacheKey, input, trustedInstallers);
 }
 
 export async function enforceInstallerPreflight(
   input: InstallerPreflightRequest,
+  trustedInstallers?: NormalizedInstaller[],
 ): Promise<InstallerPreflightResult> {
+  if (isCuratedPackageId(input.wingetId) || input.sourceType === 'curated') {
+    const { installer } = assertCuratedInstaller(input);
+    trustedInstallers = [installer];
+  }
   if (input.sourceType === 'custom' || input.wingetId.startsWith('Custom.')) {
+    if (isCuratedPackageId(input.wingetId)) throw new InstallerPreflightError('CURATED_RELEASE_UNAVAILABLE', 'Curated releases cannot use custom installer validation.');
     return { cacheKey: '', status: 'skipped', source: 'custom' };
   }
   if (isHostedRuntime() && !getHealthClient()) {
@@ -378,7 +464,8 @@ export async function enforceInstallerPreflight(
   const existing = inFlight.get(cacheKey);
   if (existing) return existing;
 
-  const promise = enforceInternal(input).finally(() => inFlight.delete(cacheKey));
+  const promise = enforceInternal(input, trustedInstallers)
+    .finally(() => inFlight.delete(cacheKey));
   inFlight.set(cacheKey, promise);
   return promise;
 }
@@ -397,4 +484,36 @@ export async function quarantineInstaller(
     reason_code: reasonCode,
     reason_message: reasonMessage,
   }));
+}
+
+export interface InstallerSourceCheck {
+  probed: boolean;
+  reason?: string;
+  diagnostic?: InstallerSourceDiagnostic;
+}
+const diagnosticInFlight = new Map<string, Promise<InstallerSourceCheck>>();
+/** Read-only diagnosis: no lease, health acceptance, hash change or dispatch. */
+export async function diagnoseInstallerSource(input: InstallerPreflightRequest): Promise<InstallerSourceCheck> {
+  assertTrustedInput(input);
+  if (isCuratedPackageId(input.wingetId) || input.sourceType === 'curated' || input.sourceType === 'custom' || input.wingetId.startsWith('Custom.')) return { probed: false, reason: 'source_not_supported' };
+  if (isHostedRuntime() && !getHealthClient()) return { probed: false, reason: 'health_unavailable' };
+  const key = createInstallerHealthKey(input);
+  const existing = diagnosticInFlight.get(key);
+  if (existing) return existing;
+  if (diagnosticInFlight.size >= 4) return { probed: false, reason: 'diagnostic_busy' };
+  const operation = (async (): Promise<InstallerSourceCheck> => {
+    try {
+      const row = await readHealth(key);
+      if (row?.status === 'quarantined') return { probed: false, reason: 'quarantined' };
+      if (row?.status === 'checking' && row.lease_expires_at && Date.parse(row.lease_expires_at) > Date.now()) return { probed: false, reason: 'preflight_in_progress' };
+      const trustedUrl = input.manifestInstallerUrl || input.installerUrl;
+      if (input.installerUrl !== applyInstallerUrlOverride(input.wingetId, input.version, input.architecture || 'x64', trustedUrl)) return { probed: false, reason: 'source_changed' };
+      const installers = await getLiveInstallers(input.wingetId, input.version);
+      if (!installers.length) return { probed: false, reason: 'manifest_unavailable' };
+      if (!installerExistsInManifest(input, installers)) return { probed: false, reason: 'manifest_changed' };
+      return { probed: true, diagnostic: await probeInstallerSource(input.installerUrl) };
+    } catch { return { probed: false, reason: 'diagnostic_unavailable' }; }
+  })().finally(() => diagnosticInFlight.delete(key));
+  diagnosticInFlight.set(key, operation);
+  return operation;
 }

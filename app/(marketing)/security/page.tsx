@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     "Exactly which Microsoft Graph permissions IntuneGet requests, how admin consent works, where data lives, and why installers and credentials never touch our infrastructure.",
   alternates: {
-    canonical: "https://intuneget.com/security",
+    canonical: "https://www.intuneget.com/security",
   },
   openGraph: {
     title: "Security & Permissions | IntuneGet",
@@ -27,13 +27,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Security & Permissions",
-      item: "https://intuneget.com/security",
+      item: "https://www.intuneget.com/security",
     },
   ],
 };
@@ -104,7 +104,7 @@ export default function SecurityPage() {
       />
 
       {/* Content */}
-      <main id="main-content" className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28">
+      <main id="main-content" className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28 w-full">
         <div className="space-y-8">
           <div>
             <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">
@@ -412,6 +412,25 @@ export default function SecurityPage() {
                     documentation
                   </Link>{" "}
                   for setup guides, including Azure and self-hosting.
+                </T>
+              </li>
+              <li>
+                <T>
+                  Learn how IntuneGet{" "}
+                  <Link
+                    href="/docs/packaging"
+                    className="text-accent-cyan hover:text-accent-cyan-bright transition-colors"
+                  >
+                    packages and verifies an app
+                  </Link>
+                  , and review{" "}
+                  <Link
+                    href="/qa"
+                    className="text-accent-cyan hover:text-accent-cyan-bright transition-colors"
+                  >
+                    recent QA results
+                  </Link>
+                  .
                 </T>
               </li>
               <li>

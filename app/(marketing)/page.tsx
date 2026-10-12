@@ -1,15 +1,16 @@
+import { Header } from "@/components/landing/Header";
+import { HeroSection } from "@/components/landing/sections/HeroSection";
+import { TrustSection } from "@/components/landing/sections/TrustSection";
+import { TestimonialsSection } from "@/components/landing/sections/TestimonialsSection";
+import { HowItWorksSection } from "@/components/landing/sections/HowItWorksSection";
+import { FAQSectionAnimated } from "@/components/landing/sections/FAQSectionAnimated";
+import { Footer } from "@/components/landing/sections/Footer";
 import {
-  Header,
-  HeroSection,
-  TrustSection,
-  CapabilitiesSection,
-  ComparisonSection,
-  HowItWorksSection,
-  MSPSection,
-  FAQSectionAnimated,
-  CTASection,
-  Footer,
-} from "@/components/landing";
+  DeferredCapabilities,
+  DeferredComparison,
+  DeferredMSP,
+  DeferredCTA,
+} from "@/components/landing/DeferredSections";
 import { faqData } from "@/lib/data/faq-data";
 import {
   getPublicLandingStats,
@@ -31,7 +32,7 @@ function buildSoftwareApplicationJsonLd(appCountLabel: string) {
     name: "IntuneGet",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    url: "https://intuneget.com",
+    url: "https://www.intuneget.com",
     downloadUrl: "https://github.com/ugurkocde/IntuneGet",
     softwareVersion: packageJson.version,
     datePublished: "2024-01-01",
@@ -62,7 +63,7 @@ function buildSoftwareApplicationJsonLd(appCountLabel: string) {
       "AI-Powered App Discovery",
       "PSADT v4 Support",
     ],
-    screenshot: "https://intuneget.com/og-image.png",
+    screenshot: "https://www.intuneget.com/og-image.png",
   };
 }
 
@@ -114,7 +115,7 @@ const faqPageJsonLd = {
     acceptedAnswer: {
       "@type": "Answer",
       text: faq.linkHref
-        ? `${faq.answer} Learn more: https://intuneget.com${faq.linkHref}`
+        ? `${faq.answer} Learn more: https://www.intuneget.com${faq.linkHref}`
         : faq.answer,
     },
   })),
@@ -159,13 +160,14 @@ export default async function LandingPage() {
           <Header />
           <main id="main-content" className="flex-1">
             <HeroSection initialStats={stats} />
+            <TestimonialsSection />
             <HowItWorksSection />
-            <CapabilitiesSection />
-            <ComparisonSection />
-            <MSPSection />
+            <DeferredCapabilities />
+            <DeferredComparison />
+            <DeferredMSP />
             <TrustSection initialStats={stats} />
             <FAQSectionAnimated />
-            <CTASection initialStats={stats} />
+            <DeferredCTA initialStats={stats} />
           </main>
           <Footer />
         </div>

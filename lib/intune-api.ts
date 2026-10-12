@@ -13,6 +13,7 @@ import type {
   IntuneMobileAppCategory,
   IntuneAssignmentFilter,
   GraphApiResponse,
+  Win32LobAppRule,
 } from '@/types/intune';
 import type { PackageAssignment } from '@/types/upload';
 
@@ -574,6 +575,29 @@ export async function getApp(
   }
 
   return response.json();
+}
+
+/** Replace an app's Graph rules array. Callers must preserve existing rules. */
+export async function setAppRules(
+  accessToken: string,
+  appId: string,
+  rules: Win32LobAppRule[]
+): Promise<void> {
+  const response = await fetch(
+    `${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${appId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ rules }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to update app requirement rules');
+  }
 }
 
 /**

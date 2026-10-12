@@ -4,9 +4,31 @@
  */
 
 import Database from 'better-sqlite3';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import path from 'path';
 import fs from 'fs';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord } from './types';
+import type {
+  DatabaseAdapter,
+  AnalyticsJob,
+  AnalyticsJobScope,
+  PackagingJob,
+  UploadHistoryRecord,
+  AutoUpdateHistoryQuery,
+  UpdateCheckResult,
+  UpdateCheckQuery,
+  CuratedLicenceAttestationRecord,
+  CuratedLicenceAttestationInput,
+  ClaimedAppInput,
+  ClaimedAppRecord,
+} from './types';
+import type {
+  AppUpdatePolicy,
+  AutoUpdateHistory,
+  AutoUpdateHistoryWithPolicy,
+  AutoUpdateStatus,
+} from '@/types/update-policies';
+import { runSqliteMigrations } from './sqlite-migrations';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 
 // Singleton database instance
 let db: Database.Database | null = null;
@@ -30,120 +52,13 @@ function getDb(): Database.Database {
   // Enable WAL mode for better concurrent access
   db.pragma('journal_mode = WAL');
 
-  // Initialize schema
-  initializeSchema(db);
+  // Required for the ON DELETE CASCADE / SET NULL rules in migration 2.
+  db.pragma('foreign_keys = ON');
+
+  // Apply versioned migrations (baseline, then additive changes)
+  runSqliteMigrations(db);
 
   return db;
-}
-
-/**
- * Initialize the database schema
- */
-function initializeSchema(db: Database.Database): void {
-  // Create packaging_jobs table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS packaging_jobs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      user_email TEXT,
-      tenant_id TEXT,
-      winget_id TEXT NOT NULL,
-      version TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      publisher TEXT,
-      architecture TEXT,
-      installer_type TEXT NOT NULL,
-      installer_url TEXT NOT NULL,
-      installer_sha256 TEXT,
-      install_command TEXT,
-      uninstall_command TEXT,
-      install_scope TEXT,
-      silent_switches TEXT,
-      detection_rules TEXT,
-      package_config TEXT,
-      github_run_id TEXT,
-      github_run_url TEXT,
-      intunewin_url TEXT,
-      intunewin_size_bytes INTEGER,
-      unencrypted_content_size INTEGER,
-      encryption_info TEXT,
-      intune_app_id TEXT,
-      intune_app_url TEXT,
-      app_source TEXT DEFAULT 'win32',
-      status TEXT NOT NULL DEFAULT 'queued',
-      status_message TEXT,
-      progress_percent INTEGER DEFAULT 0,
-      progress_message TEXT,
-      error_message TEXT,
-      error_stage TEXT,
-      error_category TEXT,
-      error_code TEXT,
-      error_details TEXT,
-      warnings TEXT,
-      packager_id TEXT,
-      packager_heartbeat_at TEXT,
-      claimed_at TEXT,
-      packaging_started_at TEXT,
-      packaging_completed_at TEXT,
-      upload_started_at TEXT,
-      completed_at TEXT,
-      cancelled_at TEXT,
-      cancelled_by TEXT,
-      archived_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const existingColumns = new Set(
-    (db.pragma('table_info(packaging_jobs)') as Array<{ name: string }>).map((column) => column.name),
-  );
-  const compatibleColumns: Record<string, string> = {
-    app_source: "TEXT DEFAULT 'win32'",
-    error_stage: 'TEXT',
-    error_category: 'TEXT',
-    error_code: 'TEXT',
-    error_details: 'TEXT',
-    warnings: 'TEXT',
-    archived_at: 'TEXT',
-  };
-  for (const [column, definition] of Object.entries(compatibleColumns)) {
-    if (!existingColumns.has(column)) {
-      db.exec(`ALTER TABLE packaging_jobs ADD COLUMN ${column} ${definition}`);
-    }
-  }
-
-  // Create index for status queries
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_status ON packaging_jobs(status);
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_user_id ON packaging_jobs(user_id);
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_created_at ON packaging_jobs(created_at);
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_packager_heartbeat ON packaging_jobs(packager_heartbeat_at);
-  `);
-
-  // Create upload_history table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS upload_history (
-      id TEXT PRIMARY KEY,
-      packaging_job_id TEXT,
-      user_id TEXT NOT NULL,
-      winget_id TEXT NOT NULL,
-      version TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      publisher TEXT,
-      intune_app_id TEXT NOT NULL,
-      intune_app_url TEXT,
-      intune_tenant_id TEXT,
-      deployed_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (packaging_job_id) REFERENCES packaging_jobs(id)
-    )
-  `);
-
-  // Create index for upload_history
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_upload_history_user_id ON upload_history(user_id);
-    CREATE INDEX IF NOT EXISTS idx_upload_history_deployed_at ON upload_history(deployed_at);
-  `);
 }
 
 /**
@@ -158,6 +73,48 @@ function parseJobRow(row: Record<string, unknown>): PackagingJob {
     error_details: row.error_details ? JSON.parse(row.error_details as string) : null,
     warnings: row.warnings ? JSON.parse(row.warnings as string) : null,
   } as PackagingJob;
+}
+
+function parsePolicyRow(row: Record<string, unknown>): AppUpdatePolicy {
+  return {
+    ...row,
+    is_enabled: Boolean(row.is_enabled),
+    deployment_config: row.deployment_config ? JSON.parse(row.deployment_config as string) : null,
+  } as unknown as AppUpdatePolicy;
+}
+
+function parseHistoryRow(row: Record<string, unknown>): AutoUpdateHistory {
+  return row as unknown as AutoUpdateHistory;
+}
+
+function parseCheckResultRow(row: Record<string, unknown>): UpdateCheckResult {
+  return {
+    ...row,
+    is_critical: Boolean(row.is_critical),
+    is_managed: row.is_managed === undefined ? true : Boolean(row.is_managed),
+  } as unknown as UpdateCheckResult;
+}
+
+/**
+ * Build the SET clause shared by the dynamic update methods.
+ */
+function buildSetClause(
+  data: Record<string, unknown>,
+  options: { json?: Set<string>; boolean?: Set<string> } = {}
+): { clause: string; values: unknown[] } {
+  const assignments: string[] = [];
+  const values: unknown[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    assignments.push(`${key} = ?`);
+    if (options.json?.has(key)) {
+      values.push(value != null ? JSON.stringify(value) : null);
+    } else if (options.boolean?.has(key)) {
+      values.push(value ? 1 : 0);
+    } else {
+      values.push(value);
+    }
+  }
+  return { clause: assignments.join(', '), values };
 }
 
 /**
@@ -209,6 +166,19 @@ export const sqliteDb: DatabaseAdapter = {
       return rows.map(parseJobRow);
     },
 
+    async getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]> {
+      const key = scope.tenantId === undefined ? 'user_id' : 'tenant_id';
+      const identity = scope.tenantId ?? scope.userId;
+      if (!identity) throw new Error('Statistics identity required');
+      const rows = getDb().prepare(`
+        SELECT id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url
+        FROM packaging_jobs WHERE ${key} = ? AND archived_at IS NULL
+        ORDER BY created_at DESC, id DESC LIMIT 100001
+      `).all(identity) as AnalyticsJob[];
+      if (rows.length > 100000) throw new Error('Statistics read limit exceeded');
+      return rows;
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const database = getDb();
       // Every user's jobs in this tenant, most recent first, no age cutoff.
@@ -219,6 +189,22 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       const rows = stmt.all(tenantId, limit) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
+      const rows = getDb().prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE tenant_id = ? AND winget_id = ? ${curated ? 'COLLATE NOCASE' : ''} AND status IN (${INTUNE_APPROVAL_CHECKPOINT_STATUSES.map(() => '?').join(',')})
+          AND (error_category = 'approval' OR error_code = 'INTUNE_APPROVAL_REQUIRED')
+          ${cursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
+        ORDER BY created_at DESC, id DESC LIMIT 100
+      `).all(tenantId, wingetId, ...INTUNE_APPROVAL_CHECKPOINT_STATUSES,
+        ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : [])) as Record<string, unknown>[];
       return rows.map(parseJobRow);
     },
 
@@ -235,9 +221,13 @@ export const sqliteDb: DatabaseAdapter = {
           id, user_id, user_email, tenant_id, winget_id, version, display_name,
           publisher, architecture, installer_type, installer_url, installer_sha256,
           install_command, uninstall_command, install_scope, detection_rules,
-          package_config, app_source, status, progress_percent, created_at, updated_at
+          package_config, app_source, status, status_message, progress_percent,
+          error_stage, error_category, error_code, execution_profile_sha256,
+          presentation_profile_sha256, qa_candidate_id, qa_requested_at,
+          qa_completed_at, is_auto_update, auto_update_policy_id, created_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `);
 
@@ -261,7 +251,18 @@ export const sqliteDb: DatabaseAdapter = {
         job.package_config ? JSON.stringify(job.package_config) : null,
         job.app_source || 'win32',
         job.status || 'queued',
+        job.status_message || null,
         job.progress_percent || 0,
+        job.error_stage || null,
+        job.error_category || null,
+        job.error_code || null,
+        job.execution_profile_sha256 || null,
+        job.presentation_profile_sha256 || null,
+        job.qa_candidate_id || null,
+        job.qa_requested_at || null,
+        job.qa_completed_at || null,
+        (job as Record<string, unknown>).is_auto_update ? 1 : 0,
+        (job as Record<string, unknown>).auto_update_policy_id || null,
         now,
         now
       );
@@ -284,6 +285,9 @@ export const sqliteDb: DatabaseAdapter = {
         if (key === 'detection_rules' || key === 'package_config' || key === 'encryption_info' || key === 'warnings' || key === 'error_details') {
           updates.push(`${key} = ?`);
           values.push(value ? JSON.stringify(value) : null);
+        } else if (key === 'is_auto_update') {
+          updates.push(`${key} = ?`);
+          values.push(value ? 1 : 0);
         } else {
           updates.push(`${key} = ?`);
           values.push(value);
@@ -506,6 +510,496 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       return stmt.all(userId, limit) as UploadHistoryRecord[];
+    },
+
+    async getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          `SELECT * FROM upload_history
+           WHERE user_id = ? AND intune_tenant_id = ? AND winget_id = ?
+           ORDER BY deployed_at DESC
+           LIMIT 1`
+        )
+        .get(userId, tenantId, wingetId) as UploadHistoryRecord | undefined;
+      return row ?? null;
+    },
+
+    async listAll(limit: number = 1000): Promise<UploadHistoryRecord[]> {
+      const database = getDb();
+      return database
+        .prepare('SELECT * FROM upload_history ORDER BY deployed_at DESC LIMIT ?')
+        .all(limit) as UploadHistoryRecord[];
+    },
+  },
+
+  updatePolicies: {
+    async list(userId: string, tenantId?: string): Promise<AppUpdatePolicy[]> {
+      const database = getDb();
+      const stmt = tenantId
+        ? database.prepare(
+            'SELECT * FROM app_update_policies WHERE user_id = ? AND tenant_id = ? ORDER BY updated_at DESC'
+          )
+        : database.prepare('SELECT * FROM app_update_policies WHERE user_id = ? ORDER BY updated_at DESC');
+      const rows = (tenantId ? stmt.all(userId, tenantId) : stmt.all(userId)) as Record<string, unknown>[];
+      return rows.map(parsePolicyRow);
+    },
+
+    async getById(id: string, userId: string): Promise<AppUpdatePolicy | null> {
+      const database = getDb();
+      const row = database
+        .prepare('SELECT * FROM app_update_policies WHERE id = ? AND user_id = ?')
+        .get(id, userId) as Record<string, unknown> | undefined;
+      return row ? parsePolicyRow(row) : null;
+    },
+
+    async getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          'SELECT * FROM app_update_policies WHERE user_id = ? AND tenant_id = ? AND winget_id = ?'
+        )
+        .get(userId, tenantId, wingetId) as Record<string, unknown> | undefined;
+      return row ? parsePolicyRow(row) : null;
+    },
+
+    async listAll(): Promise<AppUpdatePolicy[]> {
+      const database = getDb();
+      const rows = database
+        .prepare('SELECT * FROM app_update_policies ORDER BY updated_at DESC')
+        .all() as Record<string, unknown>[];
+      return rows.map(parsePolicyRow);
+    },
+
+    async upsert(
+      policy: Partial<AppUpdatePolicy> & Pick<AppUpdatePolicy, 'user_id' | 'tenant_id' | 'winget_id' | 'policy_type'>
+    ): Promise<AppUpdatePolicy> {
+      const database = getDb();
+      const id = policy.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      database
+        .prepare(
+          `INSERT INTO app_update_policies (
+             id, user_id, tenant_id, winget_id, policy_type, pinned_version,
+             deployment_config, original_upload_history_id, last_auto_update_at,
+             last_auto_update_version, is_enabled, consecutive_failures, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, tenant_id, winget_id) DO UPDATE SET
+             policy_type = excluded.policy_type,
+             pinned_version = excluded.pinned_version,
+             deployment_config = excluded.deployment_config,
+             original_upload_history_id = excluded.original_upload_history_id,
+             is_enabled = excluded.is_enabled,
+             updated_at = excluded.updated_at`
+        )
+        .run(
+          id,
+          policy.user_id,
+          policy.tenant_id,
+          policy.winget_id,
+          policy.policy_type,
+          policy.pinned_version ?? null,
+          policy.deployment_config ? JSON.stringify(policy.deployment_config) : null,
+          policy.original_upload_history_id ?? null,
+          policy.last_auto_update_at ?? null,
+          policy.last_auto_update_version ?? null,
+          policy.is_enabled === false ? 0 : 1,
+          policy.consecutive_failures ?? 0,
+          policy.created_at || now,
+          policy.updated_at || now
+        );
+
+      const row = database
+        .prepare(
+          'SELECT * FROM app_update_policies WHERE user_id = ? AND tenant_id = ? AND winget_id = ?'
+        )
+        .get(policy.user_id, policy.tenant_id, policy.winget_id) as Record<string, unknown>;
+      return parsePolicyRow(row);
+    },
+
+    async update(id: string, userId: string, data: Partial<AppUpdatePolicy>): Promise<AppUpdatePolicy | null> {
+      const database = getDb();
+      const { clause, values } = buildSetClause(data as Record<string, unknown>, {
+        json: new Set(['deployment_config']),
+        boolean: new Set(['is_enabled']),
+      });
+      if (!clause) {
+        return this.getById(id, userId);
+      }
+
+      const result = database
+        .prepare(`UPDATE app_update_policies SET ${clause} WHERE id = ? AND user_id = ?`)
+        .run(...values, id, userId);
+
+      if (result.changes === 0) {
+        return null;
+      }
+      return this.getById(id, userId);
+    },
+
+    async delete(id: string, userId: string): Promise<boolean> {
+      const database = getDb();
+      const result = database
+        .prepare('DELETE FROM app_update_policies WHERE id = ? AND user_id = ?')
+        .run(id, userId);
+      return result.changes > 0;
+    },
+  },
+
+  autoUpdateHistory: {
+    async create(
+      record: Partial<AutoUpdateHistory> &
+        Pick<AutoUpdateHistory, 'policy_id' | 'from_version' | 'to_version' | 'update_type'>
+    ): Promise<AutoUpdateHistory> {
+      const database = getDb();
+      const id = record.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      database
+        .prepare(
+          `INSERT INTO auto_update_history (
+             id, policy_id, packaging_job_id, from_version, to_version,
+             update_type, status, error_message, triggered_at, completed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          record.policy_id,
+          record.packaging_job_id ?? null,
+          record.from_version,
+          record.to_version,
+          record.update_type,
+          record.status ?? 'pending',
+          record.error_message ?? null,
+          record.triggered_at || now,
+          record.completed_at ?? null
+        );
+
+      const row = database.prepare('SELECT * FROM auto_update_history WHERE id = ?').get(id) as Record<string, unknown>;
+      return parseHistoryRow(row);
+    },
+
+    async update(id: string, data: Partial<AutoUpdateHistory>): Promise<AutoUpdateHistory | null> {
+      const database = getDb();
+      const { clause, values } = buildSetClause(data as Record<string, unknown>);
+      if (!clause) {
+        const row = database.prepare('SELECT * FROM auto_update_history WHERE id = ?').get(id) as
+          | Record<string, unknown>
+          | undefined;
+        return row ? parseHistoryRow(row) : null;
+      }
+
+      const result = database
+        .prepare(`UPDATE auto_update_history SET ${clause} WHERE id = ?`)
+        .run(...values, id);
+      if (result.changes === 0) {
+        return null;
+      }
+      const row = database.prepare('SELECT * FROM auto_update_history WHERE id = ?').get(id) as Record<string, unknown>;
+      return parseHistoryRow(row);
+    },
+
+    async list(userId: string, query: AutoUpdateHistoryQuery): Promise<AutoUpdateHistoryWithPolicy[]> {
+      const database = getDb();
+      const conditions = ['p.user_id = ?'];
+      const values: unknown[] = [userId];
+
+      if (query.tenantId) {
+        conditions.push('p.tenant_id = ?');
+        values.push(query.tenantId);
+      }
+      if (query.wingetId) {
+        conditions.push('p.winget_id = ?');
+        values.push(query.wingetId);
+      }
+      if (query.status) {
+        conditions.push('h.status = ?');
+        values.push(query.status);
+      }
+
+      const stmt = database.prepare(`
+        SELECT
+          h.*,
+          p.winget_id AS policy_winget_id,
+          p.tenant_id AS policy_tenant_id,
+          j.display_name AS packaging_display_name
+        FROM auto_update_history h
+        JOIN app_update_policies p ON h.policy_id = p.id
+        LEFT JOIN packaging_jobs j ON h.packaging_job_id = j.id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY h.triggered_at DESC
+        LIMIT ? OFFSET ?
+      `);
+
+      const rows = stmt.all(...values, query.limit, query.offset) as Record<string, unknown>[];
+      return rows.map((row) => ({
+        id: row.id as string,
+        policy_id: row.policy_id as string,
+        packaging_job_id: (row.packaging_job_id as string | null) ?? null,
+        from_version: row.from_version as string,
+        to_version: row.to_version as string,
+        update_type: row.update_type as AutoUpdateHistory['update_type'],
+        status: row.status as AutoUpdateHistory['status'],
+        error_message: (row.error_message as string | null) ?? null,
+        triggered_at: row.triggered_at as string,
+        completed_at: (row.completed_at as string | null) ?? null,
+        policy: {
+          winget_id: row.policy_winget_id as string,
+          tenant_id: row.policy_tenant_id as string,
+        },
+        display_name: (row.packaging_display_name as string | null) ?? undefined,
+      }));
+    },
+
+    async countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number> {
+      if (policyIds.length === 0) return 0;
+      const database = getDb();
+      const placeholders = policyIds.map(() => '?').join(', ');
+      const conditions = [`policy_id IN (${placeholders})`, 'triggered_at >= ?'];
+      const values: unknown[] = [...policyIds, since];
+      if (status) {
+        conditions.push('status = ?');
+        values.push(status);
+      }
+      const row = database
+        .prepare(`SELECT COUNT(*) AS count FROM auto_update_history WHERE ${conditions.join(' AND ')}`)
+        .get(...values) as { count: number };
+      return row.count;
+    },
+  },
+
+  updateCheckResults: {
+    async list(userId: string, query: UpdateCheckQuery): Promise<UpdateCheckResult[]> {
+      const database = getDb();
+      const conditions = ['user_id = ?'];
+      const values: unknown[] = [userId];
+      if (query.tenantId) {
+        conditions.push('tenant_id = ?');
+        values.push(query.tenantId);
+      }
+      if (!query.includeDismissed) {
+        conditions.push('dismissed_at IS NULL');
+      }
+      if (query.criticalOnly) {
+        conditions.push('is_critical = 1');
+      }
+      const rows = database
+        .prepare(
+          `SELECT * FROM update_check_results WHERE ${conditions.join(' AND ')} ORDER BY detected_at DESC`
+        )
+        .all(...values) as Record<string, unknown>[];
+      return rows.map(parseCheckResultRow);
+    },
+
+    async upsert(
+      record: Partial<UpdateCheckResult> &
+        Pick<
+          UpdateCheckResult,
+          'user_id' | 'tenant_id' | 'winget_id' | 'intune_app_id' | 'display_name' | 'current_version' | 'latest_version'
+        >
+    ): Promise<UpdateCheckResult> {
+      const database = getDb();
+      const id = record.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      database
+        .prepare(
+          `INSERT INTO update_check_results (
+             id, user_id, tenant_id, winget_id, intune_app_id, display_name,
+             current_version, latest_version, is_critical, is_managed, large_icon_type,
+             large_icon_value, notified_at, dismissed_at, detected_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, tenant_id, winget_id, intune_app_id) DO UPDATE SET
+             display_name = excluded.display_name,
+             current_version = excluded.current_version,
+             latest_version = excluded.latest_version,
+             is_critical = excluded.is_critical,
+             is_managed = excluded.is_managed,
+             updated_at = excluded.updated_at`
+        )
+        .run(
+          id,
+          record.user_id,
+          record.tenant_id,
+          record.winget_id,
+          record.intune_app_id,
+          record.display_name,
+          record.current_version,
+          record.latest_version,
+          record.is_critical ? 1 : 0,
+          record.is_managed === false ? 0 : 1,
+          record.large_icon_type ?? null,
+          record.large_icon_value ?? null,
+          record.notified_at ?? null,
+          record.dismissed_at ?? null,
+          record.detected_at || now,
+          record.updated_at || now
+        );
+
+      const row = database
+        .prepare(
+          `SELECT * FROM update_check_results
+           WHERE user_id = ? AND tenant_id = ? AND winget_id = ? AND intune_app_id = ?`
+        )
+        .get(record.user_id, record.tenant_id, record.winget_id, record.intune_app_id) as Record<string, unknown>;
+      return parseCheckResultRow(row);
+    },
+
+    async setDismissed(ids: string[], userId: string, dismissedAt: string | null): Promise<number> {
+      if (ids.length === 0) return 0;
+      const database = getDb();
+      const placeholders = ids.map(() => '?').join(', ');
+      const result = database
+        .prepare(
+          `UPDATE update_check_results
+           SET dismissed_at = ?, updated_at = ?
+           WHERE user_id = ? AND id IN (${placeholders})`
+        )
+        .run(dismissedAt, new Date().toISOString(), userId, ...ids);
+      return result.changes;
+    },
+
+    async deleteMissing(
+      userId: string,
+      tenantId: string,
+      keep: Array<{ wingetId: string; intuneAppId: string }>
+    ): Promise<number> {
+      const database = getDb();
+      if (keep.length === 0) {
+        const result = database
+          .prepare('DELETE FROM update_check_results WHERE user_id = ? AND tenant_id = ?')
+          .run(userId, tenantId);
+        return result.changes;
+      }
+      const tuples = keep.map(() => '(?, ?)').join(', ');
+      const values: unknown[] = [];
+      for (const entry of keep) {
+        values.push(entry.wingetId, entry.intuneAppId);
+      }
+      const result = database
+        .prepare(
+          `DELETE FROM update_check_results
+           WHERE user_id = ? AND tenant_id = ? AND (winget_id, intune_app_id) NOT IN (${tuples})`
+        )
+        .run(userId, tenantId, ...values);
+      return result.changes;
+    },
+  },
+
+  curatedLicenceAttestations: {
+    async get(
+      tenantId: string,
+      attestationId: string,
+      attestationVersion: string
+    ): Promise<CuratedLicenceAttestationRecord | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          `SELECT * FROM curated_licence_attestations
+           WHERE tenant_id = ? AND attestation_id = ? AND attestation_version = ?`
+        )
+        .get(tenantId, attestationId, attestationVersion) as CuratedLicenceAttestationRecord | undefined;
+      return row ?? null;
+    },
+
+    async listByTenant(tenantId: string): Promise<CuratedLicenceAttestationRecord[]> {
+      const database = getDb();
+      return database
+        .prepare('SELECT * FROM curated_licence_attestations WHERE tenant_id = ? ORDER BY accepted_at DESC')
+        .all(tenantId) as CuratedLicenceAttestationRecord[];
+    },
+
+    async accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord> {
+      const database = getDb();
+      database
+        .prepare(
+          `INSERT INTO curated_licence_attestations (
+             id, tenant_id, app_id, attestation_id, attestation_version,
+             accepted_by_user_id, accepted_by_email, accepted_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (tenant_id, attestation_id, attestation_version) DO NOTHING`
+        )
+        .run(
+          crypto.randomUUID(),
+          record.tenant_id,
+          record.app_id,
+          record.attestation_id,
+          record.attestation_version,
+          record.accepted_by_user_id,
+          record.accepted_by_email,
+          new Date().toISOString()
+        );
+      const stored = await sqliteDb.curatedLicenceAttestations.get(
+        record.tenant_id,
+        record.attestation_id,
+        record.attestation_version
+      );
+      if (!stored) throw new Error('Failed to record licence acceptance');
+      return stored;
+    },
+  },
+
+  claimedApps: {
+    async upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord> {
+      const database = getDb();
+      // Re-claiming keeps the row id and original app name, matching the
+      // hosted route, and resets the claim to pending for the new claimant.
+      database
+        .prepare(
+          `INSERT INTO claimed_apps (
+             id, user_id, tenant_id, discovered_app_id, discovered_app_name,
+             winget_package_id, device_count_at_claim, status, claimed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+           ON CONFLICT (tenant_id, discovered_app_id) DO UPDATE SET
+             user_id = excluded.user_id,
+             winget_package_id = excluded.winget_package_id,
+             device_count_at_claim = excluded.device_count_at_claim,
+             status = 'pending',
+             claimed_at = excluded.claimed_at`
+        )
+        .run(
+          crypto.randomUUID(),
+          claim.user_id,
+          claim.tenant_id,
+          claim.discovered_app_id,
+          claim.discovered_app_name,
+          claim.winget_package_id,
+          claim.device_count_at_claim ?? 0,
+          new Date().toISOString()
+        );
+      const stored = database
+        .prepare('SELECT * FROM claimed_apps WHERE tenant_id = ? AND discovered_app_id = ?')
+        .get(claim.tenant_id, claim.discovered_app_id) as ClaimedAppRecord | undefined;
+      if (!stored) throw new Error('Failed to record claim');
+      return stored;
+    },
+
+    async listByTenant(tenantId: string): Promise<ClaimedAppRecord[]> {
+      const database = getDb();
+      return database
+        .prepare('SELECT * FROM claimed_apps WHERE tenant_id = ? ORDER BY claimed_at DESC')
+        .all(tenantId) as ClaimedAppRecord[];
+    },
+
+    async update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null> {
+      const database = getDb();
+      const fields: Record<string, unknown> = {};
+      if (data.status !== undefined) fields.status = data.status;
+      if (data.intune_app_id !== undefined) fields.intune_app_id = data.intune_app_id;
+      const { clause, values } = buildSetClause(fields);
+      if (!clause) return null;
+      const result = database
+        .prepare(`UPDATE claimed_apps SET ${clause} WHERE id = ? AND tenant_id = ?`)
+        .run(...values, id, tenantId);
+      if (result.changes === 0) return null;
+      return (database
+        .prepare('SELECT * FROM claimed_apps WHERE id = ?')
+        .get(id) as ClaimedAppRecord | undefined) ?? null;
     },
   },
 };

@@ -4,10 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
+import { resolveAssignmentGroupNames } from '@/lib/intune/assignment-group-names';
 import type { IntuneAppWithAssignments, IntuneAppAssignment } from '@/types/inventory';
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
@@ -28,34 +29,24 @@ export async function GET(
     }
 
     // Verify admin consent
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+    let tenantId = user.tenantId;
 
-    const tenantResolution = await resolveTargetTenantId({
-      supabase,
-      userId: user.userId,
-      tokenTenantId: user.tenantId,
-      requestedTenantId: mspTenantId,
-    });
+    if (supabase) {
+      const tenantResolution = await resolveTargetTenantId({
+        supabase, userId: user.userId, tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
+      if (tenantResolution.errorResponse) return tenantResolution.errorResponse;
+      tenantId = tenantResolution.tenantId;
 
-    if (tenantResolution.errorResponse) {
-      return tenantResolution.errorResponse;
-    }
-
-    const tenantId = tenantResolution.tenantId;
-
-    const { data: consentData, error: consentError } = await supabase
-      .from('tenant_consent')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .single();
-
-    if (consentError || !consentData) {
-      return NextResponse.json(
-        { error: 'Admin consent not found' },
-        { status: 403 }
-      );
+      const { data: consentData, error: consentError } = await supabase
+        .from('tenant_consent').select('*').eq('tenant_id', tenantId)
+        .eq('is_active', true).single();
+      if (consentError || !consentData) {
+        return NextResponse.json({ error: 'Admin consent not found' }, { status: 403 });
+      }
     }
 
     // Get service principal token
@@ -66,6 +57,16 @@ export async function GET(
         { error: 'Failed to get Graph API token' },
         { status: 500 }
       );
+    }
+
+    if (request.nextUrl.searchParams.get('view') === 'icon') {
+      const response = await fetch(`${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${encodeURIComponent(id)}?$select=largeIcon`, {
+        headers: { Authorization: `Bearer ${graphToken}` }, signal: request.signal,
+        cache: 'no-store',
+      });
+      if (!response.ok) return NextResponse.json({ error: 'Failed to fetch app icon' }, { status: response.status });
+      const data = await response.json();
+      return NextResponse.json({ icon: data.largeIcon || null }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     // Fetch app details and assignments in parallel
@@ -105,9 +106,14 @@ export async function GET(
       assignments = assignmentsData.value || [];
     }
 
+    const groupLookup = await resolveAssignmentGroupNames(assignments, graphToken, request.signal);
     const app: IntuneAppWithAssignments = {
       ...appData,
       assignments,
+      assignmentGroupNames: groupLookup.names,
+      ...(Object.keys(groupLookup.failures).length > 0
+        ? { assignmentGroupLookupFailures: groupLookup.failures }
+        : {}),
     };
 
     return NextResponse.json({ app });

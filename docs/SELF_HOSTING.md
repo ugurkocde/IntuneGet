@@ -2,6 +2,18 @@
 
 This guide covers deploying IntuneGet on your own infrastructure.
 
+## Server diagnostics
+
+Set `INTUNEGET_LOG_LEVEL` to `debug`, `info` (default), `warn`, or `error`, then restart the server. The level applies to existing server `console.log`, `info`, `warn`, `error`, and `debug` calls. It does not add debug messages where none exist; `trace`, `dir`, and `table` remain unchanged. Terminal arguments and stack formatting are preserved.
+
+Set `INTUNEGET_LOG_DIR` to enable persistent server logs. Docker Compose defaults to `/data/logs` in the existing data volume. Other deployments have no file output unless this variable is set. The server creates the folder on its first accepted log line. Bind mounts must allow the container user (UID/GID 1001) to write there. Do not share a log directory between server processes.
+
+`intuneget.log` rotates at 5 MiB, retaining three backups (`.1` through `.3`), for up to 20 MiB per process directory. The asynchronous queue is bounded; excess lines are dropped with a count. A filesystem failure disables file logging until restart and emits one error code on stderr. Requests continue normally. Build workers never create log files. Vercel and explicit hosted mode keep their existing console behavior and never write these files.
+
+File lines redact credential patterns, URLs, email addresses and UUIDs and flatten line breaks. This is not a guarantee that arbitrary third party messages contain no personal information; restrict log access and treat logs as sensitive. Terminal output retains the existing call site redaction. POSIX folders/files use permissions 0750/0640 when created; Windows uses the directory ACL.
+
+Next server request errors record the route pattern and numeric error digest without request URLs, headers or error contents. Root, global and dashboard page error boundaries also send a fixed area and optional numeric digest to `/api/diagnostics/page-error`. This diagnostic makes no database or Graph calls. Reports are limited to three per page load and five per minute per server process, so some events can be suppressed. It covers errors caught by these page boundaries, rather than every browser exception or a failure before the reporting JavaScript can run.
+
 ## Deployment Modes
 
 IntuneGet supports two self-hosting modes:
@@ -45,6 +57,23 @@ docker-compose up -d
 
 The application will be available at `http://localhost:3000`.
 
+#### SQLite storage in Docker
+
+With `DATABASE_MODE=sqlite`, the supplied Compose configuration stores the
+database at `/data/intuneget.db` in the `intuneget-data` named volume. The image
+prepares `/data` for the application's nonroot user, UID and GID 1001. Docker
+copies that ownership into a new or empty named volume when the container is
+created, allowing the first health check to initialize SQLite.
+
+Rebuilding and recreating the container preserves the named volume and its
+database. The image does not change ownership of existing data at startup.
+Nonempty volumes retain their existing permissions; bind mounts use the host
+directory's permissions and must allow UID 1001 to write. A custom container
+user or `volume-nocopy` requires matching storage permissions.
+
+For a manual `docker run`, set `DATABASE_PATH=/data/intuneget.db` and mount your
+persistent volume at `/data` to use the same prepared directory.
+
 > **Note on environment variables and Docker**: The Docker image is built without
 > any `NEXT_PUBLIC_*` environment variables baked in. Instead, these values are
 > injected at runtime when the container starts. This means you only need to
@@ -70,10 +99,11 @@ For other hosting providers or bare metal.
 
 Prerequisites:
 
-- **Node.js 20 or 22 LTS recommended.** The optional `better-sqlite3`
-  dependency ships prebuilt binaries for these versions. Other Node.js
-  versions trigger a source build, which requires Python 3 and, on Windows,
-  Visual Studio Build Tools.
+- **Node.js 22 or later is required.** An [LTS release](https://nodejs.org/en/about/previous-releases)
+  is recommended. The optional `better-sqlite3` dependency uses a prebuilt
+  binary when one is available for your Node.js version and platform.
+  Otherwise, it builds from source, which requires Python 3 and a C/C++
+  build toolchain (Visual Studio Build Tools on Windows).
 - If the optional `better-sqlite3` install fails, the app still runs in
   Supabase mode, but `DATABASE_MODE=sqlite` will not work until
   `better-sqlite3` is installed successfully.
@@ -141,16 +171,40 @@ Optional catalog snapshot overrides (sensible defaults, normally unset):
 
 > **App catalog in SQLite mode**: when `DATABASE_MODE=sqlite` and Supabase is
 > not configured, the app catalog (browse, search, categories, update detection,
-> SCCM matching) is served from a **downloaded SQLite snapshot** instead of
+> SCCM matching, and compact application QA results) is served from a
+> **downloaded SQLite snapshot** instead of
 > Supabase. On first use the app downloads `catalog.sqlite.gz` from the public
 > `catalog-latest` GitHub release, verifies its sha256 against the published
 > manifest, opens it read-only, and re-checks daily. Requirements: the optional
 > `better-sqlite3` package installed (it is in the Docker image), a writable data
 > directory, and outbound HTTPS to `github.com`. For a fully offline install,
 > point `CATALOG_SNAPSHOT_FILE` at a snapshot you fetched yourself.
+> QA results are refreshed by the catalog publisher and can therefore lag the
+> canonical private QA JSON by up to one snapshot cycle. Older snapshots that
+> do not contain the optional `qa_results` table remain compatible: apps simply
+> appear as not QA tested until a newer snapshot is downloaded.
 >
-> Note: other Supabase-backed surfaces (dashboard history, notifications, MSP
-> features) still require Supabase; only the catalog runs Supabase-less.
+> Note: app update policies and their auto-update history are stored locally in
+> SQLite. Other Supabase-backed surfaces (dashboard history, notifications,
+> automatic update triggering, and MSP features) still require Supabase; the
+> catalog and update policies run Supabase-less.
+
+### Notification Configuration
+
+Email preferences, webhook configurations, and notification history require
+Supabase. A deployment using only SQLite cannot store these settings.
+**Settings → Notifications** shows which configuration is missing and links to
+this section.
+
+To enable notifications, complete the [Supabase setup](DATABASE_SETUP.md),
+including its migrations, and configure the server environment variables
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY`. Keep the service role key on the server.
+
+For email delivery, also set `RESEND_API_KEY` and `RESEND_FROM_EMAIL`. The sender
+must use a [domain verified with your Resend account](https://resend.com/docs/dashboard/domains/introduction). Restart the deployment after
+changing its environment, then use **Settings → Notifications** to save your
+preferences and send a test email. Webhook delivery does not require Resend.
 
 ### Pipeline Configuration
 
@@ -210,11 +264,11 @@ The app registration is still used for interactive user sign-in.
 
 ### 1. Database Setup
 
-See [DATABASE_SETUP.md](DATABASE_SETUP.md) for detailed Supabase configuration.
+See [DATABASE_SETUP.md](DATABASE_SETUP.md) for the supported migration procedure and detailed Supabase configuration. The `000_user_profiles.sql` migration is required for authentication and Microsoft token persistence.
 
 Quick start:
 1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Run the SQL migrations from the `supabase/migrations` folder
+2. Apply the migrations from `supabase/migrations` in filename order, starting with `000_user_profiles.sql`
 3. Copy the project URL and keys to your `.env.local`
 
 ### 2. Azure AD Setup
@@ -257,7 +311,7 @@ PACKAGER_MODE=local
 
 #### 5.2 Install the Packager on Windows
 
-On a Windows machine with Node.js 18+:
+On a Windows machine with Node.js 22 or later:
 
 ```bash
 # Install globally
@@ -319,6 +373,43 @@ Expected response:
 ```
 
 For more details, see the [Packager README](../packager/README.md).
+
+## Automatic updates (SQLite mode)
+
+In `DATABASE_MODE=sqlite`, update policies and their history are stored locally
+(see the earlier note). To make them act, run the update check on a schedule and
+let the local packager do the deployment.
+
+1. Set `PACKAGER_MODE=local` so the self-hosted packager picks up queued jobs.
+2. Set `CRON_SECRET` and call the check endpoint on a schedule:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  https://intune.example.com/api/cron/check-updates
+```
+
+The check compares every recorded deployment with the catalog, records available
+updates, and queues a packaging job for each enabled `auto_update` policy whose
+app is behind. The response reports `available`, `triggered`, `skipped`, and
+`errors`.
+
+Schedule it with any external scheduler, for example cron:
+
+```cron
+30 3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://intune.example.com/api/cron/check-updates
+```
+
+or Windows Task Scheduler on the packager host. Recommended cadence is once or
+twice a day, matching the catalog sync.
+
+Differences from the hosted service: the self-hosted check uses the catalog
+only (no live Intune query), and it does not run hosted QA, send
+notifications, or require tenant consent. Rate limits and the failure circuit
+breaker still apply, and jobs are created in `queued` state for the local
+packager.
+
+The on-demand refresh endpoint (`POST /api/updates/refresh`) runs the same
+catalog check in SQLite mode.
 
 ## How Runtime Environment Injection Works
 

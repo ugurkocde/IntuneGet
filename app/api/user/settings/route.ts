@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { DEFAULT_USER_SETTINGS } from '@/types/user-settings';
 import type { UserSettings, UserSettingsUpdate } from '@/types/user-settings';
@@ -76,6 +76,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({
+        settings: DEFAULT_USER_SETTINGS,
+        hasStoredSettings: false,
+      });
+    }
+
     const supabase = createServerClient() as ReturnType<typeof createServerClient> & {
       from: (relation: string, ...args: unknown[]) => any;
     };
@@ -128,6 +135,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Saving user settings requires hosted services' },
+        { status: 503 }
       );
     }
 

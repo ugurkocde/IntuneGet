@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 
 interface DailyDeployment {
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       now.getUTCDate() - days
     ));
 
-    const supabase = createServerClient();
+    const database = getDatabase();
 
     // Define the shape of jobs returned from the query
     interface PackagingJobAnalytics {
@@ -67,19 +67,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all jobs in date range
-    const { data: jobs, error: jobsError } = await supabase
-      .from('packaging_jobs')
-      .select('id, winget_id, display_name, publisher, status, error_message, created_at, completed_at')
-      .eq('user_id', user.userId)
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: false });
-
-    if (jobsError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch analytics data' },
-        { status: 500 }
-      );
-    }
+    const jobs = (await database.jobs.getByUserId(user.userId)).filter(
+      (job) => new Date(job.created_at) >= startDate
+    );
 
     const allJobs = (jobs || []) as PackagingJobAnalytics[];
 

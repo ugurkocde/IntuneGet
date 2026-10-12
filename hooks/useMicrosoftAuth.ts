@@ -1,39 +1,25 @@
 "use client";
 
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionRequiredAuthError, AccountInfo } from "@azure/msal-browser";
+import { InteractionRequiredAuthError, InteractionStatus } from "@azure/msal-browser";
 import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
-import { useCallback, useRef, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
+
+const BLOCKED_POPUP_ERRORS = new Set(["popup_window_error", "empty_window_error"]);
+
+/** True when MSAL could not open its sign-in popup (blocked or unsupported). */
+export function isBlockedPopupError(error: unknown): boolean {
+  const code = (error as { errorCode?: unknown } | null)?.errorCode;
+  return typeof code === "string" && BLOCKED_POPUP_ERRORS.has(code);
+}
 
 /**
  * Hook to manage Microsoft authentication and access tokens
  * Provides sign-in, sign-out, and token management functionality
  */
-// Track sign-in to server for logging
-async function trackSignInToServer(
-  account: AccountInfo,
-  authMethod: 'popup' | 'redirect' | 'silent'
-): Promise<void> {
-  try {
-    await fetch('/api/auth/track-signin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: account.localAccountId,
-        email: account.username,
-        name: account.name || null,
-        tenantId: account.tenantId,
-        authMethod,
-      }),
-    });
-  } catch {
-    // Silently fail - tracking shouldn't break auth flow
-  }
-}
-
 export function useMicrosoftAuth() {
-  const { instance, accounts } = useMsal();
+  const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
   // Track sign-out in progress to prevent auth guard redirects
@@ -42,9 +28,6 @@ export function useMicrosoftAuth() {
   // Cache the current token to check expiry
   const cachedTokenRef = useRef<string | null>(null);
   const tokenExpiryRef = useRef<number | null>(null);
-
-  // Track if we've already tracked this session's sign-in
-  const hasTrackedSignInRef = useRef<string | null>(null);
 
   /**
    * Force refresh the token, bypassing cache
@@ -153,17 +136,6 @@ export function useMicrosoftAuth() {
     return getTokenExpiryMinutes(cachedTokenRef.current);
   }, []);
 
-  // Track sign-in for redirect flows (when user returns to app after redirect)
-  useEffect(() => {
-    const account = accounts[0];
-    if (account && hasTrackedSignInRef.current !== account.localAccountId) {
-      // Mark as tracked to prevent duplicate tracking
-      hasTrackedSignInRef.current = account.localAccountId;
-      // Track as redirect/silent since we're detecting an existing session
-      trackSignInToServer(account, 'silent');
-    }
-  }, [accounts]);
-
   /**
    * Sign in with Microsoft popup
    */
@@ -176,11 +148,21 @@ export function useMicrosoftAuth() {
         // when multiple Microsoft accounts are signed in.
         instance.setActiveAccount(result.account);
         document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
-        hasTrackedSignInRef.current = result.account.localAccountId;
-        await trackSignInToServer(result.account, 'popup');
       }
       return !!result;
-    } catch {
+    } catch (error) {
+      // Popup blockers and embedded browsers cannot open the sign-in window.
+      // Fall back to a full-page redirect instead of failing silently; the
+      // /redirect bridge returns to this page and MsalProvider completes it.
+      if (isBlockedPopupError(error)) {
+        try {
+          document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
+          await instance.loginRedirect({ scopes: graphScopes });
+          return true;
+        } catch {
+          return false;
+        }
+      }
       return false;
     }
   }, [instance]);
@@ -263,6 +245,7 @@ export function useMicrosoftAuth() {
   }, [getUserInfo]);
 
   return {
+    isInitializing: inProgress === InteractionStatus.Startup || inProgress === InteractionStatus.HandleRedirect,
     isAuthenticated,
     isSigningOut,
     account: accounts[0] || null,

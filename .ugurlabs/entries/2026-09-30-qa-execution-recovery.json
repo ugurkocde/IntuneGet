@@ -1,0 +1,5 @@
+{
+  "title": "QA now detects stalled tests more reliably",
+  "summary": "Application QA distinguishes tests waiting to start from active tests, detects stalled result publishing, and preserves completed test evidence during recovery.",
+  "type": "fixed"
+}

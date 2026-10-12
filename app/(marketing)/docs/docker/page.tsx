@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   description:
     "Deploy IntuneGet with Docker and Docker Compose. Complete guide for containerized self-hosting.",
   alternates: {
-    canonical: "https://intuneget.com/docs/docker",
+    canonical: "https://www.intuneget.com/docs/docker",
   },
   openGraph: {
     title: "Docker Deployment | IntuneGet Docs",
@@ -84,14 +84,36 @@ cp .env.example .env.local
 # Edit .env.local with your values
 # (Use your favorite editor)
 
-# Start the application
-docker-compose up -d`}
+# Start the application (Compose reads .env.local only via --env-file)
+docker-compose --env-file .env.local up -d`}
         </CodeBlock>
 
         <p className="text-text-secondary mt-4">
           <T>The application will be available at{" "}
           <code className="text-accent-cyan">http://localhost:3000</code></T>
         </p>
+
+        <Callout type="warning" title="Know what SQLite covers before you start">
+          <p>
+            <T>
+              Docker Compose defaults to <code>DATABASE_MODE=supabase</code>. SQLite is supported
+              for the packaging pipeline, upload history, the read-only catalog snapshot, app
+              update policies with their auto-update history, and the scheduled update check that
+              queues auto-update jobs for the local packager. Live Intune update checks,
+              notifications, and MSP features still require Supabase.
+            </T>
+          </p>
+          <p>
+            <T>
+              If you want those surfaces, configure Supabase before the first start rather than
+              migrating later. The
+            </T>{" "}
+            <Link href="/docs/environment-reference" className="text-accent-cyan hover:underline">
+              <T>environment reference</T>
+            </Link>{" "}
+            <T>lists the Supabase URL, anon key, and service role key you need.</T>
+          </p>
+        </Callout>
       </section>
 
       {/* Step by Step */}
@@ -324,7 +346,7 @@ services:
           </p>
         </Callout>
 
-        <div className="grid gap-4 sm:grid-cols-3 mt-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mt-6">
           <div className="rounded-lg border border-overlay/10 bg-bg-elevated p-4">
             <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
               <Shield className="h-4 w-4 text-accent-cyan" />

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "2038edf703a27944ec660fc50cf61eb218b676d1",
+    "runId": "37636993858",
+    "workflowCommit": "9cbcaf236c79093164c2088a87c4821bba9c6c5a",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "teamviewer",
+    "version": "15.82.6",
+    "installerUrl": "https://download.teamviewer.com/download/TeamViewer_Setup_x64.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.teamviewer.com/",
+    "discoveredAt": "2026-10-07T03:30:55.717Z",
+    "id": "2cb5aa9783833f9b025427e7"
+  },
+  "previous": null,
+  "inspection": {
+    "current": {
+      "candidateId": "2cb5aa9783833f9b025427e7",
+      "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+      "sourceUrl": "https://download.teamviewer.com/download/TeamViewer_Setup_x64.exe",
+      "finalOrigin": "https://dl.teamviewer.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "TeamViewer Germany GmbH"
+      },
+      "security": {
+        "scannedAt": "2026-10-07T14:34:04.7493203Z",
+        "signatureVersion": "1.459.601.0",
+        "status": "clean",
+        "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+        "suspicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "2cb5aa9783833f9b025427e7",
+    "packageId": "IntuneGet.Curated.TeamViewer",
+    "installerUrl": "https://download.teamviewer.com/download/TeamViewer_Setup_x64.exe",
+    "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.TeamViewer",
+      "displayName": "TeamViewer",
+      "publisher": "TeamViewer Germany GmbH",
+      "version": "15.82.6",
+      "architecture": "x64",
+      "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+      "installerType": "nullsoft",
+      "installScope": "machine",
+      "silentSwitches": "/S",
+      "uninstallCommand": "REGISTRY_UNINSTALL:TeamViewer",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_TeamViewer\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"15.82.6\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_TeamViewer\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"15.82.6\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "30E84F17906AF6F539C77E44D3F92ED128A488076E6649B4DBEBC4B058EC4D14",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.TeamViewer\",\"publisher\":\"IntuneGet QA\",\"version\":\"15.82.6\",\"wingetId\":\"IntuneGet.Curated.TeamViewer\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"15.82.6\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_TeamViewer\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"3EF2188EBE8A62B6302D72E526FA37EA7C93AB0FD34ACAF59714714429C69884\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"24625B7445D456A13880BF52BFB8AE3FFE8A1CD5EC6D12A8415A15552D79DE7A\",\"silentArgs\":\"/S\",\"sourceType\":\"nullsoft\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:TeamViewer\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"15.82.6\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_TeamViewer\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"024D434AB5AC55A72F1F57D75DBC2EB5F57ACC580E079A2189F9F6A0D154A787\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "024d434ab5ac55a72f1f57d75dbc2eb5f57acc580e079a2189f9f6a0d154a787",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testLevel": "psadt-package",
+    "upgrade": {
+      "tested": false
+    },
+    "installerVersion": "15.82.6",
+    "architecture": "x64",
+    "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+    "candidateId": "2cb5aa9783833f9b025427e7",
+    "testedAt": "2026-10-07T14:35:57.384316Z",
+    "executionProfileSha256": "30E84F17906AF6F539C77E44D3F92ED128A488076E6649B4DBEBC4B058EC4D14",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionContext": "LocalSystem"
+  },
+  "verifiedAt": "2026-10-07T14:36:02.9219224Z",
+  "authenticatedArtifact": {
+    "id": 11489653941,
+    "sha256": "f323b36ac569f0edcd3043a3e1ff02ada4ae75a6eaab08fbf65066c48147a9bf"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-07T14:48:23.637Z",
+    "unsignedException": null,
+    "upgradeException": "Automated policy: TeamViewer is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+  }
+}

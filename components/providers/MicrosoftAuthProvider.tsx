@@ -1,75 +1,69 @@
 "use client";
 
-import { MsalProvider } from "@azure/msal-react";
-import { PublicClientApplication } from "@azure/msal-browser";
+import { MsalProvider, useMsal } from "@azure/msal-react";
+import { InteractionStatus, EventType } from "@azure/msal-browser";
 import { getMsalInstance } from "@/lib/msal-config";
 import { notifyAuthHintChanged } from "@/hooks/useAuthHint";
-import { useEffect, useState, ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
-interface MicrosoftAuthProviderProps {
-  children: ReactNode;
-}
-
-export function MicrosoftAuthProvider({
-  children,
-}: MicrosoftAuthProviderProps) {
-  const pathname = usePathname();
-  const [msalInstance, setMsalInstance] =
-    useState<PublicClientApplication | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // The /redirect page handles MSAL v5 redirect bridge and must not be
-  // wrapped in MsalProvider
-  const isRedirectPage = pathname === "/redirect";
-
+// One owner for session side effects, independent of useMicrosoftAuth consumers.
+function AuthSession() {
+  const { instance, accounts, inProgress } = useMsal();
+  const tracked = useRef<string | null>(null);
+  const method = useRef('silent');
   useEffect(() => {
-    if (isRedirectPage) {
-      setIsInitialized(true);
+    const callback = instance.addEventCallback(event => {
+      if (event.eventType === EventType.LOGIN_SUCCESS) method.current = event.interactionType || 'silent';
+    });
+    return () => { if (callback) instance.removeEventCallback(callback); };
+  }, [instance]);
+  useEffect(() => {
+    if (inProgress !== InteractionStatus.None) return;
+    const account = instance.getActiveAccount() ?? accounts[0];
+    document.cookie = account
+      ? "msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400"
+      : "msal-auth-hint=; path=/; SameSite=Lax; max-age=0";
+    notifyAuthHintChanged();
+    if (!account) {
+      tracked.current = null;
+      method.current = 'silent';
       return;
     }
-    const initializeMsal = async () => {
-      try {
-        const instance = getMsalInstance();
-        await instance.initialize();
+    if (!instance.getActiveAccount()) instance.setActiveAccount(account);
+    const key = `${account.homeAccountId}:${account.tenantId}`;
+    if (tracked.current === key) return;
+    tracked.current = key;
+    void fetch('/api/auth/track-signin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: account.localAccountId,
+        email: account.username,
+        name: account.name || null,
+        tenantId: account.tenantId,
+        authMethod: method.current,
+      }),
+    }).catch(() => { /* Logging must never block authentication. */ });
+  }, [instance, accounts, inProgress]);
+  return null;
+}
 
-        // Sync auth hint cookie for server-side middleware protection
-        const accounts = instance.getAllAccounts();
-        if (accounts.length > 0) {
-          // Ensure an active account is set for returning sessions so silent
-          // token acquisition has a deterministic target across tabs/reloads.
-          if (!instance.getActiveAccount()) {
-            instance.setActiveAccount(accounts[0]);
-          }
-          document.cookie = "msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400";
-        } else {
-          document.cookie = "msal-auth-hint=; path=/; SameSite=Lax; max-age=0";
-        }
-        // Let useAuthHint consumers (marketing Header) re-read the corrected
-        // cookie right away instead of waiting for a focus/visibility event.
-        notifyAuthHintChanged();
+function AuthenticatedProvider({ children }: { children: ReactNode }) {
+  // MsalProvider owns initialization. Keep its position stable so initialization
+  // does not remount forms and repeat dashboard mount effects.
+  const [instance] = useState(getMsalInstance);
+  return (
+    <MsalProvider instance={instance}>
+      <AuthSession />
+      {children}
+    </MsalProvider>
+  );
+}
 
-        setMsalInstance(instance);
-        setIsInitialized(true);
-      } catch (error) {
-        console.error("Failed to initialize MSAL:", error);
-        // Still render children even if MSAL fails to initialize
-        setIsInitialized(true);
-      }
-    };
-
-    initializeMsal();
-  }, []);
-
-  // Show children immediately, MSAL features will be available once initialized
-  if (!isInitialized) {
-    return <>{children}</>;
-  }
-
-  if (!msalInstance) {
-    // MSAL failed to initialize, render without it
-    return <>{children}</>;
-  }
-
-  return <MsalProvider instance={msalInstance}>{children}</MsalProvider>;
+export function MicrosoftAuthProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  // MSAL v5 redirect bridge must run outside MsalProvider.
+  if (pathname === '/redirect') return <>{children}</>;
+  return <AuthenticatedProvider>{children}</AuthenticatedProvider>;
 }

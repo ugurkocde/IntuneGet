@@ -1,0 +1,5 @@
+{
+  "title": "More reliable QA publication and update scans",
+  "summary": "Completed application tests can recover publication without repeating VM installs. Update scans handle larger inventories with bounded matching and preserve cached results when a scan cannot finish.",
+  "type": "fixed"
+}

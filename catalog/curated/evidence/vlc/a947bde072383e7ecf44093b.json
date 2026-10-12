@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "37243410536",
+    "workflowCommit": "9b61bb82c18323ad543027aeaf802bf04a34b374",
+    "websiteCommit": "029b901386d9b65f3468340dbeef87df380a6a53",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "vlc",
+    "version": "3.0.24",
+    "installerUrl": "https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe",
+    "vendorSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+    "releaseNotesUrl": "https://www.videolan.org/vlc/",
+    "discoveredAt": "2026-10-04T23:20:31.724Z",
+    "id": "a947bde072383e7ecf44093b"
+  },
+  "previous": null,
+  "inspection": {
+    "current": {
+      "candidateId": "a947bde072383e7ecf44093b",
+      "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+      "sourceUrl": "https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe",
+      "finalOrigin": "https://videolan.mirror.liteserver.nl",
+      "signature": {
+        "status": "valid",
+        "publisher": "VideoLAN"
+      },
+      "security": {
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.554.0",
+        "malicious": 0,
+        "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+        "scanner": "defender",
+        "scannedAt": "2026-10-04T23:41:29.0813746Z",
+        "status": "clean",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "a947bde072383e7ecf44093b",
+    "packageId": "IntuneGet.Curated.VLC",
+    "installerUrl": "https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe",
+    "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.VLC",
+      "displayName": "VLC media player",
+      "publisher": "VideoLAN",
+      "version": "3.0.24",
+      "architecture": "x64",
+      "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+      "installerType": "nullsoft",
+      "installScope": "machine",
+      "silentSwitches": "/S",
+      "uninstallCommand": "REGISTRY_UNINSTALL:VLC media player",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VLC\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"3.0.24\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VLC\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"3.0.24\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "C2A78A3606C673B4DF196C08F651DB2F042C11EFA19042D90C0331E7CE776B48",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.VLC\",\"publisher\":\"IntuneGet QA\",\"version\":\"3.0.24\",\"wingetId\":\"IntuneGet.Curated.VLC\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"3.0.24\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VLC\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"68DD4586C05B267B7A1262359D2D8C517E2E0F11B78AF18594BEB4E5A3DC9550\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"D711E1E1FE52052748C39080C7DCE63F6B7E4C315EFEDF1774A3F1957B782FF3\",\"silentArgs\":\"/S\",\"sourceType\":\"nullsoft\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:VLC media player\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"3.0.24\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VLC\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"75C20195DE0303D5500531220B28963298CC3021A7CD46DF0E29FD5D90015800\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "upgrade": {
+      "tested": false
+    },
+    "candidateId": "a947bde072383e7ecf44093b",
+    "architecture": "x64",
+    "testLevel": "psadt-package",
+    "testedAt": "2026-10-04T23:42:51.9879879Z",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionContext": "LocalSystem",
+    "executionProfileSha256": "C2A78A3606C673B4DF196C08F651DB2F042C11EFA19042D90C0331E7CE776B48",
+    "installerVersion": "3.0.24",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3"
+  },
+  "verifiedAt": "2026-10-04T23:42:55.7845153Z",
+  "authenticatedArtifact": {
+    "id": 11318024586,
+    "sha256": "710c8c27e9b82b6d78059697b04ffb77c33dc310139d0761057ac16ee4c0f56d"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-04T23:45:22.373Z",
+    "unsignedException": null,
+    "upgradeException": "Automated policy: VLC media player is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+  }
+}

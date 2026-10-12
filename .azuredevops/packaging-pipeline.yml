@@ -69,6 +69,30 @@ variables:
     value: '50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283'
   - name: INTUNE_CONTENT_PREP_TOOL_URL
     value: 'https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe'
+  # Parameters reach the scripts only as environment variables. A template
+  # expression inside an inline script would become script source text.
+  - name: IG_JOB_ID
+    value: ${{ parameters.jobId }}
+  - name: IG_CALLBACK_URL
+    value: ${{ parameters.callbackUrl }}
+  - name: IG_WINGET_ID
+    value: ${{ parameters.wingetId }}
+  - name: IG_DISPLAY_NAME
+    value: ${{ parameters.displayName }}
+  - name: IG_PUBLISHER
+    value: ${{ parameters.publisher }}
+  - name: IG_VERSION
+    value: ${{ parameters.version }}
+  - name: IG_INSTALLER_URL
+    value: ${{ parameters.installerUrl }}
+  - name: IG_INSTALLER_SHA256
+    value: ${{ parameters.installerSha256 }}
+  - name: IG_INSTALLER_TYPE
+    value: ${{ parameters.installerType }}
+  - name: IG_SILENT_SWITCHES
+    value: ${{ parameters.silentSwitches }}
+  - name: IG_UNINSTALL_COMMAND
+    value: ${{ parameters.uninstallCommand }}
 
 pool:
   vmImage: 'windows-latest'
@@ -88,14 +112,14 @@ stages:
               targetType: 'inline'
               script: |
                 $body = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'packaging'
                   message = 'Pipeline started, preparing environment...'
                   progress = 5
                 } | ConvertTo-Json
 
                 try {
-                  Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30
+                  Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30
                 } catch {
                   Write-Warning "Failed to send status update: $_"
                 }
@@ -153,21 +177,21 @@ stages:
               script: |
                 # Send progress update
                 $body = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'packaging'
                   message = 'Downloading installer...'
                   progress = 20
                 } | ConvertTo-Json
-                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+                try { Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
 
                 $installerDir = "$(Build.SourcesDirectory)\installer"
                 New-Item -ItemType Directory -Path $installerDir -Force | Out-Null
 
                 # Extract filename from URL
-                $installerUrl = '${{ parameters.installerUrl }}'
+                $installerUrl = $env:IG_INSTALLER_URL
                 $fileName = [System.IO.Path]::GetFileName([System.Uri]::new($installerUrl).LocalPath)
                 if ([string]::IsNullOrEmpty($fileName) -or $fileName -eq '/') {
-                  $fileName = "installer.${{ parameters.installerType }}"
+                  $fileName = "installer.$env:IG_INSTALLER_TYPE"
                 }
 
                 $installerPath = "$installerDir\$fileName"
@@ -189,7 +213,7 @@ stages:
                 }
 
                 # Verify SHA256
-                $expectedHash = '${{ parameters.installerSha256 }}'
+                $expectedHash = $env:IG_INSTALLER_SHA256
                 if (-not [string]::IsNullOrEmpty($expectedHash)) {
                   Write-Host "Verifying SHA256 hash..."
                   $actualHash = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash
@@ -215,12 +239,12 @@ stages:
               script: |
                 # Send progress update
                 $body = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'packaging'
                   message = 'Creating PSADT package structure...'
                   progress = 40
                 } | ConvertTo-Json
-                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+                try { Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
 
                 $packageDir = "$(Build.SourcesDirectory)\package"
                 $psadtDir = "$(Build.SourcesDirectory)\psadt"
@@ -240,7 +264,7 @@ stages:
                 # Copy installer to Files folder
                 $filesDir = "$packageDir\Files"
                 New-Item -ItemType Directory -Path $filesDir -Force | Out-Null
-                Copy-Item -Path "$(InstallerPath)" -Destination $filesDir
+                Copy-Item -LiteralPath $env:INSTALLERPATH -Destination $filesDir
 
                 Write-Host "Package structure created at: $packageDir"
                 Get-ChildItem $packageDir
@@ -254,32 +278,50 @@ stages:
                 $packageDir = "$(Build.SourcesDirectory)\package"
                 $deployScript = "$packageDir\Invoke-AppDeployToolkit.ps1"
 
-                # Escape special characters for PowerShell string
-                $displayName = '${{ parameters.displayName }}' -replace "'", "''"
-                $publisher = '${{ parameters.publisher }}' -replace "'", "''"
-                $version = '${{ parameters.version }}'
-                $installerFileName = '$(InstallerFileName)'
-                $silentSwitches = '${{ parameters.silentSwitches }}' -replace "'", "''"
-                $uninstallCommand = '${{ parameters.uninstallCommand }}' -replace "'", "''"
-                $installScope = '${{ parameters.installScope }}'
-                $installerType = '${{ parameters.installerType }}'
+                # Values arrive as environment variables, never as script text, and
+                # are encoded for the exact PowerShell context they are embedded in.
+                # PowerShell ends a single-quoted string at U+0027 and U+2018 to
+                # U+201B, and a double-quoted string at U+0022 and U+201C to U+201E.
+                function ConvertTo-PSSingleQuotedContent([string]$Value) {
+                  [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Value)
+                }
+                function ConvertTo-PSDoubleQuotedContent([string]$Value) {
+                  $Value -replace ('[`$"' + [char]0x201C + '-' + [char]0x201E + ']'), '`$0'
+                }
+                function ConvertTo-PSCommentContent([string]$Value) {
+                  [System.Management.Automation.Language.CodeGeneration]::EscapeBlockCommentContent(
+                    ($Value -replace "[\x00-\x1F\x7F$([char]0x85)$([char]0x2028)$([char]0x2029)]+", ' '))
+                }
+
+                $displayName = ConvertTo-PSSingleQuotedContent $env:IG_DISPLAY_NAME
+                $publisher = ConvertTo-PSSingleQuotedContent $env:IG_PUBLISHER
+                $version = ConvertTo-PSSingleQuotedContent $env:IG_VERSION
+                $installerFileName = ConvertTo-PSSingleQuotedContent $env:INSTALLERFILENAME
+                $installerFileNameDoubleQuoted = ConvertTo-PSDoubleQuotedContent $env:INSTALLERFILENAME
+                $silentSwitches = ConvertTo-PSSingleQuotedContent $env:IG_SILENT_SWITCHES
+                $uninstallCommand = ConvertTo-PSSingleQuotedContent $env:IG_UNINSTALL_COMMAND
+                $installerType = $env:IG_INSTALLER_TYPE
+                $displayNameComment = ConvertTo-PSCommentContent $env:IG_DISPLAY_NAME
+                $wingetIdComment = ConvertTo-PSCommentContent $env:IG_WINGET_ID
+                $versionComment = ConvertTo-PSCommentContent $env:IG_VERSION
+                $publisherComment = ConvertTo-PSCommentContent $env:IG_PUBLISHER
 
                 # Determine install method based on installer type (PSADT v4 cmdlets)
                 $installMethod = switch ($installerType) {
                   { $_ -in 'msi', 'wix' } { "Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName'" }
-                  'msix' { "Add-AppxProvisionedPackage -Online -PackagePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -SkipLicense" }
-                  default { "Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList '$silentSwitches' -WindowStyle Hidden -WaitForMsiExec" }
+                  'msix' { "Add-AppxProvisionedPackage -Online -PackagePath `"`$(`$adtSession.DirFiles)\$installerFileNameDoubleQuoted`" -SkipLicense" }
+                  default { "Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileNameDoubleQuoted`" -ArgumentList '$silentSwitches' -WindowStyle Hidden -WaitForMsiExec" }
                 }
 
                 $scriptContent = @"
                 <#
                 .SYNOPSIS
-                    PSADT v4 deployment script for $displayName
+                    PSADT v4 deployment script for $displayNameComment
                     Generated by IntuneGet Packaging Pipeline
                 .DESCRIPTION
-                    Package ID: ${{ parameters.wingetId }}
-                    Version: $version
-                    Publisher: $publisher
+                    Package ID: $wingetIdComment
+                    Version: $versionComment
+                    Publisher: $publisherComment
                 #>
 
                 [CmdletBinding()]
@@ -412,12 +454,12 @@ stages:
               script: |
                 # Send progress update
                 $body = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'packaging'
                   message = 'Creating .intunewin package...'
                   progress = 60
                 } | ConvertTo-Json
-                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+                try { Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
 
                 $packageDir = "$(Build.SourcesDirectory)\package"
                 $outputDir = "$(Build.SourcesDirectory)\output"
@@ -515,15 +557,15 @@ stages:
               inlineScript: |
                 # Send progress update
                 $body = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'packaging'
                   message = 'Uploading package to storage...'
                   progress = 80
                 } | ConvertTo-Json
-                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+                try { Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
 
                 $intunewinPath = "$(IntunewinPath)"
-                $blobName = "${{ parameters.jobId }}/${{ parameters.wingetId }}_${{ parameters.version }}.intunewin"
+                $blobName = "$($env:IG_JOB_ID)/$($env:IG_WINGET_ID)_$($env:IG_VERSION).intunewin"
 
                 Write-Host "Uploading to blob: $blobName"
 
@@ -562,11 +604,11 @@ stages:
                 $encryptionInfo = '$(EncryptionInfo)' | ConvertFrom-Json -AsHashtable
 
                 $result = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'completed'
                   message = 'Package created successfully'
                   progress = 100
-                  intunewinUrl = '$(BlobSasUrl)'
+                  intunewinUrl = $env:BLOBSASURL
                   intunewinSizeBytes = [long]'$(IntunewinSizeBytes)'
                   unencryptedContentSize = [long]'$(UnencryptedContentSize)'
                   encryptionInfo = $encryptionInfo
@@ -578,7 +620,7 @@ stages:
                 Write-Host $result
 
                 try {
-                  Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $result -ContentType 'application/json' -TimeoutSec 60
+                  Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $result -ContentType 'application/json' -TimeoutSec 60
                   Write-Host "Callback sent successfully"
                 } catch {
                   Write-Error "Failed to send callback: $_"
@@ -593,7 +635,7 @@ stages:
               targetType: 'inline'
               script: |
                 $result = @{
-                  jobId = '${{ parameters.jobId }}'
+                  jobId = $env:IG_JOB_ID
                   status = 'failed'
                   message = 'Pipeline failed - check Azure DevOps for details'
                   progress = 0
@@ -605,7 +647,7 @@ stages:
                 Write-Host "Sending failure callback..."
 
                 try {
-                  Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $result -ContentType 'application/json' -TimeoutSec 60
+                  Invoke-RestMethod -Uri $env:IG_CALLBACK_URL -Method POST -Body $result -ContentType 'application/json' -TimeoutSec 60
                 } catch {
                   Write-Warning "Failed to send failure callback: $_"
                 }

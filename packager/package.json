@@ -1,6 +1,6 @@
 {
   "name": "@ugurkocde/intuneget-packager",
-  "version": "1.3.0",
+  "version": "1.4.1",
   "description": "Local Windows packager service for IntuneGet - enables true self-hosting without GitHub Actions dependency",
   "main": "dist/index.js",
   "bin": {
@@ -33,12 +33,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ugurkocde/IntuneGet-Website.git",
+    "url": "https://github.com/ugurkocde/IntuneGet.git",
     "directory": "packager"
   },
-  "homepage": "https://github.com/ugurkocde/IntuneGet-Website/tree/main/packager#readme",
+  "homepage": "https://github.com/ugurkocde/IntuneGet/tree/main/packager#readme",
   "bugs": {
-    "url": "https://github.com/ugurkocde/IntuneGet-Website/issues"
+    "url": "https://github.com/ugurkocde/IntuneGet/issues"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

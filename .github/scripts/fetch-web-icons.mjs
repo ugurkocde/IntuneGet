@@ -20,6 +20,11 @@ import sharp from 'sharp';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const MAX_APPS = parseInt(process.env.MAX_APPS || '500', 10);
+// Wall-clock ceiling for the fetch loop. Apps we never reach keep their current
+// state (no attempt counter is touched), so the next run picks them up again.
+// This lets MAX_APPS be raised for throughput without the job overrunning.
+const BUDGET_MINUTES = parseInt(process.env.BUDGET_MINUTES || '0', 10);
+const BUDGET_MS = BUDGET_MINUTES > 0 ? BUDGET_MINUTES * 60_000 : Infinity;
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
 const ICON_SIZES = [32, 64, 128, 256];
 // When true, target apps that already have an icon and only generate sizes
@@ -187,6 +192,34 @@ async function resizeAndSave(sourceBuffer, outputDir) {
     }
   }
   return MISSING_SIZES_ONLY ? written > 0 : success;
+}
+
+/**
+ * Family inheritance: locale/variant packages (e.g. Mozilla.Firefox.es-ES)
+ * should reuse the icon already produced for their base package
+ * (e.g. Mozilla.Firefox) instead of hitting the network tiers independently.
+ * Walks proper prefixes of the winget ID from longest to shortest and returns
+ * the best available source buffer (prefers 256 > 128 > 64).
+ * Returns { buffer, ancestorId } on success, null when no ancestor has an icon.
+ */
+function findAncestorIcon(wingetId) {
+  const parts = wingetId.split('.');
+  for (let take = parts.length - 1; take >= 1; take--) {
+    const ancestorId = parts.slice(0, take).join('.');
+    const ancestorDir = path.join(ICONS_DIR, ancestorId);
+    if (!fs.existsSync(ancestorDir)) continue;
+    for (const size of [256, 128, 64]) {
+      const p = path.join(ancestorDir, `icon-${size}.png`);
+      if (fs.existsSync(p)) {
+        try {
+          return { buffer: fs.readFileSync(p), ancestorId };
+        } catch {
+          continue;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -402,6 +435,9 @@ async function fetchAppsNeedingIcons(limit) {
   let offset = 0;
   let cursor = null;
   let cursorReset = false;
+  // Wrapping revisits ids from the start, so the same row can come back in the
+  // second pass. Dedupe rather than fetching it twice.
+  const seen = new Set();
 
   if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
     const { data } = await supabase
@@ -452,18 +488,37 @@ async function fetchAppsNeedingIcons(limit) {
       process.exit(1);
     }
 
-    if (data.length === 0 && cursor && !cursorReset) {
+    const cursorMode = !MISSING_SIZES_ONLY && !BINARY_GAP_FILL;
+    // The cursor walks winget_id order and has to wrap to pick up everything
+    // before where it stopped last time. Wrapping only on an empty page was
+    // not enough: a short page also means the tail is exhausted, and breaking
+    // there ended the sweep with the whole head of the alphabet unvisited. A
+    // request for 2,500 apps would return 209 and report itself complete.
+    const exhausted = data.length < batchSize;
+    if (exhausted && cursorMode && cursor && !cursorReset) {
+      for (const row of data) {
+        if (!seen.has(row.winget_id)) {
+          seen.add(row.winget_id);
+          apps.push(row);
+        }
+      }
       cursor = null;
       cursorReset = true;
       continue;
     }
     if (data.length === 0) break;
-    apps.push(...data);
-    offset += data.length;
-    if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) cursor = data[data.length - 1].winget_id;
 
-    // If we got fewer than requested, there are no more rows
-    if (data.length < batchSize) break;
+    for (const row of data) {
+      if (seen.has(row.winget_id)) continue;
+      seen.add(row.winget_id);
+      apps.push(row);
+    }
+    offset += data.length;
+    if (cursorMode) cursor = data[data.length - 1].winget_id;
+
+    // A short page means no more rows in this direction. After a wrap there is
+    // nowhere left to go, so the sweep is genuinely done.
+    if (exhausted) break;
   }
 
   return apps;
@@ -488,9 +543,24 @@ async function main() {
   let faviconHits = 0;
   let storeHits = 0;
   let homepageHits = 0;
+  let inheritedHits = 0;
   let misses = 0;
 
-  for (const app of apps) {
+  const startedAt = Date.now();
+  let budgetStopped = 0;
+  // Index of the last app the loop actually reached. The cursor below must not
+  // advance past it, or a budget stop would silently skip the untouched tail.
+  let lastReachedIndex = apps.length - 1;
+
+  for (const [index, app] of apps.entries()) {
+    if (Date.now() - startedAt > BUDGET_MS) {
+      budgetStopped = apps.length - index;
+      lastReachedIndex = index - 1;
+      console.log(
+        `Budget of ${BUDGET_MINUTES}m reached - stopping early, ${budgetStopped} apps left for the next run`
+      );
+      break;
+    }
     const wingetId = app.winget_id;
     const publisher = wingetId.split('.')[0];
     const outputDir = path.join(ICONS_DIR, wingetId);
@@ -513,6 +583,28 @@ async function main() {
 
     let source = null;
     let buffer = null;
+
+    // Family inheritance first: a locale/variant package whose base package
+    // already has an icon never needs a network fetch. This keeps every
+    // variant visually consistent with its product family and avoids
+    // publisher-level images (org avatars, favicons) leaking onto variants.
+    if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
+      const ancestor = findAncestorIcon(wingetId);
+      if (ancestor) {
+        const savedInherited = await resizeAndSave(ancestor.buffer, outputDir);
+        if (savedInherited) {
+          console.log(`  [family_inherited] ${wingetId} <- ${ancestor.ancestorId}`);
+          results.push({
+            winget_id: wingetId,
+            status: 'success',
+            icon_source: 'family_inherited',
+            icon_path: `/icons/${wingetId}/`,
+          });
+          inheritedHits++;
+          continue;
+        }
+      }
+    }
 
     if (MISSING_SIZES_ONLY) {
       // Re-use the source that originally produced this app's icon so the
@@ -598,6 +690,7 @@ async function main() {
         if (source === 'github_avatar') githubHits++;
         else if (source === 'microsoft_store') storeHits++;
         else if (source === 'homepage_image') homepageHits++;
+        else if (source === 'family_inherited') inheritedHits++;
         else faviconHits++;
         continue;
       }
@@ -617,30 +710,34 @@ async function main() {
   console.log(`Microsoft Store: ${storeHits}`);
   console.log(`GitHub avatars: ${githubHits}`);
   console.log(`Homepage images: ${homepageHits}`);
+  console.log(`Family inherited: ${inheritedHits}`);
   console.log(`Favicons: ${faviconHits}`);
   console.log(`No icon found: ${misses}`);
-  console.log(`Total processed: ${apps.length}`);
+  console.log(`Total processed: ${lastReachedIndex + 1}`);
+  if (budgetStopped > 0) {
+    console.log(`Deferred to next run (budget): ${budgetStopped}`);
+  }
 
   fs.writeFileSync('web-icon-results.json', JSON.stringify(results, null, 2));
 
   if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
-    const nextCursor = apps.length > 0 ? apps[apps.length - 1].winget_id : null;
-    const { error: cursorError } = await supabase.from('curated_sync_status').upsert({
-      id: 'extract-icons-web-cursor',
-      metadata: { last_winget_id: nextCursor },
-      updated_at: new Date().toISOString(),
-    });
-    if (cursorError) throw new Error(`Failed to persist web icon cursor: ${cursorError.message}`);
+    // The cursor is persisted by a later workflow step, only after the fetched
+    // icons have been committed. Upserting it here would advance the cursor
+    // even when the commit fails, silently skipping these apps until the
+    // cursor wraps around.
+    const nextCursor = lastReachedIndex >= 0 ? apps[lastReachedIndex].winget_id : null;
+    fs.writeFileSync('web-icon-cursor.json', JSON.stringify({ last_winget_id: nextCursor }));
   }
 
   // Write counts for GitHub Actions output
   const outputFile = process.env.GITHUB_OUTPUT;
   if (outputFile) {
-    fs.appendFileSync(outputFile, `github_hits=${githubHits}\n`);
-    fs.appendFileSync(outputFile, `favicon_hits=${faviconHits}\n`);
-    fs.appendFileSync(outputFile, `store_hits=${storeHits}\n`);
-    fs.appendFileSync(outputFile, `homepage_hits=${homepageHits}\n`);
-    fs.appendFileSync(outputFile, `total_hits=${githubHits + faviconHits + storeHits + homepageHits}\n`);
+  fs.appendFileSync(outputFile, `github_hits=${githubHits}\n`);
+  fs.appendFileSync(outputFile, `favicon_hits=${faviconHits}\n`);
+  fs.appendFileSync(outputFile, `store_hits=${storeHits}\n`);
+  fs.appendFileSync(outputFile, `homepage_hits=${homepageHits}\n`);
+  fs.appendFileSync(outputFile, `inherited_hits=${inheritedHits}\n`);
+  fs.appendFileSync(outputFile, `total_hits=${githubHits + faviconHits + storeHits + homepageHits + inheritedHits}\n`);
   }
 }
 

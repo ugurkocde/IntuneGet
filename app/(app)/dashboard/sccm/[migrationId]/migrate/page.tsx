@@ -33,6 +33,9 @@ import type {
   SccmMigrationResult,
   SccmMigrationOptions,
 } from '@/types/sccm';
+import type { Win32CartItem } from '@/types/upload';
+import type { MsiDetectionRule } from '@/types/intune';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 
 interface PageProps {
   params: Promise<{ migrationId: string }>;
@@ -154,7 +157,21 @@ export default function MigratePage({ params }: PageProps) {
       // Add cart items
       if (data.cartItems && Array.isArray(data.cartItems)) {
         for (const item of data.cartItems) {
-          addItem(item);
+          const cartItem = item as Win32CartItem;
+          const productCode = (
+            cartItem.detectionRules?.find((rule) => rule.type === 'msi') as
+              | MsiDetectionRule
+              | undefined
+          )?.productCode;
+          addItem({
+            ...cartItem,
+            requirementRules: buildCartItemRequirementRules(
+              cartItem.displayName,
+              cartItem.installerType,
+              productCode,
+              cartItem.assignments
+            ),
+          });
         }
         openCart();
       }

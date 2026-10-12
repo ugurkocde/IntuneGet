@@ -1,0 +1,5 @@
+{
+  "title": "More reliable release history details",
+  "summary": "Release history now loads vendor links and scan details in smaller groups and retries temporary database failures. A failed group no longer hides details for every app on the page. Existing sync status remains separate from detail-loading errors.",
+  "type": "fixed"
+}

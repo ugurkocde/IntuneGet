@@ -237,23 +237,28 @@ ALTER TABLE sccm_winget_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sccm_migration_history ENABLE ROW LEVEL SECURITY;
 
 -- Service role has full access
+DROP POLICY IF EXISTS "Service role full access sccm_migrations" ON sccm_migrations;
 CREATE POLICY "Service role full access sccm_migrations"
   ON sccm_migrations FOR ALL
   USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access sccm_apps" ON sccm_apps;
 CREATE POLICY "Service role full access sccm_apps"
   ON sccm_apps FOR ALL
   USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access sccm_winget_mappings" ON sccm_winget_mappings;
 CREATE POLICY "Service role full access sccm_winget_mappings"
   ON sccm_winget_mappings FOR ALL
   USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access sccm_migration_history" ON sccm_migration_history;
 CREATE POLICY "Service role full access sccm_migration_history"
   ON sccm_migration_history FOR ALL
   USING (auth.role() = 'service_role');
 
 -- Public read access for global mappings
+DROP POLICY IF EXISTS "Public read global sccm_winget_mappings" ON sccm_winget_mappings;
 CREATE POLICY "Public read global sccm_winget_mappings"
   ON sccm_winget_mappings FOR SELECT
   USING (tenant_id IS NULL);
@@ -269,16 +274,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_sccm_migrations_updated_at ON sccm_migrations;
 CREATE TRIGGER trigger_sccm_migrations_updated_at
   BEFORE UPDATE ON sccm_migrations
   FOR EACH ROW
   EXECUTE FUNCTION update_sccm_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_sccm_apps_updated_at ON sccm_apps;
 CREATE TRIGGER trigger_sccm_apps_updated_at
   BEFORE UPDATE ON sccm_apps
   FOR EACH ROW
   EXECUTE FUNCTION update_sccm_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_sccm_mappings_updated_at ON sccm_winget_mappings;
 CREATE TRIGGER trigger_sccm_mappings_updated_at
   BEFORE UPDATE ON sccm_winget_mappings
   FOR EACH ROW
@@ -423,29 +431,26 @@ RETURNS TABLE (
 LANGUAGE sql STABLE AS $$
   SELECT
     COUNT(*) as total_apps,
-    COUNT(*) FILTER (WHERE match_status = 'matched') as matched_apps,
-    COUNT(*) FILTER (WHERE match_status = 'partial') as partial_match_apps,
-    COUNT(*) FILTER (WHERE match_status = 'unmatched') as unmatched_apps,
-    COUNT(*) FILTER (WHERE match_status IN ('excluded', 'skipped')) as excluded_apps,
-    COUNT(*) FILTER (WHERE match_status = 'pending') as pending_apps,
-    COUNT(*) FILTER (WHERE migration_status = 'completed') as migrated_apps,
-    COUNT(*) FILTER (WHERE migration_status = 'failed') as failed_apps,
-    COALESCE(SUM(deployment_count), 0) as total_deployment_count,
-    COUNT(*) FILTER (WHERE is_deployed = TRUE) as deployed_apps_count,
-    jsonb_object_agg(
-      COALESCE(technology, 'Unknown'),
-      tech_count
-    ) as technology_breakdown
-  FROM sccm_apps
-  WHERE migration_id = p_migration_id
-  CROSS JOIN LATERAL (
-    SELECT technology as tech, COUNT(*) as tech_count
-    FROM sccm_apps
-    WHERE migration_id = p_migration_id
-    GROUP BY technology
-  ) tech_counts
-  GROUP BY tech_counts.tech, tech_counts.tech_count
-  LIMIT 1;
+    COUNT(*) FILTER (WHERE a.match_status = 'matched') as matched_apps,
+    COUNT(*) FILTER (WHERE a.match_status = 'partial') as partial_match_apps,
+    COUNT(*) FILTER (WHERE a.match_status = 'unmatched') as unmatched_apps,
+    COUNT(*) FILTER (WHERE a.match_status IN ('excluded', 'skipped')) as excluded_apps,
+    COUNT(*) FILTER (WHERE a.match_status = 'pending') as pending_apps,
+    COUNT(*) FILTER (WHERE a.migration_status = 'completed') as migrated_apps,
+    COUNT(*) FILTER (WHERE a.migration_status = 'failed') as failed_apps,
+    COALESCE(SUM(a.deployment_count), 0) as total_deployment_count,
+    COUNT(*) FILTER (WHERE a.is_deployed = TRUE) as deployed_apps_count,
+    COALESCE((
+      SELECT jsonb_object_agg(tech_counts.technology, tech_counts.tech_count)
+      FROM (
+        SELECT COALESCE(technology, 'Unknown') AS technology, COUNT(*) AS tech_count
+        FROM sccm_apps
+        WHERE migration_id = p_migration_id
+        GROUP BY COALESCE(technology, 'Unknown')
+      ) tech_counts
+    ), '{}'::jsonb) as technology_breakdown
+  FROM sccm_apps a
+  WHERE a.migration_id = p_migration_id;
 $$;
 
 -- Get SCCM mapping by name (for matching)
@@ -518,7 +523,7 @@ INSERT INTO sccm_winget_mappings (
   winget_package_name,
   confidence,
   is_verified
-) VALUES
+) SELECT * FROM (VALUES
   -- Browsers
   ('Google Chrome', 'google chrome', 'Google', 'Google.Chrome', 'Google Chrome', 1.0, TRUE),
   ('Mozilla Firefox', 'mozilla firefox', 'Mozilla', 'Mozilla.Firefox', 'Mozilla Firefox', 1.0, TRUE),
@@ -552,4 +557,18 @@ INSERT INTO sccm_winget_mappings (
   -- Security
   ('KeePass', 'keepass', 'KeePass', 'DominikReichl.KeePass', 'KeePass', 1.0, TRUE),
   ('Bitwarden', 'bitwarden', 'Bitwarden', 'Bitwarden.Bitwarden', 'Bitwarden', 1.0, TRUE)
-ON CONFLICT (sccm_display_name_normalized, tenant_id) DO NOTHING;
+) AS seed (
+  sccm_display_name,
+  sccm_display_name_normalized,
+  sccm_manufacturer,
+  winget_package_id,
+  winget_package_name,
+  confidence,
+  is_verified
+)
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM sccm_winget_mappings existing
+  WHERE existing.sccm_display_name_normalized = seed.sccm_display_name_normalized
+    AND existing.tenant_id IS NULL
+);

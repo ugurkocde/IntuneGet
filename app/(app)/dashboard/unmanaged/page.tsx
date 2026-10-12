@@ -17,6 +17,7 @@ import {
   ShoppingCart,
   ArrowRight,
 } from 'lucide-react';
+import { VirtualAppList } from '@/components/VirtualAppList';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { AnimatedStatCard, StatCardGrid } from '@/components/dashboard/AnimatedStatCard';
@@ -413,44 +414,15 @@ export default function UnmanagedAppsPage() {
           onRefresh={handleRefresh}
           onViewAll={clearFilters}
         />
-      ) : viewMode === 'grid' ? (
-        <motion.div
-          variants={staggerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-        >
-          {visibleApps.map((app) => (
-            <motion.div key={app.discoveredAppId} variants={itemVariants}>
-              <UnmanagedAppCard
-                app={app}
-                onClaim={() => setClaimModalApp(app)}
-                onLink={() => setLinkModalApp(app)}
-                onDeviceCountClick={() => setDeviceListApp(app)}
-                isClaimLoading={claimingAppId === app.discoveredAppId}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
       ) : (
-        <motion.div
-          variants={staggerVariants}
-          initial="hidden"
-          animate="visible"
-          className="space-y-2"
-        >
-          {visibleApps.map((app) => (
-            <motion.div key={app.discoveredAppId} variants={itemVariants}>
-              <UnmanagedListRow
-                app={app}
-                onClaim={() => setClaimModalApp(app)}
-                onLink={() => setLinkModalApp(app)}
-                onDeviceCountClick={() => setDeviceListApp(app)}
-                isClaimLoading={claimingAppId === app.discoveredAppId}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
+        <VirtualAppList items={visibleApps} grid={viewMode === 'grid'}
+          itemKey={app => app.discoveredAppId}
+          renderItem={app => {
+            const Item = viewMode === 'grid' ? UnmanagedAppCard : UnmanagedListRow;
+            return <Item app={app} onClaim={() => setClaimModalApp(app)}
+              onLink={() => setLinkModalApp(app)} onDeviceCountClick={() => setDeviceListApp(app)}
+              isClaimLoading={claimingAppId === app.discoveredAppId} />;
+          }} />
       )}
 
       {/* Incremental rendering: reveal the next batch on demand */}

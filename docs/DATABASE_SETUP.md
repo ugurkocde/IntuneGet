@@ -1,252 +1,133 @@
 # Database Setup
 
-This guide covers configuring Supabase for IntuneGet.
+IntuneGet uses Supabase PostgreSQL for application state, catalog data, and server-side Microsoft authentication data.
 
-## Overview
+## Apply the migrations
 
-IntuneGet uses Supabase (PostgreSQL) for:
-- Storing deployment status and history
-- Real-time updates via Supabase Realtime
-- App catalog metadata
+Supabase CLI migrations use the version prefix before the first underscore as
+their unique history identifier. A different filename suffix does not create a
+different version. See the [Supabase migration history reference](https://supabase.com/docs/reference/cli/supabase-migration-repair).
 
-## Options
+Migration versions are unique. The former duplicate versions reported in
+[issue #449](https://github.com/ugurkocde/IntuneGet/issues/449) are separated into
+`014_sccm_migration.sql`, `0141_winget_index_v2.sql`,
+`015_enhanced_error_handling.sql`, and `0151_msp_batch_and_webhooks.sql`.
+Use the CLI's migration version order rather than sorting complete filenames.
 
-### Option 1: Supabase Cloud (Recommended)
+Use Supabase CLI 2.115.0 or later for these migrations and confirm the installed
+version with `supabase --version` before following either installation path.
+The migration version ordering was checked with CLI 2.115.0. A tool that sorts
+complete filenames places `0141_...` before `014_...` and `0151_...` before
+`015_...`, which does not match version order.
 
-Easiest option with a generous free tier.
-
-1. Create account at [supabase.com](https://supabase.com)
-2. Create a new project
-3. Run migrations
-4. Copy credentials to environment
-
-### Option 2: Self-Hosted Supabase
-
-For enterprises requiring data sovereignty.
-
-See [Supabase Self-Hosting Docs](https://supabase.com/docs/guides/self-hosting)
-
-### Option 3: Plain PostgreSQL
-
-IntuneGet can work with plain PostgreSQL, but you'll lose:
-- Real-time subscriptions (deployment status updates)
-- Supabase Auth (if used in future)
-- Supabase Studio for management
-
-## Supabase Cloud Setup
-
-### Step 1: Create Project
-
-1. Go to [supabase.com](https://supabase.com)
-2. Sign up or log in
-3. Click **New Project**
-4. Fill in:
-   - **Name**: `intuneget`
-   - **Database Password**: Generate a strong password
-   - **Region**: Choose closest to your users
-5. Click **Create new project**
-6. Wait for project to provision
-
-### Step 2: Run Migrations
-
-The database schema is defined in `supabase/migrations/`.
-
-**Option A: Using Supabase CLI**
+For a fresh installation, install the CLI using
+the [official installation guide](https://supabase.com/docs/guides/local-development/cli/getting-started),
+then use the normal deployment commands:
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Login to Supabase
 supabase login
-
-# Link to your project
 supabase link --project-ref your-project-ref
-
-# Run migrations
 supabase db push
 ```
 
-**Option B: Using SQL Editor**
+Always start with `000_user_profiles.sql`. This migration creates the profile table required for authentication and token persistence.
 
-1. Go to your Supabase project dashboard
-2. Click **SQL Editor** in the left menu
-3. Open each file in `supabase/migrations/` in order
-4. Copy contents and run in SQL Editor
+Direct SQL Editor execution does not maintain the CLI migration history and is
+not an interchangeable fallback for `db push`. If an installation already used
+that method, preserve its schema and reconcile its actual history before moving
+to CLI migrations.
 
-### Step 3: Get Credentials
+## Credentials
 
-1. Go to **Settings** > **API** in your Supabase dashboard
-2. Copy these values:
+From **Settings > API** in the Supabase dashboard, configure:
 
-| Setting | Environment Variable |
-|---------|---------------------|
+| Supabase value | Environment variable |
+|---|---|
 | Project URL | `NEXT_PUBLIC_SUPABASE_URL` |
-| anon public | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
-| service_role | `SUPABASE_SERVICE_ROLE_KEY` |
+| Anonymous key | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| Service role key | `SUPABASE_SERVICE_ROLE_KEY` |
 
-## Database Schema
+Keep the service role key server-side. The `user_profiles` table contains Microsoft access and refresh tokens and is accessible only to the service role through row level security.
 
-### Tables
+## Core tables
 
-#### `deployments`
+- `user_profiles`: Microsoft identity profile, tenant, and token persistence
+- `packaging_jobs`: packaging and Intune upload job state
+- `curated_apps`: curated application catalog metadata
 
-Tracks all deployment requests and their status.
+Additional feature tables are introduced by later migrations. Treat [`supabase/migrations/`](../supabase/migrations/) as the source of truth for the current schema.
 
-```sql
-CREATE TABLE deployments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  user_id TEXT NOT NULL,
-  tenant_id TEXT NOT NULL,
-  app_id TEXT NOT NULL,
-  app_name TEXT NOT NULL,
-  status TEXT DEFAULT 'pending',
-  error_message TEXT,
-  intune_app_id TEXT,
-  workflow_run_id TEXT
-);
-```
+## Updating an installation
 
-#### `apps`
+Before applying an update, inspect the linked project's history with
+`supabase migration list`. Once version uniqueness and history alignment have
+been established, `supabase db push` applies pending migrations.
 
-Stores app catalog metadata.
+`supabase migration repair` changes history records; it does not execute SQL.
+Mark a version as applied only after verifying that its complete schema changes
+already exist. Do not delete history or mark missing schema as applied.
 
-```sql
-CREATE TABLE apps (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  publisher TEXT,
-  version TEXT,
-  description TEXT,
-  icon_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+### Upgrading an installation created before the version correction
 
-### Row Level Security (RLS)
+Back up the database and inspect `supabase migration list` before any write.
+Existing `014` and `015` records do not prove that both formerly duplicated
+files ran. Each record may belong to either file that shared its version, so
+check all four migrations separately. Do not treat a recorded `014` or `015`
+as proof of its schema:
 
-RLS policies ensure users can only access their own data:
+* For `014`, compare the complete definitions in
+  [`014_sccm_migration.sql`](../supabase/migrations/014_sccm_migration.sql):
+  the `sccm_migrations`, `sccm_apps`, `sccm_winget_mappings`, and
+  `sccm_migration_history` tables with their columns, foreign keys, and indexes,
+  including the generated `fts` column and its GIN index, enabled row level
+  security and the five policies, the seven `sccm` functions, and the four
+  triggers. The global mapping seed rows are data, not schema; their absence
+  alone does not establish a schema mismatch.
+* For `015`, compare the `error_stage`, `error_category`, and `error_code`
+  columns (TEXT), `error_details` (JSONB), their column comments, and the
+  `idx_packaging_jobs_error_code` and `idx_packaging_jobs_error_category`
+  partial indexes on the `packaging_jobs` table from `001_packaging_jobs.sql`
+  with
+  [`015_enhanced_error_handling.sql`](../supabase/migrations/015_enhanced_error_handling.sql).
+  If `packaging_jobs` is missing, stop and reconcile the installation.
+* For `0141`, if it is local only, compare `curated_apps.winget_last_update` and
+  `idx_curated_apps_winget_last_update` with
+  [`0141_winget_index_v2.sql`](../supabase/migrations/0141_winget_index_v2.sql).
+* For `0151`, if it is local only, compare the complete definitions in
+  [`0151_msp_batch_and_webhooks.sql`](../supabase/migrations/0151_msp_batch_and_webhooks.sql):
+  the four `msp_batch_deployments`, `msp_batch_deployment_items`,
+  `msp_webhook_configurations`, and `msp_webhook_deliveries` tables, their indexes,
+  the `update_msp_webhook_updated_at` function,
+  `trigger_update_msp_webhook_updated_at`, the four service role policies and
+  enabled row level security, and the `msp_batch_deployment_stats` view.
 
-```sql
--- Users can only see their own deployments
-CREATE POLICY "Users can view own deployments"
-  ON deployments FOR SELECT
-  USING (auth.uid()::text = user_id);
+If all changes for a local only version already match, reconcile only that
+version's history, for example `supabase migration repair --status applied 0141`.
+Use `0151` instead only after its own complete schema has been verified.
+Preserve the original `014` and `015` records.
 
--- Service role can insert/update all deployments
-CREATE POLICY "Service can manage deployments"
-  ON deployments FOR ALL
-  USING (auth.role() = 'service_role');
-```
+If all changes for a pending version are absent, inspect
+`supabase db push --include-all --dry-run` and confirm every listed migration is
+appropriate before running `supabase db push --include-all`. This allows missing
+versions older than the latest recorded version to run in migration order.
+If only some changes exist, definitions differ, or history is ambiguous, stop
+and reconcile that installation before pushing. The `0151` trigger and policies
+are not replay safe and can fail with SQLSTATE `42710` if executed again.
 
-## Real-Time Configuration
+If a recorded `014` or `015` lacks its complete schema, stop and reconcile that
+installation before pushing. `db push` will not run a version that is already
+recorded, and `trigger_sccm_apps_stats_update` is not replay safe.
 
-IntuneGet uses Supabase Realtime for live deployment status updates.
-
-### Enable Realtime
-
-1. Go to **Database** > **Replication** in Supabase dashboard
-2. Enable replication for the `deployments` table
-
-### Client Configuration
-
-The app subscribes to deployment updates:
-
-```typescript
-supabase
-  .channel('deployments')
-  .on('postgres_changes', {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'deployments',
-    filter: `user_id=eq.${userId}`
-  }, handleUpdate)
-  .subscribe()
-```
-
-## Backup and Recovery
-
-### Automated Backups (Supabase Cloud)
-
-- Free tier: Daily backups, 7-day retention
-- Pro tier: Point-in-time recovery
-
-### Manual Backup
-
-```bash
-# Using pg_dump
-pg_dump -h db.your-project.supabase.co \
-  -U postgres \
-  -d postgres \
-  -F c \
-  -f backup.dump
-
-# Restore
-pg_restore -h db.your-project.supabase.co \
-  -U postgres \
-  -d postgres \
-  backup.dump
-```
-
-## Performance Optimization
-
-### Indexes
-
-Recommended indexes for production:
-
-```sql
--- Speed up deployment queries by user
-CREATE INDEX idx_deployments_user_id ON deployments(user_id);
-
--- Speed up deployment queries by tenant
-CREATE INDEX idx_deployments_tenant_id ON deployments(tenant_id);
-
--- Speed up status filtering
-CREATE INDEX idx_deployments_status ON deployments(status);
-
--- Composite index for common queries
-CREATE INDEX idx_deployments_user_status ON deployments(user_id, status);
-```
-
-### Connection Pooling
-
-For high-traffic deployments, use Supabase's connection pooler:
-
-1. Go to **Settings** > **Database**
-2. Copy the **Connection pooling** URL
-3. Use for server-side connections
+Recheck history and schema afterwards. These instructions provide an upgrade
+decision path; they do not establish that a particular existing installation
+has been repaired.
 
 ## Troubleshooting
 
-### "Permission denied" errors
-
-Check RLS policies are correctly configured:
-
-```sql
--- View existing policies
-SELECT * FROM pg_policies WHERE tablename = 'deployments';
-```
-
-### Real-time not working
-
-1. Verify table is enabled for replication
-2. Check browser console for WebSocket errors
-3. Verify `NEXT_PUBLIC_SUPABASE_ANON_KEY` is correct
-
-### Connection timeouts
-
-1. Check if project is paused (free tier pauses after inactivity)
-2. Verify network allows connections to Supabase
-3. Check connection string is correct
-
-## Migration from Other Databases
-
-If migrating from another database:
-
-1. Export data in CSV format
-2. Use Supabase import tools or `COPY` command
-3. Verify data integrity
-4. Update application configuration
+- Confirm `000_user_profiles.sql` was applied before migrations that reference `user_profiles`.
+- Confirm the project URL and keys belong to the same Supabase project.
+- For `schema_migrations_pkey` / SQLSTATE `23505`, check duplicate version
+  prefixes and the existing history. This error does not indicate missing API
+  credentials.
+- For an older installation, follow the schema and history checks above before
+  applying the renamed migrations. File names alone do not prove applied schema.

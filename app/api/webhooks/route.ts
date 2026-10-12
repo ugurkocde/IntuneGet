@@ -5,9 +5,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { validateWebhookUrl, detectWebhookType } from '@/lib/webhooks/service';
+import { WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE } from '@/types/notifications';
 import type {
   WebhookConfiguration,
   WebhookConfigurationInput,
@@ -24,6 +25,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE },
+        { status: 503 }
       );
     }
 
@@ -110,6 +118,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid webhook type' },
         { status: 400 }
+      );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE },
+        { status: 503 }
       );
     }
 

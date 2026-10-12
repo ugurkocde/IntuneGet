@@ -1,0 +1,5 @@
+{
+  "title": "Faster, quota-aware VirusTotal lookups",
+  "summary": "VirusTotal reports now use frequent background batches instead of an eight-per-hour cap. New releases and requested unseen installers take priority, while cached refreshes and historical coverage share a separate budget. A daily cap and shared rate limiter protect the public API allowance. QA findings are reused across the catalog, fresh reports avoid repeat requests, and interrupted or rate-limited lookups recover through leases and retries. Operators can see queue age and budget usage in workflow summaries. Initial catalog-wide coverage remains gradual within the free API's daily limit.",
+  "type": "improved"
+}

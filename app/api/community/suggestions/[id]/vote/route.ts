@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { isValidUuid } from '@/lib/validators/community';
 import {
@@ -23,6 +23,12 @@ interface RouteParams {
  * Add a vote to a suggestion
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  if (!isSupabaseServerConfigured()) {
+    return NextResponse.json(
+      { error: 'App request voting requires hosted services' },
+      { status: 503 }
+    );
+  }
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
@@ -136,6 +142,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  * Remove a vote from a suggestion
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  if (!isSupabaseServerConfigured()) {
+    return NextResponse.json(
+      { error: 'App request voting requires hosted services' },
+      { status: 503 }
+    );
+  }
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import {
+  ArrowUpCircle,
   X,
   Settings,
   Terminal,
@@ -41,6 +42,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AppIcon } from '@/components/AppIcon';
 import { AssignmentConfig } from '@/components/AssignmentConfig';
+import { CartUpdatePolicyPicker, type CartUpdatePolicyValue } from '@/components/updates/CartUpdatePolicyPicker';
 import { CategoryConfig } from '@/components/CategoryConfig';
 import { DependencyConfig } from '@/components/DependencyConfig';
 import { EspProfileSelector } from '@/components/EspProfileSelector';
@@ -57,15 +59,19 @@ import type {
   CustomPrompt,
   BalloonTipConfig,
 } from '@/types/psadt';
-import type { CartItem, IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
+import type { CartItem, NewCartItem, IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship } from '@/types/intune';
 import type { EspProfileSelection } from '@/types/esp';
-import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
+import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose, sanitizeProcessesToClose } from '@/types/psadt';
 import { useCartStore, createStoreCartItem } from '@/stores/cart-store';
+import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
 import { INTUNE_APP_SOURCE_MARKER } from '@/lib/intune-description';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
+import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';
+import { CustomDetectionEditor, createEmptyDetectionRule } from '@/components/CustomDetectionEditor';
 
 // Strip the auto-appended "Source: IntuneGet.com" marker so the description
 // editor shows only the human-authored text. The marker is re-appended at
@@ -75,6 +81,7 @@ function stripSourceMarker(value: string): string {
   return (idx === -1 ? value : value.slice(0, idx)).trimEnd();
 }
 import { useLocaleVariants, usePackageManifest } from '@/hooks/use-packages';
+import { resolveListedWingetVersion } from '@/lib/winget-version';
 import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
 
@@ -83,6 +90,8 @@ interface PackageConfigProps {
   installers: NormalizedInstaller[];
   versions?: string[];
   onClose: () => void;
+  replaceCartItemId?: string;
+  onAddedToCart?: () => void;
   isDeployed?: boolean;
   deployedConfig?: CartItem | null;
   intuneAppId?: string | null;
@@ -100,20 +109,26 @@ type ConfigSection =
   | 'assignment'
   | 'category'
   | 'esp'
+  | 'updates'
   | 'dependencies'
   | 'branding'
   | 'advanced';
 
-export function PackageConfig({ package: pkg, installers, versions = [], onClose, isDeployed = false, deployedConfig, intuneAppId, storeManifest }: PackageConfigProps) {
+export function PackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
 
   // Store app install experience state
   const [storeInstallExperience, setStoreInstallExperience] = useState<'user' | 'system'>('user');
 
   // Selection state - pre-fill from deployed config when available
-  const [selectedVersion, setSelectedVersion] = useState(
-    deployedConfig?.version || pkg.version
-  );
+  const defaultVersion = isStoreApp
+    ? pkg.version
+    : resolveListedWingetVersion(pkg.version, versions) ?? pkg.version;
+  const [selectedVersion, setSelectedVersion] = useState(() => {
+    const requestedVersion = deployedConfig?.version || pkg.version;
+    return isStoreApp ? requestedVersion
+      : resolveListedWingetVersion(requestedVersion, versions) ?? requestedVersion;
+  });
   const [selectedArch, setSelectedArch] = useState<WingetArchitecture>(() => {
     const win32Config = deployedConfig && 'architecture' in deployedConfig ? deployedConfig : null;
     const preferred = win32Config?.architecture || 'x64';
@@ -203,19 +218,34 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const [relationships, setRelationships] = useState<AppRelationship[]>(
     deployedConfig?.relationships || []
   );
+  const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
+    deployedConfig?.updatePolicy
+  );
+  const { settings: userSettings } = useUserSettings();
+  const [carryOverAssignments, setCarryOverAssignments] = useState<boolean>(
+    deployedConfig?.assignmentMigration?.carryOverAssignments ??
+      Boolean(userSettings.carryOverAssignments)
+  );
 
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStoreApp ? 'assignment' : 'detection');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [processesError, setProcessesError] = useState<string | null>(null);
+  const [customDetectionErrors, setCustomDetectionErrors] = useState<string[]>([]);
   const [addedToCartSuccess, setAddedToCartSuccess] = useState(false);
   const [configMode, setConfigMode] = useState<'quick' | 'advanced'>('quick');
 
-  const quickSections: ConfigSection[] = ['detection', 'assignment', 'category', 'esp', 'dependencies'];
+  const quickSections: ConfigSection[] = ['detection', 'assignment', 'category', 'esp', 'updates', 'dependencies'];
   const isQuickSection = (section: ConfigSection) => quickSections.includes(section);
   const visibleSections = configMode === 'quick' ? quickSections : null; // null = show all
 
   // Cart store
-  const addItem = useCartStore((state) => state.addItem);
+  const addItemToStore = useCartStore((state) => state.addItem);
+  const updateCartItem = useCartStore((state) => state.updateItem);
+  const addItem = (item: NewCartItem) => {
+    if (replaceCartItemId) updateCartItem(replaceCartItemId, item);
+    else addItemToStore(item);
+  };
   const isInCart = useCartStore((state) => state.isInCart);
 
   // Settings update mutation (for deployed apps with known Intune app ID)
@@ -263,27 +293,58 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   // user selects a different version we must re-fetch so the installer URL/SHA
   // (which flow straight into the cart item) match the chosen version rather than
   // silently deploying the latest binary under an older version label.
-  const isNonDefaultVersion = !isStoreApp && !!selectedVersion && selectedVersion !== pkg.version;
-  const { data: versionManifest, isFetching: isFetchingVersionInstallers } = usePackageManifest(
+  const isNonDefaultVersion = !isStoreApp && !!selectedVersion && selectedVersion !== defaultVersion;
+  const { data: versionManifest, isFetching: isFetchingVersionInstallers, error: versionInstallerError } = usePackageManifest(
     pkg.id,
     selectedVersion,
     undefined,
     !isNonDefaultVersion
   );
-  const effectiveInstallers =
-    isNonDefaultVersion && versionManifest?.installers?.length
+  const effectiveInstallers = isNonDefaultVersion
+    ? versionManifest?.manifest.version === selectedVersion && !versionInstallerError
       ? versionManifest.installers
-      : installers;
+      : []
+    : installers;
 
-  // Get selected installer (not relevant for store apps)
-  const selectedInstaller = effectiveInstallers.find((i) => i.architecture === selectedArch) || effectiveInstallers[0];
+  // Bind installer metadata to both architecture and scope. Some manifests
+  // publish separate user and machine entries with different vendor switches
+  // even when both entries download the same binary.
+  const architectureInstallers = effectiveInstallers.filter(
+    (installer) => installer.architecture === selectedArch
+  );
+  const selectedInstaller =
+    architectureInstallers.find((installer) => installer.scope === selectedScope) ||
+    architectureInstallers.find((installer) => !installer.scope) ||
+    architectureInstallers[0] ||
+    effectiveInstallers[0];
+  const scopeIsAvailable = (scope: WingetScope) =>
+    architectureInstallers.some(
+      (installer) => !installer.scope || installer.scope === scope
+    );
+  // Customer-authored detection rules are offered only for ordinary catalog
+  // Win32 installers. Curated, MSIX/APPX (including nested) and custom-source
+  // items keep their generated detection.
+  const customDetectionSupported =
+    !isStoreApp &&
+    !!selectedInstaller &&
+    canUseCustomDetection({
+      wingetId: effectiveWingetId,
+      sourceType: deployedConfig?.sourceType ?? 'winget',
+      installerType: selectedInstaller.type,
+      nestedInstallerType: selectedInstaller.nestedInstallerType,
+    });
+  const customDetectionActive = config.customDetection === true && customDetectionSupported;
+  const lastCustomRulesRef = useRef<DetectionRule[] | null>(null);
+  useEffect(() => {
+    if (customDetectionActive) lastCustomRulesRef.current = config.detectionRules;
+  }, [customDetectionActive, config.detectionRules]);
   const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
   const inCart = isStoreApp
-    ? isInCart(pkg.packageIdentifier || pkg.id, selectedVersion, undefined, storeInstallExperience)
+    ? isInCart(pkg.packageIdentifier || pkg.id, selectedVersion, undefined, storeInstallExperience, replaceCartItemId)
     : selectedInstaller
-      ? isInCart(effectiveWingetId, selectedVersion, selectedInstaller.architecture, selectedScope)
+      ? isInCart(effectiveWingetId, selectedVersion, selectedInstaller.architecture, selectedScope, replaceCartItemId)
       : false;
 
   const modalRef = useFocusTrap<HTMLDivElement>();
@@ -356,22 +417,39 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   }, [effectiveInstallers, selectedArch]);
 
   // Generate detection rules when installer, version, locale, or marker path changes
-  // Pass effectiveWingetId so locale variant packages get correct detection markers
+  // Pass effectiveWingetId so locale variant packages get correct detection markers.
+  // Customer-authored rules stay fixed while custom detection is on; switching it
+  // off (or selecting an installer that does not support it) restores generated rules.
   useEffect(() => {
-    if (selectedInstaller) {
-      const rules = generateDetectionRules(
-        selectedInstaller,
-        pkg.name,
-        effectiveWingetId,
-        selectedVersion,
-        config.registryMarkerPath
-      );
-      setConfig((prev) => ({
-        ...prev,
-        detectionRules: rules,
-      }));
+    if (!selectedInstaller || customDetectionActive) return;
+    const rules = generateDetectionRules(
+      selectedInstaller,
+      pkg.name,
+      effectiveWingetId,
+      selectedVersion,
+      config.registryMarkerPath
+    );
+    setConfig((prev) => {
+      if (prev.customDetection !== true) return { ...prev, detectionRules: rules };
+      const { customDetection: _customDetection, ...rest } = prev;
+      return { ...rest, detectionRules: rules };
+    });
+  }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath, customDetectionActive]);
+
+  const setCustomDetection = (enabled: boolean) => {
+    setCustomDetectionErrors([]);
+    if (enabled) {
+      const rules = lastCustomRulesRef.current ?? [createEmptyDetectionRule('registry')];
+      lastCustomRulesRef.current = rules;
+      setConfig((prev) => ({ ...prev, customDetection: true, detectionRules: rules }));
+    } else {
+      lastCustomRulesRef.current = config.detectionRules;
+      setConfig((prev) => {
+        const { customDetection: _customDetection, ...rest } = prev;
+        return rest;
+      });
     }
-  }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath]);
+  };
 
   const handleAddToCart = async () => {
     if (addedToCartSuccess) return;
@@ -382,6 +460,29 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     // otherwise the cart could capture the previous version's installer.
     if (!isStoreApp && isFetchingVersionInstallers) return;
     if (!isStoreApp && inCart) return;
+
+    // The packaging pipeline rejects close-process entries without an
+    // executable name, so block adding to cart instead of storing a config
+    // that fails minutes later during packaging.
+    const sanitizedProcesses = isStoreApp
+      ? null
+      : sanitizeProcessesToClose(config.processesToClose);
+    if (sanitizedProcesses && sanitizedProcesses.invalid.length > 0) {
+      setProcessesError(
+        'Each process to close needs an executable name, for example chrome. Fill in the process name or remove the row.'
+      );
+      setExpandedSection('behavior');
+      return;
+    }
+
+    if (customDetectionActive) {
+      const validation = validateCustomDetectionRules(config.detectionRules);
+      if (!validation.valid) {
+        setCustomDetectionErrors(validation.errors);
+        setExpandedSection('detection');
+        return;
+      }
+    }
 
     setIsAddingToCart(true);
     try {
@@ -430,23 +531,41 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           installerType: selectedInstaller!.type,
           installerUrl: selectedInstaller!.url,
           installerSha256: selectedInstaller!.sha256,
+          installerSuccessCodes: selectedInstaller!.installerSuccessCodes,
           nestedInstallerType: selectedInstaller!.nestedInstallerType,
           nestedInstallerPath: selectedInstaller!.nestedInstallerPath,
           manifestDependencies: selectedInstaller!.packageDependencies,
           installCommand: config.installCommand || generateInstallCommand(selectedInstaller!, selectedScope),
           uninstallCommand: config.uninstallCommand || generateUninstallCommand(selectedInstaller!, pkg.name),
           detectionRules: config.detectionRules,
-          psadtConfig: config,
+          psadtConfig: sanitizedProcesses
+            ? { ...config, processesToClose: sanitizedProcesses.processes }
+            : config,
           assignments: assignments.length > 0 ? assignments : undefined,
+          requirementRules: buildCartItemRequirementRules(
+            displayName,
+            selectedInstaller!.type,
+            selectedInstaller!.productCode,
+            assignments
+          ),
           categories: categories.length > 0 ? categories : undefined,
           espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
           relationships: relationships.length > 0 ? relationships : undefined,
           localeCode: selectedLocale || undefined,
           iconPath: pkg.iconPath,
+          updatePolicy,
+          assignmentMigration:
+            updatePolicy === 'auto_update'
+              ? {
+                  carryOverAssignments,
+                  removeAssignmentsFromPreviousApp: carryOverAssignments,
+                }
+              : undefined,
           ...(isDeployed ? { forceCreate: true } : {}),
         });
       }
       setAddedToCartSuccess(true);
+      onAddedToCart?.();
       setTimeout(() => onClose(), 1200);
     } finally {
       setIsAddingToCart(false);
@@ -486,6 +605,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const removeProcess = (index: number) => {
+    setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
       processesToClose: prev.processesToClose.filter((_, i) => i !== index),
@@ -493,6 +613,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const updateProcess = (index: number, updates: Partial<ProcessToClose>) => {
+    setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
       processesToClose: prev.processesToClose.map((p, i) =>
@@ -856,13 +977,16 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   const manifestScope = selectedInstaller?.scope;
                   const isRecommended = manifestScope ? scope === manifestScope : scope === 'machine';
                   const label = scope === 'machine' ? 'Per-Machine' : 'Per-User';
+                  const isAvailable = scopeIsAvailable(scope);
 
                   return (
                     <button
                       key={scope}
                       onClick={() => setSelectedScope(scope)}
+                      disabled={!isAvailable}
                       className={cn(
                         'flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors',
+                        !isAvailable && 'cursor-not-allowed opacity-45',
                         selectedScope === scope
                           ? 'bg-accent-cyan border-accent-cyan text-white'
                           : 'bg-bg-elevated border-overlay/15 text-text-primary hover:border-overlay/20'
@@ -978,7 +1102,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                               value={process.name}
                               onChange={(e) => updateProcess(index, { name: e.target.value })}
                               placeholder="Process name (e.g., chrome)"
-                              className="flex-1 px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm"
+                              className={cn(
+                                'flex-1 px-3 py-2 bg-bg-elevated border rounded-lg text-text-primary text-sm',
+                                processesError && !process.name.trim() && process.description.trim()
+                                  ? 'border-red-500/60'
+                                  : 'border-overlay/15'
+                              )}
                             />
                             <input
                               type="text"
@@ -995,6 +1124,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                             </button>
                           </div>
                         ))
+                      )}
+                      {processesError && (
+                        <p className="text-red-400 text-sm">{processesError}</p>
                       )}
                     </div>
                   </div>
@@ -1667,6 +1799,25 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                 onToggle={() => toggleSection('detection')}
               >
                 <div className="space-y-3">
+                  {customDetectionSupported && (
+                    <ToggleOption
+                      label="Use my own detection rules"
+                      description="Your registry, file or MSI rules replace the IntuneGet version marker. They stay fixed, so edit them before you deploy a newer version."
+                      checked={customDetectionActive}
+                      onChange={setCustomDetection}
+                    />
+                  )}
+                  {customDetectionActive ? (
+                    <CustomDetectionEditor
+                      rules={config.detectionRules}
+                      onChange={(detectionRules) => {
+                        setCustomDetectionErrors([]);
+                        lastCustomRulesRef.current = detectionRules;
+                        updateConfig({ detectionRules });
+                      }}
+                      errors={customDetectionErrors}
+                    />
+                  ) : <>
                   {config.detectionRules.length === 0 ? (
                     <p className="text-text-muted text-sm italic">No detection rules configured</p>
                   ) : (
@@ -1684,6 +1835,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   <p className="text-text-muted text-xs">
                     Detection rules are auto-generated based on installer type. They determine how Intune verifies the app is installed.
                   </p>
+                  </>}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-1.5">
                       Detection marker registry path
@@ -1697,6 +1849,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                     />
                     <p className="text-text-muted text-xs mt-1.5">
                       Registry key under HKLM/HKCU where the detection marker is written. Customize to track deployments under your own key, e.g. SOFTWARE\CompanyName\Apps.
+                      {customDetectionActive && ' The marker is still written during install, but Intune uses your own rules for detection.'}
                     </p>
                   </div>
                 </div>
@@ -1741,6 +1894,26 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   mode="pre-deploy"
                   hasRequiredAssignment={assignments.some((a) => a.intent === 'required')}
                 />
+              </ConfigSection>}
+
+              {/* App Updates (quick + advanced, win32 only) */}
+              {!isStoreApp && (visibleSections === null || visibleSections.includes('updates')) && <ConfigSection
+                title="App Updates"
+                icon={<ArrowUpCircle className="w-4 h-4" />}
+                expanded={expandedSection === 'updates'}
+                onToggle={() => toggleSection('updates')}
+              >
+                <div className="space-y-3">
+                  <p className="text-sm text-text-secondary">
+                    Choose how IntuneGet handles future versions of this app.
+                  </p>
+                  <CartUpdatePolicyPicker
+                    value={updatePolicy}
+                    onChange={setUpdatePolicy}
+                    carryOverAssignments={carryOverAssignments}
+                    onCarryOverAssignmentsChange={setCarryOverAssignments}
+                  />
+                </div>
               </ConfigSection>}
 
               {/* Dependencies & Supersedence (quick + advanced, win32 only) */}
@@ -2009,6 +2182,11 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           </div>
         </div>
 
+        {versionInstallerError && isNonDefaultVersion && (
+          <p role="alert" className="px-6 py-3 text-sm text-status-error">
+            {versionInstallerError.message}
+          </p>
+        )}
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-overlay/10 p-4 bg-bg-surface/95 space-y-2">
           {settingsSuccess && (
@@ -2108,7 +2286,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
               ) : (
                 <>
                   <Plus className="w-5 h-5 mr-2" />
-                  Add to Selection
+                  {replaceCartItemId ? 'Update Selection' : 'Add to Selection'}
                 </>
               )}
             </Button>

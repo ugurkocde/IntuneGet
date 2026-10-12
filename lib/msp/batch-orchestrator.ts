@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 /**
  * MSP Batch Deployment Orchestrator
  * Processes pending batch deployments by creating packaging jobs and tracking completion.
@@ -7,22 +8,42 @@
 import { createServerClient } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { getDatabase } from '@/lib/db';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
   type WorkflowInputs,
 } from '@/lib/github-actions';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { queueWebhookDelivery } from '@/lib/msp/webhook-service';
 import { createAuditLog } from '@/lib/audit-logger';
+import {
+  describeQaGateError,
+  enforceQaGate,
+  isQaGateError,
+  type AnyQaGateError,
+} from '@/lib/qa/gate';
+import { normalizeInstaller } from '@/lib/manifest-api';
+import { selectTrustedCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import type { WingetInstaller } from '@/types/winget';
 
 // Stale timeout: items in_progress longer than this are marked failed
 const STALE_TIMEOUT_MINUTES = 45;
 
+/** Pending tenants in one batch have no individual creation timestamp. */
+export function loadPendingBatchItems(supabase: ReturnType<typeof createServerClient>, batchId: string, availableSlots: number) {
+  return supabase.from('msp_batch_deployment_items').select('*')
+    .eq('batch_id', batchId).eq('status', 'pending')
+    .order('tenant_display_name', { ascending: true })
+    .order('id', { ascending: true }).limit(availableSlots);
+}
+
 interface InstallerDetails {
+  architecture: string;
   installer_url: string;
   installer_sha256: string;
   installer_type: string;
@@ -217,15 +238,15 @@ async function startBatchItems(batchId: string): Promise<number> {
   }
 
   // Get pending items
-  const { data: pendingItems, error: pendingError } = await supabase
-    .from('msp_batch_deployment_items')
-    .select('*')
-    .eq('batch_id', batchId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(availableSlots);
+  const { data: pendingItems, error: pendingError } = await loadPendingBatchItems(supabase, batchId, availableSlots);
 
-  if (pendingError || !pendingItems || pendingItems.length === 0) {
+  if (pendingError) {
+    // Database messages can include customer data. Log the code, never row values.
+    const code = /^[A-Z0-9_]{2,20}$/.test(pendingError.code || '') ? pendingError.code : 'unknown';
+    console.error(`[BatchOrchestrator] Failed to load pending items (${code})`);
+    return 0;
+  }
+  if (!pendingItems || pendingItems.length === 0) {
     return 0;
   }
 
@@ -247,7 +268,8 @@ async function startBatchItems(batchId: string): Promise<number> {
   // Get installer details from version_history
   const installerDetails = await lookupInstallerDetails(
     batch.winget_id,
-    batch.version
+    batch.version,
+    batch.architecture || 'x64',
   );
 
   // Get the curated app description (falls back to the generic marker text)
@@ -263,7 +285,26 @@ async function startBatchItems(batchId: string): Promise<number> {
   const db = getDatabase();
   let started = 0;
 
+  // Evaluate the package tuple once before processing tenants. This avoids
+  // creating one misleading job per tenant for a known current QA failure.
+  let qaGateError: AnyQaGateError | null = null;
+  if (installerDetails) {
+    try {
+      await enforceQaGate({
+        qaOverride: isQaMaintenanceMode(),
+        wingetId: batch.winget_id,
+        version: batch.version,
+        architecture: installerDetails.architecture,
+        installerSha256: installerDetails.installer_sha256,
+      });
+    } catch (error) {
+      if (isQaGateError(error)) qaGateError = error;
+      else throw error;
+    }
+  }
+
   for (const item of pendingItems) {
+    let jobId: string | null = null;
     try {
       // If no installer details, fail the item
       if (!installerDetails) {
@@ -272,6 +313,18 @@ async function startBatchItems(batchId: string): Promise<number> {
           .update({
             status: 'failed',
             error_message: 'Package version not found in catalog',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+        continue;
+      }
+
+      if (qaGateError) {
+        await supabase
+          .from('msp_batch_deployment_items')
+          .update({
+            status: 'skipped',
+            error_message: describeQaGateError(qaGateError),
             completed_at: new Date().toISOString(),
           })
           .eq('id', item.id);
@@ -292,8 +345,34 @@ async function startBatchItems(batchId: string): Promise<number> {
         continue;
       }
 
+      // A curated publisher licence is accepted per customer tenant, so an
+      // acceptance for one tenant never authorizes the rest of the batch.
+      try {
+        await assertCuratedLicenceAccepted(item.tenant_id, batch.winget_id, db);
+      } catch (error) {
+        if (!(error instanceof CuratedLicenceError)) throw error;
+        await supabase
+          .from('msp_batch_deployment_items')
+          .update({
+            status: 'skipped',
+            error_message: error.message,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+        continue;
+      }
+
+      const approvalBlocks = await findPendingApprovalBlocks({ tenantId: item.tenant_id,
+        wingetIds: [batch.winget_id] }, { db });
+      if (approvalBlocks.length) {
+        await supabase.from('msp_batch_deployment_items').update({ status: 'skipped',
+          error_message: approvalBlocks[0].message, completed_at: new Date().toISOString() })
+          .eq('id', item.id);
+        continue;
+      }
+
       // Create packaging job
-      const jobId = crypto.randomUUID();
+      jobId = crypto.randomUUID();
       const jobRecord = await db.jobs.create({
         id: jobId,
         user_id: batch.created_by_user_id,
@@ -325,6 +404,7 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       // Trigger GitHub Actions workflow
       const workflowInputs: WorkflowInputs = {
+        qaOverride: isQaMaintenanceMode(),
         jobId,
         tenantId: item.tenant_id,
         wingetId: batch.winget_id,
@@ -369,11 +449,23 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       started++;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to trigger packaging workflow';
+      const isQaSkip = isQaGateError(err);
+      const msg = isQaSkip
+        ? describeQaGateError(err)
+        : err instanceof Error ? err.message : 'Failed to trigger packaging workflow';
+      if (isQaSkip && jobId) {
+        await db.jobs.update(jobId, {
+          status: 'cancelled',
+          status_message: 'Skipped because the installation test failed',
+          error_message: msg,
+          cancelled_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        });
+      }
       await supabase
         .from('msp_batch_deployment_items')
         .update({
-          status: 'failed',
+          status: isQaSkip ? 'skipped' : 'failed',
           error_message: msg,
           completed_at: new Date().toISOString(),
         })
@@ -454,7 +546,7 @@ async function advanceBatch(batchId: string): Promise<boolean> {
     .from('msp_batch_deployments')
     .update({
       completed_tenants: completed,
-      failed_tenants: failed,
+      failed_tenants: failed + skipped,
     })
     .eq('id', batchId);
 
@@ -497,7 +589,7 @@ async function advanceBatch(batchId: string): Promise<boolean> {
         status: finalStatus,
         total_tenants: items.length,
         completed_tenants: completed,
-        failed_tenants: failed,
+        failed_tenants: failed + skipped,
         skipped_tenants: skipped,
       });
     } catch (err) {
@@ -523,7 +615,8 @@ async function advanceBatch(batchId: string): Promise<boolean> {
           status: finalStatus,
           total_tenants: items.length,
           completed_tenants: completed,
-          failed_tenants: failed,
+          failed_tenants: failed + skipped,
+          skipped_tenants: skipped,
         },
       });
     } catch (err) {
@@ -550,9 +643,10 @@ async function lookupAppDescription(wingetId: string): Promise<string | undefine
  * Look up installer details from the version_history table.
  * Falls back to parsing the installers JSONB if the top-level fields are null.
  */
-async function lookupInstallerDetails(
+export async function lookupInstallerDetails(
   wingetId: string,
-  version: string
+  version: string,
+  architecture: string,
 ): Promise<InstallerDetails | null> {
   const data = await getCatalogSource().getLatestVersionInstallerInfo(wingetId, version);
 
@@ -560,35 +654,24 @@ async function lookupInstallerDetails(
     return null;
   }
 
-  // Try top-level fields first
-  if (data.installer_url) {
-    const type = data.installer_type || 'exe';
-    return {
-      installer_url: data.installer_url,
-      installer_sha256: data.installer_sha256 || '',
-      installer_type: type,
-      silent_args: extractSilentSwitches('', type),
-      installer_scope: data.installer_scope || 'machine',
-    };
-  }
-
-  // Fall back to installers JSONB array
   if (data.installers && Array.isArray(data.installers) && data.installers.length > 0) {
-    // Prefer x64 architecture
-    const installers = data.installers as Array<Record<string, unknown>>;
-    const preferred =
-      installers.find((i) => i.architecture === 'x64') || installers[0];
-
-    if (preferred && typeof preferred.url === 'string') {
-      const type = (typeof preferred.type === 'string' ? preferred.type : 'exe').toLowerCase();
+    const installers = (data.installers as Array<Record<string, unknown>>)
+      .map((value) => normalizeInstaller(value as unknown as WingetInstaller));
+    const preferred = selectTrustedCatalogInstaller(installers, {
+      wingetId,
+      version,
+      architecture,
+      installScope: 'machine',
+    });
+    if (preferred?.url) {
+      const type = preferred.type || 'exe';
       return {
+        architecture: preferred.architecture || architecture,
         installer_url: preferred.url,
-        installer_sha256: typeof preferred.sha256 === 'string' ? preferred.sha256 : '',
+        installer_sha256: preferred.sha256 || '',
         installer_type: type,
-        silent_args: typeof preferred.silent_args === 'string'
-          ? preferred.silent_args
-          : extractSilentSwitches('', type),
-        installer_scope: typeof preferred.scope === 'string' ? preferred.scope : 'machine',
+        silent_args: preferred.silentArgs || extractSilentSwitches('', type),
+        installer_scope: preferred.scope || 'machine',
       };
     }
   }

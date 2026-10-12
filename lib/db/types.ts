@@ -4,6 +4,51 @@
  */
 
 import type { Json } from '@/types/database';
+import type {
+  AppUpdatePolicy,
+  AutoUpdateHistory,
+  AutoUpdateHistoryWithPolicy,
+  AutoUpdateStatus,
+} from '@/types/update-policies';
+
+/**
+ * Query options for auto-update history reads.
+ */
+export interface AutoUpdateHistoryQuery {
+  tenantId?: string;
+  wingetId?: string;
+  status?: AutoUpdateStatus;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * A detected available update for a deployed app.
+ */
+export interface UpdateCheckResult {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  winget_id: string;
+  intune_app_id: string;
+  display_name: string;
+  current_version: string;
+  latest_version: string;
+  is_critical: boolean;
+  is_managed: boolean;
+  large_icon_type: string | null;
+  large_icon_value: string | null;
+  notified_at: string | null;
+  dismissed_at: string | null;
+  detected_at: string;
+  updated_at: string;
+}
+
+export interface UpdateCheckQuery {
+  tenantId?: string;
+  includeDismissed?: boolean;
+  criticalOnly?: boolean;
+}
 
 /**
  * Packaging job record
@@ -46,6 +91,13 @@ export interface PackagingJob {
   error_code: string | null;
   error_details: Json | null;
   warnings: Json | null;
+  execution_profile_sha256: string | null;
+  presentation_profile_sha256: string | null;
+  qa_candidate_id: string | null;
+  qa_requested_at: string | null;
+  qa_completed_at: string | null;
+  is_auto_update?: boolean | null;
+  auto_update_policy_id?: string | null;
   packager_id: string | null;
   packager_heartbeat_at: string | null;
   claimed_at: string | null;
@@ -59,6 +111,46 @@ export interface PackagingJob {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * A tenant's acceptance of a publisher licence agreement required by a
+ * curated application. Unique per tenant, agreement, and agreement version.
+ */
+export interface CuratedLicenceAttestationRecord {
+  id: string;
+  tenant_id: string;
+  app_id: string;
+  attestation_id: string;
+  attestation_version: string;
+  accepted_by_user_id: string;
+  accepted_by_email: string | null;
+  accepted_at: string;
+}
+
+export type CuratedLicenceAttestationInput = Omit<CuratedLicenceAttestationRecord, 'id' | 'accepted_at'>;
+
+export type ClaimedAppStatus = 'pending' | 'deploying' | 'deployed' | 'failed';
+
+/**
+ * A discovered app a user claimed for deployment, one per tenant and app
+ */
+export interface ClaimedAppRecord {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  discovered_app_id: string;
+  discovered_app_name: string;
+  winget_package_id: string;
+  intune_app_id: string | null;
+  device_count_at_claim: number | null;
+  claimed_at: string;
+  status: ClaimedAppStatus;
+}
+
+export type ClaimedAppInput = Pick<
+  ClaimedAppRecord,
+  'user_id' | 'tenant_id' | 'discovered_app_id' | 'discovered_app_name' | 'winget_package_id' | 'device_count_at_claim'
+>;
 
 /**
  * Upload history record
@@ -81,6 +173,9 @@ export interface UploadHistoryRecord {
 /**
  * Job statistics
  */
+export type AnalyticsJob = Pick<PackagingJob, 'id' | 'user_id' | 'user_email' | 'status' | 'completed_at' | 'created_at' | 'winget_id' | 'display_name' | 'intune_app_url'>;
+export type AnalyticsJobScope = { userId: string; tenantId?: never } | { tenantId: string; userId?: never };
+
 export interface JobStats {
   queued: number;
   packaging: number;
@@ -115,6 +210,13 @@ export interface DatabaseAdapter {
      * Get jobs for every user in a tenant (tenant-wide deployments view)
      */
     getByTenantId(tenantId: string, limit?: number): Promise<PackagingJob[]>;
+
+    /** Failed and cancelled approval checkpoints include dismissed jobs and every user/version in the tenant. */
+    getApprovalFailures(tenantId: string, wingetId: string,
+      cursor?: { createdAt: string; id: string }): Promise<PackagingJob[]>;
+
+    /** Complete summary input, independent of the uploads page limit. */
+    getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]>;
 
     /**
      * Create a new job
@@ -176,5 +278,157 @@ export interface DatabaseAdapter {
      * Get upload history by user ID
      */
     getByUserId(userId: string, limit?: number): Promise<UploadHistoryRecord[]>;
+
+    /**
+     * Get the newest deployment of one app for a user in a tenant, filtered in
+     * the query rather than a fixed window so old deployments are found.
+     */
+    getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null>;
+
+    /**
+     * Every recorded deployment, newest first. Used by the update check to scan
+     * the whole local fleet without knowing the user ids up front.
+     */
+    listAll(limit?: number): Promise<UploadHistoryRecord[]>;
+  };
+
+  updateCheckResults: {
+    /**
+     * List detected updates for a user with the optional filters.
+     */
+    list(userId: string, query: UpdateCheckQuery): Promise<UpdateCheckResult[]>;
+
+    /**
+     * Insert or refresh a detected update on the
+     * (user_id, tenant_id, winget_id, intune_app_id) key.
+     */
+    upsert(
+      record: Partial<UpdateCheckResult> &
+        Pick<
+          UpdateCheckResult,
+          'user_id' | 'tenant_id' | 'winget_id' | 'intune_app_id' | 'display_name' | 'current_version' | 'latest_version'
+        >
+    ): Promise<UpdateCheckResult>;
+
+    /**
+     * Dismiss or restore detected updates owned by the user. Returns the rows changed.
+     */
+    setDismissed(ids: string[], userId: string, dismissedAt: string | null): Promise<number>;
+
+    /**
+     * Delete detected updates for a user and tenant that are no longer current.
+     */
+    deleteMissing(
+      userId: string,
+      tenantId: string,
+      keep: Array<{ wingetId: string; intuneAppId: string }>
+    ): Promise<number>;
+  };
+
+  updatePolicies: {
+    /**
+     * List every policy for a user, newest first, optionally scoped to a tenant
+     */
+    list(userId: string, tenantId?: string): Promise<AppUpdatePolicy[]>;
+
+    /**
+     * Get one policy owned by the user
+     */
+    getById(id: string, userId: string): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Get the policy for a user, tenant, and app (the unique key)
+     */
+    getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Every policy, newest first. Used by the update check across the local fleet.
+     */
+    listAll(): Promise<AppUpdatePolicy[]>;
+
+    /**
+     * Insert or replace a policy on the (user_id, tenant_id, winget_id) key
+     */
+    upsert(
+      policy: Partial<AppUpdatePolicy> &
+        Pick<AppUpdatePolicy, 'user_id' | 'tenant_id' | 'winget_id' | 'policy_type'>
+    ): Promise<AppUpdatePolicy>;
+
+    /**
+     * Update a policy owned by the user. Returns null when no row matched.
+     */
+    update(id: string, userId: string, data: Partial<AppUpdatePolicy>): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Delete a policy owned by the user. Returns false when no row matched.
+     */
+    delete(id: string, userId: string): Promise<boolean>;
+  };
+
+  autoUpdateHistory: {
+    /**
+     * Create an auto-update history record
+     */
+    create(
+      record: Partial<AutoUpdateHistory> &
+        Pick<AutoUpdateHistory, 'policy_id' | 'from_version' | 'to_version' | 'update_type'>
+    ): Promise<AutoUpdateHistory>;
+
+    /**
+     * Update a history record. Returns null when no row matched.
+     */
+    update(id: string, data: Partial<AutoUpdateHistory>): Promise<AutoUpdateHistory | null>;
+
+    /**
+     * List a user's history with the policy target and deployed app name,
+     * newest first, honoring the optional filters and pagination.
+     */
+    list(userId: string, query: AutoUpdateHistoryQuery): Promise<AutoUpdateHistoryWithPolicy[]>;
+
+    /**
+     * Count history records for the given policies triggered at or after
+     * `since`, optionally filtered by status. Backs the auto-update rate limits.
+     */
+    countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number>;
+  };
+
+  curatedLicenceAttestations: {
+    /**
+     * Get a tenant's acceptance of one exact agreement version
+     */
+    get(tenantId: string, attestationId: string, attestationVersion: string): Promise<CuratedLicenceAttestationRecord | null>;
+
+    /**
+     * Every agreement acceptance recorded for a tenant, newest first
+     */
+    listByTenant(tenantId: string): Promise<CuratedLicenceAttestationRecord[]>;
+
+    /**
+     * Record an acceptance. Idempotent: an existing acceptance of the same
+     * agreement version is returned unchanged.
+     */
+    accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord>;
+  };
+
+  claimedApps: {
+    /**
+     * Record a claim. Claiming an app again in the same tenant resets the
+     * existing claim to pending for the new claimant.
+     */
+    upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord>;
+
+    /**
+     * Every claim recorded for a tenant, newest first
+     */
+    listByTenant(tenantId: string): Promise<ClaimedAppRecord[]>;
+
+    /**
+     * Update a claim in the tenant. Returns null when no row matched.
+     */
+    update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null>;
   };
 }

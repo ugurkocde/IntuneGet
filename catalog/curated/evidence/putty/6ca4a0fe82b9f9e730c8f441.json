@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "37269945856",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "websiteCommit": "ca26106ac1822bc3d60e84d1812a5216dc3b5501",
+    "runAttempt": "1",
+    "workflowCommit": "d8f21bb21cffb6bfdb1b609c9befc146a64f5fff",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml"
+  },
+  "candidate": {
+    "appId": "putty",
+    "version": "0.85",
+    "installerUrl": "https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi",
+    "vendorSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+    "releaseNotesUrl": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
+    "discoveredAt": "2026-10-05T05:55:37.191Z",
+    "id": "6ca4a0fe82b9f9e730c8f441"
+  },
+  "previous": {
+    "appId": "putty",
+    "version": "0.84",
+    "installerUrl": "https://the.earth.li/~sgtatham/putty/0.84/w64/putty-64bit-0.84-installer.msi",
+    "vendorSha256": "190d00150e67ad3ff51af4b50e76a3ab97b863a34efd50472627b17c0cf4102b",
+    "releaseNotesUrl": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
+    "discoveredAt": "2026-10-05T05:55:43.164Z",
+    "id": "5f290e9a143d8bc0401620fb"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "6ca4a0fe82b9f9e730c8f441",
+      "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+      "sourceUrl": "https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi",
+      "finalOrigin": "https://the.earth.li",
+      "signature": {
+        "publisher": "Simon Tatham",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.557.0",
+        "scanner": "defender",
+        "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+        "status": "clean",
+        "scannedAt": "2026-10-05T06:11:22.8571843Z",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "5f290e9a143d8bc0401620fb",
+      "installerSha256": "190d00150e67ad3ff51af4b50e76a3ab97b863a34efd50472627b17c0cf4102b",
+      "sourceUrl": "https://the.earth.li/~sgtatham/putty/0.84/w64/putty-64bit-0.84-installer.msi",
+      "finalOrigin": "https://the.earth.li",
+      "signature": {
+        "publisher": "Simon Tatham",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.557.0",
+        "scanner": "defender",
+        "installerSha256": "190d00150e67ad3ff51af4b50e76a3ab97b863a34efd50472627b17c0cf4102b",
+        "status": "clean",
+        "scannedAt": "2026-10-05T06:11:23.704237Z",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "6ca4a0fe82b9f9e730c8f441",
+    "packageId": "IntuneGet.Curated.PuTTY",
+    "installerUrl": "https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi",
+    "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.PuTTY",
+      "displayName": "PuTTY",
+      "publisher": "Simon Tatham",
+      "version": "0.85",
+      "architecture": "x64",
+      "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:PuTTY",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PuTTY\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"0.85\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PuTTY\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"0.85\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "B32B7A2B627E45248906CA632727F325D7B5396A2E94082FA5B58A08EF2DD741",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.PuTTY\",\"publisher\":\"IntuneGet QA\",\"version\":\"0.85\",\"wingetId\":\"IntuneGet.Curated.PuTTY\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"0.85\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PuTTY\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"FC8FDF31B526D48B375A94F78FE5376894A62BDA04E04193F3A79D34F92DB3EE\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"2213EBACF962B709411D654A40087508A694756BC4E41C5A1C24AD86596B2511\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:PuTTY\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"0.85\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PuTTY\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"E844DA62DDA6928D32146043D35E96D5CAF3675A2E6BDD8633807C976905E559\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "upgradeFromVersion": "0.84",
+    "executionProfileSha256": "B32B7A2B627E45248906CA632727F325D7B5396A2E94082FA5B58A08EF2DD741",
+    "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+    "testedAt": "2026-10-05T06:12:54.2408377Z",
+    "candidateId": "6ca4a0fe82b9f9e730c8f441",
+    "architecture": "x64",
+    "executionContext": "LocalSystem",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "previousInstallerSha256": "190d00150e67ad3ff51af4b50e76a3ab97b863a34efd50472627b17c0cf4102b",
+    "installerVersion": "0.85",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testLevel": "psadt-package"
+  },
+  "verifiedAt": "2026-10-05T06:12:57.0134260Z",
+  "authenticatedArtifact": {
+    "id": 11328049278,
+    "sha256": "50f8c675e8fdcc68e7a3e80746dd82955bab95a2a5d1da3fcffecdeba02a6d61"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-05T06:48:22.096Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

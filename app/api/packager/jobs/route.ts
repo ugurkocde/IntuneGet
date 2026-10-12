@@ -4,9 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logValue } from '@/lib/server-log';
 import { getDatabase, verifyPackagerApiKey } from '@/lib/db';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
+import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies/ensure-policy';
+import { validateCuratedPackagingJob } from '@/lib/curated-catalog/server';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 
 // Verify the packager auth key (API key for SQLite, service role key for Supabase)
 function verifyPackagerAuth(request: NextRequest): boolean {
@@ -50,7 +54,8 @@ export async function GET(request: NextRequest) {
     const jobs = await db.jobs.getByStatus(status, limit, true);
 
     return NextResponse.json({ jobs: jobs || [] });
-  } catch {
+  } catch (error) {
+    console.error(`[Packager Jobs API] Failed to list jobs: ${logValue(error instanceof Error ? error.message : String(error))}`);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -103,11 +108,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    try {
+      await validateCuratedPackagingJob(job);
+    } catch {
+      const message = 'The curated release is no longer approved for this packaging configuration.';
+      await db.jobs.update(job.id, {
+        status: 'failed', error_code: 'CURATED_RELEASE_UNAVAILABLE',
+        error_message: message,
+        completed_at: new Date().toISOString(),
+      }, { status: 'packaging' });
+      console.error(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) failed: ${message}`);
+      return NextResponse.json({ claimed: false, error: 'This curated release is unavailable.' }, { status: 409 });
+    }
+    try {
+      await assertCuratedLicenceAccepted(job.tenant_id, job.winget_id, db);
+    } catch (error) {
+      if (!(error instanceof CuratedLicenceError)) throw error;
+      await db.jobs.update(job.id, {
+        status: 'failed', error_code: error.code, error_message: error.message,
+        completed_at: new Date().toISOString(),
+      }, { status: 'packaging' });
+      console.error(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) failed: ${logValue(error.message)}`);
+      return NextResponse.json({ claimed: false, error: error.message, code: error.code }, { status: 409 });
+    }
+    console.info(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) claimed by packager ${logValue(packagerId)}`);
     return NextResponse.json({
       claimed: true,
       job,
     });
-  } catch {
+  } catch (error) {
+    console.error(`[Packager Jobs API] Failed to claim job: ${logValue(error instanceof Error ? error.message : String(error))}`);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -199,6 +229,19 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // Log terminal transitions once, so the server log shows the outcome of
+    // every deployment the local packager runs.
+    if (status && status !== existingJob?.status) {
+      const label = `Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)})`;
+      if (status === 'failed') {
+        console.error(`[Packager Jobs API] ${label} failed: ${logValue(errorMessage) || 'Unknown error'}`);
+      } else if (status === 'deployed') {
+        console.info(`[Packager Jobs API] ${label} deployed to Intune`);
+      } else if (status === 'duplicate_skipped') {
+        console.info(`[Packager Jobs API] ${label} skipped as a duplicate of an existing Intune app`);
+      }
+    }
+
     // Record deployments in upload_history so update checks can track versions.
     if (status === 'deployed' && existingJob?.status !== 'deployed' && job.intune_app_id) {
       try {
@@ -218,6 +261,22 @@ export async function PATCH(request: NextRequest) {
           `[Packager Jobs API] Failed to write upload_history for job ${job.id}:`,
           historyError
         );
+      }
+
+      // Materialize an update policy chosen in the cart, now that the
+      // upload_history row exists to anchor original_upload_history_id.
+      const chosenPolicy = parseCartUpdatePolicy(job.package_config);
+      if (chosenPolicy && job.tenant_id) {
+        const policyResult = await ensureUpdatePolicy({
+          userId: job.user_id,
+          tenantId: job.tenant_id,
+          wingetId: job.winget_id,
+          policyType: chosenPolicy,
+          deployedVersion: job.version,
+        });
+        if (policyResult.status !== 'saved') {
+          console.warn(`[Packager Jobs API] Update policy not saved for job ${job.id}:`, policyResult);
+        }
       }
 
       // Clean up stale update_check_results so the Updates page no longer
@@ -241,7 +300,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ updated: true, job });
-  } catch {
+  } catch (error) {
+    console.error(`[Packager Jobs API] Failed to update job: ${logValue(error instanceof Error ? error.message : String(error))}`);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

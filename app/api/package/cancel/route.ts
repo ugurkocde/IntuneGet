@@ -5,8 +5,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { getDatabase } from '@/lib/db';
-import { cancelWorkflowRun, isGitHubActionsConfigured } from '@/lib/github-actions';
+import { getDatabase, isSqliteMode } from '@/lib/db';
+import {
+  cancelWorkflowRun,
+  getWorkflowRun,
+  isGitHubActionsConfigured,
+  UNSTARTED_WORKFLOW_RUN_STATUSES,
+} from '@/lib/github-actions';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import type { Database } from '@/types/database';
@@ -21,8 +26,13 @@ type PackagingJobUpdate = Database['public']['Tables']['packaging_jobs']['Update
 
 // Statuses that can be cancelled (active jobs)
 const CANCELLABLE_STATUSES = ['queued', 'packaging', 'uploading'];
+// Jobs waiting on a shared QA candidate have no workflow run of their own yet.
+// Cancelling only detaches this job; the candidate keeps serving other jobs.
+const QA_WAITING_STATUSES = ['awaiting_qa'];
 // Statuses that can be force-dismissed by the user
-const DISMISSABLE_STATUSES = ['queued', 'packaging', 'uploading', 'completed', 'failed'];
+const DISMISSABLE_STATUSES = [
+  'queued', 'packaging', 'uploading', 'awaiting_qa', 'completed', 'failed', 'qa_failed',
+];
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,17 +58,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createServerClient();
-
     // Fetch the job to verify ownership and check status
-    const { data: job, error: fetchError } = await supabase
-      .from('packaging_jobs')
-      .select('*')
-      .eq('id', jobId)
-      .single();
+    const db = getDatabase();
+    const job = await db.jobs.getById(jobId);
 
-    if (fetchError || !job) {
+    if (!job) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     // If dismiss is set for a terminal job, soft-archive it. The row remains
     // available to upload history and update-policy audit references.
-    const terminalStatuses = ['completed', 'failed', 'cancelled', 'duplicate_skipped', 'deployed'];
+    const terminalStatuses = ['completed', 'failed', 'qa_failed', 'cancelled', 'duplicate_skipped', 'deployed'];
     if (dismiss && terminalStatuses.includes(typedJob.status)) {
       // Run auto-update cleanup before deleting (defense-in-depth for stuck jobs)
       if (typedJob.is_auto_update) {
@@ -88,7 +92,6 @@ export async function POST(request: NextRequest) {
           console.error('[Cancel] Auto-update cleanup error on dismiss:', err);
         });
       }
-      const db = getDatabase();
       await db.jobs.deleteById(jobId);
       return NextResponse.json({
         success: true,
@@ -97,6 +100,10 @@ export async function POST(request: NextRequest) {
         archived: true,
       });
     }
+
+    // SQLite self-hosted installs keep jobs in the adapter. Hosted installs
+    // create their client before attempting to cancel a workflow.
+    const supabase = isSqliteMode() ? null : createServerClient();
 
     // Check if job is already cancelled or deployed (cannot be modified)
     if (typedJob.status === 'cancelled') {
@@ -138,7 +145,21 @@ export async function POST(request: NextRequest) {
       }
 
       githubCancelResult = await cancelWorkflowRun(typedJob.github_run_id);
-      if (!githubCancelResult.success) {
+      if (!githubCancelResult.success && githubCancelResult.status === 'not_cancellable') {
+        // GitHub can report a run as queued while rejecting both cancel and
+        // force-cancel because it never really queued it. Nothing has run, so
+        // the job is released locally. The workflow stops on its first
+        // callback if GitHub ever starts the run.
+        const run = await getWorkflowRun(Number(typedJob.github_run_id)).catch(() => null);
+        if (run && UNSTARTED_WORKFLOW_RUN_STATUSES.includes(run.status)) {
+          githubCancelResult = {
+            success: false,
+            status: 'not_started',
+            message: 'GitHub never started this workflow run',
+          };
+        }
+      }
+      if (!githubCancelResult.success && githubCancelResult.status !== 'not_started') {
         const status = githubCancelResult.status === 'error' ? 502 : 409;
         return NextResponse.json(
           {
@@ -153,13 +174,41 @@ export async function POST(request: NextRequest) {
 
     // Update the database only after GitHub accepted cancellation (or when the
     // job is handled by the local packager and no GitHub run exists).
+    const isQaWaitingJob = QA_WAITING_STATUSES.includes(typedJob.status);
     let errorMessage = 'Job cancelled by user';
-    if (!isActiveJob) {
+    if (isQaWaitingJob) {
+      errorMessage = 'Job cancelled by user while waiting for QA';
+    } else if (!isActiveJob) {
       errorMessage = `Job dismissed by user (was ${typedJob.status})`;
     }
 
     // Use token email, or fall back to job's stored user_email
     const cancelledByEmail = userEmail || typedJob.user_email || 'unknown';
+
+    if (!supabase) {
+      // Lock on the status read above: a job the local packager claimed or
+      // finished in the meantime is reported instead of overwritten.
+      const cancelledJob = await db.jobs.update(jobId, {
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: cancelledByEmail,
+        error_message: errorMessage,
+      }, { status: typedJob.status });
+
+      if (!cancelledJob) {
+        return NextResponse.json(
+          { error: 'The job changed status while cancelling. Refresh and try again.', retryable: true },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Job cancelled successfully',
+        jobId,
+        githubCancelled: githubCancelResult?.success ?? null,
+      });
+    }
 
     // Try full update first with all cancellation fields
     const fullUpdateData: PackagingJobUpdate = {
@@ -178,14 +227,16 @@ export async function POST(request: NextRequest) {
 
     // Only use optimistic lock for active jobs (prevent race conditions)
     // For dismissed jobs (completed/failed), we allow updating regardless of current status
-    if (isActiveJob) {
+    // QA-waiting jobs are locked too, so a concurrent QA resume wins cleanly.
+    const useStatusLock = isActiveJob || isQaWaitingJob;
+    if (useStatusLock) {
       updateQuery = updateQuery.eq('status', typedJob.status);
     } else {
       // For non-active jobs, exclude already cancelled or deployed
       updateQuery = updateQuery.not('status', 'in', '("cancelled","deployed")');
     }
 
-    let { error: updateError } = await updateQuery;
+    let { data: updatedRows, error: updateError } = await updateQuery.select('id');
 
     // If full update fails (e.g., missing columns), try minimal update
     if (updateError) {
@@ -201,13 +252,13 @@ export async function POST(request: NextRequest) {
         .update(minimalUpdateData)
         .eq('id', jobId);
 
-      if (isActiveJob) {
+      if (useStatusLock) {
         minimalQuery = minimalQuery.eq('status', typedJob.status);
       } else {
         minimalQuery = minimalQuery.not('status', 'in', '("cancelled","deployed")');
       }
 
-      const { error: minimalError } = await minimalQuery;
+      const { data: minimalRows, error: minimalError } = await minimalQuery.select('id');
 
       if (minimalError) {
         return NextResponse.json(
@@ -218,6 +269,16 @@ export async function POST(request: NextRequest) {
 
       // Minimal update succeeded
       updateError = null;
+      updatedRows = minimalRows;
+    }
+
+    // The status lock matched nothing: the job moved on (for example, its
+    // run started) between the read and this update.
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json(
+        { error: 'The job changed status while cancelling. Refresh and try again.', retryable: true },
+        { status: 409 }
+      );
     }
 
     // Clean up auto-update tracking

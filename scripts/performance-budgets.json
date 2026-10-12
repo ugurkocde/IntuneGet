@@ -1,0 +1,11 @@
+{
+  "/": 317440,
+  "/apps": 296960,
+  "/docs": 322560,
+  "/auth/signin": 424960,
+  "/dashboard": 563200,
+  "/dashboard/apps": 604160,
+  "/dashboard/reports": 696320,
+  "/dashboard/uploads": 578560,
+  "/dashboard/unmanaged": 599040
+}

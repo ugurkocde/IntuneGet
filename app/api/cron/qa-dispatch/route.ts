@@ -1,0 +1,506 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
+import { dispatchQaCandidate } from '@/lib/qa/dispatch';
+import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
+import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
+import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
+import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
+import { diagnoseInstallerSource, InstallerPreflightError } from '@/lib/installer-preflight';
+import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
+import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
+import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
+import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
+import { qaSourceKey, qaSourceRetryAt } from '@/lib/qa/source-backoff';
+import { dispatchCuratedQueue } from '@/lib/qa/curated-queue';
+import type { Database } from '@/types/database';
+
+const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
+const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
+const STALE_HEARTBEAT_MS = 10 * 60 * 1000;
+const MAX_ATTEMPTS = 2;
+const QUEUE_SCAN_PAGE_SIZE = 100;
+const MAX_QUEUE_SCAN_PAGES = 10;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function queueCursor(candidate: {
+  id: unknown;
+  priority: unknown;
+  enqueued_at: unknown;
+}): { priority: number; enqueuedAt: string; id: string } | null {
+  if (!Number.isInteger(candidate.priority)) return null;
+  if (typeof candidate.id !== 'string' || !UUID_PATTERN.test(candidate.id)) return null;
+  if (
+    typeof candidate.enqueued_at !== 'string' ||
+    !candidate.enqueued_at ||
+    Number.isNaN(Date.parse(candidate.enqueued_at))
+  ) {
+    return null;
+  }
+  return {
+    priority: candidate.priority as number,
+    enqueuedAt: candidate.enqueued_at,
+    id: candidate.id,
+  };
+}
+
+function postgrestQuoted(value: string): string {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
+
+export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const supabase = createServerClient();
+  const control = await getQaPipelineControl(supabase);
+  if (control.paused || isQaMaintenanceMode()) {
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'maintenance_paused',
+      maintenanceReason: control.reason,
+      pausedAt: control.updatedAt,
+    });
+  }
+  if (!isQaPackagerReleaseReady(control, QA_PSADT_TOOLCHAIN.packagerCommit)) {
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'packager_release_pending',
+    });
+  }
+  const githubActions = await getGitHubActionsHealth();
+  if (!githubActions.operational) {
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'github_actions_unavailable',
+      githubActionsStatus: githubActions.status,
+    });
+  }
+  const now = new Date();
+  const { data: active, error: activeError } = await supabase
+    .from('qa_candidates')
+    .select('*')
+    .eq('test_level', 'psadt-package')
+    .in('status', ['dispatched', 'running']);
+  if (activeError) throw new Error(`Could not reconcile QA candidates: ${activeError.message}`);
+
+  // A queued GitHub owner can strand a newer pending dispatch indefinitely.
+  // Repair the owner before burning the pending app's timeout/retry budget.
+  // Healthy VM work never pays for GitHub inventory inspection.
+  const stalledDispatch = (active || []).some(candidate =>
+    candidate.status === 'dispatched' && !candidate.started_at &&
+    now.getTime() - Date.parse(candidate.dispatched_at || '') >= STALE_HEARTBEAT_MS);
+  if (!active?.length || stalledDispatch) {
+    const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
+    if (cancelledWaitingRunIds.length > 0) {
+      return NextResponse.json({ success: true, dispatched: false,
+        reason: 'stale_waiting_run_cancelled', cancelledRuns: cancelledWaitingRunIds.length });
+    }
+  }
+
+  let reconciled = 0;
+  for (const candidate of active || []) {
+    const timestamp = candidate.status === 'running' ? candidate.started_at : candidate.dispatched_at;
+    const timeout = candidate.status === 'running' ? RUN_TIMEOUT_MS : DISPATCH_TIMEOUT_MS;
+    const lifecycleStartedAt = typeof timestamp === 'string' ? Date.parse(timestamp) : Number.NaN;
+    const hardTimedOut = !Number.isFinite(lifecycleStartedAt) ||
+      now.getTime() - lifecycleStartedAt > timeout;
+    let completedWithoutCallback = false;
+    if (hardTimedOut && candidate.github_run_id) {
+      // Do not erase the only link to a workflow that still owns GitHub's
+      // concurrency slot (including a queued result publisher). The guardian
+      // can recover that exact run without repeating its completed VM test.
+      completedWithoutCallback = await isQaWorkflowRunCompleted(candidate.github_run_id);
+      if (!completedWithoutCallback) continue;
+    }
+    if (!hardTimedOut) {
+      const heartbeatCandidates = [
+        candidate.activity_updated_at,
+        candidate.phase_updated_at,
+        candidate.updated_at,
+        timestamp,
+      ]
+        .filter((value): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value)))
+        .map((value) => Date.parse(value));
+      const latestHeartbeat = heartbeatCandidates.length ? Math.max(...heartbeatCandidates) : null;
+      if (latestHeartbeat === null || now.getTime() - latestHeartbeat <= STALE_HEARTBEAT_MS) continue;
+      if (!candidate.github_run_id) continue;
+      completedWithoutCallback = await isQaWorkflowRunCompleted(candidate.github_run_id);
+      if (!completedWithoutCallback) continue;
+    }
+
+    const recovery = completedWithoutCallback && candidate.phase === 'publishing' ? {
+      // The cron may observe cancellation before the guardian's next tick.
+      // Preserve the completed VM/run identity for publication-only recovery.
+      status: 'error', finished_at: now.toISOString(), updated_at: now.toISOString(),
+      failure_summary: 'QA result publication did not complete; inspect the protected workflow run.',
+    } : qaTimeoutRecoveryUpdate(
+      candidate,
+      now.toISOString(),
+      MAX_ATTEMPTS,
+      completedWithoutCallback
+        ? 'The QA workflow completed without reporting a terminal candidate result.'
+        : candidate.status === 'dispatched' && !candidate.started_at
+          ? 'The QA workflow did not start before the dispatch timeout.'
+        : undefined
+    );
+    const { error } = await supabase
+      .from('qa_candidates')
+      .update(recovery)
+      .eq('id', candidate.id)
+      .eq('status', candidate.status);
+    if (error) throw error;
+    reconciled++;
+  }
+
+  const { data: stillActive, error: stillActiveError } = await supabase
+    .from('qa_candidates')
+    .select('id')
+    .eq('test_level', 'psadt-package')
+    .in('status', ['dispatched', 'running'])
+    .limit(1);
+  if (stillActiveError) throw stillActiveError;
+  if (stillActive?.length) {
+    return NextResponse.json({ success: true, dispatched: false, reason: 'qa_active', reconciled });
+  }
+
+  let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+  const curated = await dispatchCuratedQueue(supabase, now);
+  if (curated.handled) return NextResponse.json({ success: true, ...curated, reconciled });
+  let scanned = 0;
+  let superseded = 0;
+  let lastInstallerQuarantine: { candidateId: string; code: string } | null = null;
+  let lastInstallerUnavailable: {
+    candidateId: string;
+    code: string;
+    attempts: number;
+    exhausted: boolean;
+  } | null = null;
+  const supersededAt = new Date().toISOString();
+
+  for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
+    let queueQuery = orderQaQueue(supabase
+      .from('qa_candidates')
+      .select(
+        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts, next_retry_at'
+      )
+      .eq('test_level', 'psadt-package')
+      .eq('status', 'queued')
+      .lte('next_retry_at', now.toISOString()))
+      .limit(QUEUE_SCAN_PAGE_SIZE);
+    if (cursor) {
+      const enqueuedAt = postgrestQuoted(cursor.enqueuedAt);
+      const id = postgrestQuoted(cursor.id);
+      queueQuery = queueQuery.or(
+        `priority.lt.${cursor.priority},and(priority.eq.${cursor.priority},enqueued_at.gt.${enqueuedAt}),and(priority.eq.${cursor.priority},enqueued_at.eq.${enqueuedAt},id.gt.${id})`
+      );
+    }
+
+    const { data: page, error: queueError } = await queueQuery;
+    if (queueError) throw queueError;
+    if (!page?.length) break;
+    scanned += page.length;
+
+    const eligible = [];
+    const invalidByReason = new Map<string, string[]>();
+    const addInvalid = (reason: string, id: string) => {
+      const ids = invalidByReason.get(reason) || [];
+      ids.push(id);
+      invalidByReason.set(reason, ids);
+    };
+    for (const candidate of page) {
+      const reason = qaQueueCandidateReason(candidate, now);
+      if (reason) {
+        if (reason !== 'source-retry-pending') addInvalid(reason, candidate.id);
+        continue;
+      }
+      {
+        const compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
+          wingetId: candidate.winget_id,
+          version: candidate.version,
+          architecture: candidate.architecture,
+          installerSha256: candidate.installer_sha256,
+        });
+        if (compatibilityBlock) {
+          addInvalid('package-compatibility-blocked', candidate.id);
+          continue;
+        }
+        eligible.push(candidate);
+        continue;
+      }
+    }
+
+    for (const [reason, ids] of invalidByReason) {
+      const { data: updated, error: supersedeError } = await supabase
+        .from('qa_candidates')
+        .update({
+          status: 'superseded',
+          finished_at: supersededAt,
+          failure_summary: `Superseded before dispatch: ${reason}.`,
+          updated_at: supersededAt,
+        })
+        .in('id', ids)
+        .eq('status', 'queued')
+        .select('id');
+      if (supersedeError) throw supersedeError;
+      superseded += updated?.length || 0;
+    }
+
+    let nextCursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+    for (let index = page.length - 1; index >= 0; index--) {
+      nextCursor = queueCursor(page[index]);
+      if (nextCursor) break;
+    }
+    if (!nextCursor) {
+      return NextResponse.json({
+        success: true,
+        dispatched: false,
+        reason: 'queue_metadata_invalid',
+        reconciled,
+        scanned,
+        superseded,
+      });
+    }
+    cursor = nextCursor;
+
+    for (const candidate of eligible) {
+      const sourceKey = qaSourceKey(candidate);
+      const sourceRetryAt = await qaSourceRetryAt(supabase, sourceKey);
+      if (sourceRetryAt) {
+        const { error } = await supabase.from('qa_candidates')
+          .update({ next_retry_at: sourceRetryAt })
+          .eq('id', candidate.id).eq('status', 'queued');
+        if (error) throw error;
+        continue;
+      }
+      const { data: claimData, error: claimError } = await supabase.rpc('claim_qa_work', {
+        p_kind: 'ordinary', p_id: candidate.id, p_packager_commit: QA_PSADT_TOOLCHAIN.packagerCommit,
+      });
+      const claim = claimData as { row?: Database['public']['Tables']['qa_candidates']['Row']; reason?: string } | null;
+      const claimed = claim?.row;
+      if (claimError?.code === '23505') {
+        return NextResponse.json({
+          success: true,
+          dispatched: false,
+          reason: claim?.reason || 'claim_lost',
+          reconciled,
+          scanned,
+          superseded,
+        });
+      }
+      if (claimError) throw claimError;
+      // A lost compare-and-set means another dispatcher is already making
+      // progress. Do not move on to a second row and violate single-flight QA.
+      if (!claimed) {
+        return NextResponse.json({
+          success: true,
+          dispatched: false,
+          reason: claim?.reason || 'claim_lost',
+          reconciled,
+          scanned,
+          superseded,
+        });
+      }
+
+      try {
+        await dispatchQaCandidate(claimed);
+        // Dispatch has already succeeded; never roll back its claim if bookkeeping fails.
+        try {
+          const { error: clearError } = await supabase.from('qa_source_backoff')
+            .delete().eq('source_key', sourceKey);
+          if (clearError) console.warn('Could not clear completed installer cooldown', clearError.code);
+        } catch { console.warn('Could not clear completed installer cooldown'); }
+        return NextResponse.json({
+          success: true,
+          dispatched: true,
+          candidateId: claimed.id,
+          reconciled,
+          scanned,
+          superseded,
+        });
+      } catch (error) {
+        console.error(`QA dispatch failed for candidate ${claimed.id}:`, error);
+        if (error instanceof InstallerPreflightError && !error.retryable) {
+          const quarantinedAt = new Date().toISOString();
+          const summary = `Installer source quarantined before QA: ${error.code}. ${error.message}`
+            .slice(0, 1000);
+          const { data: quarantinedRows, error: quarantineError } = await supabase
+            .from('qa_candidates')
+            .update({
+              status: 'superseded',
+              finished_at: quarantinedAt,
+              phase: 'preparing_package',
+              phase_started_at: claimed.dispatched_at || quarantinedAt,
+              phase_updated_at: quarantinedAt,
+              failure_summary: summary,
+              updated_at: quarantinedAt,
+            })
+            .in('id', [claimed.id])
+            .eq('status', 'dispatched')
+            .select('id');
+          if (quarantineError) throw quarantineError;
+          superseded += quarantinedRows?.length || 0;
+          lastInstallerQuarantine = {
+            candidateId: claimed.id,
+            code: error.code,
+          };
+          // A deterministic bad tuple must not consume the entire dispatch
+          // tick. Continue scanning the already-validated queue page so one
+          // high-priority candidate cannot starve unrelated applications.
+          continue;
+        }
+        if (error instanceof InstallerPreflightError && error.retryable) {
+          const deferredAt = new Date().toISOString();
+          const attempts = Number.isInteger(claimed.attempts)
+            ? claimed.attempts
+            : candidate.attempts + 1;
+          const exhausted = false;
+          const { data: nextRetryAt, error: backoffError } = await supabase.rpc('record_qa_source_failure', {
+            p_source_key: sourceKey, p_candidate_id: claimed.id, p_attempt: attempts,
+          });
+          if (backoffError) throw backoffError;
+          const { error: deferError } = await supabase
+            .from('qa_candidates')
+            .update({
+                  status: 'queued',
+                  attempts,
+                  next_retry_at: nextRetryAt,
+                  enqueued_at: deferredAt,
+                  dispatched_at: null,
+                  phase: null,
+                  phase_started_at: null,
+                  phase_updated_at: null,
+                  failure_summary:
+                    'The installer source is temporarily unavailable; another check is scheduled.',
+                  updated_at: deferredAt,
+                })
+            .eq('id', claimed.id)
+            .eq('status', 'dispatched');
+          if (deferError) throw deferError;
+          lastInstallerUnavailable = {
+            candidateId: claimed.id,
+            code: error.code,
+            attempts,
+            exhausted,
+          };
+          console.warn('QA installer preflight deferred', lastInstallerUnavailable);
+          if (error.code === 'PREFLIGHT_DEADLINE_EXCEEDED') {
+            return NextResponse.json({
+              success: true,
+              dispatched: false,
+              reason: 'installer_unavailable',
+              reconciled,
+              scanned,
+              superseded,
+              installerUnavailable: lastInstallerUnavailable,
+            });
+          }
+          // A transient publisher/CDN response must not block unrelated apps.
+          // Persist an increasing cooldown on the same row and exact source.
+          continue;
+        }
+        await supabase
+          .from('qa_candidates')
+          .update({
+            status: 'queued',
+            attempts: candidate.attempts,
+            dispatched_at: null,
+            phase: null,
+            phase_started_at: null,
+            phase_updated_at: null,
+            failure_summary: 'The installation test could not start; retry scheduled.',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', claimed.id)
+          .eq('status', 'dispatched');
+        throw error;
+      }
+    }
+
+    if (page.length < QUEUE_SCAN_PAGE_SIZE) break;
+  }
+
+  return NextResponse.json({
+    success: true,
+    dispatched: false,
+    reason: lastInstallerQuarantine
+      ? 'installer_quarantined'
+      : lastInstallerUnavailable
+        ? 'installer_unavailable'
+      : scanned >= QUEUE_SCAN_PAGE_SIZE * MAX_QUEUE_SCAN_PAGES
+        ? 'scan_limit'
+        : 'queue_empty',
+    ...(lastInstallerQuarantine || {}),
+    ...(lastInstallerUnavailable || {}),
+    reconciled,
+    scanned,
+    superseded,
+  });
+}
+
+/** Operator recovery for a terminal infrastructure error; protected by CRON_SECRET. */
+export async function POST(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const body = (await request.json().catch(() => null)) as { candidateId?: string; mode?: string } | null;
+  if (!body?.candidateId || !/^[0-9a-fA-F-]{36}$/.test(body.candidateId)) {
+    return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
+  }
+
+  if (body.mode !== undefined && body.mode !== 'source-diagnostic') {
+    return NextResponse.json({ error: 'Unknown operation mode' }, { status: 400 });
+  }
+  const supabase = createServerClient();
+  if (body.mode === 'source-diagnostic') {
+    if (!UUID_PATTERN.test(body.candidateId)) return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
+    const { data, error } = await supabase.from('qa_candidates')
+      .select('winget_id,version,architecture,installer_url,installer_sha256,installer_type,test_config,test_level')
+      .eq('id', body.candidateId).eq('test_level', 'psadt-package').maybeSingle();
+    if (error) return NextResponse.json({ error: 'Candidate state unavailable' }, { status: 503 });
+    if (!data) return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+    const result = await diagnoseInstallerSource(buildQaCandidatePreflightRequest(data));
+    return NextResponse.json({ success: true, mode: body.mode, candidateId: body.candidateId, ...result });
+  }
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('qa_candidates')
+    .update({
+      status: 'queued',
+      attempts: 0,
+      dispatched_at: null,
+      started_at: null,
+      finished_at: null,
+      github_run_id: null,
+      github_run_url: null,
+      phase: null,
+      phase_started_at: null,
+      phase_updated_at: null,
+      failure_summary: null,
+      updated_at: now,
+    })
+    .eq('id', body.candidateId)
+    .eq('test_level', 'psadt-package')
+    .in('status', ['error', 'superseded'])
+    .or('phase.is.null,phase.neq.publishing')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    return NextResponse.json({ error: 'Candidate is not retryable' }, { status: 409 });
+  }
+  return NextResponse.json({ success: true, candidateId: data.id });
+}
+
+// Installer preflight downloads and hashes the exact vendor payload before
+// dispatching a runner job. Large installers need the same bounded function
+// window as the customer packaging route; otherwise the function can be
+// terminated after claiming a candidate but before GitHub receives a run.
+export const maxDuration = 300;

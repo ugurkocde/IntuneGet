@@ -1,0 +1,5 @@
+{
+  "title": "Clearer WinGet polling status",
+  "summary": "The live QA page now shows an active WinGet catalog check as scanning instead of briefly reporting a degraded service. A poll is only marked degraded when it actually fails or remains unfinished beyond the allowed window.",
+  "type": "fixed"
+}

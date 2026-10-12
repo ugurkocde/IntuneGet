@@ -1,0 +1,5 @@
+{
+  "title": "VirusTotal lookups focus on recent catalog versions",
+  "summary": "Automatic catalog hash lookups now cover only versions recorded by IntuneGet within the last 72 hours. Older queued requests are removed, and browsing historical releases does not restart them. Existing cached findings and direct VirusTotal links remain available. The cutoff uses the catalog recorded date, not the vendor release date, so the free API budget stays focused on recent additions.",
+  "type": "improved"
+}

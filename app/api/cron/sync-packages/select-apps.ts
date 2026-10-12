@@ -16,6 +16,7 @@ export interface AppToSync {
   winget_id: string;
   latest_version: string | null;
   description: string | null;
+  upstream_miss_count: number;
 }
 
 export async function selectAppsToSync(
@@ -24,7 +25,7 @@ export async function selectAppsToSync(
   // Top ranked apps
   const { data: rankedApps, error: rankedError } = await supabase
     .from('curated_apps')
-    .select('winget_id, latest_version, description')
+    .select('winget_id, latest_version, description, upstream_miss_count')
     .eq('is_verified', true)
     .eq('is_winget_verified', true)
     .eq('app_source', 'win32')
@@ -38,7 +39,7 @@ export async function selectAppsToSync(
   // Apps that have never been synced (no version data yet)
   const { data: unsyncedApps, error: unsyncedError } = await supabase
     .from('curated_apps')
-    .select('winget_id, latest_version, description')
+    .select('winget_id, latest_version, description, upstream_miss_count')
     .eq('is_verified', true)
     .eq('is_winget_verified', true)
     .eq('app_source', 'win32')

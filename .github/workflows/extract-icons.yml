@@ -43,6 +43,10 @@ on:
         description: 'Pagination offset for missing-sizes-only mode (winget_id-ordered). Use to walk through the binary tier batch by batch.'
         required: false
         default: '0'
+      budget_minutes:
+        description: 'Wall-clock ceiling per job for the per-app loop. Apps not reached stay untouched and are re-selected by the next run, so max_apps can be raised for throughput without long runs. 0 disables the guard.'
+        required: false
+        default: '40'
 
 # Prevent concurrent runs that could cause git conflicts
 # Use same group as build-app-list and sync-manifests to ensure sequential execution
@@ -52,6 +56,7 @@ concurrency:
 
 env:
   MAX_APPS: ${{ github.event.inputs.max_apps || '100' }}
+  BUDGET_MINUTES: ${{ github.event.inputs.budget_minutes || '40' }}
 
 permissions:
   contents: write
@@ -81,6 +86,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify push token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The PAT secret is not set -- icon PRs cannot be published."
+            exit 1
+          fi
+          # A dry-run push replicates the exact operation that breaks when the
+          # PAT expires or loses 'Contents: write'. No refs are created. The
+          # /repos permissions field is NOT a reliable substitute -- it reports
+          # push=false for fine-grained PATs that can in fact push.
+          if ! git push --dry-run "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/preflight-check-${GITHUB_RUN_ID}"; then
+            echo "::error::The PAT cannot push to $GITHUB_REPOSITORY -- it has likely expired or lost 'Contents: write'. Rotate the PAT secret before re-running."
+            exit 1
+          fi
+          echo "PAT verified: push access to $GITHUB_REPOSITORY confirmed"
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -95,15 +119,32 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MAX_APPS: ${{ env.MAX_APPS }}
+          # Web fetching is fast (seconds per app); allow a larger batch than
+          # the binary job so the cursor advances meaningfully per run.
+          MAX_APPS: ${{ github.event.inputs.max_apps || '300' }}
+          BUDGET_MINUTES: ${{ env.BUDGET_MINUTES }}
           ICONS_DIR: public/icons
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
           BINARY_GAP_FILL: ${{ github.event.inputs.binary_gap_fill || 'false' }}
         run: node .github/scripts/fetch-web-icons.mjs
 
+      - name: Audit duplicate icons
+        if: always()
+        env:
+          ICONS_DIR: public/icons
+        run: node .github/scripts/audit-duplicate-icons.mjs
+
+      - name: Upload icon audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: icon-audit
+          path: icon-audit.json
+          if-no-files-found: ignore
+
       - name: Commit web icons
         id: commit-web-icons
-        if: steps.fetch-web-icons.outputs.total_hits != '0'
+        if: steps.fetch-web-icons.outputs.total_hits != '' && steps.fetch-web-icons.outputs.total_hits != '0'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.PAT }}
@@ -181,6 +222,38 @@ jobs:
           });
           EOF
 
+      # Advance the pagination cursor only after the fetched icons were
+      # committed (or there was nothing to commit). Default step semantics do
+      # the gating: a failed commit/database step aborts the job before this
+      # step, so the next run retries the same batch instead of skipping it.
+      - name: Persist web icon cursor
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          if (!fs.existsSync('web-icon-cursor.json')) {
+            console.log('No cursor file (top-up/gap-fill mode) -- nothing to persist');
+            process.exit(0);
+          }
+          const { createClient } = require('@supabase/supabase-js');
+          const cursor = JSON.parse(fs.readFileSync('web-icon-cursor.json', 'utf8'));
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+          supabase.from('curated_sync_status').upsert({
+            id: 'extract-icons-web-cursor',
+            metadata: { last_winget_id: cursor.last_winget_id },
+            updated_at: new Date().toISOString(),
+          }).then(({ error }) => {
+            if (error) {
+              console.error('Failed to persist web icon cursor:', error.message);
+              process.exit(1);
+            }
+            console.log('Web icon cursor advanced to:', cursor.last_winget_id);
+          });
+          EOF
+
       - name: Web icons summary
         if: always()
         run: |
@@ -192,11 +265,13 @@ jobs:
             FAVICON=$(jq '[.[] | select(.icon_source == "favicon")] | length' web-icon-results.json)
             STORE=$(jq '[.[] | select(.icon_source == "microsoft_store")] | length' web-icon-results.json)
             HOMEPAGE=$(jq '[.[] | select(.icon_source == "homepage_image")] | length' web-icon-results.json)
+            INHERITED=$(jq '[.[] | select(.icon_source == "family_inherited")] | length' web-icon-results.json)
             TOTAL=$(jq 'length' web-icon-results.json)
             echo "- **GitHub avatars:** $GITHUB" >> $GITHUB_STEP_SUMMARY
             echo "- **Favicons:** $FAVICON" >> $GITHUB_STEP_SUMMARY
             echo "- **Microsoft Store:** $STORE" >> $GITHUB_STEP_SUMMARY
             echo "- **Homepage images:** $HOMEPAGE" >> $GITHUB_STEP_SUMMARY
+            echo "- **Family inherited:** $INHERITED" >> $GITHUB_STEP_SUMMARY
             echo "- **Total success:** $SUCCESS" >> $GITHUB_STEP_SUMMARY
             echo "- **Total processed:** $TOTAL" >> $GITHUB_STEP_SUMMARY
           fi
@@ -226,6 +301,25 @@ jobs:
       - name: Pull latest (includes web icons)
         run: git pull origin main
         shell: bash
+
+      - name: Verify push token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The PAT secret is not set -- icon PRs cannot be published."
+            exit 1
+          fi
+          # A dry-run push replicates the exact operation that breaks when the
+          # PAT expires or loses 'Contents: write'. No refs are created. The
+          # /repos permissions field is NOT a reliable substitute -- it reports
+          # push=false for fine-grained PATs that can in fact push.
+          if ! git push --dry-run "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/preflight-check-${GITHUB_RUN_ID}"; then
+            echo "::error::The PAT cannot push to $GITHUB_REPOSITORY -- it has likely expired or lost 'Contents: write'. Rotate the PAT secret before re-running."
+            exit 1
+          fi
+          echo "PAT verified: push access to $GITHUB_REPOSITORY confirmed"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -285,14 +379,27 @@ jobs:
           async function getApps() {
             let query = supabase
               .from('curated_apps')
-              .select('winget_id, name, publisher, latest_version, icon_extraction_attempts, icon_source');
+              .select('winget_id, name, publisher, latest_version, has_icon, icon_extraction_attempts, icon_source');
+
+            // Low-fidelity web sources are placeholders: binary extraction
+            // always wins over them, so include them here to heal wrong icons
+            // (e.g. publisher avatars shown for product apps like Firefox).
+            const WEB_SOURCES = ['github_avatar', 'favicon', 'homepage_image'];
 
             if (appIds !== 'all') {
               const targetIds = appIds.split(',').map(id => id.trim());
-              query = query.in('winget_id', targetIds);
-            }
-
-            if (missingSizesOnly) {
+              // Explicitly targeted run (e.g. healing audit-flagged icons):
+              // bypass icon-state filters so named apps are re-extracted no
+              // matter what their current icon_source is.
+              query = supabase
+                .from('curated_apps')
+                .select('winget_id, name, publisher, latest_version, has_icon, icon_extraction_attempts, icon_source')
+                .in('winget_id', targetIds)
+                .order('winget_id', { ascending: true });
+              if (!forceRefresh) {
+                query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
+              }
+            } else if (missingSizesOnly) {
               // Top-up mode: target apps that already have a binary-sourced icon.
               // Web-sourced icons are handled by the fetch-web-icons job.
               // Use deterministic ordering + range so we can walk through the
@@ -307,12 +414,10 @@ jobs:
                 .range(startOffset, startOffset + maxApps - 1);
             } else {
               if (!forceRefresh) {
-                query = query.or('has_icon.is.null,has_icon.eq.false');
-              }
-
-              if (!forceRefresh) {
+                query = query.or('has_icon.is.null,has_icon.eq.false,icon_source.in.(github_avatar,favicon,homepage_image)');
                 query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
               }
+              query = query.order('winget_id', { ascending: true });
               query = query.limit(maxApps);
             }
 
@@ -323,15 +428,85 @@ jobs:
               process.exit(1);
             }
 
-            const wingetIds = apps.map(a => a.winget_id);
+            // Resolve an app's package-family ancestors (Mozilla.Firefox.es-ES ->
+            // Mozilla.Firefox). Returns the longest ancestor directory that
+            // already has every target size on disk, so locale/variant packages
+            // reuse their base product's extracted icon instead of each
+            // downloading its own installer.
+            function findFullAncestorDir(wingetId) {
+              const parts = wingetId.split('.');
+              for (let take = parts.length - 1; take >= 2; take--) {
+                const dir = path.join('public/icons', parts.slice(0, take).join('.'));
+                if (!fs.existsSync(dir)) continue;
+                const complete = TARGET_SIZES.every(s => fs.existsSync(path.join(dir, `icon-${s}.png`)));
+                if (complete) return dir;
+              }
+              return null;
+            }
+
+            // Cheap change detector: when an ancestor's icons were re-extracted
+            // (new version, healed publisher-level icon), the signature differs
+            // and every variant below it re-copies exactly once, then converges.
+            function dirSignature(dir) {
+              return TARGET_SIZES.map(s => {
+                const p = path.join(dir, `icon-${s}.png`);
+                return fs.existsSync(p) ? `${s}:${fs.statSync(p).size}` : `${s}:missing`;
+              }).join('|');
+            }
+
+            const wingetIds = [];
+            const inheritedResults = [];
+
+            for (const app of apps) {
+              if (!missingSizesOnly && !forceRefresh) {
+                const ancestorDir = findFullAncestorDir(app.winget_id);
+                if (ancestorDir) {
+                  const iconDir = path.join('public/icons', app.winget_id);
+                  fs.mkdirSync(iconDir, { recursive: true });
+                  const stale = dirSignature(ancestorDir) !== dirSignature(iconDir);
+                  if (stale) {
+                    for (const file of fs.readdirSync(ancestorDir)) {
+                      if (!/^icon-\d+\.png$/.test(file)) continue;
+                      const src = path.join(ancestorDir, file);
+                      const dst = path.join(iconDir, file);
+                      if (!fs.existsSync(dst) || fs.statSync(src).size !== fs.statSync(dst).size) {
+                        fs.copyFileSync(src, dst);
+                      }
+                    }
+                    console.log(`Inherited refreshed icon for ${app.winget_id} from ${path.basename(ancestorDir)} (no installer download needed)`);
+                    inheritedResults.push({
+                      winget_id: app.winget_id,
+                      status: 'success',
+                      icon_path: `/icons/${app.winget_id}/`,
+                      icon_source: 'family_inherited'
+                    });
+                    continue;
+                  }
+                  // Ancestor matches what we already ship -- fall through to
+                  // normal rules so converged variants cost nothing.
+                }
+              }
+              wingetIds.push(app.winget_id);
+            }
+
             const installerMap = {};
             if (wingetIds.length > 0) {
-              const { data: vhRows } = await supabase
+              // version_history has no detected_at column; ordering by it made
+              // PostgREST reject the whole query. The error was discarded, so
+              // installerMap silently stayed empty and every app fell through
+              // to the slower manifest tiers. Surface the error now so a
+              // schema drift like that cannot go unnoticed again.
+              const { data: vhRows, error: vhError } = await supabase
                 .from('version_history')
                 .select('winget_id, installer_url, installer_sha256')
                 .in('winget_id', wingetIds)
                 .not('installer_url', 'is', null)
-                .order('detected_at', { ascending: false });
+                .order('created_at', { ascending: false });
+
+              if (vhError) {
+                console.error('Failed to fetch version_history:', vhError.message);
+                process.exit(1);
+              }
 
               if (vhRows) {
                 for (const row of vhRows) {
@@ -345,6 +520,7 @@ jobs:
 
             const appsToProcess = [];
             for (const app of apps) {
+              if (inheritedResults.some(r => r.winget_id === app.winget_id)) continue;
               const iconDir = `public/icons/${app.winget_id}`;
               if (missingSizesOnly) {
                 // Process only if at least one target size is missing on disk.
@@ -357,10 +533,11 @@ jobs:
                 appsToProcess.push(app);
               } else {
                 const iconPath = `${iconDir}/icon-64.png`;
-                if (forceRefresh || !fs.existsSync(iconPath)) {
+                const wantsHeal = WEB_SOURCES.includes(app.icon_source) || appIds !== 'all';
+                if (forceRefresh || !fs.existsSync(iconPath) || wantsHeal) {
                   const attempts = app.icon_extraction_attempts || 0;
                   if (!forceRefresh && attempts >= 3) {
-                    console.log(`Skipping ${app.winget_id} (${attempts} failed attempts)`);
+                    console.log(`Skipping ${app.winget_id} (source=${app.icon_source}, ${attempts} failed attempts)`);
                     continue;
                   }
                   app.cached_installer_url = installerMap[app.winget_id]?.url || null;
@@ -371,13 +548,27 @@ jobs:
               if (appsToProcess.length >= maxApps) break;
             }
 
-            console.log(`Processing ${appsToProcess.length} apps for binary icon extraction`);
+            // Merge inherited successes into the results file so the commit and
+            // database steps publish them even when no installer downloads ran.
+            let existingResults = [];
+            if (inheritedResults.length > 0) {
+              try {
+                existingResults = JSON.parse(fs.readFileSync('icon-results.json', 'utf8'));
+              } catch {}
+              fs.writeFileSync(
+                'icon-results.json',
+                JSON.stringify([...existingResults.filter(r => !inheritedResults.some(i => i.winget_id === r.winget_id)), ...inheritedResults], null, 2)
+              );
+            }
+
+            console.log(`Processing ${appsToProcess.length} apps for binary icon extraction (${inheritedResults.length} resolved via family inheritance)`);
 
             fs.writeFileSync('apps-to-process.json', JSON.stringify(appsToProcess, null, 2));
 
             const outputFile = process.env.GITHUB_OUTPUT;
             if (outputFile) {
-              fs.appendFileSync(outputFile, `app_count=${appsToProcess.length}\n`);
+              fs.appendFileSync(outputFile, `app_count=${appsToProcess.length + inheritedResults.length}\n`);
+              fs.appendFileSync(outputFile, `inherited_count=${inheritedResults.length}\n`);
             }
           }
 
@@ -391,261 +582,9 @@ jobs:
         if: steps.get-apps.outputs.app_count != '0'
         env:
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
+          BUDGET_MINUTES: ${{ env.BUDGET_MINUTES }}
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-
-          $skipExisting = $env:MISSING_SIZES_ONLY -eq 'true'
-          if ($skipExisting) {
-            Write-Host "Top-up mode: existing icon sizes will be preserved" -ForegroundColor Cyan
-          }
-
-          $apps = Get-Content "apps-to-process.json" | ConvertFrom-Json
-
-          $extracted = 0
-          $failed = 0
-          $results = @()
-
-          foreach ($app in $apps) {
-            $wingetId = $app.winget_id
-            Write-Host "`n=== Processing $wingetId ===" -ForegroundColor Cyan
-
-            $failureReason = $null
-
-            try {
-              $iconDir = "public/icons/$wingetId"
-              New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
-
-              $installerUrl = $null
-              $installerPath = $null
-
-              $parts = $wingetId.Split('.')
-              $publisher = $parts[0]
-              $firstLetter = $publisher.Substring(0,1).ToLower()
-
-              $namePath = $parts[1..($parts.Length-1)] -join '/'
-              $rawBaseUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/$firstLetter/$publisher/$namePath"
-
-              $encodedParts = $parts[1..($parts.Length-1)] | ForEach-Object { [uri]::EscapeDataString($_) }
-              $encodedNamePath = $encodedParts -join '/'
-              $encodedPublisher = [uri]::EscapeDataString($publisher)
-              $apiBaseUrl = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$firstLetter/$encodedPublisher/$encodedNamePath"
-
-              if ($app.cached_installer_url) {
-                Write-Host "Tier 1: Using cached installer URL from version_history"
-                $installerUrl = $app.cached_installer_url
-              }
-
-              if (-not $installerUrl -and $app.latest_version) {
-                try {
-                  $latestVersion = $app.latest_version
-                  Write-Host "Tier 2: Using latest_version '$latestVersion' with raw URL"
-                  $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
-                  $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
-
-                  $lines = $yamlContent.Content -split "`n"
-                  foreach ($line in $lines) {
-                    if ($line -match 'InstallerUrl:\s*(.+)') {
-                      $installerUrl = $matches[1].Trim()
-                      break
-                    }
-                  }
-                } catch {
-                  Write-Host "Tier 2 failed for $wingetId : $($_.Exception.Message)"
-                }
-              }
-
-              if (-not $installerUrl) {
-                try {
-                  Write-Host "Tier 3: Listing versions via GitHub API"
-                  $versions = Invoke-RestMethod -Uri $apiBaseUrl -Headers @{ 'User-Agent' = 'IntuneGet' } -ErrorAction Stop -TimeoutSec 30
-                  $versionDirs = $versions | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' }
-                  $latestVersion = ($versionDirs | Sort-Object { [version]($_.name -replace '[^\d.]', '.') } -Descending -ErrorAction SilentlyContinue | Select-Object -First 1).name
-                  if (-not $latestVersion) {
-                    $latestVersion = ($versionDirs | Sort-Object name -Descending | Select-Object -First 1).name
-                  }
-
-                  if ($latestVersion) {
-                    $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
-                    $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
-
-                    $lines = $yamlContent.Content -split "`n"
-                    foreach ($line in $lines) {
-                      if ($line -match 'InstallerUrl:\s*(.+)') {
-                        $installerUrl = $matches[1].Trim()
-                        break
-                      }
-                    }
-                  }
-                } catch {
-                  Write-Warning "Tier 3 failed for $wingetId : $_"
-                }
-              }
-
-              if (-not $installerUrl) {
-                Write-Warning "No installer URL found for $wingetId"
-                $failureReason = 'no_installer_url'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = 'no_installer_url'
-                  failure_reason = $failureReason
-                }
-                continue
-              }
-
-              if (-not $app.cached_installer_sha256 -or $app.cached_installer_sha256 -notmatch '^[A-Fa-f0-9]{64}$') {
-                Write-Warning "No trusted SHA256 is available for $wingetId"
-                $failureReason = 'missing_trusted_installer_hash'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = 'A trusted installer hash is required before binary parsing'
-                  failure_reason = $failureReason
-                }
-                continue
-              }
-
-              $extension = if ($installerUrl -match '\.msi(\?|$)') { '.msi' }
-                          elseif ($installerUrl -match '\.msixbundle(\?|$)') { '.msixbundle' }
-                          elseif ($installerUrl -match '\.msix(\?|$)') { '.msix' }
-                          elseif ($installerUrl -match '\.appx(\?|$)') { '.appx' }
-                          else { '.exe' }
-
-              $installerPath = "$env:TEMP\installer_$([System.IO.Path]::GetRandomFileName())$extension"
-
-              Write-Host "Downloading installer from $installerUrl"
-              try {
-                & "$env:GITHUB_WORKSPACE\.github\scripts\save-safe-download.ps1" `
-                  -Uri $installerUrl -Destination $installerPath -MaxBytes 524288000 -MaxRedirects 5 -TimeoutSeconds 90
-              } catch {
-                Write-Warning "Download failed or timed out for ${wingetId}: $_"
-                $failureReason = 'download_timeout'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = "Download timeout or error"
-                  failure_reason = $failureReason
-                }
-                continue
-              }
-
-              if (-not (Test-Path $installerPath)) {
-                Write-Warning "Failed to download installer for $wingetId"
-                $failureReason = 'download_failed'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = 'download_failed'
-                  failure_reason = $failureReason
-                }
-                continue
-              }
-
-              $fileSize = (Get-Item $installerPath).Length
-              $fileSizeMB = [math]::Round($fileSize / 1MB, 1)
-              Write-Host "Downloaded $fileSizeMB MB"
-              if ($fileSize -gt 500MB) {
-                Write-Warning "Installer too large ($fileSizeMB MB) for $wingetId, skipping"
-                Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-                $failureReason = 'installer_too_large'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = "Installer too large: ${fileSizeMB}MB"
-                  failure_reason = $failureReason
-                }
-                continue
-              }
-
-              $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash
-              if ($actualHash -ine $app.cached_installer_sha256) {
-                Write-Warning "SHA256 mismatch for $wingetId"
-                $failureReason = 'installer_hash_mismatch'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = "Installer SHA256 did not match the trusted manifest"
-                  failure_reason = $failureReason
-                }
-                continue
-              }
-
-              $iconSourceType = switch ($extension) {
-                '.msi' { 'binary_msi' }
-                '.msix' { 'binary_msix' }
-                '.msixbundle' { 'binary_msix' }
-                '.appx' { 'binary_msix' }
-                default { 'binary_exe' }
-              }
-
-              $extractResult = & "$env:GITHUB_WORKSPACE\.github\scripts\extract-icon.ps1" `
-                -InstallerPath $installerPath `
-                -OutputDir $iconDir `
-                -AppId $wingetId `
-                -SkipExisting:$skipExisting 2>&1
-              $extractExitCode = $LASTEXITCODE
-
-              if ($extractExitCode -ne 0) {
-                Write-Host "Icon extraction script returned exit code: $extractExitCode"
-                Write-Host $extractResult
-              }
-
-              if (Test-Path "$iconDir/icon-64.png") {
-                Write-Host "Successfully extracted icon for $wingetId" -ForegroundColor Green
-                $extracted++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'success'
-                  icon_path = "/icons/$wingetId/"
-                  icon_source = $iconSourceType
-                }
-              } else {
-                Write-Warning "No icon extracted for $wingetId"
-                $failureReason = 'no_icon_in_binary'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = 'No icon extracted'
-                  failure_reason = $failureReason
-                }
-              }
-            } catch {
-              Write-Warning "Error processing $wingetId : $_"
-              $failureReason = 'extraction_error'
-              $failed++
-              $results += @{
-                winget_id = $wingetId
-                status = 'failed'
-                error = $_.ToString()
-                failure_reason = $failureReason
-              }
-            } finally {
-              if ($installerPath -and (Test-Path $installerPath)) {
-                Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-              }
-            }
-
-            Start-Sleep -Seconds 1
-          }
-
-          Write-Host "`n=== Binary Icon Extraction Summary ===" -ForegroundColor Cyan
-          Write-Host "Extracted: $extracted"
-          Write-Host "Failed: $failed"
-
-          ConvertTo-Json -InputObject @($results) -Depth 10 | Out-File "icon-results.json" -Encoding utf8NoBOM
-
-          echo "extracted=$extracted" >> $env:GITHUB_OUTPUT
-          echo "failed=$failed" >> $env:GITHUB_OUTPUT
-
-          exit 0
+        run: .github/scripts/extract-icons-batch.ps1
 
       - name: Commit icons
         id: commit-icons
@@ -803,3 +742,32 @@ jobs:
             }
           }
         shell: pwsh
+
+  # ============================================================
+  # Alert: keep a visible issue open while the pipeline is failing.
+  # Scheduled-run failure emails are easy to miss -- this workflow
+  # once failed for four weeks straight before anyone noticed.
+  # ============================================================
+  alert-on-failure:
+    runs-on: ubuntu-24.04
+    needs: [extract-web-icons, extract-binary-icons]
+    if: always() && contains(needs.*.result, 'failure')
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Extract App Icons workflow is failing"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Run failed again: $run_url"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The Extract App Icons workflow failed: $run_url
+
+          The most common cause is the \`PAT\` secret expiring or losing write access -- check the 'Verify push token' step of the failed run, and rotate the secret if it flagged the token.
+
+          A comment is added here on every subsequent failed run. Close this issue once the workflow is green again."
+          fi

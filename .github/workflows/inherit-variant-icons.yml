@@ -1,0 +1,83 @@
+name: Inherit Variant Icons
+
+# Mozilla.Firefox.de is the same product as Mozilla.Firefox and should wear the
+# same icon. The heal planner deliberately does not queue variants, leaving
+# them to family inheritance so one installer download serves the whole family.
+#
+# Nothing was picking them up: inheritance lives in fetch-web-icons.mjs, which
+# only looks at apps with no icon at all, and a variant holding a publisher
+# avatar has one. This closes that gap by copying a healed ancestor's icon down
+# onto its variants. Pure file copying, so it runs on Ubuntu in seconds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: 'Cap on variants to update in one run. The work is a file copy per variant, so the default covers the whole catalog.'
+        required: false
+        default: '5000'
+
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  inherit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Copy ancestor icons onto variants
+        id: inherit
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ICONS_DIR: public/icons
+          MAX_APPS: ${{ github.event.inputs.max_apps || '5000' }}
+        run: node .github/scripts/inherit-variant-icons.mjs
+
+      - name: Audit duplicate icons
+        if: always()
+        env:
+          ICONS_DIR: public/icons
+        run: node .github/scripts/audit-duplicate-icons.mjs
+
+      - name: Publish icons
+        id: commit-icons
+        if: steps.inherit.outputs.inherited != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          .github/scripts/publish-icon-pr.sh inherit "chore: inherit product icons for variant packages"
+
+      # Runs whenever the pass produced results, not only when files changed: a
+      # variant whose bytes already matched still needs its row corrected, which
+      # is the whole reason these were stuck.
+      - name: Update database
+        if: always() && steps.inherit.outputs.inherited != '0'
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          COMMITTED_APPS: ${{ steps.commit-icons.outputs.committed_apps }}
+          RESULTS_FILE: icon-results.json
+          SYNC_ID: inherit-variant-icons
+        run: node .github/scripts/update-icon-db.mjs

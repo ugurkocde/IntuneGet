@@ -1,0 +1,6 @@
+{
+  "title": "See how each package was built",
+  "summary": "App pages now show the provenance of the tested build: the installer source, the installer hash, the packaging toolchain version and the commit that produced it, and the tested package profile. A direct VirusTotal lookup opens the report for that hash, and a button opens the full per-version QA report with the install and uninstall phases, detection, and captured commands.",
+  "type": "new",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/1206"
+}

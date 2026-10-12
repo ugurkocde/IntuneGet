@@ -45,10 +45,10 @@ export function PermissionStatusIndicator({
         <CheckCircle2 className="w-5 h-5 text-status-success flex-shrink-0" />
         <div className="flex-1">
           <p className="text-status-success text-sm font-medium">
-            Ready to deploy
+            Intune permissions verified
           </p>
           <p className="text-status-success/70 text-xs mt-0.5">
-            Intune permissions verified
+            Installer availability is checked before deployment.
           </p>
         </div>
       </div>

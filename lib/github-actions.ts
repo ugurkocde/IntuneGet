@@ -4,8 +4,30 @@
  * Uses repository_dispatch to a private workflows repository
  */
 
+import { createHmac } from 'node:crypto';
+import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
+import { assertCuratedLicenceAccepted } from '@/lib/curated-catalog/licence';
+
 import { applyInstallerUrlOverride } from './installer-url-overrides';
-import { enforceInstallerPreflight } from './installer-preflight';
+import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
+import { enforceInstallerPreflight, InstallerPreflightError } from './installer-preflight';
+import { enforceQaGate } from './qa/gate';
+import {
+  resolveApplicationInstallScope,
+  resolveApplicationInstallerSuccessCodes,
+  resolveApplicationUninstallCommand,
+} from './packaging-adapters';
+import { assertPackagingContract } from './packaging-contract';
+import {
+  normalizeQaWorkflowPackageInput,
+} from './qa/package-profile';
+import {
+  resolveWingetPackageDependencies,
+  type PackagedWingetDependency,
+} from './winget-dependencies';
+import type { Win32CartItem } from '@/types/upload';
+import type { NormalizedInstaller } from '@/types/winget';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -23,6 +45,7 @@ export interface WorkflowInputs {
   nestedInstallerType?: string; // Nested installer type for zip installers
   nestedInstallerPath?: string; // Relative path to the nested installer inside the zip
   silentSwitches: string;
+  installerSuccessCodes?: number[];
   uninstallCommand: string;
   callbackUrl: string;
   psadtConfig?: string; // JSON-serialized PSADTConfig
@@ -34,12 +57,16 @@ export interface WorkflowInputs {
   relationships?: string; // JSON-serialized AppRelationship[]
   installScope?: 'machine' | 'user'; // Install scope for per-user vs per-machine
   forceCreate?: boolean; // Skip duplicate check and force create new app
+  qaOverride?: boolean; // Server-side QA acknowledgement; never forwarded to GitHub
   sourceIntuneAppId?: string; // Previous app ID for assignment carry-over
   carryOverAssignments?: boolean; // Copy assignments from previous app
   removeAssignmentsFromPreviousApp?: boolean; // Remove assignments from previous app after carry-over
   autoSupersede?: boolean; // Mark the new app as superseding the previous app
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
-  sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
+  sourceType?: 'winget' | 'custom' | 'curated';
+  curatedReleaseId?: string;
+  packageProfileSha256?: string; // Upstream QA identity; final dispatch recalculates from effective inputs
+  packageDependencies?: PackagedWingetDependency[]; // Server-resolved; caller values are never trusted
 }
 
 export interface GitHubActionsConfig {
@@ -102,28 +129,177 @@ export interface TriggerResult {
 export async function triggerPackagingWorkflow(
   inputs: WorkflowInputs,
   config?: GitHubActionsConfig,
-  options?: { skipRunCapture?: boolean }
+  options?: { skipRunCapture?: boolean; requireQaPass?: boolean }
 ): Promise<TriggerResult> {
   const cfg = config || getGitHubActionsConfig();
 
-  const finalInstallerUrl = applyInstallerUrlOverride(
-    inputs.wingetId,
-    inputs.version,
-    inputs.architecture ?? '',
-    inputs.installerUrl,
-  );
+  let effectiveInputs = inputs;
+  let trustedInstallers: NormalizedInstaller[] | undefined;
+  if (isCuratedPackageId(inputs.wingetId) || inputs.sourceType === 'curated') {
+    if (inputs.sourceType === 'custom' || inputs.qaOverride || inputs.hashValidationMode === 'calculate') {
+      throw new CuratedCatalogError('Curated releases require their approved validation profile.');
+    }
+    const approved = await authorizeCuratedWorkflow(inputs);
+    // Every hosted dispatch (cart, QA resume, manual and automatic updates,
+    // MSP batches) passes here, so the target tenant's licence acceptance is
+    // enforced for each one regardless of how the job was created.
+    await assertCuratedLicenceAccepted(inputs.tenantId, approved.app.packageId);
+    effectiveInputs = { ...inputs, sourceType: 'curated', curatedReleaseId: approved.release.id };
+    trustedInstallers = [approved.installer];
+  } else if (inputs.sourceType !== 'custom') {
+    const resolvedUninstallCommand = resolveApplicationUninstallCommand(
+      inputs.wingetId,
+      inputs.uninstallCommand,
+    );
+    const generatedDisplayUninstallCommand = resolveApplicationUninstallCommand(
+      inputs.wingetId,
+      `REGISTRY_UNINSTALL:${inputs.displayName}`,
+    );
+    // Generated catalog fallbacks are not customer overrides. Let trusted
+    // manifest reconciliation replace them with a ProductCode, exact ARP key
+    // or MSIX package identity; preserve real custom uninstall commands.
+    const customerUninstallOverride = resolvedUninstallCommand.trim() &&
+      resolvedUninstallCommand.trim() !== generatedDisplayUninstallCommand
+      && resolvedUninstallCommand.trim() !== 'MSIX_UNINSTALL:{PACKAGE_NAME}'
+      ? resolvedUninstallCommand
+      : undefined;
+    try {
+      const reconciled = await reconcileCatalogInstaller({
+        id: inputs.jobId,
+        addedAt: new Date().toISOString(),
+        appSource: 'win32',
+        sourceType: 'winget',
+        wingetId: inputs.wingetId,
+        displayName: inputs.displayName,
+        description: inputs.description,
+        publisher: inputs.publisher,
+        version: inputs.version,
+        architecture: (inputs.architecture || 'x64') as Win32CartItem['architecture'],
+        installScope: inputs.installScope || 'machine',
+        installerType: inputs.installerType as Win32CartItem['installerType'],
+        installerUrl: inputs.installerUrl,
+        installerSha256: inputs.installerSha256,
+        installerSuccessCodes: inputs.installerSuccessCodes,
+        installCommand: inputs.silentSwitches,
+        uninstallCommand: inputs.uninstallCommand,
+        detectionRules: [],
+        requirementRules: [],
+        psadtConfig: {
+          installCommand: inputs.silentSwitches,
+          uninstallCommand: customerUninstallOverride,
+        } as Win32CartItem['psadtConfig'],
+      });
+      effectiveInputs = {
+        ...inputs,
+        installerUrl: reconciled.item.installerUrl,
+        installerSha256: reconciled.item.installerSha256,
+        installerType: reconciled.item.installerType,
+        nestedInstallerType: reconciled.item.nestedInstallerType,
+        nestedInstallerPath: reconciled.item.nestedInstallerPath,
+        silentSwitches: reconciled.item.installCommand,
+        installerSuccessCodes: reconciled.item.installerSuccessCodes,
+        uninstallCommand: reconciled.item.uninstallCommand,
+        installScope: reconciled.item.installScope,
+      };
+      trustedInstallers = reconciled.trustedInstallers;
+    } catch (error) {
+      if (!(error instanceof InstallerPreflightError && error.retryable)) {
+        throw error;
+      }
+      console.warn(`Live installer reconciliation unavailable for ${inputs.wingetId} ${inputs.version}; using the catalog tuple.`);
+    }
+  }
 
+  const finalInstallerUrl = applyInstallerUrlOverride(
+    effectiveInputs.wingetId,
+    effectiveInputs.version,
+    effectiveInputs.architecture ?? '',
+    effectiveInputs.installerUrl,
+  );
   // This is the final dispatch boundary shared by manual, MSP, update-policy,
   // and auto-update paths. Never create a packaging run for a known-bad tuple.
   await enforceInstallerPreflight({
+    wingetId: effectiveInputs.wingetId,
+    version: effectiveInputs.version,
+    architecture: effectiveInputs.architecture,
+    installerUrl: finalInstallerUrl,
+    manifestInstallerUrl: effectiveInputs.installerUrl,
+    installerSha256: effectiveInputs.installerSha256,
+    installerType: effectiveInputs.installerType,
+    installScope: effectiveInputs.installScope,
+    sourceType: effectiveInputs.sourceType,
+    curatedReleaseId: effectiveInputs.curatedReleaseId,
+  }, trustedInstallers);
+  inputs = effectiveInputs.sourceType === 'custom'
+    ? effectiveInputs
+    : {
+        ...effectiveInputs,
+        installScope: resolveApplicationInstallScope(
+          effectiveInputs.wingetId,
+          effectiveInputs.installScope
+        ),
+        installerSuccessCodes: resolveApplicationInstallerSuccessCodes(
+          effectiveInputs.wingetId,
+          effectiveInputs.installerSuccessCodes
+        ),
+      };
+  // Final dispatch boundary: custom callers bypass catalog reconciliation, so
+  // they must still prove an unattended install contract before GitHub sees
+  // the installer URL or any tenant-scoped packaging request.
+  assertPackagingContract({
+    wingetId: inputs.wingetId,
+    installerType: inputs.installerType,
+    silentArgs: inputs.silentSwitches,
+    nestedInstallerType: inputs.nestedInstallerType,
+    nestedInstallerFiles: inputs.nestedInstallerPath ? [inputs.nestedInstallerPath] : [],
+  });
+  const packageDependencies = inputs.sourceType === 'custom'
+    ? []
+    : await resolveWingetPackageDependencies({
+        wingetId: inputs.wingetId,
+        version: inputs.version,
+        architecture: inputs.architecture,
+        installerSha256: inputs.installerSha256,
+        installScope: inputs.installScope,
+      });
+  const normalizedPackageInput = inputs.sourceType === 'custom'
+    ? null
+    : normalizeQaWorkflowPackageInput({ ...inputs, packageDependencies });
+  // Keep the workflow payload and its hashed execution profile identical even
+  // when live catalog reconciliation is temporarily unavailable. Reviewed app
+  // identities are resolved again by normalizeQaWorkflowPackageInput; dispatch
+  // that exact command so the customer PSADT package cannot retain stale
+  // manifest metadata while its QA gate evaluates the corrected profile.
+  if (normalizedPackageInput) {
+    inputs = {
+      ...inputs,
+      uninstallCommand: normalizedPackageInput.uninstallCommand,
+    };
+  }
+  const packageDependenciesJson = JSON.stringify(packageDependencies);
+  const dependencyBundleSignature = packageDependencies.length > 0
+    ? (() => {
+        const callbackSecret = process.env.CALLBACK_SECRET;
+        if (!callbackSecret) {
+          throw new Error('CALLBACK_SECRET is required to sign package dependencies.');
+        }
+        return createHmac('sha256', callbackSecret)
+          .update(packageDependenciesJson, 'utf8')
+          .digest('hex');
+      })()
+    : '';
+  const calculatedPackageProfileSha256 = normalizedPackageInput?.identity.packageProfileSha256;
+  const packageProfileSha256 = calculatedPackageProfileSha256;
+  await enforceQaGate({
     wingetId: inputs.wingetId,
     version: inputs.version,
     architecture: inputs.architecture,
-    installerUrl: finalInstallerUrl,
     installerSha256: inputs.installerSha256,
-    installerType: inputs.installerType,
-    installScope: inputs.installScope,
+    packageProfileSha256,
+    requirePassed: options?.requireQaPass,
+    qaOverride: inputs.qaOverride,
     sourceType: inputs.sourceType,
+    curatedReleaseId: inputs.curatedReleaseId,
   });
 
   // Record time before triggering to help find the run
@@ -166,11 +342,15 @@ export async function triggerPackagingWorkflow(
           nestedInstallerType: inputs.nestedInstallerType || '',
           nestedInstallerPath: inputs.nestedInstallerPath || '',
           silentSwitches: inputs.silentSwitches,
+          successCodes: JSON.stringify(inputs.installerSuccessCodes || []),
+          packageDependencies: packageDependenciesJson,
+          dependencyBundleSignature,
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {
-          psadtConfig: inputs.psadtConfig || '{}',
-          detectionRules: inputs.detectionRules || '[]',
+          psadtConfig: normalizedPackageInput?.psadtConfigJson || inputs.psadtConfig || '{}',
+          detectionRules:
+            normalizedPackageInput?.detectionRulesJson || inputs.detectionRules || '[]',
           requirementRules: inputs.requirementRules || '[]',
           assignments: inputs.assignments || '[]',
           categories: inputs.categories || '[]',
@@ -298,7 +478,7 @@ export async function getWorkflowRuns(
 
 export interface CancelResult {
   success: boolean;
-  status: 'cancelled' | 'not_cancellable' | 'not_found' | 'error';
+  status: 'cancelled' | 'not_cancellable' | 'not_found' | 'not_started' | 'error';
   message: string;
 }
 
@@ -308,6 +488,10 @@ export interface CancelResult {
  * - 202: Accepted (cancellation initiated)
  * - 409: Conflict (workflow already completed or not cancellable)
  * - 404: Not found
+ *
+ * GitHub can leave a dispatched run reported as queued while refusing the
+ * normal cancel with 409 ("has not been queued yet"). The force-cancel
+ * endpoint is tried once before giving up so such runs are not left behind.
  */
 export async function cancelWorkflowRun(
   runId: number | string,
@@ -315,17 +499,21 @@ export async function cancelWorkflowRun(
 ): Promise<CancelResult> {
   const cfg = config || getGitHubActionsConfig();
   // Cancel in private workflows repository
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/runs/${runId}/cancel`;
+  const runUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/runs/${runId}`;
+  const post = (action: 'cancel' | 'force-cancel') => fetch(`${runUrl}/${action}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${cfg.token}`,
-        Accept: 'application/vnd.github.v3+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
+    let response = await post('cancel');
+    if (response.status === 409) {
+      response = await post('force-cancel');
+    }
 
     if (response.status === 202) {
       return {
@@ -365,6 +553,11 @@ export async function cancelWorkflowRun(
     };
   }
 }
+
+/**
+ * GitHub run statuses that mean no runner has started executing the run.
+ */
+export const UNSTARTED_WORKFLOW_RUN_STATUSES = ['queued', 'waiting', 'pending', 'requested'];
 
 /**
  * Get a specific workflow run by ID from the private workflows repository

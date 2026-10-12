@@ -1,0 +1,5 @@
+{
+  "title": "QA recovers completed workflow handoffs",
+  "summary": "Application QA now recognizes when a GitHub test workflow has completed but its final status callback did not arrive. The stale runner slot is released automatically so queued application tests can continue without operator intervention.",
+  "type": "fixed"
+}

@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
   suggestionSchema,
@@ -23,6 +23,11 @@ import {
 import { createAppSuggestionIssue } from '@/lib/github-issues';
 import { checkWingetPackageExists } from '@/lib/winget-existence';
 import { getCatalogSource } from '@/lib/catalog';
+import {
+  getCatalogExclusion,
+  getPackageEligibilityBlocks,
+  PACKAGE_UNAVAILABLE_MESSAGE,
+} from '@/lib/package-eligibility';
 
 /**
  * GET /api/community/suggestions
@@ -52,6 +57,14 @@ export async function GET(request: NextRequest) {
 
     const { status, sort, page, limit } = queryValidation.data;
     const offset = (page - 1) * limit;
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({
+        suggestions: [],
+        userVotes: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
+    }
 
     const supabase = createServerClient();
 
@@ -132,6 +145,13 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'App requests require hosted services' },
+        { status: 503 }
+      );
+    }
+
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -168,7 +188,8 @@ export async function POST(request: NextRequest) {
       .select('id, status')
       .eq('winget_id', winget_id)
       .in('status', ['pending', 'approved'])
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json(
@@ -178,6 +199,41 @@ export async function POST(request: NextRequest) {
           status: existing.status,
         },
         { status: 409 }
+      );
+    }
+
+    // Refuse ids that are blocked from automated deployment. This runs before
+    // the catalog check because a blocked app stays in curated_apps (the block
+    // row references it), so the catalog branch would otherwise answer with a
+    // misleading "already available in IntuneGet".
+    const eligibilityBlocks = await getPackageEligibilityBlocks(supabase, [
+      winget_id,
+    ]);
+    if (eligibilityBlocks.length > 0) {
+      return NextResponse.json(
+        {
+          error: PACKAGE_UNAVAILABLE_MESSAGE,
+          code: 'PACKAGE_UNAVAILABLE',
+          wingetId: eligibilityBlocks[0].wingetId,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Refuse ids on the permanent catalog denylist. Excluded packages never
+    // enter curated_apps (e.g. SourceForge installers that get rate limited
+    // in CI), so a request for one can never be fulfilled: without this check
+    // it would pass the winget existence check below and later be closed as
+    // fulfilled with a promise the catalog cannot keep.
+    const exclusion = await getCatalogExclusion(supabase, winget_id);
+    if (exclusion) {
+      return NextResponse.json(
+        {
+          error: `IntuneGet cannot offer ${exclusion.wingetId}: ${exclusion.reason}. This package is permanently excluded from the catalog, so requests for it cannot be fulfilled.`,
+          code: 'PACKAGE_EXCLUDED',
+          wingetId: exclusion.wingetId,
+        },
+        { status: 422 }
       );
     }
 

@@ -3,9 +3,11 @@
  * POST - Run an on-demand update scan and refresh cached update results
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { parseVersion } from '@/lib/version-compare';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getDatabase, isSqliteMode } from '@/lib/db';
+import { runSqliteUpdateCheck } from '@/lib/auto-update/sqlite';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { GET as getLiveIntuneUpdates } from '@/app/api/intune/apps/updates/route';
@@ -15,6 +17,10 @@ import type { AppUpdateInfo } from '@/types/inventory';
 interface RefreshRequestBody {
   tenant_id?: string;
 }
+
+// Calling the live route does not inherit its Vercel duration configuration.
+// Leave time after the bounded scan to persist the complete result.
+export const maxDuration = 60;
 
 interface LiveUpdatesResponse {
   updates: AppUpdateInfo[];
@@ -52,7 +58,24 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as RefreshRequestBody;
     const requestedTenantId = body.tenant_id?.trim() || null;
 
-    if (!isSupabaseConfigured()) {
+    // Self-hosted SQLite: run the same catalog check as the cron. The live
+    // Graph matching path needs the hosted consent plus the claimed and manual
+    // mapping tables, which a self-hosted deployment does not have.
+    if (isSqliteMode()) {
+      const summary = await runSqliteUpdateCheck(getDatabase(), { userId: user.userId });
+      return NextResponse.json({
+        success: true,
+        mode: 'sqlite',
+        refreshedCount: summary.available,
+        removedCount: 0,
+        updateCount: summary.available,
+        triggered: summary.triggered,
+        skipped: summary.skipped,
+        errors: summary.errors,
+      });
+    }
+
+    if (!isSupabaseServerConfigured()) {
       return NextResponse.json(
         { error: 'Update checking requires Supabase and is not available on this self-hosted deployment' },
         { status: 503 }
@@ -197,26 +220,20 @@ export async function POST(request: NextRequest) {
     // user's email frequency, since they just ran an on-demand check. Failures
     // here must not fail the refresh; the daily cron remains the backstop.
     const hasPendingNotifications = rows.some((row) => row.notified_at === null);
-    let notified: { emailsSent: number; webhooksSent: number } | undefined;
     if (hasPendingNotifications) {
-      try {
-        const res = await notifyUserOfPendingUpdates(supabase, user.userId, {
-          respectFrequency: false,
-        });
-        notified = { emailsSent: res.emailsSent, webhooksSent: res.webhooksSent };
-      } catch (notifyError) {
-        console.error(
-          'On-demand update notification failed:',
-          notifyError instanceof Error ? notifyError.message : notifyError
-        );
-      }
+      after(async () => {
+        try {
+          await notifyUserOfPendingUpdates(supabase, user.userId, { respectFrequency: false });
+        } catch {
+          console.error('On-demand update notification failed; the scheduled notifier will retry.');
+        }
+      });
     }
 
     return NextResponse.json({
       success: true,
       refreshedCount: rows.length,
       removedCount: staleIds.length,
-      ...(notified ? { notified } : {}),
       updateCount: liveData.updateCount,
       matchingSummary: {
         totalChecked: liveData.checkedApps?.length || 0,

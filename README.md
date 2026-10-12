@@ -4,6 +4,8 @@
 
 # IntuneGet
 
+Self-hosted operators can configure server log verbosity and bounded rotating files. See [server diagnostics](docs/SELF_HOSTING.md#server-diagnostics) for settings, permissions and page error reporting.
+
 **Deploy Winget applications to Microsoft Intune with a single click.**
 
 Skip the manual packaging workflow and deploy Winget apps to Intune in seconds.
@@ -29,7 +31,7 @@ Skip the manual packaging workflow and deploy Winget apps to Intune in seconds.
 
 <div align="center">
 
-**[Features](#features)** | **[Quick Start](#quick-start)** | **[Architecture](#architecture)** | **[How It Compares](#how-it-compares)** | **[Documentation](#documentation)**
+**[Features](#features)** | **[Quick Start](#quick-start)** | **[Architecture](#architecture)** | **[How It Compares](#how-it-compares)** | **[Documentation](#documentation)** | **[Roadmap](https://www.intuneget.com/roadmap)**
 
 </div>
 
@@ -263,7 +265,8 @@ See [SECURITY.md](SECURITY.md) for our complete security policy.
 | [Updates and Policy Guide](docs/FEATURES_UPDATES.md) | Auto-update policies, triggers, and history |
 | [Inventory/Reports/Uploads Guide](docs/FEATURES_INVENTORY_AND_REPORTS.md) | Operational dashboard feature docs |
 | [Authentication Architecture](docs/authentication-architecture.md) | MSAL, admin consent, and service principal flow |
-| [Documentation Audit](docs/DOCUMENTATION_AUDIT.md) | Coverage and remaining documentation gaps |
+| [Curated Catalog](docs/CURATED_CATALOG.md) | Verified catalog pipeline, trust model, and withdrawal |
+| [PSADT Packaging Coverage](docs/PSADT_PACKAGING_COVERAGE.md) | Which PSADT options are generated and tested |
 
 ---
 

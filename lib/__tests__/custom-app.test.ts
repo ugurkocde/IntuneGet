@@ -22,6 +22,7 @@ function validInput(overrides: Partial<CustomAppInput> = {}): CustomAppInput {
     installerType: 'exe',
     architecture: 'x64',
     installScope: 'machine',
+    silentSwitches: '/vendor-silent',
     ...overrides,
   };
 }
@@ -128,25 +129,48 @@ describe('buildCustomAppCartItem', () => {
   });
 
   it('should apply per-type default silent switches to the install command', () => {
-    const exeItem = buildCustomAppCartItem(validInput({ installerType: 'exe' }));
-    expect(exeItem.installCommand).toBe(`"setup.exe" ${CUSTOM_SILENT_SWITCH_DEFAULTS.exe}`);
+    const exeItem = buildCustomAppCartItem(validInput({
+      installerType: 'exe',
+      silentSwitches: '/documented-quiet',
+    }));
+    expect(exeItem.installCommand).toBe('"setup.exe" /documented-quiet');
 
     const innoItem = buildCustomAppCartItem(
-      validInput({ installerType: 'inno', installerUrl: 'https://example.com/app-setup.exe' })
+      validInput({
+        installerType: 'inno',
+        installerUrl: 'https://example.com/app-setup.exe',
+        silentSwitches: '',
+      })
     );
     expect(innoItem.installCommand).toBe(
       `"app-setup.exe" ${CUSTOM_SILENT_SWITCH_DEFAULTS.inno}`
     );
 
-    const burnItem = buildCustomAppCartItem(validInput({ installerType: 'burn' }));
+    const burnItem = buildCustomAppCartItem(validInput({
+      installerType: 'burn',
+      silentSwitches: '',
+    }));
     expect(burnItem.installCommand).toBe(`"setup.exe" ${CUSTOM_SILENT_SWITCH_DEFAULTS.burn}`);
   });
 
-  it('should build an msiexec install command for MSI installers', () => {
+  it('should build an msiexec command with the supplied MSI switches', () => {
     const item = buildCustomAppCartItem(
       validInput({ installerType: 'msi', installerUrl: 'https://example.com/app.msi' })
     );
-    expect(item.installCommand).toBe('msiexec /i "app.msi" /qn ALLUSERS=1 /norestart');
+    expect(item.installCommand).toBe(
+      'msiexec /i "app.msi" /vendor-silent ALLUSERS=1'
+    );
+  });
+
+  it('should use the managed MSI defaults when no switches are supplied', () => {
+    const item = buildCustomAppCartItem(validInput({
+      installerType: 'msi',
+      installerUrl: 'https://example.com/app.msi',
+      silentSwitches: '',
+    }));
+    expect(item.installCommand).toBe(
+      'msiexec /i "app.msi" /qn /norestart ALLUSERS=1'
+    );
   });
 
   it('should prefer user-provided silent switches over the defaults', () => {
@@ -203,6 +227,12 @@ describe('buildCustomAppCartItem', () => {
 
   it('should reject an invalid sha256', () => {
     expect(() => buildCustomAppCartItem(validInput({ sha256: 'xyz' }))).toThrow(/SHA256/);
+  });
+
+  it('should reject a custom plain EXE without vendor silent switches', () => {
+    expect(() => buildCustomAppCartItem(validInput({ silentSwitches: '' }))).toThrow(
+      /Silent switches are required/
+    );
   });
 
   it('should reject missing required fields', () => {

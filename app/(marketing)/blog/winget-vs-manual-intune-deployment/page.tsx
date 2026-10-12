@@ -1,3 +1,4 @@
+import { PopularAppLinks } from "@/components/catalog/PopularAppLinks";
 import { Metadata } from "next";
 import Link from "next/link";
 import { getBlogPost } from "@/lib/data/blog-data";
@@ -15,12 +16,12 @@ export const metadata: Metadata = {
   title: post.title,
   description: post.description,
   alternates: {
-    canonical: "https://intuneget.com/blog/winget-vs-manual-intune-deployment",
+    canonical: "https://www.intuneget.com/blog/winget-vs-manual-intune-deployment",
   },
   openGraph: {
     title: post.title,
     description: post.description,
-    url: "https://intuneget.com/blog/winget-vs-manual-intune-deployment",
+    url: "https://www.intuneget.com/blog/winget-vs-manual-intune-deployment",
     type: "article",
     publishedTime: post.date,
     authors: [post.author],
@@ -41,19 +42,19 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Blog",
-      item: "https://intuneget.com/blog",
+      item: "https://www.intuneget.com/blog",
     },
     {
       "@type": "ListItem",
       position: 3,
       name: post.title,
-      item: "https://intuneget.com/blog/winget-vs-manual-intune-deployment",
+      item: "https://www.intuneget.com/blog/winget-vs-manual-intune-deployment",
     },
   ],
 };
@@ -78,11 +79,11 @@ const articleJsonLd = {
   publisher: {
     "@type": "Organization",
     name: "IntuneGet",
-    url: "https://intuneget.com",
+    url: "https://www.intuneget.com",
   },
-  image: "https://intuneget.com/favicon.svg",
+  image: "https://www.intuneget.com/favicon.svg",
   mainEntityOfPage:
-    "https://intuneget.com/blog/winget-vs-manual-intune-deployment",
+    "https://www.intuneget.com/blog/winget-vs-manual-intune-deployment",
   keywords: [
     "Winget vs manual Intune deployment",
     "Intune app deployment automation",
@@ -722,6 +723,9 @@ export default function WingetVsManualIntuneDeploymentPage() {
                 </Link>
                 .</T>
               </p>
+
+              <div className="mt-10"><PopularAppLinks /></div>
+
 
               {/* CTA */}
               <div className="mt-10 p-6 rounded-2xl bg-accent-cyan/5 border border-accent-cyan/20">

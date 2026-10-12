@@ -4,7 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
@@ -29,6 +30,7 @@ import type {
 } from '@/types/update-policies';
 import type { Json } from '@/types/database';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
+import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 
 // Batches of up to 10 apps run sequentially (DB lookups, job creation, and a
 // workflow dispatch each); the platform default duration times out mid-batch
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseServerConfigured()) {
       const unavailableError =
         'Update deployment requires Supabase and is not available on this self-hosted deployment';
       return NextResponse.json(
@@ -188,7 +190,6 @@ export async function POST(request: NextRequest) {
             tenantId: req.tenant_id,
             wingetId: req.winget_id,
             latestVersion: updateResult.latest_version,
-            globalCarryOver,
           });
 
           if (built.status === 'orphaned_job') {
@@ -271,18 +272,25 @@ export async function POST(request: NextRequest) {
         }
 
         // Get installer info
-        const installerInfo = await getLatestInstallerInfo(supabase, req.winget_id);
+        const deploymentConfig = policy.deployment_config as unknown as DeploymentConfig | null;
+        const installerResolution = await getLatestInstallerInfo(
+          supabase,
+          req.winget_id,
+          deploymentConfig?.architecture,
+          deploymentConfig?.installScope
+        );
 
-        if (!installerInfo) {
+        if (!installerResolution.ok) {
           response.failed++;
           response.results.push({
             winget_id: req.winget_id,
             tenant_id: req.tenant_id,
             success: false,
-            error: 'Could not get installer information for latest version',
+            error: installerResolution.failure.message,
           });
           continue;
         }
+        const installerInfo = installerResolution.info;
 
         installerInfo.currentVersion = updateResult.current_version;
 
@@ -328,6 +336,8 @@ export async function POST(request: NextRequest) {
             const currentCarryOver = globalCarryOver;
 
             const workflowInputs: WorkflowInputs = {
+              sourceType: installerInfo.sourceType,
+              curatedReleaseId: installerInfo.curatedReleaseId,
               jobId: triggerResult.packagingJobId,
               tenantId: req.tenant_id,
               wingetId: req.winget_id,
@@ -346,7 +356,8 @@ export async function POST(request: NextRequest) {
               nestedInstallerPath: installerInfo.nestedInstallerPath,
               silentSwitches: extractSilentSwitches(
                 deploymentConfig.installCommand || '',
-                installerInfo.installerType || deploymentConfig.installerType || 'exe'
+                installerInfo.installerType || deploymentConfig.installerType || 'exe',
+                installerInfo.nestedInstallerType
               ),
               uninstallCommand: deploymentConfig.uninstallCommand || '',
               callbackUrl,
@@ -359,7 +370,12 @@ export async function POST(request: NextRequest) {
                 ? JSON.stringify(deploymentConfig.psadtConfig)
                 : undefined,
               assignments: deploymentConfig.assignments
-                ? JSON.stringify(deploymentConfig.assignments)
+                ? JSON.stringify(
+                    sanitizeAssignmentsForDispatch(
+                      deploymentConfig.assignments,
+                      Boolean(deploymentConfig.requirementRules?.length)
+                    )
+                  )
                 : undefined,
               categories: deploymentConfig.categories
                 ? JSON.stringify(deploymentConfig.categories)
@@ -377,12 +393,55 @@ export async function POST(request: NextRequest) {
               removeAssignmentsFromPreviousApp: currentCarryOver,
               autoSupersede: supersedePrevious,
               supersedenceType: supersedePrevious ? 'update' : undefined,
+              packageProfileSha256: triggerResult.packageProfileSha256,
             };
 
             const isBatch = updateRequests.length > 1;
-            await triggerPackagingWorkflow(workflowInputs, undefined, {
-              skipRunCapture: isBatch,
-            });
+            try {
+              await triggerPackagingWorkflow(workflowInputs, undefined, {
+                skipRunCapture: isBatch,
+                requireQaPass: true,
+              });
+            } catch (error) {
+              if (!isQaGateError(error)) throw error;
+
+              // The status can change between the pre-job auto-update gate and
+              // the final dispatch gate. Make that race an explicit safety
+              // cancellation rather than leaving a queued/failed mystery job.
+              const message = describeQaGateError(error);
+              const completedAt = new Date().toISOString();
+              await supabase
+                .from('packaging_jobs')
+                .update({
+                  status: 'cancelled',
+                  status_message: 'Waiting for the installation test to finish',
+                  error_message: message,
+                  cancelled_at: completedAt,
+                  completed_at: completedAt,
+                })
+                .eq('id', triggerResult.packagingJobId);
+              if (triggerResult.historyId) {
+                await supabase
+                  .from('auto_update_history')
+                  .update({
+                    status: 'cancelled',
+                    error_message: message,
+                    completed_at: completedAt,
+                  })
+                  .eq('id', triggerResult.historyId);
+              }
+
+              response.failed++;
+              response.results.push({
+                winget_id: req.winget_id,
+                tenant_id: req.tenant_id,
+                success: false,
+                skipped: true,
+                code: error.code,
+                error: message,
+              });
+              continue;
+            }
           }
           // If local packager mode, the job stays in 'queued'/'packaging' for local pickup
 
@@ -399,6 +458,8 @@ export async function POST(request: NextRequest) {
             winget_id: req.winget_id,
             tenant_id: req.tenant_id,
             success: false,
+            skipped: triggerResult.skipped || undefined,
+            code: triggerResult.code,
             error: triggerResult.error || triggerResult.skipReason || 'Unknown error',
           });
         }

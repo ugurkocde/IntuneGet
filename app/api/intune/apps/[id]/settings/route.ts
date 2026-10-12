@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -12,7 +12,9 @@ import {
   assignToGroups,
   convertToGraphAssignments,
   syncAppCategories,
+  setAppRules,
 } from '@/lib/intune-api';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { PackageAssignment, IntuneAppCategorySelection } from '@/types/upload';
 import type { Json } from '@/types/database';
@@ -33,15 +35,15 @@ export async function PATCH(
     }
 
     // Resolve tenant (MSP-aware)
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
+    const tenantResolution = supabase ? await resolveTargetTenantId({
       supabase,
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
-    });
+    }) : { tenantId: user.tenantId, errorResponse: null };
 
     if (tenantResolution.errorResponse) {
       return tenantResolution.errorResponse;
@@ -50,12 +52,12 @@ export async function PATCH(
     const tenantId = tenantResolution.tenantId;
 
     // Verify admin consent
-    const { data: consentData, error: consentError } = await supabase
+    const { data: consentData, error: consentError } = supabase ? await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
-      .single();
+      .single() : { data: true, error: null };
 
     if (consentError || !consentData) {
       return NextResponse.json(
@@ -98,6 +100,26 @@ export async function PATCH(
 
     // Apply assignments
     if (assignments) {
+      const productCode = existingApp.msiInformation?.productCode;
+      const requirementRules = buildCartItemRequirementRules(
+        existingApp.displayName,
+        productCode ? 'msi' : 'exe',
+        productCode,
+        assignments
+      );
+      // Skip when the app already carries requirement rules so repeated
+      // settings updates do not stack duplicates onto the rules array.
+      const existingRules = existingApp.rules ?? [];
+      const hasRequirementRule = existingRules.some(
+        (rule) => rule.ruleType === 'requirement'
+      );
+      if (requirementRules && !hasRequirementRule) {
+        await setAppRules(graphToken, intuneAppId, [
+          ...existingRules,
+          ...requirementRules,
+        ]);
+      }
+
       const graphAssignments = convertToGraphAssignments(assignments);
       await assignToGroups(graphToken, intuneAppId, graphAssignments);
     }
@@ -108,7 +130,7 @@ export async function PATCH(
     }
 
     // Persist updated assignments/categories in the most recent packaging_jobs row
-    if (wingetId) {
+    if (wingetId && supabase) {
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
         .select('id, package_config')

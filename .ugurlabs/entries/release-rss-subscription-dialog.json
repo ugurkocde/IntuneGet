@@ -1,0 +1,5 @@
+{
+  "title": "Copy release feed URLs directly into your RSS reader",
+  "summary": "Subscribe via RSS now opens a dialog with a selectable feed URL and a Copy URL button, instead of opening a raw feed that your browser may download. The URL follows the selected app or the full catalog. Copy confirmation and manual copying instructions make subscribing straightforward even when clipboard access is unavailable.",
+  "type": "fixed"
+}

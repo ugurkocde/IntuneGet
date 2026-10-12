@@ -9,8 +9,12 @@ import type { NormalizedPackage } from '@/types/winget';
 import { cleanPackageName } from '@/lib/locale-utils';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { TenantDeploymentBadge } from '@/components/TenantDeploymentBadge';
+import { QaBadge } from '@/components/qa/QaBadge';
+import type { QaStatus } from '@/types/qa';
+import { CuratedReleaseBadge } from '@/components/CuratedReleaseBadge';
 
-const installerTypeStyles: Record<string, string> = {
+export const installerTypeStyles: Record<string, string> = {
   msi: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   wix: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   msix: 'text-purple-600 bg-purple-500/10 border-purple-500/20',
@@ -23,7 +27,7 @@ const installerTypeStyles: Record<string, string> = {
   portable: 'text-slate-600 bg-slate-500/10 border-slate-500/20',
 };
 
-function getInstallerLabel(type: string): string {
+export function getInstallerLabel(type: string): string {
   const upper = type.toUpperCase();
   if (upper === 'NULLSOFT' || upper === 'INNO' || upper === 'BURN') return 'EXE';
   if (upper === 'WIX') return 'MSI';
@@ -35,12 +39,15 @@ interface AppCardProps {
   package: NormalizedPackage;
   onSelect?: (pkg: NormalizedPackage) => void;
   isDeployed?: boolean;
+  tenantDeployedBy?: string | null;
   isBulkSelectMode?: boolean;
   isBulkSelected?: boolean;
   onBulkToggle?: (pkg: NormalizedPackage) => void;
+  qaStatus?: QaStatus | null;
+  curatedAppId?: string;
 }
 
-function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle }: AppCardProps) {
+function AppCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus, curatedAppId }: AppCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -157,6 +164,9 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
                 {getInstallerLabel(pkg.installerType)}
               </span>
             )}
+            {pkg.appSource !== 'store' && (
+              <QaBadge wingetId={pkg.id} catalogVersion={pkg.version} status={qaStatus} />
+            )}
             {pkg.popularityRank != null && pkg.popularityRank <= 100 && pkg.appSource !== 'store' && (
               <span className="text-xs font-medium text-accent-violet bg-accent-violet/10 px-2 py-0.5 rounded-full border border-accent-violet/20">
                 Top {pkg.popularityRank}
@@ -165,6 +175,10 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
           </div>
         </div>
       </div>
+
+      {curatedAppId && pkg.appSource !== 'store' && (
+        <div className="mt-3"><CuratedReleaseBadge appId={curatedAppId} /></div>
+      )}
 
       {!isBulkSelectMode && (
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-overlay/10">
@@ -182,6 +196,8 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
               </a>
             )}
           </div>
+
+          <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
 
           {isDeployed ? (
             <Button
@@ -229,6 +245,12 @@ export const AppCard = memo(AppCardComponent, (prevProps, nextProps) => {
   return prevProps.package.id === nextProps.package.id &&
          prevProps.package.version === nextProps.package.version &&
          prevProps.isDeployed === nextProps.isDeployed &&
+         prevProps.tenantDeployedBy === nextProps.tenantDeployedBy &&
          prevProps.isBulkSelectMode === nextProps.isBulkSelectMode &&
-         prevProps.isBulkSelected === nextProps.isBulkSelected;
+         prevProps.isBulkSelected === nextProps.isBulkSelected &&
+         prevProps.curatedAppId === nextProps.curatedAppId &&
+         prevProps.qaStatus?.outcome === nextProps.qaStatus?.outcome &&
+         prevProps.qaStatus?.testedVersion === nextProps.qaStatus?.testedVersion &&
+         prevProps.qaStatus?.architecture === nextProps.qaStatus?.architecture &&
+         prevProps.qaStatus?.testedAtUtc === nextProps.qaStatus?.testedAtUtc;
 });

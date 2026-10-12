@@ -1,9 +1,58 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_REGISTRY_MARKER_PATH,
+  inferSavedCustomMarkerPath,
   normalizeMarkerPath,
+  reconcileManagedMarkerDetectionRules,
   rewriteMarkerKeyPath,
 } from '../registry-marker';
+
+describe('inferSavedCustomMarkerPath', () => {
+  const saved8x8Rule = {
+    type: 'registry' as const,
+    keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\HBX\\InstalledApps\\8x8_Work',
+    valueName: 'Version',
+    check32BitOn64System: false,
+    detectionType: 'version' as const,
+    operator: 'greaterThanOrEqual' as const,
+    detectionValue: '8.36.2',
+  };
+
+  it('recovers the exact custom root from a saved managed marker rule', () => {
+    expect(inferSavedCustomMarkerPath({
+      detectionRules: [saved8x8Rule],
+      wingetId: '8x8.Work',
+      version: '8.36.2',
+      installScope: 'machine',
+    })).toBe('SOFTWARE\\HBX\\InstalledApps');
+  });
+
+  it.each([
+    { detectionRules: [saved8x8Rule, saved8x8Rule], version: '8.36.2', scope: 'machine' },
+    { detectionRules: [{ ...saved8x8Rule, detectionValue: '8.35.0' }], version: '8.36.2', scope: 'machine' },
+    { detectionRules: [{ ...saved8x8Rule, keyPath: saved8x8Rule.keyPath.replace('HKEY_LOCAL_MACHINE', 'HKEY_CURRENT_USER') }], version: '8.36.2', scope: 'machine' },
+    { detectionRules: [{ ...saved8x8Rule, keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\8x8_Work' }], version: '8.36.2', scope: 'machine' },
+  ])('refuses ambiguous or non-marker-shaped saved rules', ({ detectionRules, version, scope }) => {
+    expect(inferSavedCustomMarkerPath({
+      detectionRules,
+      wingetId: '8x8.Work',
+      version,
+      installScope: scope,
+    })).toBeNull();
+  });
+
+  it('does not materialize an explicit config value for the default marker root', () => {
+    expect(inferSavedCustomMarkerPath({
+      detectionRules: [{
+        ...saved8x8Rule,
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\8x8_Work',
+      }],
+      wingetId: '8x8.Work',
+      version: '8.36.2',
+      installScope: 'machine',
+    })).toBeNull();
+  });
+});
 
 describe('normalizeMarkerPath', () => {
   it('should return the default for undefined input', () => {
@@ -160,5 +209,117 @@ describe('rewriteMarkerKeyPath', () => {
     expect(
       rewriteMarkerKeyPath('HKEY_LOCAL_MACHINE\\Publisher_App', 'Publisher_App', 'X')
     ).toBeNull();
+  });
+});
+
+describe('reconcileManagedMarkerDetectionRules', () => {
+  it('moves a saved IntuneGet marker to the current user scope and version', () => {
+    expect(
+      reconcileManagedMarkerDetectionRules({
+        detectionRules: [
+          {
+            type: 'registry',
+            keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+            valueName: 'Version',
+            check32BitOn64System: false,
+            detectionType: 'version',
+            operator: 'greaterThanOrEqual',
+            detectionValue: '2.7.1',
+          },
+        ],
+        wingetId: 'Asana.Asana',
+        version: '2.8.0',
+        installScope: 'user',
+      })
+    ).toEqual([
+      {
+        type: 'registry',
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+        valueName: 'Version',
+        check32BitOn64System: false,
+        detectionType: 'version',
+        operator: 'greaterThanOrEqual',
+        detectionValue: '2.8.0',
+      },
+    ]);
+  });
+
+  it('uses exact string detection for an opaque current version', () => {
+    const [rule] = reconcileManagedMarkerDetectionRules({
+      detectionRules: [
+        {
+          type: 'registry',
+          keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Example_App',
+          valueName: 'Version',
+          detectionType: 'version',
+          operator: 'greaterThanOrEqual',
+          detectionValue: '1.0.0',
+        },
+      ],
+      wingetId: 'Example.App',
+      version: '2026.08-beta',
+      installScope: 'machine',
+    });
+
+    expect(rule).toMatchObject({
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Example_App',
+      detectionType: 'string',
+      operator: 'equal',
+      detectionValue: '2026.08-beta',
+    });
+  });
+
+  it('reconciles the configured marker root without touching unrelated rules', () => {
+    const unrelated = {
+      type: 'registry' as const,
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Vendor\\Asana_Asana',
+      valueName: 'Version',
+      detectionType: 'version' as const,
+      operator: 'greaterThanOrEqual' as const,
+      detectionValue: '2.7.1',
+    };
+    const result = reconcileManagedMarkerDetectionRules({
+      detectionRules: [
+        unrelated,
+        {
+          type: 'registry',
+          keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Apps\\Asana_Asana',
+          valueName: 'Version',
+          detectionType: 'version',
+          operator: 'greaterThanOrEqual',
+          detectionValue: '2.7.1',
+        },
+      ],
+      wingetId: 'Asana.Asana',
+      version: '2.8.0',
+      installScope: 'user',
+      markerPath: 'SOFTWARE\\Contoso\\Apps',
+    });
+
+    expect(result[0]).toBe(unrelated);
+    expect(result[1]).toMatchObject({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\Contoso\\Apps\\Asana_Asana',
+      detectionValue: '2.8.0',
+    });
+  });
+
+  it('preserves a manually authored value under the marker key', () => {
+    const customRule = {
+      type: 'registry' as const,
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+      valueName: 'Channel',
+      detectionType: 'string' as const,
+      operator: 'equal' as const,
+      detectionValue: 'stable',
+    };
+
+    const [result] = reconcileManagedMarkerDetectionRules({
+      detectionRules: [customRule],
+      wingetId: 'Asana.Asana',
+      version: '2.8.0',
+      installScope: 'user',
+    });
+
+    expect(result).toBe(customRule);
   });
 });

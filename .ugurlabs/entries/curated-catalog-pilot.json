@@ -1,0 +1,5 @@
+{
+  "title": "Curated Catalog pilot",
+  "summary": "A separate Curated Catalog view introduces the first ten applications with vendor sources and release verification status. Releases become deployable only after reviewed security and installation evidence is recorded in a signed catalog. The pilot begins with all ten applications awaiting verification; it does not advertise untested releases as approved.",
+  "type": "new"
+}

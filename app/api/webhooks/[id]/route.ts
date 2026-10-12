@@ -6,8 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE } from '@/types/notifications';
 import { validateWebhookUrl } from '@/lib/webhooks/service';
 import type {
   WebhookConfiguration,
@@ -37,6 +38,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE }, { status: 503 });
+    }
 
     const supabase = createServerClient();
 
@@ -113,6 +118,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { error: 'Invalid webhook type' },
         { status: 400 }
       );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE }, { status: 503 });
     }
 
     const supabase = createServerClient();
@@ -193,6 +202,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE }, { status: 503 });
+    }
 
     const supabase = createServerClient();
 

@@ -20,6 +20,8 @@ import {
   ClipboardList,
   RefreshCw,
   Package,
+  PackageCheck,
+  Library,
   SlidersHorizontal,
 } from "lucide-react";
 import { Github } from "@/components/icons/brand-icons";
@@ -38,7 +40,7 @@ export const metadata: Metadata = {
   description:
     "Learn how to self-host IntuneGet - comprehensive documentation for deploying your own Intune app deployment solution.",
   alternates: {
-    canonical: "https://intuneget.com/docs",
+    canonical: "https://www.intuneget.com/docs",
   },
   openGraph: {
     title: "Documentation | IntuneGet",
@@ -101,6 +103,18 @@ const quickLinks = [
     href: "/docs/updates-policies",
     icon: RefreshCw,
     description: "Available updates, policy types, trigger flow",
+  },
+  {
+    title: "Packaging & Verification",
+    href: "/docs/packaging",
+    icon: PackageCheck,
+    description: "How a package is built, what is pinned, how to verify",
+  },
+  {
+    title: "Catalog & Supply Chain",
+    href: "/docs/catalog",
+    icon: Library,
+    description: "Catalog source, storage, and installer handling",
   },
   {
     title: "Inventory/Reports/Uploads",

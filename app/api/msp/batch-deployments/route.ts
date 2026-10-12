@@ -14,6 +14,7 @@ interface BatchDeploymentInput {
   winget_id: string;
   display_name: string;
   version: string;
+  architecture?: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
   tenant_ids: string[];
   concurrency_limit?: number;
 }
@@ -209,6 +210,7 @@ export async function POST(request: NextRequest) {
         winget_id: body.winget_id,
         display_name: body.display_name,
         version: body.version,
+        architecture: body.architecture || 'x64',
         total_tenants: tenants.length,
         concurrency_limit: concurrencyLimit,
       })

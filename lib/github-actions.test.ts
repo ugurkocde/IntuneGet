@@ -1,12 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  cancelWorkflowRun,
   triggerPackagingWorkflow,
   type GitHubActionsConfig,
   type WorkflowInputs,
 } from './github-actions';
+import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
+import { QaCompatibilityGateError } from './qa/gate';
+import { generateUninstallCommand } from './detection-rules';
 
-const { enforceInstallerPreflightMock } = vi.hoisted(() => ({
+const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
+  enforceQaGateMock: vi.fn(),
+  reconcileCatalogInstallerMock: vi.fn(),
+  resolveDependenciesMock: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('./catalog-installer-reconciliation', () => ({
+  reconcileCatalogInstaller: reconcileCatalogInstallerMock,
 }));
 
 vi.mock('./installer-preflight', async (importOriginal) => {
@@ -14,6 +25,19 @@ vi.mock('./installer-preflight', async (importOriginal) => {
   return {
     ...original,
     enforceInstallerPreflight: enforceInstallerPreflightMock,
+  };
+});
+
+vi.mock('./qa/gate', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./qa/gate')>();
+  return { ...original, enforceQaGate: enforceQaGateMock };
+});
+
+vi.mock('./winget-dependencies', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./winget-dependencies')>();
+  return {
+    ...original,
+    resolveWingetPackageDependencies: resolveDependenciesMock,
   };
 });
 
@@ -42,6 +66,7 @@ function workflowInputs(overrides: Partial<WorkflowInputs> = {}): WorkflowInputs
     uninstallCommand: 'uninstall.exe /S',
     callbackUrl: 'https://example.test/api/package/callback',
     hashValidationMode: 'calculate',
+    sourceType: 'custom',
     ...overrides,
   };
 }
@@ -51,7 +76,741 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
+  item,
+  trustedInstallers: [],
+}));
+
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('dispatches authored catalog detection rules with the matching QA identity', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const rules = [{ type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Test_App', valueName: 'Version', detectionType: 'version', operator: 'equal', detectionValue: '0.9.0' }];
+    const inputs = workflowInputs({ sourceType: 'winget', detectionRules: JSON.stringify(rules), psadtConfig: JSON.stringify({ customDetection: true, detectionRules: rules }) });
+    await triggerPackagingWorkflow(inputs, config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.parse(payload.client_payload.config.detectionRules)).toEqual(rules);
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({ customDetection: true, detectionRules: rules });
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ packageProfileSha256: buildQaPackageIdentityFromWorkflowInput({ ...inputs, detectionRules: payload.client_payload.config.detectionRules, psadtConfig: payload.client_payload.config.psadtConfig }).packageProfileSha256 }));
+  });
+  it.each(['MSIX_UNINSTALL:{PACKAGE_NAME}', ' MSIX_UNINSTALL:{PACKAGE_NAME} '])(
+    'replaces the generated MSIX identity placeholder %s with trusted manifest identity',
+    async (uninstallCommand) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+      vi.stubGlobal('fetch', fetchMock);
+      reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+        item: {
+          ...item,
+          uninstallCommand: item.psadtConfig?.uninstallCommand || 'MSIX_UNINSTALL:Claude',
+        },
+        trustedInstallers: [],
+      }));
+      await triggerPackagingWorkflow(workflowInputs({
+        wingetId: 'Anthropic.Claude', displayName: 'Claude', sourceType: 'winget',
+        installerType: 'msix', uninstallCommand,
+        installerSha256: 'A'.repeat(64),
+      }), config, { skipRunCapture: true });
+      expect(reconcileCatalogInstallerMock).toHaveBeenCalledWith(expect.objectContaining({
+        psadtConfig: expect.objectContaining({ uninstallCommand: undefined }),
+      }));
+      const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+      expect(payload.client_payload.installer.uninstallCommand).toBe('MSIX_UNINSTALL:Claude');
+    },
+  );
+
+  it('preserves an explicit MSIX uninstall identity supplied by the customer', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: { ...item, uninstallCommand: item.psadtConfig?.uninstallCommand || 'MSIX_UNINSTALL:Claude' },
+      trustedInstallers: [],
+    }));
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Anthropic.Claude', displayName: 'Claude', sourceType: 'winget',
+      installerType: 'msix', uninstallCommand: 'MSIX_UNINSTALL:Approved.Claude',
+      installerSha256: 'A'.repeat(64),
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('MSIX_UNINSTALL:Approved.Claude');
+  });
+
+  it('sends the exact Wacom driver registration to the shared customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_KEY:Wacom Tablet Driver:Wacom Tablet';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Wacom.WacomTabletDriver', displayName: 'Wacom Tablet', publisher: 'Wacom',
+      version: '6.4.14-1', architecture: 'x64', sourceType: 'winget',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/s', uninstallCommand,
+      installerSha256: '9DDB4C8FB467B1C9A9B9377F7FCD7ED481550D6F43BB9EA62E4724089EEECD63',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+    expect(payload.client_payload.installer.sha256).toBe('9DDB4C8FB467B1C9A9B9377F7FCD7ED481550D6F43BB9EA62E4724089EEECD63');
+    expect(payload.client_payload.installer.silentSwitches).toBe('/s');
+  });
+
+  it('dispatches Bandizip customer packages with the same silent removal as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Bandisoft.Bandizip', displayName: 'Bandizip', publisher: 'Bandisoft',
+      version: '7.46', installerSha256: 'D6D6489113C013ED7F44C0DCA24B1A882494ACE246E14D10533C4969A0F41CFE',
+      sourceType: 'winget', silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig).reviewedUninstallArguments).toEqual(['/S']);
+  });
+  it('dispatches ZWCAD 2025 customer packages with the same reviewed removal as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_PRODUCT:{82434F95-A001-0000-A200-7E20F67BFF3C}:ZWCAD 2025';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZWSOFT.ZWCAD.2025', displayName: 'ZWCAD 2025', publisher: 'ZWSOFT',
+      version: '25.21.10.19929', architecture: 'x64', sourceType: 'winget',
+      installerType: 'exe', installerSha256: '018E6F9E2C5F3F7B88EA5CBF9585B204EB3F9B6536741C82FFE26F61941E0F13',
+      silentSwitches: '/install /quiet', installScope: 'machine', uninstallCommand,
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedExactUninstall: { executablePath: '%PackageInstaller%', arguments: ['/q', '/u'], completionTimeoutMinutes: 10 },
+    });
+  });
+  it('dispatches ZWCAD 2026 customer packages with the same reviewed removal as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_PRODUCT:{CBC94276-A001-0000-A200-255782FFDEE0}:ZWCAD 2026';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZWSOFT.ZWCAD.2026', displayName: 'ZWCAD 2026', publisher: 'ZWSOFT',
+      version: '26.10.0.20036', architecture: 'x64', sourceType: 'winget',
+      installerType: 'exe', installerSha256: '9ACBCC7CD8EFC4F2F72E529736107E47986B2E881EB8D1558261820C3083D8E8',
+      silentSwitches: '/install /quiet', installScope: 'machine', uninstallCommand,
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedExactUninstall: { executablePath: '%PackageInstaller%', arguments: ['/q', '/u'], completionTimeoutMinutes: 10 },
+    });
+  });
+  it('dispatches GreenTunnel in the same user scope as QA with exact registered removal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_KEY:ba1bb1f3-0069-5c64-9a11-479ebc0471d9:GreenTunnel';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'SadeghHayeri.GreenTunnel', displayName: 'GreenTunnel',
+      publisher: 'SadeghHayeri', version: '3.0.5', architecture: 'x86',
+      sourceType: 'winget', installerType: 'nullsoft', installerSha256: 'A'.repeat(64),
+      silentSwitches: '/S', installScope: 'machine', uninstallCommand,
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.config.installScope).toBe('user');
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+  });
+
+  it('reconciles a WinGet tuple and passes trusted installers to preflight', async () => {
+    const trustedInstallers = [{
+      architecture: 'x64',
+      url: 'https://example.com/refreshed.exe',
+      sha256: 'B'.repeat(64),
+      type: 'exe',
+      scope: 'machine',
+    }];
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: {
+        ...item,
+        installerUrl: trustedInstallers[0].url,
+        installerSha256: trustedInstallers[0].sha256,
+        installCommand: '/quiet',
+        uninstallCommand: 'uninstall.exe /quiet',
+      },
+      trustedInstallers,
+    }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Example.App',
+      sourceType: 'winget',
+      installerSha256: 'A'.repeat(64),
+    }), config, { skipRunCapture: true });
+
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        installerUrl: trustedInstallers[0].url,
+        installerSha256: trustedInstallers[0].sha256,
+      }),
+      trustedInstallers,
+    );
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer).toEqual(expect.objectContaining({
+      url: trustedInstallers[0].url,
+      sha256: trustedInstallers[0].sha256,
+      silentSwitches: '/quiet',
+    }));
+  });
+
+  it('dispatches reviewed Movavi success codes through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Movavi.MovaviPhotoFocus',
+      displayName: 'Movavi Photo Focus',
+      publisher: 'Movavi',
+      version: '1.1.0',
+      architecture: 'x86',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Movavi Photo Focus',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.installer.successCodes)).toEqual([1223]);
+  });
+
+  it('dispatches WithSecure silent removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'WithSecure.ElementsAgent', displayName: 'WithSecure Elements Agent',
+      publisher: 'WithSecure', version: '26.3.298.0',
+      installerSha256: '1DC76B171B77161754BA6AC883CCFD2D7730D80E7A827779BAD905B1F9483D55',
+      sourceType: 'winget', installerType: 'msi', silentSwitches: '/quiet ALLUSERS=1',
+      uninstallCommand: 'msiexec /x "{26E3718A-7CCD-40E0-BE8B-7F1E756A05F5}" /qn /norestart',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['--silent'] });
+  });
+
+  it('dispatches SketchUp 2025 unattended removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Trimble.SketchUp.2025',
+      displayName: 'SketchUp 2025',
+      publisher: 'Trimble, Inc.',
+      version: '25.0.660',
+      installerSha256: '0AB6635E4740F415FC102F4DE23E28F6DE95BF4085E84001791A17C5FCBF320E',
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '/silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{BF6A8902-D556-5B2D-9FD7-83F19CE65B5C}:SketchUp 2025',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['-silent'] });
+  });
+
+  it('dispatches LPub3D managed-context removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'trevorsandy.lpub3d', displayName: 'LPub3D', publisher: 'trevorsandy',
+      version: '2.4.9.86.4133', installerSha256: 'A'.repeat(64), sourceType: 'winget',
+      installerType: 'exe', silentSwitches: '/S /allusers',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:LPub3D:LPub3D', installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['/shelluser', '/S'] });
+  });
+
+  it('dispatches JetBrains Toolbox headless removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'JetBrains.Toolbox',
+      displayName: 'JetBrains Toolbox',
+      publisher: 'JetBrains',
+      version: '3.7.2.0',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '/headless',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Toolbox:JetBrains Toolbox',
+      installScope: 'user',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['/headless'] });
+  });
+
+  it('dispatches IDM reviewed window automation through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Tonec.InternetDownloadManager',
+      displayName: 'Internet Download Manager',
+      publisher: 'Tonec Inc.',
+      version: '6.43.10',
+      architecture: 'x86',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '/skipdlgs',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Internet Download Manager',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    const psadtConfig = JSON.parse(payload.client_payload.config.psadtConfig);
+    expect(psadtConfig.reviewedUninstallArguments).toEqual([]);
+    expect(psadtConfig.reviewedUninstallWindowAutomation).toEqual({
+      processName: 'Uninstall.exe',
+      steps: [
+        {
+          windowText: 'Internet Download Manager',
+          buttonIndex: 2,
+          timeoutSeconds: 60,
+        },
+        { buttonIndex: 3, timeoutSeconds: 15 },
+        {
+          windowText: 'Internet protocol options',
+          buttonIndex: 2,
+          timeoutSeconds: 15,
+        },
+      ],
+    });
+  });
+
+  it('dispatches Product Portal unattended removal to customer packaging', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'iZotope.ProductPortal', displayName: 'Product Portal', publisher: 'iZotope',
+      version: '1.4.9', installerSha256: 'A'.repeat(64), sourceType: 'winget',
+      silentSwitches: '--mode unattended', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Product Portal:Product Portal',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:Product Portal:Product Portal');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedUninstallArguments: ['--mode', 'unattended'],
+    });
+  });
+
+  it('dispatches the bounded PostgreSQL 16 removal lifecycle to customer packaging', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'PostgreSQL.PostgreSQL.16',
+      displayName: 'PostgreSQL 16',
+      publisher: 'PostgreSQL',
+      version: '16.15-3',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      silentSwitches: '--mode unattended --unattendedmodeui none',
+      uninstallCommand: 'REGISTRY_UNINSTALL:PostgreSQL 16',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL:PostgreSQL 16');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
+      uninstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
+  it('dispatches the reviewed Postgres Pro lifecycle through the customer packager', async () => {
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: {
+        ...item,
+        uninstallCommand:
+          'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)',
+      },
+      trustedInstallers: [],
+    }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'PostgresPro.Standard.17',
+      displayName: 'Postgres Pro Standard 17',
+      publisher: 'Postgres Professional',
+      version: '17.7',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'nullsoft',
+      silentSwitches: '--mode unattended',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Postgres Pro Standard 17',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)'
+    );
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['/S'] });
+  });
+
+  it('dispatches the generated Acrobat archive product identity to customer packaging', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: { ...item, nestedInstallerType: 'exe', nestedInstallerPath: 'Adobe Acrobat\\setup.exe' },
+      trustedInstallers: [],
+    }));
+    const uninstallCommand = generateUninstallCommand({
+      type: 'zip', nestedInstallerType: 'exe', architecture: 'x64',
+      url: 'https://example.com/acrobat.zip', sha256: 'E'.repeat(64),
+      nestedInstallerPath: 'Adobe Acrobat\\setup.exe',
+      productCode: '{AC76BA86-1033-FFFF-7760-BC15014EA700}',
+    }, 'Adobe Acrobat Pro');
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Adobe.Acrobat.Pro', displayName: 'Adobe Acrobat Pro', publisher: 'Adobe',
+      version: '26.002.21901', installerUrl: 'https://example.com/acrobat.zip',
+      installerSha256: 'E'.repeat(64), sourceType: 'winget', installerType: 'zip',
+      nestedInstallerType: 'exe', nestedInstallerPath: 'Adobe Acrobat\\setup.exe',
+      silentSwitches: '/sAll /rs /msi EULA_ACCEPT=YES', uninstallCommand, installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FFFF-7760-BC15014EA700}:Adobe Acrobat Pro'
+    );
+    expect(payload.client_payload.installer.nestedInstallerType).toBe('exe');
+  });
+
+  it('dispatches Teradata silent archive removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Teradata.TTUOdbc',
+      displayName: 'Teradata ODBC Driver',
+      publisher: 'Teradata Corporation',
+      version: '20.00.38.00',
+      architecture: 'x64',
+      installerUrl: 'https://example.com/TeradataODBC.zip',
+      installerSha256: 'D'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: 'TeradataODBC\\TTUSuiteSilent.exe',
+      silentSwitches: '/silent',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{F075B63A-C629-41F8-BA56-33D9940F2000}:Teradata ODBC Driver',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedArchiveUninstall: {
+        relativePath: 'TeradataODBC\\silent_uninstall.bat',
+        arguments: ['ALL'],
+        completionTimeoutMinutes: 15,
+      },
+    });
+  });
+
+  it('dispatches the observable Webroot MSI lifecycle through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Webroot.SecureAnywhere',
+      displayName: 'Webroot SecureAnywhere',
+      publisher: 'Webroot',
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installerSha256: 'B'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Webroot SecureAnywhere',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.type).toBe('msi');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedInstallArguments: ['CMDLINE=SME,quiet'],
+      reviewedInstallCompletionTimeoutMinutes: 30,
+    });
+  });
+
+  it('dispatches FSLogix removal with restart suppression through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Microsoft.FSLogix',
+      displayName: 'FSLogix',
+      publisher: 'Microsoft',
+      version: '3.26.126.19110',
+      architecture: 'x64',
+      installerSha256: 'C'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      silentSwitches: '/install /quiet /norestart',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft FSLogix Apps',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:Microsoft FSLogix Apps'
+    );
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedUninstallArguments: ['/norestart'],
+    });
+  });
+
+  it('dispatches Chrome Beta EXE with the vendor channel uninstall key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Google.Chrome.Beta.EXE',
+      displayName: 'Google Chrome Beta (EXE)',
+      publisher: 'Google',
+      version: '152.0.7977.54',
+      architecture: 'x64',
+      installerSha256: 'D'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '--do-not-launch-chrome --system-level --chrome-beta',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:Google Chrome:Google Chrome Beta (EXE)',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:Google Chrome Beta:Google Chrome Beta'
+    );
+  });
+
+  it('dispatches WireSock customers with the same SDK identity adapter as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',
+      version: '3.6.1', architecture: 'x64', installerSha256: 'BDB676263FFFA4E36EC6B51155A8AFE2AC6D5680DC6D22008DE9C75C8F533ECC',
+      sourceType: 'winget', installerType: 'exe', silentSwitches: '/S /NCRC', installScope: 'machine',
+      uninstallCommand: 'REGISTRY_UNINSTALL:WireSock Secure Connect CLI',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedRegistryUninstallDisplayName: 'WireSock Secure Connect SDK',
+      reviewedPreferVisiblePrimaryUninstallRegistration: true,
+    });
+  });
+
+  it('dispatches Philips customer packages with the same exact NSIS identity as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Philips.SmartControl', displayName: 'Smart Control', publisher: 'Philips',
+      version: '7.2.0', architecture: 'x64', installerSha256: '8'.repeat(64),
+      sourceType: 'winget', installerType: 'zip', nestedInstallerType: 'nullsoft',
+      silentSwitches: '/S', installScope: 'user',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{EAF31A0E-C98A-5E6E-9883-2A487A3337A1}:Smart Control',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:eaf31a0e-c98a-5e6e-9883-2a487a3337a1:SmartControl'
+    );
+    expect(payload.client_payload.config.installScope).toBe('user');
+  });
+
+  it('dispatches DSH Desktop with the reviewed NSIS key to the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'JustGenius-s.DSHDesktop',
+      displayName: 'DSH-Decktop',
+      publisher: 'JustGenius-s',
+      version: '0.2.0',
+      architecture: 'x64',
+      installerSha256: 'D'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'nullsoft',
+      silentSwitches: '/S /allusers',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{239D4E5C-394E-5607-BF11-8B5229505789}:DSH-Decktop',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:239d4e5c-394e-5607-bf11-8b5229505789:DSH-Desktop 0.2.0'
+    );
+  });
+
+  it('dispatches Kiwix customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Kiwix.Wikivoyage.Electron', displayName: 'Wikivoyage by Kiwix Electron Edition', publisher: 'Kiwix',
+      version: '3.8.2-E', architecture: 'x86', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix'
+    );
+  });
+
+  it('dispatches tl;dv customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'tldx.tldv', displayName: 'tl;dv', publisher: 'tldx',
+      version: '3.0.264', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{D4EF7ABC-E624-5946-B915-B84166F8A4BF}:tl;dv',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:d4ef7abc-e624-5946-b915-b84166f8a4bf:tldv'
+    );
+  });
+
+  it('dispatches ZCode customer packages with the exact bare NSIS key used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZhipuAI.ZCode', displayName: 'Z Code', publisher: 'ZhipuAI',
+      version: '3.14.0', architecture: 'x64',
+      installerSha256: '74AAF7DEEF9B805B993AEAF2133E70EEF74816888B326FC8B4A36C90C4ED15EE',
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S /allusers',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{268CE9E6-A30B-5890-AD18-D4B3EBBA5377}:Z Code',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:268ce9e6-a30b-5890-ad18-d4b3ebba5377:ZCode'
+    );
+  });
+
+  it('dispatches Zermelo customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', displayName: 'Zermelo Desktop', publisher: 'Zermelo Software BV',
+      version: '26.09.1', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zermelo Desktop',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo'
+    );
+  });
+
+  it('dispatches RackSight customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'AuthorityGate.RackSight', displayName: 'RackSight Desktop', publisher: 'AuthorityGate',
+      version: '1.1.9', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:RackSight Desktop',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight'
+    );
+  });
+
+  it('dispatches AirUSB customer packages with the exact Inno identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'AirUSB.Client', displayName: 'AirUSB Client', publisher: 'AirUSB',
+      version: '1.1.2', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'inno', installScope: 'machine',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:AirUSB Client',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1:Air USB'
+    );
+  });
+
+  it('dispatches JS8Call-improved with the reviewed Inno key to the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'JS8Call-improved.JS8Call-improved',
+      displayName: 'JS8Call-improved',
+      publisher: 'JS8Call-improved',
+      version: '3.0.3',
+      architecture: 'x64',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:JS8Call-improved',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{B5281957-28FD-4BAE-8D06-FC59898D850E}_is1:JS8Call 3.0.3'
+    );
+  });
+
+  it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'FinancialID.BankID',
+      displayName: 'BankID säkerhetsprogram',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      uninstallCommand: 'REGISTRY_UNINSTALL:BankID säkerhetsprogram',
+    }), config, { skipRunCapture: true });
+
+    const reconciledItem = reconcileCatalogInstallerMock.mock.calls[0][0];
+    expect(reconciledItem.psadtConfig.uninstallCommand).toBeUndefined();
+  });
+
+  it('preserves a customer-provided uninstall override during reconciliation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Example.App',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      uninstallCommand: 'vendor-remover.exe /tenant-approved',
+    }), config, { skipRunCapture: true });
+
+    const reconciledItem = reconcileCatalogInstallerMock.mock.calls[0][0];
+    expect(reconciledItem.psadtConfig.uninstallCommand).toBe(
+      'vendor-remover.exe /tenant-approved'
+    );
+  });
+
   it('dispatches calculate mode for a custom installer without a trusted hash', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -66,6 +825,18 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
         hashValidationMode: 'calculate',
       })
     );
+  });
+
+  it('does not dispatch a custom plain EXE without silent switches', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(triggerPackagingWorkflow(workflowInputs({
+      silentSwitches: '',
+    }), config, { skipRunCapture: true })).rejects.toMatchObject({
+      code: 'silent-install-contract-missing',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('defaults to strict mode when no mode override is supplied', async () => {
@@ -91,6 +862,137 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(payload.client_payload.installer.hashValidationMode).toBe('strict');
   });
 
+  it('dispatches only server-resolved dependency metadata and binds it to the QA profile', async () => {
+    const dependency = {
+      packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+      version: '14.51.36210.0',
+      architecture: 'x64' as const,
+      installerUrl: 'https://aka.ms/vc14/vc_redist.x64.exe',
+      installerSha256: 'B'.repeat(64),
+      installerType: 'exe' as const,
+      silentArgs: '/install /quiet /norestart',
+      successCodes: [-2147023258, 0, 1638],
+      rebootCodes: [1641, 3010],
+      fileName: 'Microsoft.VCRedist.2015+.x64-vc_redist.x64.exe',
+      order: 1,
+      depth: 1,
+    };
+    resolveDependenciesMock.mockResolvedValueOnce([dependency]);
+    vi.stubEnv('CALLBACK_SECRET', 'dependency-signing-secret');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Oracle.VirtualBox',
+      version: '7.2.14',
+      installerSha256: 'A'.repeat(64),
+      hashValidationMode: 'strict',
+      sourceType: 'winget',
+      packageDependencies: [],
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.installer.packageDependencies)).toEqual([
+      dependency,
+    ]);
+    expect(payload.client_payload.installer.dependencyBundleSignature).toMatch(
+      /^[a-f0-9]{64}$/
+    );
+    expect(resolveDependenciesMock).toHaveBeenCalledWith(expect.objectContaining({
+      wingetId: 'Oracle.VirtualBox',
+      installerSha256: 'A'.repeat(64),
+    }));
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({
+      packageProfileSha256: expect.stringMatching(/^[A-F0-9]{64}$/),
+    }));
+  });
+
+  it('dispatches the same reconciled marker rules that are used for the QA gate', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const inputs = workflowInputs({
+      wingetId: 'Asana.Asana',
+      version: '2.8.0',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installScope: 'user',
+      detectionRules: JSON.stringify([
+        {
+          type: 'registry',
+          keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+          valueName: 'Version',
+          detectionType: 'version',
+          operator: 'greaterThanOrEqual',
+          detectionValue: '2.7.1',
+        },
+      ]),
+      psadtConfig: JSON.stringify({ brandingCompanyName: 'Contoso' }),
+    });
+
+    await triggerPackagingWorkflow(
+      inputs,
+      config,
+      { skipRunCapture: true }
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    const dispatchedRules = JSON.parse(payload.client_payload.config.detectionRules);
+    const dispatchedConfig = JSON.parse(payload.client_payload.config.psadtConfig);
+
+    expect(dispatchedRules[0]).toMatchObject({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+      detectionValue: '2.8.0',
+    });
+    expect(dispatchedConfig).toMatchObject({
+      brandingCompanyName: 'Contoso',
+      detectionRules: dispatchedRules,
+    });
+    const dispatchedIdentity = buildQaPackageIdentityFromWorkflowInput({
+      ...inputs,
+      psadtConfig: payload.client_payload.config.psadtConfig,
+      detectionRules: payload.client_payload.config.detectionRules,
+    });
+    expect(enforceQaGateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        packageProfileSha256: dispatchedIdentity.packageProfileSha256,
+      })
+    );
+  });
+
+  it('does not reconcile custom-installer detection rules', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const detectionRules = JSON.stringify([
+      {
+        type: 'registry',
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Custom_Example_App',
+        valueName: 'Version',
+        detectionType: 'version',
+        operator: 'equal',
+        detectionValue: '1.0.0',
+      },
+    ]);
+    const psadtConfig = JSON.stringify({ detectionRules, brandingCompanyName: 'Custom' });
+
+    await triggerPackagingWorkflow(
+      workflowInputs({
+        sourceType: 'custom',
+        installScope: 'user',
+        detectionRules,
+        psadtConfig,
+      }),
+      config,
+      { skipRunCapture: true }
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.config.detectionRules).toBe(detectionRules);
+    expect(payload.client_payload.config.psadtConfig).toBe(psadtConfig);
+  });
+
   it('does not call GitHub when installer preflight blocks dispatch', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -107,5 +1009,175 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     )).rejects.toThrow('quarantined');
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not call GitHub when the final QA gate blocks dispatch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    enforceQaGateMock.mockRejectedValueOnce(new Error('known failed QA result'));
+
+    await expect(triggerPackagingWorkflow(
+      workflowInputs({ wingetId: 'Example.App', sourceType: 'winget' }),
+      config,
+      { skipRunCapture: true },
+    )).rejects.toThrow('known failed QA result');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('binds a required QA pass to the dispatched installer SHA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const sha = 'A'.repeat(64);
+    await triggerPackagingWorkflow(
+      workflowInputs({ wingetId: 'Example.App', installerSha256: sha, sourceType: 'winget' }),
+      config,
+      { skipRunCapture: true, requireQaPass: true }
+    );
+    expect(enforceQaGateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ installerSha256: sha, requirePassed: true })
+    );
+  });
+
+  it.each([
+    { wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64' as const,
+      installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
+    { wingetId: 'Yuanfudao.Yuanfudao', version: '7.31.0', architecture: 'x64' as const,
+      installerSha256: '0AABCD7B3C471C4C27269874ABC88F338A55E170C3FCF7D132B577B3FB9BA6F2' },
+    { wingetId: 'Qingfeng.HeyboxChat', version: '1.58.0', architecture: 'x64' as const,
+      installerSha256: 'C32F3FB488EC5B1FBD046DCE3098719DF2F20C270020A8F692941D5DC686DC55' },
+    { wingetId: 'WardianApp.Wardian', version: '0.6.1', architecture: 'x64' as const,
+      installerSha256: '5804571F3796E39ED8AC5FFC23F068E17199477531BD1007C9CDF71A8FE64AF6' },
+    { wingetId: 'ZWSOFT.NetworkLicenseManager', version: '1.3.10', architecture: 'x64' as const,
+      installerSha256: '89D5794BF27134E3EBD985B36BCA951D7608C69383F6A420597CE794B2699D63' },
+    { wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64' as const,
+      installerSha256: 'F3FABDAE2DC83A6AE2344DC1BCF1AD836C4FD4D5472D9B5E681C57CC8F972E08' },
+    { wingetId: 'zokugun.MrCode', version: '1.82.0.23253', architecture: 'x64' as const,
+      installerSha256: '9BB0835D2F8F1F0EF8FB489B3040471BC16676DCE1670BAA8C7876A71D73EF06' },
+    { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
+      installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
+    { wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64' as const,
+      installerSha256: '4741C1AAD4F058939CAE5A3311E46D9C9F4E3BFAC7BC03F56F582F18C6B5029E' },
+    { wingetId: 'Yandex.Disk', version: '3.2.51.5198', architecture: 'x64' as const,
+      installerSha256: '07B333208A5C14F18A8B48C99478D53DD39368D1E66D6EEB2DD44CB0F545FFAA' },
+    { wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64' as const,
+      installerSha256: '1D6FBF4139EDF32FA66FC2D72151801D8D622760FAE71985A6C1167F47EFFCFF' },
+    { wingetId: 'BearStarSoftware.IVTSecureAccessFreeEdition', version: '28.1', architecture: 'x64' as const,
+      installerSha256: '8159B07F65735968EB3D14D34A19640B7C1E0084A41BC6189C542D1DC9B76FA2' },
+    { wingetId: 'Kuddev.Pebrel', version: '1.8.0', architecture: 'x64' as const,
+      installerSha256: '28FA2D4A0FFF3FA039CFFEF586875CB867020EB391DCD31BE3DB3477A8AE2159' },
+    { wingetId: 'tldx.tldv', version: '3.0.264', architecture: 'x64' as const,
+      installerSha256: 'BB5007C2BF94F717428D5982CF739489CB0BD0CAFD1A193DA671304AD421B25C' },
+    { wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64' as const,
+      installerSha256: '9F1F3547B1119054623B145FAAE7EC1C83BB833FE3D8C71A66C0AA5067203058' },
+    { wingetId: 'S42yt.FreSH', version: '26.10.0', architecture: 'x64' as const,
+      installerSha256: '8EB1FE8DBDAF3B36F6E77A50D0E8726018CC740D4513D46CAF42BE575BFBCAE1' },
+    { wingetId: 'Meitu.ColorByte.Pro', version: '7.9.4', architecture: 'x64' as const,
+      installerSha256: '7EAA434D370737369D4E8FF6B6680B0C8BB0DE9D630E0D59C1DC5ADD7E3B3CDF' },
+    { wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,
+      installerSha256: 'D34F1AFFD65BCF99F5762F5FC1A13C0B2585546BDC89D99AA045364DA6215BC8' },
+    { wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86' as const,
+      installerSha256: '8D64DD8FCA0C7CD042CD3028496B7085BEDF22364908D056A9795BCCB821A4A8' },
+    { wingetId: 'SKCommunications.NateOn', version: '7.0.41.0', architecture: 'x86' as const,
+      installerSha256: '1DCA7E3230CDB6BEC7374DEE2D226D62C73919B6119D870DD6BC29D19915AE2F' },
+    { wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64' as const,
+      installerSha256: '37E79B29536B79F0DB0F203CD9135A196F5A9791D446F7B16E2A3C1FE75F9EB9' },
+    { wingetId: 'WizardsoftheCoast.MTGALauncher', version: '1.0.124', architecture: 'x64' as const,
+      installerSha256: '96C64E5E0CD4D5758F3C9AE1AF7A2C6FFCF4782E273AEDE28FA92B8E63FFC368' },
+    { wingetId: 'Ubiquiti.UniFiNetworkServer', version: '10.6.106', architecture: 'x64' as const,
+      installerSha256: '984FEFAA18AA38D90928F9159D2F2C8286202F19B0E038E3C2A8F7192DFC1C91' },
+    { wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64' as const,
+      installerSha256: '9015EEE906A0B84F2B5B0471E6F7C88C5BCF50DE6B6F32C5EB252D385D7FDBD2' },
+    { wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,
+      installerSha256: 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C' },
+    { wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64' as const,
+      installerSha256: '493AE586FF07EF3696DA3BDE3AEB73D6CACA8A1C00E779DA899FF16A159CF36E' },
+    { wingetId: 'Tencent.WeType', version: '2.1.4.6', architecture: 'x64' as const,
+      installerSha256: 'D8D487B0C3F9319B7C0A4736851701503CC662B101016CC2B62F7D657A1A41EC' },
+    { wingetId: 'Thunder.Thunder', version: '25.1.13.1637', architecture: 'x64' as const,
+      installerSha256: 'B2C7A5269B267E7390BED95975FF9BA56088B26A945B6A2BA4B35B3B15FE8EC6' },
+    { wingetId: 'T3Tools.T3Code', version: '0.0.42', architecture: 'x64' as const,
+      installerSha256: '9BD4A00AE9B4880F85E81376844E4FC1DBC9F719120958D7445B4C2B281E267F' },
+    { wingetId: 'StablyAI.Orca', version: '1.4.204', architecture: 'x64' as const,
+      installerSha256: '87B877EC7472F664E5264DC5367A5F18F4484AEA67A08B4ECA76F9A65729206C' },
+    { wingetId: 'Pithflow.Pithflow', version: '1.37.0', architecture: 'x64' as const,
+      installerSha256: '536AD9787092DFBD9F23C9F5FD4EA1ED81B1A363736AE68B3B3BFCED627028D4' },
+    { wingetId: 'HydrologicEngineeringCenter.HEC-RAS', version: '7.0', architecture: 'x86' as const,
+      installerSha256: '166CA2458830C7646ECACD542C40C07E5DA7E48138BD81DA4EBEBD7B5C2A9532' },
+    { wingetId: 'Microsoft.365Copilot', version: '19.2609.33020.0', architecture: 'x64' as const,
+      installerSha256: '7B2A6D88E87F068E8775D1DE267EE932914F430BFA054A2012DEC43FA279E61A' },
+    { wingetId: 'Twinkstar.TwinkstarBrowser', version: '11.4.1000.2609', architecture: 'x64' as const,
+      installerSha256: '3671D4C0693240501854274692724B9A98C35B1E869066CF40985F43D4738668' },
+    { wingetId: 'Microsoft.DataTools.IntegrationServices', version: '17.0.1010.2', architecture: 'x86' as const,
+      installerSha256: '75D8444333303D5B449660A669AF07862289E5F2BBDEF0AE7520C5BA3E47D65B' },
+    { wingetId: 'SJMC.SJMCL', version: '1.3.1', architecture: 'x64' as const,
+      installerSha256: 'D736C896A039A9AFB8B7D4339A79293FAAAC6EF3F164DAF2DD44F8702997178A' },
+    { wingetId: 'luqiangbo.DockMapper', version: '1.1.5', architecture: 'x64' as const,
+      installerSha256: '2C17B07EA68C59D38FCE1DACCD88F294FF6E018DC2A87355E95771CC0F141D50' },
+    { wingetId: 'WINBIGFOX.TimeScribe', version: '1.17.1', architecture: 'x64' as const,
+      installerSha256: '6DBADEF47A4ED4ADA5BEFA798462A6571D2B5525AC9FA1E5E96F202469C645E1' },
+    { wingetId: 'Opera.Opera', version: '136.0.6008.52', architecture: 'x64' as const,
+      installerSha256: 'E628250756E8B7AD9CDE787DFAE806AA2929CA66B77F23D72020BEEDCFB8D1F9' },
+    { wingetId: 'Microsoft.Edge', version: '154.0.4258.37', architecture: 'x64' as const,
+      installerSha256: '4D8D922C8B2470084A380142CDFD51B2B28A83AF7982D8F023CB8FACBF258246' },
+  ])('never sends a customer Actions payload for quarantined $wingetId, even with override', async (tuple) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    enforceQaGateMock.mockRejectedValueOnce(new QaCompatibilityGateError({
+      ...tuple, blockCode: 'failed_managed_lifecycle',
+    }));
+    await expect(triggerPackagingWorkflow(
+      workflowInputs({ ...tuple, sourceType: 'winget', qaOverride: true }),
+      config,
+      { skipRunCapture: true },
+    )).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({
+      ...tuple, qaOverride: true,
+    }));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses qaOverride only at the server gate and does not forward it to GitHub', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({ qaOverride: true }), config, { skipRunCapture: true });
+
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }));
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.stringify(payload)).not.toContain('qaOverride');
+  });
+});
+
+describe('cancelWorkflowRun', () => {
+  it('falls back to force-cancel when GitHub rejects the normal cancel', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 409 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cancelWorkflowRun(42, config);
+
+    expect(result).toMatchObject({ success: true, status: 'cancelled' });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://api.github.com/repos/example/workflow-repo/actions/runs/42/cancel',
+      'https://api.github.com/repos/example/workflow-repo/actions/runs/42/force-cancel',
+    ]);
+  });
+
+  it('reports not cancellable when both endpoints reject the run', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await cancelWorkflowRun(42, config)).toMatchObject({ success: false, status: 'not_cancellable' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not force-cancel after a normal cancel is accepted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await cancelWorkflowRun(42, config)).toMatchObject({ success: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

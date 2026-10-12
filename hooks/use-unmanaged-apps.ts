@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useDeferredValue, useCallback, useRef } from 'react';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useMspOptional } from '@/hooks/useMspOptional';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { useCartStore } from '@/stores/cart-store';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
 import { toast } from '@/hooks/use-toast';
 import type {
@@ -276,32 +277,8 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     });
   }, [apps]);
 
-  // Filter and sort apps
-  const filteredApps = useMemo(() => {
-    let result = nonMicrosoftApps.map((app) => ({
-      ...app,
-      isClaimed: app.matchedPackageId ? cartWingetIds.has(app.matchedPackageId) : false,
-    }));
-
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      result = result.filter(
-        (app) =>
-          app.displayName.toLowerCase().includes(searchLower) ||
-          app.publisher?.toLowerCase().includes(searchLower) ||
-          app.matchedPackageId?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    if (filters.matchStatus !== 'all') {
-      result = result.filter((app) => app.matchStatus === filters.matchStatus);
-    }
-
-    if (!filters.showClaimed) {
-      result = result.filter((app) => !app.isClaimed);
-    }
-
-    result.sort((a, b) => {
+  const sortedApps = useMemo(() => {
+    return [...nonMicrosoftApps].sort((a, b) => {
       let comparison = 0;
       switch (filters.sortBy) {
         case 'name':
@@ -322,8 +299,19 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       return filters.sortOrder === 'desc' ? -comparison : comparison;
     });
 
-    return result;
-  }, [nonMicrosoftApps, filters, cartWingetIds]);
+  }, [nonMicrosoftApps, filters.sortBy, filters.sortOrder]);
+  const indexedApps = useMemo(() => sortedApps.map(app => ({
+    app, search: [app.displayName, app.publisher, app.matchedPackageId].join(' ').toLowerCase(),
+  })), [sortedApps]);
+  const deferredSearch = useDeferredValue(filters.search);
+  const filteredApps = useMemo(() => {
+    const needle = deferredSearch.trim().toLowerCase();
+    return indexedApps.filter(({ app, search }) =>
+      (!needle || search.includes(needle)) &&
+      (filters.matchStatus === 'all' || app.matchStatus === filters.matchStatus) &&
+      (filters.showClaimed || !app.matchedPackageId || !cartWingetIds.has(app.matchedPackageId))
+    ).map(({ app }) => ({ ...app, isClaimed: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId) }));
+  }, [indexedApps, deferredSearch, filters.matchStatus, filters.showClaimed, cartWingetIds]);
 
   // Status counts
   const statusCounts = useMemo(() => {
@@ -421,6 +409,12 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
           manifest?.name || app.displayName
         ),
         detectionRules,
+        requirementRules: buildCartItemRequirementRules(
+          manifest?.name || app.displayName,
+          recommendedInstaller.type,
+          recommendedInstaller.productCode,
+          undefined
+        ),
         psadtConfig: {
           ...DEFAULT_PSADT_CONFIG,
           processesToClose,
