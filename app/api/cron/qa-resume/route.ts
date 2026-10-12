@@ -176,6 +176,7 @@ export async function GET(request: Request) {
         // Demand can reuse a completed run awaiting publication. Read its
         // actual state before continuity decides whether packaging may start.
         if (!demand.candidateId) {
+          waitingIds.push(job.id);
           waiting++;
           continue;
         }
@@ -187,6 +188,7 @@ export async function GET(request: Request) {
         if (candidateError) throw candidateError;
         candidate = data;
         if (!candidate) {
+          waitingIds.push(job.id);
           waiting++;
           continue;
         }
@@ -262,6 +264,7 @@ export async function GET(request: Request) {
     // continuity, without treating publication failure as installer failure.
     if (!skipCustomerQa && candidateStatus === 'error' &&
         candidate?.phase === 'publishing' && candidate.github_run_id) {
+      waitingIds.push(job.id);
       waiting++;
       continue;
     }

@@ -172,8 +172,11 @@ describe('GET /api/cron/qa-resume', () => {
     const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
       headers: { authorization: 'Bearer secret' },
     }));
-    expect.soft(await response.json()).toEqual({ success: true, scanned: jobCount, resumed: 0, failed: 0, waiting: jobCount });
-    expect.soft(updates.update).not.toHaveBeenCalled();
+    expect.soft(await response.json()).toEqual({ success: true, scanned: jobCount, resumed: 0, failed: 0, waiting: jobCount,
+      held: 0, deferred: 0, budgetExhausted: false });
+    expect.soft(updates.update).toHaveBeenCalledExactlyOnceWith({ qa_resume_due_at: expect.any(String) });
+    expect.soft(updates.in).toHaveBeenCalledWith('id', jobs.map(job => job.id));
+    expect.soft(updates.eq).toHaveBeenCalledWith('status', 'awaiting_qa');
     expect.soft(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
     expect(assertCuratedLicenceAcceptedMock).not.toHaveBeenCalled();
@@ -932,7 +935,7 @@ describe('GET /api/cron/qa-resume', () => {
     process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(Date.now() + 60_000).toISOString();
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     const job = {
-      id: 'job-relinked-publication', status: 'awaiting_qa',
+      id: 'job-relinked-publication', status: 'awaiting_qa', tenant_id: 'tenant-1',
       qa_candidate_id: prior === 'missing' ? null : 'old-candidate',
       winget_id: 'Example.App', version: '1.0.0', architecture: 'x64',
       installer_sha256: 'B'.repeat(64), is_auto_update: false,
@@ -961,13 +964,17 @@ describe('GET /api/cron/qa-resume', () => {
     }));
     const released = current === 'queued';
     expect(await response.json()).toEqual({ success: true, scanned: 1,
-      resumed: released ? 1 : 0, failed: 0, waiting: released ? 0 : 1 });
+      resumed: released ? 1 : 0, failed: 0, waiting: released ? 0 : 1,
+      held: 0, deferred: 0, budgetExhausted: false });
     expect(store.row.qa_candidate_id).toBe('publication-candidate');
     expect(store.row.status).toBe(released ? 'packaging' : 'awaiting_qa');
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(released ? 1 : 0);
     expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     expect(assertCuratedLicenceAcceptedMock).not.toHaveBeenCalled();
-    expect(store.writes).toHaveLength(released ? 3 : 1);
+    expect(store.writes).toHaveLength(released ? 3 : 2);
+    expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(released ? 1 : 0);
+    if (released) expect(findPendingApprovalBlocksMock.mock.invocationCallOrder[0])
+      .toBeLessThan(triggerPackagingWorkflowMock.mock.invocationCallOrder[0]);
   });
 
   it('releases an unlinked upload immediately when the app payload already passed QA', async () => {

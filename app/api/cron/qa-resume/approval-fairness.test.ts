@@ -26,7 +26,7 @@ function job(i: number, extra: Record<string, unknown> = {}): Row {
     is_auto_update: false, package_config: { sourceType: 'winget', version: '1.0', installerType: 'exe' }, ...extra };
 }
 // Exercises actual selection, conditional writes and persistent rotation over cycles.
-function database(rows: Row[], candidateStatus = 'passed') {
+function database(rows: Row[], candidateStatus = 'passed', candidates?: Record<string, unknown>[]) {
   const writes: Array<{ id: string; patch: Record<string, unknown> }> = [];
   const client = { from(table: string) {
     const filters: Array<(r: Record<string, unknown>) => boolean> = [];
@@ -35,7 +35,7 @@ function database(rows: Row[], candidateStatus = 'passed') {
     let patch: Record<string, unknown> | undefined;
     const execute = () => {
       const source = table === 'packaging_jobs' ? rows : table === 'qa_candidates'
-        ? [{ id: 'candidate', status: candidateStatus, package_profile_sha256: 'profile' }]
+        ? candidates ?? [{ id: 'candidate', status: candidateStatus, package_profile_sha256: 'profile' }]
         : [{ outcome: 'Passed', package_profile_sha256: 'profile' }];
       const matches = source.filter(r => filters.every(f => f(r)))
         .sort((a, b) => {
@@ -86,6 +86,23 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks();
   delete process.env.QA_MAINTENANCE_MODE; delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL; });
 
 describe('approval holds and fair QA release', () => {
+  it('rotates 25 pending publication jobs so the next eligible job progresses', async () => {
+    const rows = [...Array.from({ length: 25 }, (_, i) => job(i)), job(26, { qa_candidate_id: 'ready' })];
+    vi.spyOn(packageEligibility, 'getPackageCompatibilityBlock').mockResolvedValue(null);
+    database(rows, 'passed', [
+      { id: 'candidate', status: 'error', phase: 'publishing', github_run_id: '123456789', package_profile_sha256: 'profile' },
+      { id: 'ready', status: 'passed', package_profile_sha256: 'profile' },
+    ]);
+    expect(await cycle()).toMatchObject({ waiting: 25, resumed: 0, failed: 0 });
+    expect(rows.slice(0, 25).every(row => row.status === 'awaiting_qa'
+      && row.qa_resume_due_at === new Date(epoch + 60_000).toISOString())).toBe(true);
+    expect(mocks.guard).not.toHaveBeenCalled();
+    vi.setSystemTime(epoch + 1000);
+    expect(await cycle()).toMatchObject({ resumed: 1, waiting: 0, failed: 0 });
+    expect(rows[25].status).toBe('queued');
+    expect(rows.slice(0, 25).every(row => row.status === 'awaiting_qa')).toBe(true);
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
   it('rotates unavailable compatibility lookups without releasing them or starving the next job', async () => {
     const rows = [...Array.from({ length: 25 }, (_, i) => job(i, { winget_id: 'Fixture.Unverified' })),
       job(26, { winget_id: 'Fixture.Verified' })];
