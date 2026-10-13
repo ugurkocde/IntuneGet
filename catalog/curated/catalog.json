@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-12T20:27:01.446Z",
-    "expiresAt": "2026-10-19T20:27:01.446Z",
+    "generatedAt": "2026-10-13T09:31:55.346Z",
+    "expiresAt": "2026-10-20T09:31:55.346Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -5150,10 +5150,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-functions-core-tools/ca6fae6b5766e23fe4d26559.json"
           }
         }
+      },
+      {
+        "id": "mongodb-compass:267274e0f1bc477379d077e5",
+        "candidate": {
+          "appId": "mongodb-compass",
+          "version": "1.53.0",
+          "installerUrl": "https://github.com/mongodb-js/compass/releases/download/v1.53.0/mongodb-compass-1.53.0-win32-x64.msi",
+          "vendorSha256": "533f4f9dd77ffc8b99adff08cfaa47d36aaf50691429642d6a49c56e9f1fe313",
+          "releaseNotesUrl": "https://github.com/mongodb-js/compass/releases/tag/v1.53.0",
+          "discoveredAt": "2026-10-13T08:58:10.153Z",
+          "id": "267274e0f1bc477379d077e5"
+        },
+        "installerSha256": "533f4f9dd77ffc8b99adff08cfaa47d36aaf50691429642d6a49c56e9f1fe313",
+        "executionProfileSha256": "722B36991B347953021A4C164510BC1B1724E29973C94F5B33F84D9D6220AC01",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-13T09:31:55.346Z",
+        "evidence": {
+          "verifiedAt": "2026-10-13T09:26:14.2302578Z",
+          "installerSha256": "533f4f9dd77ffc8b99adff08cfaa47d36aaf50691429642d6a49c56e9f1fe313",
+          "installerVersion": "1.53.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mongodb-compass/267274e0f1bc477379d077e5.json",
+          "signature": {
+            "publisher": "MongoDB, Inc.",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "9f4e4a1e1dd5460ee4100ab590177bdd32493b18",
+            "websiteCommit": "b01c45ff42172bf2d290b79b2d22eb6a84f8241c",
+            "runId": "38375253763",
+            "runAttempt": 1,
+            "artifactId": "11801336825",
+            "artifactSha256": "6e18e9f36d52fec4c48507632bf1d901227f8b52fa3be89925db470eae2a02fb"
+          },
+          "security": {
+            "suspicious": 0,
+            "status": "clean",
+            "installerSha256": "533f4f9dd77ffc8b99adff08cfaa47d36aaf50691429642d6a49c56e9f1fe313",
+            "scannedAt": "2026-10-13T09:23:39.8847516Z",
+            "malicious": 0,
+            "scanner": "defender",
+            "signatureVersion": "1.459.691.0",
+            "engineVersion": "1.1.26080.3",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mongodb-compass/267274e0f1bc477379d077e5.json"
+          },
+          "qa": {
+            "testedAt": "2026-10-13T09:26:06.7014764Z",
+            "architecture": "x64",
+            "testLevel": "psadt-package",
+            "executionProfileSha256": "722B36991B347953021A4C164510BC1B1724E29973C94F5B33F84D9D6220AC01",
+            "executionContext": "LocalSystem",
+            "upgradeFromVersion": "1.52.0",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerVersion": "1.53.0",
+            "candidateId": "267274e0f1bc477379d077e5",
+            "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+            "previousInstallerSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+            "installerSha256": "533f4f9dd77ffc8b99adff08cfaa47d36aaf50691429642d6a49c56e9f1fe313",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mongodb-compass/267274e0f1bc477379d077e5.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "sUVnqxOstPm6tBmV76ejcYCfFHnIBEjhFhBA3CC0ngb2tmITtoz6vTEOVsUfx96Dzla/rwJQqS1ugXGLMkYcAQ=="
+  "signature": "uYF91sARaj+5hbPq+ArfYfy0NDyVN0LXK6Z+XyEaQaProVlnu1R4KKnexM2IiMdwyoZQ69yxl+1A6GlxJW6pBQ=="
 }
