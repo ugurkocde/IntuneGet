@@ -2376,6 +2376,12 @@ jobs:
                   notifications = if ($assignment.notifications) { $assignment.notifications } else { 'showAll' }
                   deliveryOptimizationPriority = if ($assignment.deliveryOptimizationPriority) { $assignment.deliveryOptimizationPriority } else { 'notConfigured' }
                 }
+                if ($intent -eq 'available' -and $assignment.autoUpdateSupersededApps -is [bool] -and $assignment.autoUpdateSupersededApps -eq $true) {
+                  $graphAssignment['settings']['autoUpdateSettings'] = @{
+                    '@odata.type' = '#microsoft.graph.win32LobAppAutoUpdateSettings'
+                    autoUpdateSupersededAppsState = 'enabled'
+                  }
+                }
               }
 
               $graphAssignments += $graphAssignment

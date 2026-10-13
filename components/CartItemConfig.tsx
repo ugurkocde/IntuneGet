@@ -1277,6 +1277,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                 <AssignmentConfig
                   assignments={assignments}
                   onChange={setAssignments}
+                  supportsAutoUpdateSuperseded={!isStore}
                 />
               </ConfigSection>
 

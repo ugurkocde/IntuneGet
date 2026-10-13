@@ -125,6 +125,7 @@ interface PackageAssignment {
   filterType?: 'include' | 'exclude';
   notifications?: 'showAll' | 'showReboot' | 'hideAll';
   deliveryOptimizationPriority?: 'notConfigured' | 'foreground';
+  autoUpdateSupersededApps?: boolean;
 }
 
 interface IntuneAppCategorySelection {
@@ -155,6 +156,10 @@ interface GraphMobileAppAssignment {
     '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings';
     notifications: 'showAll' | 'showReboot' | 'hideAll';
     deliveryOptimizationPriority: 'notConfigured' | 'foreground';
+    autoUpdateSettings?: {
+      '@odata.type': '#microsoft.graph.win32LobAppAutoUpdateSettings';
+      autoUpdateSupersededAppsState: 'enabled';
+    };
   };
 }
 
@@ -988,6 +993,7 @@ export class IntuneUploader {
             || assignment.deliveryOptimizationPriority === 'foreground'
             ? assignment.deliveryOptimizationPriority
             : undefined,
+          autoUpdateSupersededApps: assignment.autoUpdateSupersededApps === true ? true : undefined,
         }));
     }
 
@@ -1099,6 +1105,12 @@ export class IntuneUploader {
           '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings',
           notifications: assignment.notifications ?? 'showAll',
           deliveryOptimizationPriority: assignment.deliveryOptimizationPriority ?? 'notConfigured',
+          ...(assignment.intent === 'available' && assignment.autoUpdateSupersededApps === true ? {
+            autoUpdateSettings: {
+              '@odata.type': '#microsoft.graph.win32LobAppAutoUpdateSettings' as const,
+              autoUpdateSupersededAppsState: 'enabled' as const,
+            },
+          } : {}),
         };
       }
 

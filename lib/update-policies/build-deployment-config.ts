@@ -84,6 +84,9 @@ export function parsePackageAssignments(packageConfig: unknown): PackageAssignme
       }
 
       return true;
+    }).map((assignment) => {
+      const { autoUpdateSupersededApps, ...rest } = assignment;
+      return autoUpdateSupersededApps === true ? { ...rest, autoUpdateSupersededApps: true } : rest;
     });
   }
 

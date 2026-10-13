@@ -679,6 +679,12 @@ export function convertToGraphAssignments(
         '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings',
         notifications: assignment.notifications ?? 'showAll',
         deliveryOptimizationPriority: assignment.deliveryOptimizationPriority ?? 'notConfigured',
+        ...(assignment.intent === 'available' && assignment.autoUpdateSupersededApps === true ? {
+          autoUpdateSettings: {
+            '@odata.type': '#microsoft.graph.win32LobAppAutoUpdateSettings' as const,
+            autoUpdateSupersededAppsState: 'enabled' as const,
+          },
+        } : {}),
       };
     }
 

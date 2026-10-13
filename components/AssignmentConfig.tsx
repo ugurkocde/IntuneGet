@@ -28,9 +28,10 @@ import type { EntraIDGroup, IntuneAssignmentFilter } from '@/types/intune';
 interface AssignmentConfigProps {
   assignments: PackageAssignment[];
   onChange: (assignments: PackageAssignment[]) => void;
+  supportsAutoUpdateSuperseded?: boolean;
 }
 
-export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProps) {
+export function AssignmentConfig({ assignments, onChange, supportsAutoUpdateSuperseded = false }: AssignmentConfigProps) {
   const [enabled, setEnabled] = useState(() => assignments.length > 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<EntraIDGroup[]>([]);
@@ -213,7 +214,7 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
   // Update assignment intent
   const updateIntent = (index: number, intent: AssignmentIntent) => {
     const updated = [...assignments];
-    updated[index] = { ...updated[index], intent };
+    updated[index] = { ...updated[index], intent, ...(intent !== 'available' ? { autoUpdateSupersededApps: false } : {}) };
     onChange(updated);
   };
 
@@ -744,6 +745,20 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
                               (Win32 assignment settings; not applicable to exclusions) */}
                           {!isExclusion && (
                             <>
+                              {supportsAutoUpdateSuperseded && assignment.intent === 'available' && (
+                                <div className="space-y-1.5">
+                                  <label className="flex items-start gap-2 text-xs text-text-secondary">
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Automatically update superseded app versions"
+                                      checked={assignment.autoUpdateSupersededApps === true}
+                                      onChange={(e) => onChange(assignments.map((row, rowIndex) => rowIndex === index ? { ...row, autoUpdateSupersededApps: e.target.checked } : row))}
+                                    />
+                                    <span>Automatically update superseded app versions</span>
+                                  </label>
+                                  <p className="text-xs text-text-muted">Applies to apps installed from Company Portal when this app supersedes them. This option does not create a supersedence relationship.</p>
+                                </div>
+                              )}
                               <div className="space-y-1.5">
                                 <label className="block text-xs font-medium text-text-secondary">
                                   End user notifications
