@@ -17,7 +17,7 @@ import {
   resolveWingetPackageDependencies,
 } from '@/lib/winget-dependencies';
 import type { Json } from '@/types/database';
-import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { buildQaDeploymentTestConfig, QA_DEPLOYMENT_TEST_PSADT_CONFIG } from './deployment-test-config';
 import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
 import {
   getPackageCompatibilityBlock,
@@ -92,15 +92,7 @@ export async function ensureQaDemand(
   const baseResolvedInput: QaDemandInput = {
     ...input,
     installScope,
-    psadtConfig: JSON.stringify({
-      ...DEFAULT_PSADT_CONFIG,
-      deployMode: 'Auto',
-      progressDialog: {
-        enabled: true,
-        statusMessage: 'IntuneGet is validating this application package.',
-        windowLocation: 'BottomRight',
-      },
-    }),
+    psadtConfig: JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG),
   };
   if (!isQaRunnerArchitectureSupported(input.architecture)) {
     return {
@@ -259,23 +251,7 @@ export async function ensureQaDemand(
     };
   }
   const now = new Date().toISOString();
-  const testConfig = {
-    mode: 'psadt-package',
-    profileKind: 'deployment-config',
-    ...(packageDependencies.length
-      ? { packageDependencies: packageDependencies as unknown as Json }
-      : {}),
-    packageProfileCanonicalJson: identity.canonicalJson,
-    packageProfileSha256: profileSha256,
-    executionProfileSha256: profileSha256,
-    presentationProfileSha256: identity.presentationProfileSha256,
-    psadtConfigSha256: identity.psadtConfigSha256,
-    detectionRulesSha256: identity.detectionRulesSha256,
-    // Keep the real presentation values for the VM. The canonical execution
-    // identity intentionally strips those values only for hashing/deduplication.
-    psadtConfig: normalizedPackage.psadtConfig as unknown as Json,
-    detectionRules: normalizedPackage.detectionRules as unknown as Json,
-  };
+  const testConfig = buildQaDeploymentTestConfig(normalizedPackage, packageDependencies);
 
   const row = {
     winget_id: input.wingetId,

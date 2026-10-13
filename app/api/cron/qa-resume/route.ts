@@ -228,6 +228,7 @@ export async function GET(request: Request) {
         .update({
           status: 'qa_failed',
           status_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
+          error_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
           error_code: 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
           error_stage: 'validation',
           error_category: 'installer',
@@ -272,11 +273,13 @@ export async function GET(request: Request) {
 
     if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
       const now = new Date().toISOString();
+      const failureReason = candidateFailureSummary?.trim() || 'The required installation test could not complete.';
       const { data: updated } = await supabase
         .from('packaging_jobs')
         .update({
           status: 'qa_failed',
-          status_message: candidateFailureSummary || 'The required installation test could not complete.',
+          status_message: failureReason,
+          error_message: failureReason,
           error_code: 'QA_FAILED_EXECUTION_PROFILE',
           error_stage: 'validation',
           error_category: 'installer',
@@ -292,7 +295,7 @@ export async function GET(request: Request) {
         await handleAutoUpdateJobCompletion(
           job.id,
           'failed',
-          candidateFailureSummary || 'The required installation test could not complete.'
+          failureReason
         );
       }
       continue;

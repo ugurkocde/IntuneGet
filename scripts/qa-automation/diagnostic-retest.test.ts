@@ -67,5 +67,15 @@ await test('publishing error retains grant for publication recovery',async()=>{a
 await test('passed diagnostic closes grant without catalog promotion',async()=>{await grant();await query("update public.qa_candidates set status='running',phase='publishing' where id=$1",[id]);assert.equal((await query('select public.report_qa_candidate_result($1,$2,\'passed\',null) as ok',[testSecret,id])).rows[0].ok,true);assert.equal((await query('select count(*)::int as n from public.curated_apps')).rows[0].n,0);assert.equal((await query('select count(*)::int as n from public.qa_package_blocks')).rows[0].n,1);});
 await test('expired open grant is swept and later supersede restores its repair',async()=>{await grant();await sql("update public.qa_retest_grants set created_at=now()-interval '2 hours',expires_at=now()-interval '1 hour'; update public.qa_retest_grants set closed_at=now() where closed_at is null and expires_at<=now();");await query("update public.qa_candidates set status='superseded' where id=$1",[id]);assert.equal((await query('select status from public.qa_repair_requests')).rows[0].status,'in_progress');});
 await test('publication error reconciles Passed after grant expiry without promotion',async()=>{await grant();await query("update public.qa_candidates set status='error',phase='publishing',github_run_url='https://example.invalid/run',started_at=now()-interval '1 hour' where id=$1",[id]);await sql("update public.qa_retest_grants set created_at=now()-interval '2 hours',expires_at=now()-interval '1 hour';");await query(`insert into public.qa_package_results(package_profile_sha256,winget_id,tested_version,architecture,installer_sha256,outcome,github_run_url,tested_at_utc) values($1,'Example.App','1','x64',$2,'Passed','https://example.invalid/run',now())`,[profile,sha]);assert.equal((await query('select public.report_qa_candidate_result($1,$2,\'passed\',null) as ok',[testSecret,id])).rows[0].ok,true);assert.equal((await query('select count(*)::int as n from public.version_history')).rows[0].n,0);assert.equal((await query('select status from public.qa_repair_requests')).rows[0].status,'resolved');});
-await pg.close();assert.equal(passed.length,27);
+await test('deployment-profile diagnostic pass retains quarantine and customer state',async()=>{
+ await query("update public.qa_candidates set test_config=jsonb_set(test_config,'{profileKind}','\"deployment-config\"') where id=$1",[id]);
+ await query("insert into public.packaging_jobs(id,winget_id,status) values(gen_random_uuid(),'Unrelated.App','failed')");
+ const before=(await query('select id,status from public.packaging_jobs')).rows;
+ await grant();await query("update public.qa_candidates set status='running',phase='publishing' where id=$1",[id]);
+ assert.equal((await query("select public.report_qa_candidate_result($1,$2,'passed',null) as ok",[testSecret,id])).rows[0].ok,true);
+ assert.equal((await query('select count(*)::int as n from public.curated_apps')).rows[0].n,0);
+ assert.equal((await query('select count(*)::int as n from public.qa_package_blocks')).rows[0].n,1);
+ assert.deepEqual((await query('select id,status from public.packaging_jobs')).rows,before);
+});
+await pg.close();assert.equal(passed.length,28);
 }, 30000);

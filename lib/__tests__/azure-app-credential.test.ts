@@ -102,6 +102,28 @@ describe('azure-app-credential', () => {
       if (!r.ok) expect(r.error).toBe('consent_not_granted');
       vi.unstubAllGlobals();
     });
+
+    it.each(['AADSTS7000229', 'AADSTS700016', 'AADSTS65001'])(
+      'classifies tenant error %s before generic invalid_client',
+      async (code) => {
+        process.env.AZURE_CLIENT_ID = 'client-fixture';
+        process.env.AZURE_CLIENT_SECRET = 'secret-fixture';
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+          ok: false,
+          json: async () => ({
+            error: 'invalid_client',
+            error_description: `${code}: Application is missing or not consented in the fixture tenant.`,
+          }),
+        }));
+        try {
+          const result = await acquireAppOnlyToken('tenant-fixture');
+          expect(result.ok).toBe(false);
+          if (!result.ok) expect(result.error).toBe('consent_not_granted');
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      },
+    );
   });
 
   describe('managed-identity mode', () => {

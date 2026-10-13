@@ -1092,6 +1092,13 @@ export function validateCurrentQaPackageProfile(
   return validateQaPackageProfile(input, [QA_PSADT_TOOLCHAIN.packagerCommit]);
 }
 
+/** Historical evidence is a comparison witness, never a source of executable commands. */
+export function validateRecordedQaPackageProfile(
+  input: QaPackageProfileValidationInput
+): QaPackageProfileValidation {
+  return validateQaPackageProfile(input, QA_PACKAGER_RELEASE_HISTORY);
+}
+
 export function validateCompatiblePassedCatalogQaProfile(
   input: QaPackageProfileValidationInput
 ): QaPackageProfileValidation {
