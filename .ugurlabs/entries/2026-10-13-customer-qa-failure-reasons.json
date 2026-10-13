@@ -1,0 +1,5 @@
+{
+  "title": "Explain failed application validation",
+  "summary": "Failed application validation now records a customer error reason alongside its status message, including a clear fallback when QA provides no reason.",
+  "type": "fixed"
+}

@@ -2002,14 +2002,15 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
-  it('creates an actionable blocked job for a failed execution profile', async () => {
+  it.each(['Correct the uninstall command.', null, '', '   '])('stores a visible customer reason for a failed execution profile: %s', async (summary) => {
+    const reason = summary?.trim() || 'This app did not pass the isolated installation test.';
     process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(
       Date.now() + 7 * 24 * 60 * 60 * 1000
     ).toISOString();
     ensureQaDemandMock.mockResolvedValueOnce({
       state: 'failed',
       candidateId: 'candidate-1',
-      failureSummary: 'Correct the uninstall command.',
+      failureSummary: summary,
       identity: {
         executionProfileSha256: 'A'.repeat(64),
         packageProfileSha256: 'A'.repeat(64),
@@ -2035,6 +2036,8 @@ describe('POST /api/package (workflow dispatch)', () => {
       status: 'qa_failed',
       qa_candidate_id: 'candidate-1',
       error_code: 'QA_FAILED_EXECUTION_PROFILE',
+      status_message: reason,
+      error_message: reason,
     }));
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });

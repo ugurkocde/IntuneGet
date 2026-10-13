@@ -730,7 +730,7 @@ export async function POST(request: NextRequest) {
                   ? 'Preparing deployment while installation validation remains scheduled'
                   : 'Running an isolated installation test to make sure this app works before deployment'
                 : qaDemand?.state === 'failed'
-                  ? qaDemand.failureSummary
+                  ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                   : null,
               progress_percent: 0,
               execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
@@ -738,6 +738,9 @@ export async function POST(request: NextRequest) {
               qa_candidate_id: qaDemand?.candidateId || null,
               qa_requested_at: qaDemand ? now : null,
               qa_completed_at: qaDemand?.state === 'passed' ? now : null,
+              error_message: qaDemand?.state === 'failed'
+                ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                : null,
               error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
               error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
               error_category: qaDemand?.state === 'failed' ? 'installer' : null,
