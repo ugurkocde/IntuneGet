@@ -348,6 +348,7 @@ describe('GET /api/cron/qa-resume', () => {
     });
     expect(update.update).toHaveBeenCalledWith(expect.objectContaining({
       status: 'qa_failed', status_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
+      error_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
     }));
     expect(update.eq).toHaveBeenCalledWith('status', 'awaiting_qa');
     expect(update.update).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }));
@@ -631,7 +632,8 @@ describe('GET /api/cron/qa-resume', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
-  it('finalizes auto-update tracking when the required QA candidate fails', async () => {
+  it.each(['Installer remained interactive.', null, '', '   '])('records the failed candidate reason in both customer fields: %s', async (summary) => {
+    const reason = summary?.trim() || 'The required installation test could not complete.';
     const job = {
       tenant_id: 'tenant-1', id: 'job-failed-qa',
       qa_candidate_id: 'candidate-failed',
@@ -652,7 +654,7 @@ describe('GET /api/cron/qa-resume', () => {
             data: {
               id: 'candidate-failed',
               status: 'failed',
-              failure_summary: 'Installer remained interactive.',
+              failure_summary: summary,
               package_profile_sha256: 'A'.repeat(64),
             },
             error: null,
@@ -672,12 +674,13 @@ describe('GET /api/cron/qa-resume', () => {
     expect(body).toMatchObject({ resumed: 0, failed: 1, waiting: 0 });
     expect(packagingUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
       status: 'qa_failed',
-      status_message: 'Installer remained interactive.',
+      status_message: reason,
+      error_message: reason,
     }));
     expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(
       job.id,
       'failed',
-      'Installer remained interactive.'
+      reason
     );
   });
 

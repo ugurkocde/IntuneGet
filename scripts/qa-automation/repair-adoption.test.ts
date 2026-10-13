@@ -23,7 +23,7 @@ it('adopts only an inert, current exact tuple without resetting repair history',
     await pg.exec(baseline.claimant);
     await pg.exec(baseline.reporter);
     await pg.exec(read('../../supabase/migrations/20261011075101_qa_guarded_diagnostic_retests.sql'));
-    const migrations = fs.readdirSync(new URL('../../supabase/migrations/', root)).filter(name => name.endsWith('_qa_repair_current_profile_adoption.sql'));
+    const migrations = fs.readdirSync(new URL('../../supabase/migrations/', root)).filter(name => (name.endsWith('_qa_repair_current_profile_adoption.sql') || name.endsWith('_qa_deployment_profile_adoption.sql')));
     for (const migration of migrations) await pg.exec(read('../../supabase/migrations/' + migration));
     const old = '11111111-1111-4111-8111-111111111111', current = '33333333-3333-4333-8333-333333333333', repair = '22222222-2222-4222-8222-222222222222';
     const sha = 'A'.repeat(64), pin = 'b'.repeat(40);

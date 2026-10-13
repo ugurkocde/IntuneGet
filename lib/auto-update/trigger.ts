@@ -903,7 +903,10 @@ export class AutoUpdateTrigger {
         ? 'Installation test passed; preparing deployment'
         : qaDemand.state === 'waiting'
           ? 'Running an isolated installation test to make sure this app works before deployment'
-          : qaDemand.failureSummary || 'This app did not pass the isolated installation test',
+          : qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test',
+      error_message: qaDemand?.state === 'failed'
+        ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test'
+        : null,
       progress_percent: 0,
       execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
       presentation_profile_sha256: qaDemand?.identity.presentationProfileSha256 || null,
