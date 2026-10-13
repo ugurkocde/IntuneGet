@@ -123,10 +123,11 @@ export class SupabaseCatalogSource implements CatalogSource {
       // A never-settling SDK operation produces no summary; no watchdog is added.
       const settledMs = elapsed();
       if (!success || settledMs > 5000) {
-        const category = success ? 'success'
-          : signal.aborted && signal.reason?.name === 'TimeoutError' ? 'timeout' : 'error';
+        const category = success ? 'success' : 'error';
+        // Observed budget expiry does not establish why the RPC failed.
+        const budgetExpired = signal.aborted && signal.reason?.name === 'TimeoutError';
         console.warn('Catalog history RPC timing', {
-          entryMs: 0, dispatchMs, headersMs, settledMs, category, status,
+          entryMs: 0, dispatchMs, headersMs, settledMs, category, budgetExpired, status,
         });
       }
     }

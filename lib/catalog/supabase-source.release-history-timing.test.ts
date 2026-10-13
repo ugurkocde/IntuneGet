@@ -25,12 +25,12 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
-function check(category: string, status: number | null, headers: boolean) {
+function check(category: string, budgetExpired: boolean, status: number | null, headers: boolean) {
   expect(warn).toHaveBeenCalledTimes(1);
   expect(warn.mock.calls[0][0]).toBe('Catalog history RPC timing');
   const timing = warn.mock.calls[0][1];
   expect(timing).toEqual({ entryMs: 0, dispatchMs: expect.any(Number), headersMs: headers ? expect.any(Number) : null,
-    settledMs: expect.any(Number), category, status });
+    settledMs: expect.any(Number), category, budgetExpired, status });
   expect(timing.dispatchMs).toBeGreaterThanOrEqual(0);
   expect(timing.settledMs).toBeGreaterThanOrEqual(timing.dispatchMs);
   if (headers) expect(timing.headersMs).toBeLessThanOrEqual(timing.settledMs);
@@ -49,19 +49,19 @@ describe('release history RPC diagnostics', () => {
   it('reports slow success without changing its result', async () => {
     fetchMock.mockImplementation(async () => { clock = 6001; return Response.json(result); });
     await expect(run()).resolves.toBe(7);
-    check('success', 200, true);
+    check('success', false, 200, true);
   });
   it('records a late dispatch with an already aborted signal', async () => {
     timer.mockImplementation(() => { timeout(); return controller.signal; });
     fetchMock.mockImplementation(async () => { throw controller.signal.reason; });
     await expect(run()).rejects.toThrow('Catalog history unavailable');
-    check('timeout', null, false);
+    check('error', true, null, false);
     expect(warn.mock.calls[0][1].dispatchMs).toBe(15_001);
   });
   it('reports a timeout while waiting for response headers', async () => {
     fetchMock.mockImplementation(async () => { timeout(); throw controller.signal.reason; });
     await expect(run()).rejects.toThrow('Catalog history unavailable');
-    check('timeout', null, false);
+    check('error', true, null, false);
   });
   it('retains header status when the SDK body read aborts', async () => {
     fetchMock.mockImplementation(async () => {
@@ -73,20 +73,20 @@ describe('release history RPC diagnostics', () => {
       return new Response(body, { status: 200 });
     });
     await expect(run()).rejects.toThrow('Catalog history unavailable');
-    check('timeout', 200, true);
+    check('error', true, 200, true);
     expect(warn.mock.calls[0][1].headersMs).toBe(3);
   });
-  it('classifies the held signal and preserves the error cause', async () => {
+  it('keeps an unrelated failure distinct from the expired budget and preserves its cause', async () => {
     fetchMock.mockImplementation(async () => { timeout(); throw new Error('Private transport detail'); });
     const error = await run().catch(error => error);
     expect(error.message).toBe('Catalog history unavailable');
     expect(error.cause).toBeDefined();
-    check('timeout', null, false);
+    check('error', true, null, false);
   });
   it('reports an unrelated HTTP error without exposing its content', async () => {
     fetchMock.mockResolvedValue(Response.json({ message: 'Private failure body', code: 'fixture' }, { status: 500 }));
     await expect(run()).rejects.toThrow('Catalog history unavailable');
-    check('error', 500, true);
+    check('error', false, 500, true);
     expect(controller.signal.aborted).toBe(false);
   });
   it('does not log fast successful requests', async () => {
