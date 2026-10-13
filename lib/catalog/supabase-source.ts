@@ -90,26 +90,56 @@ export class SupabaseCatalogSource implements CatalogSource {
       return rows.filter(row => row.outcome !== 'Passed');
     }
   }
-  private async releaseHistoryPage(client: NonNullable<ReturnType<typeof serviceOrAnonClient>>, filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
-    const { data, error } = await client.rpc('get_catalog_release_history_v2', {
+  private async releaseHistoryPage(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const started = performance.now();
+    const elapsed = () => performance.now() - started;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) throw new Error('Catalog unavailable');
+    let dispatchMs: number | null = null;
+    let headersMs: number | null = null;
+    let status: number | null = null;
+    // This hook is local to this RPC. Follow-up metadata reads keep their client.
+    const client = createClient(url, key, { global: { fetch: async (input, init) => {
+      dispatchMs = elapsed();
+      const response = await globalThis.fetch(input, init);
+      headersMs = elapsed();
+      status = response.status;
+      return response;
+    } } });
+    const signal = AbortSignal.timeout(15_000);
+    let success = false;
+    try {
+      const { data, error } = await client.rpc('get_catalog_release_history_v2', {
       app_filter: filters.app ?? "", date_from: filters.from || null, date_to: filters.to || null, architecture_filter: filters.architecture ?? "",
       search_text: filters.query, month_filter: filters.month,
       kind_filter: filters.kind, page_number: filters.page,
-    }).abortSignal(AbortSignal.timeout(15_000));
-    if (error) throw new Error('Catalog history unavailable', { cause: error });
-    return data as ReleaseHistoryResult;
+      }).abortSignal(signal);
+      if (error) throw new Error('Catalog history unavailable', { cause: error });
+      success = true;
+      return data as ReleaseHistoryResult;
+    } finally {
+      // SDK settlement includes body reading/parsing; headers are not wire first byte.
+      // A never-settling SDK operation produces no summary; no watchdog is added.
+      const settledMs = elapsed();
+      if (!success || settledMs > 5000) {
+        const category = success ? 'success'
+          : signal.aborted && signal.reason?.name === 'TimeoutError' ? 'timeout' : 'error';
+        console.warn('Catalog history RPC timing', {
+          entryMs: 0, dispatchMs, headersMs, settledMs, category, status,
+        });
+      }
+    }
   }
 
   async countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
-    const client = serviceOrAnonClient();
-    if (!client) throw new Error('Catalog unavailable');
-    return (await this.releaseHistoryPage(client, filters)).total;
+    return (await this.releaseHistoryPage(filters)).total;
   }
 
   async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
-    const result = await this.releaseHistoryPage(client, filters);
+    const result = await this.releaseHistoryPage(filters);
     if (!result.rows.length) return result;
     let recoverySignal: AbortSignal | undefined;
     const {metadata, unavailable} = await loadReleaseMetadata(result.rows, batch => {
