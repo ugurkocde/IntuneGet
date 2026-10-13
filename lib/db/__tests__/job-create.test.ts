@@ -58,6 +58,20 @@ function readStoredJob(id: string): Record<string, unknown> {
 }
 
 describe('real SQLite jobs.create', () => {
+  it('persists a provided QA failure reason through a fresh connection', async () => {
+    const reason = 'This app is not currently available for deployment.';
+    const job = await adapter.jobs.create({
+      id: 'failed-fixture', user_id: 'fixture-user', winget_id: 'Fixture.Unavailable',
+      version: '1.0.0', display_name: 'Unavailable fixture', installer_type: 'exe',
+      installer_url: 'https://example.invalid/fixture.exe', status: 'qa_failed',
+      status_message: reason, error_message: reason, error_code: 'QA_FAILED_EXECUTION_PROFILE',
+    });
+    expect(readStoredJob(job.id)).toMatchObject({
+      status: 'qa_failed', status_message: reason, error_message: reason,
+      error_code: 'QA_FAILED_EXECUTION_PROFILE',
+    });
+  });
+
   it('persists required fields and defaults on a freshly migrated database', async () => {
     const input = {
       user_id: 'minimal-user',
@@ -79,6 +93,7 @@ describe('real SQLite jobs.create', () => {
       progress_percent: 0,
       app_source: 'win32',
       user_email: null,
+      error_message: null,
       tenant_id: null,
       detection_rules: null,
       package_config: null,

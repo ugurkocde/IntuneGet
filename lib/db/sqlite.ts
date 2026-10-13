@@ -221,13 +221,13 @@ export const sqliteDb: DatabaseAdapter = {
           id, user_id, user_email, tenant_id, winget_id, version, display_name,
           publisher, architecture, installer_type, installer_url, installer_sha256,
           install_command, uninstall_command, install_scope, detection_rules,
-          package_config, app_source, status, status_message, progress_percent,
+          package_config, app_source, status, status_message, error_message, progress_percent,
           error_stage, error_category, error_code, execution_profile_sha256,
           presentation_profile_sha256, qa_candidate_id, qa_requested_at,
           qa_completed_at, is_auto_update, auto_update_policy_id, created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `);
 
@@ -252,6 +252,7 @@ export const sqliteDb: DatabaseAdapter = {
         job.app_source || 'win32',
         job.status || 'queued',
         job.status_message || null,
+        job.error_message ?? null,
         job.progress_percent || 0,
         job.error_stage || null,
         job.error_category || null,

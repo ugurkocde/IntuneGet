@@ -1,0 +1,5 @@
+{
+  "title": "Preserve deployment failure reasons",
+  "summary": "Newly failed deployments keep their recorded reason in hosted and self hosted storage, so the error panel can explain why the deployment could not proceed.",
+  "type": "fixed"
+}

@@ -287,6 +287,7 @@ export const supabaseDb: DatabaseAdapter = {
         app_source: job.app_source || 'win32',
         status: job.status || 'queued',
         status_message: job.status_message,
+        error_message: job.error_message,
         progress_percent: job.progress_percent || 0,
         error_stage: job.error_stage,
         error_category: job.error_category,
