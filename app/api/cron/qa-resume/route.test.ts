@@ -974,6 +974,8 @@ describe('GET /api/cron/qa-resume', () => {
       held: 0, deferred: 0, budgetExhausted: false, reopened: 0, recoveryDeferred: false });
     expect(store.row.qa_candidate_id).toBe('publication-candidate');
     expect(store.row.status).toBe(released ? 'packaging' : 'awaiting_qa');
+    if (!released) expect(store.row.status_message)
+      .toBe('Waiting for installation validation before deployment');
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(released ? 1 : 0);
     expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     expect(assertCuratedLicenceAcceptedMock).not.toHaveBeenCalled();

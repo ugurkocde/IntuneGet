@@ -592,6 +592,20 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     }));
   });
 
+  it('describes an auto-update job waiting for installation validation without claiming a running test', async () => {
+    const insert = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({
+      packaging_jobs: { insertSpy: insert, singleResult: { data: { id: 'synthetic-job' }, error: null } },
+    }));
+    await trigger['createPackagingJob'](makePolicy({ displayName: 'Synthetic App', architecture: 'x64' }), UPDATE_INFO, 'synthetic-history', {
+      state: 'waiting', candidateId: 'synthetic-candidate',
+      identity: { executionProfileSha256: 'A'.repeat(64), presentationProfileSha256: 'B'.repeat(64) },
+    });
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'awaiting_qa', status_message: 'Waiting for installation validation before deployment',
+    }));
+  });
+
   it('applies the same app adapter to auto-update QA and customer packaging', async () => {
     const supabase = createSupabaseMock({});
     const trigger = makeTrigger(supabase);

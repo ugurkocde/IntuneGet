@@ -947,7 +947,7 @@ function UploadJobCard({
               progress={job.progress_percent}
               status={job.status}
               statusMessage={job.status === 'awaiting_qa'
-                ? 'Running an isolated installation test to make sure this app works before deployment'
+                ? 'Waiting for installation validation before deployment'
                 : job.status_message}
               startTime={job.status === 'awaiting_qa'
                 ? job.qa_requested_at || job.created_at

@@ -728,7 +728,7 @@ export async function POST(request: NextRequest) {
               status_message: qaDemand?.state === 'waiting'
                 ? qaDeferred
                   ? 'Preparing deployment while installation validation remains scheduled'
-                  : 'Running an isolated installation test to make sure this app works before deployment'
+                  : 'Waiting for installation validation before deployment'
                 : qaDemand?.state === 'failed'
                   ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                   : null,
