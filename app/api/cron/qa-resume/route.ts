@@ -163,7 +163,7 @@ export async function GET(request: Request) {
           uninstall_command: item.uninstallCommand || job.uninstall_command,
           install_scope: item.installScope || job.install_scope,
           status_message: demand.state === 'waiting'
-            ? 'Running an isolated installation test to make sure this app works before deployment'
+            ? 'Waiting for installation validation before deployment'
             : job.status_message,
         })
         .eq('id', job.id)

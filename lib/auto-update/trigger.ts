@@ -902,7 +902,7 @@ export class AutoUpdateTrigger {
       status_message: !qaDemand || qaDemand.state === 'passed'
         ? 'Installation test passed; preparing deployment'
         : qaDemand.state === 'waiting'
-          ? 'Running an isolated installation test to make sure this app works before deployment'
+          ? 'Waiting for installation validation before deployment'
           : qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test',
       error_message: qaDemand?.state === 'failed'
         ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test'

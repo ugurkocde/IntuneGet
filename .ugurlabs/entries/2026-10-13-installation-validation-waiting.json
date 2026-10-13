@@ -1,0 +1,5 @@
+{
+  "title": "Clarify installation validation waiting status",
+  "summary": "Deployment jobs waiting for installation validation now show a waiting message instead of claiming a test is already running.",
+  "type": "fixed"
+}
