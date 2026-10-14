@@ -1,0 +1,5 @@
+{
+  "title": "Choose automatic updates for available apps",
+  "summary": "Win32 Available assignments offer an explicit option to automatically update superseded app versions. The option is off by default.",
+  "type": "new"
+}

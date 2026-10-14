@@ -110,6 +110,8 @@ export interface PackageAssignment {
   // Omitted = Intune defaults (showAll / notConfigured).
   notifications?: 'showAll' | 'showReboot' | 'hideAll';  // End-user notifications
   deliveryOptimizationPriority?: 'notConfigured' | 'foreground';  // DO download priority (Win32 only)
+  // Opt in only for Available Win32 include assignments. Omitted or false stays off.
+  autoUpdateSupersededApps?: boolean;
 }
 
 export interface IntuneAppCategorySelection {

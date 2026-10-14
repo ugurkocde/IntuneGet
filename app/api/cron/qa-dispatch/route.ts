@@ -15,6 +15,8 @@ import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
 import { qaSourceKey, qaSourceRetryAt } from '@/lib/qa/source-backoff';
 import { dispatchCuratedQueue } from '@/lib/qa/curated-queue';
+import { readLiveQaInventory } from '@/lib/qa/github-live-qa-inventory';
+import { classifyForeignQaRuns } from '@/lib/qa/foreign-workflow-runs';
 import type { Database } from '@/types/database';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
@@ -97,7 +99,23 @@ export async function GET(request: Request) {
   const stalledDispatch = (active || []).some(candidate =>
     candidate.status === 'dispatched' && !candidate.started_at &&
     now.getTime() - Date.parse(candidate.dispatched_at || '') >= STALE_HEARTBEAT_MS);
+  let liveRunsAtStart: number | undefined;
   if (!active?.length || stalledDispatch) {
+    const result = await readLiveQaInventory();
+    if (result.state !== 'complete') {
+      return NextResponse.json({ success: true, dispatched: false, reason: 'qa_inventory_unknown' });
+    }
+    const foreign = classifyForeignQaRuns(result.inventory, (active || []).map(candidate => candidate.github_run_id));
+    if (foreign.state === 'unknown') {
+      return NextResponse.json({ success: true, dispatched: false, reason: 'qa_inventory_unknown' });
+    }
+    // An executing unlinked owner makes queued dispatches legitimate waiters.
+    // Preserve their retry budget and do not cancel anything behind that owner.
+    if (result.inventory.workflow_runs.some(run =>
+      run.status === 'in_progress' && foreign.runIds.includes(run.id))) {
+      return NextResponse.json({ success: true, dispatched: false, reason: 'foreign_qa_run_active' });
+    }
+    liveRunsAtStart = result.inventory.total_count;
     const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
     if (cancelledWaitingRunIds.length > 0) {
       return NextResponse.json({ success: true, dispatched: false,
@@ -169,6 +187,19 @@ export async function GET(request: Request) {
   if (stillActiveError) throw stillActiveError;
   if (stillActive?.length) {
     return NextResponse.json({ success: true, dispatched: false, reason: 'qa_active', reconciled });
+  }
+
+  // Reconciliation can free the candidate slot without visiting cleanup above.
+  // Both curated and ordinary claims require complete, empty live inventory.
+  if (liveRunsAtStart === undefined) {
+    const result = await readLiveQaInventory();
+    if (result.state !== 'complete') {
+      return NextResponse.json({ success: true, dispatched: false, reason: 'qa_inventory_unknown', reconciled });
+    }
+    liveRunsAtStart = result.inventory.total_count;
+  }
+  if (liveRunsAtStart > 0) {
+    return NextResponse.json({ success: true, dispatched: false, reason: 'foreign_qa_run_pending', reconciled });
   }
 
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;

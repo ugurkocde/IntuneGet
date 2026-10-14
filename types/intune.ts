@@ -249,6 +249,10 @@ export interface Win32LobAppAssignmentSettings {
   restartSettings?: Win32LobAppRestartSettings;
   installTimeSettings?: MobileAppInstallTimeSettings;
   deliveryOptimizationPriority?: 'notConfigured' | 'foreground';
+  autoUpdateSettings?: {
+    '@odata.type': '#microsoft.graph.win32LobAppAutoUpdateSettings';
+    autoUpdateSupersededAppsState: 'enabled' | 'notConfigured';
+  };
 }
 
 export interface Win32LobAppRestartSettings {
