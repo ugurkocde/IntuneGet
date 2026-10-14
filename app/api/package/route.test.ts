@@ -1698,7 +1698,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
-  it('fails closed before job creation when a catalog identity is missing', async () => {
+  it.each([undefined, 42])('fails closed before job creation when a catalog identity is missing or invalid: %j', async (wingetId) => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',
       headers: {
@@ -1706,7 +1706,7 @@ describe('POST /api/package (workflow dispatch)', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        items: [makeWin32Item({ wingetId: undefined })],
+        items: [makeWin32Item({ wingetId })],
       }),
     });
 

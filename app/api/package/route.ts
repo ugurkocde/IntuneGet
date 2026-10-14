@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
     // require HTTPS. Preserve HTTP support for trusted catalog sources, whose
     // manifest and hash are verified separately before dispatch.
     for (const item of win32Items) {
-      const isCustom = item.sourceType === 'custom' || item.wingetId?.startsWith('Custom.');
+      const isCustom = item.sourceType === 'custom' || (typeof item.wingetId === 'string' && item.wingetId.startsWith('Custom.'));
       if (!isValidInstallerUrl(item.installerUrl, { allowHttp: !isCustom })) {
         return NextResponse.json(
           {
