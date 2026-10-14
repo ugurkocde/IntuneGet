@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "9dcde91dd37495a51afbc706694b03db478b69e4",
+    "runId": "38175340487",
+    "runAttempt": "1",
+    "websiteCommit": "e090f507750dd9262079eace432cfb96697edd71"
+  },
+  "candidate": {
+    "appId": "k6",
+    "version": "2.3.0",
+    "installerUrl": "https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-windows-amd64.msi",
+    "vendorSha256": "ad65844ca7b50dedc376415cc7d4db47122549811437c89625bcda7f985cea91",
+    "releaseNotesUrl": "https://github.com/grafana/k6/releases/tag/v2.3.0",
+    "discoveredAt": "2026-10-11T19:50:43.275Z",
+    "id": "e0a2221712eaee76f4b0bd14"
+  },
+  "previous": {
+    "appId": "k6",
+    "version": "2.2.0",
+    "installerUrl": "https://github.com/grafana/k6/releases/download/v2.2.0/k6-v2.2.0-windows-amd64.msi",
+    "vendorSha256": "02dc187b69b5e11eb2d9bf7c2cacbc0f00bf93ea3a675db7afab4d53fc81172a",
+    "releaseNotesUrl": "https://github.com/grafana/k6/releases/tag/v2.2.0",
+    "discoveredAt": "2026-10-11T19:50:53.711Z",
+    "id": "5aa9cb87686e3e8ea0848d61"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "e0a2221712eaee76f4b0bd14",
+      "installerSha256": "ad65844ca7b50dedc376415cc7d4db47122549811437c89625bcda7f985cea91",
+      "sourceUrl": "https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-windows-amd64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Grafana Labs",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "scannedAt": "2026-10-11T21:19:30.2778224Z",
+        "suspicious": 0,
+        "scanner": "defender",
+        "installerSha256": "ad65844ca7b50dedc376415cc7d4db47122549811437c89625bcda7f985cea91",
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.675.0"
+      }
+    },
+    "previous": {
+      "candidateId": "5aa9cb87686e3e8ea0848d61",
+      "installerSha256": "02dc187b69b5e11eb2d9bf7c2cacbc0f00bf93ea3a675db7afab4d53fc81172a",
+      "sourceUrl": "https://github.com/grafana/k6/releases/download/v2.2.0/k6-v2.2.0-windows-amd64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Grafana Labs",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "scannedAt": "2026-10-11T21:19:35.4518669Z",
+        "suspicious": 0,
+        "scanner": "defender",
+        "installerSha256": "02dc187b69b5e11eb2d9bf7c2cacbc0f00bf93ea3a675db7afab4d53fc81172a",
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.675.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "e0a2221712eaee76f4b0bd14",
+    "packageId": "IntuneGet.Curated.K6",
+    "installerUrl": "https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-windows-amd64.msi",
+    "installerSha256": "ad65844ca7b50dedc376415cc7d4db47122549811437c89625bcda7f985cea91",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.K6",
+      "displayName": "k6",
+      "publisher": "Grafana Labs",
+      "version": "2.3.0",
+      "architecture": "x64",
+      "installerSha256": "ad65844ca7b50dedc376415cc7d4db47122549811437c89625bcda7f985cea91",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:k6",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_K6\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.3.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_K6\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.3.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "9DF5FCA363E34484D5EA9CA043C95B81F2042F5B63DBF46E16488FACCD9D0D60",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.K6\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.3.0\",\"wingetId\":\"IntuneGet.Curated.K6\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.3.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_K6\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"79231F5448A5C7423C08C349894BEC6913A4EE45EB59B3FD8BD68580348BD59E\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"AD65844CA7B50DEDC376415CC7D4DB47122549811437C89625BCDA7F985CEA91\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:k6\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.3.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_K6\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"3F59CD1FECCA030CB4748FBB52A139EB9679BA6A6EA079885CEDAEEFD17989C8\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "3f59cd1fecca030cb4748fbb52a139eb9679ba6a6ea079885cedaeefd17989c8",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testedAt": "2026-10-11T21:21:11.7359953Z",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "upgradeFromVersion": "2.2.0",
+    "architecture": "x64",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "executionProfileSha256": "9DF5FCA363E34484D5EA9CA043C95B81F2042F5B63DBF46E16488FACCD9D0D60",
+    "installerVersion": "2.3.0",
+    "previousInstallerSha256": "02dc187b69b5e11eb2d9bf7c2cacbc0f00bf93ea3a675db7afab4d53fc81172a",
+    "candidateId": "e0a2221712eaee76f4b0bd14",
+    "installerSha256": "ad65844ca7b50dedc376415cc7d4db47122549811437c89625bcda7f985cea91"
+  },
+  "verifiedAt": "2026-10-11T21:21:18.3464081Z",
+  "authenticatedArtifact": {
+    "id": 11715867443,
+    "sha256": "8b21df152a1de48d744c7edbfc7ace1c15a1d97d8f7bdc18778d572ef943f494"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-11T23:22:56.969Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

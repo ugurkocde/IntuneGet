@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { isIntuneApprovalFailure } from '@/lib/intune-approval';
 import { T, Var } from "gt-next";
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -946,7 +947,7 @@ function UploadJobCard({
               progress={job.progress_percent}
               status={job.status}
               statusMessage={job.status === 'awaiting_qa'
-                ? 'Running an isolated installation test to make sure this app works before deployment'
+                ? 'Waiting for installation validation before deployment'
                 : job.status_message}
               startTime={job.status === 'awaiting_qa'
                 ? job.qa_requested_at || job.created_at
@@ -979,7 +980,8 @@ function UploadJobCard({
           )}
 
           {/* Retry button for failures */}
-          {['failed', 'qa_failed'].includes(job.status) && (
+            {['failed', 'qa_failed'].includes(job.status) &&
+              !isIntuneApprovalFailure(job) && (
             <div className="mt-3">
               <Button
                 size="sm"

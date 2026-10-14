@@ -1,0 +1,5 @@
+{
+  "title": "Preserve QA repair continuity across packaging updates",
+  "summary": "QA can prepare a current package profile for an existing repair while preserving its retry budget and security restrictions. Verification still requires a separately guarded lifecycle.",
+  "type": "fixed"
+}

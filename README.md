@@ -4,6 +4,8 @@
 
 # IntuneGet
 
+Self-hosted operators can configure server log verbosity and bounded rotating files. See [server diagnostics](docs/SELF_HOSTING.md#server-diagnostics) for settings, permissions and page error reporting.
+
 **Deploy Winget applications to Microsoft Intune with a single click.**
 
 Skip the manual packaging workflow and deploy Winget apps to Intune in seconds.

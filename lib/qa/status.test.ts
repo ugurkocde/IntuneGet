@@ -29,6 +29,14 @@ describe('deriveQaBadgeState', () => {
     expect(deriveQaBadgeState({ ...passed, outcome: 'Failed' }, '8.9.8')).toBe('stale_failed');
   });
 
+  it('keeps a passed lifecycle separate from deployment availability', () => {
+    const diagnostic = { ...passed, deploymentBlocked: true };
+    expect(deriveQaBadgeState(diagnostic, '8.9.7')).toBe('blocked');
+    expect(deriveQaBadgeState(diagnostic, '8.9.8')).toBe('blocked');
+    expect(diagnostic.outcome).toBe('Passed');
+    expect(deriveQaBadgeState({ ...diagnostic, outcome: 'Failed' }, '8.9.7')).toBe('failed');
+  });
+
   it('shows active candidate states even while the catalog version catches up', () => {
     const running: QaStatus = { ...passed, outcome: 'Running', testedVersion: '9.0.0' };
     expect(deriveQaBadgeState(running, '9.0.0')).toBe('running');

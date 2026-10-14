@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 /**
  * Package API Route
@@ -28,6 +29,7 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { acquireGraphToken } from '@/lib/graph-token';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import { deployStoreApp } from '@/lib/store-app-deploy';
 import {
   STALE_JOB_TIMEOUT_MINUTES,
@@ -165,10 +167,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const body: PackageRequestBody = await request.json();
-    const { items, forceCreate } = body;
+    const body: unknown = await request.json();
+    const { items, forceCreate } = (body && typeof body === 'object' ? body : {}) as PackageRequestBody;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: 'No items provided for packaging' },
         { status: 400 }
@@ -183,8 +185,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Reject the entire invalid custom detection request before packaging side effects.
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return NextResponse.json({ error: 'Invalid package item' }, { status: 400 });
+      }
+      const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
+      if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
+        return NextResponse.json({ error: 'Invalid PSADT settings' }, { status: 400 });
+      }
+      const flag = (item as unknown as { psadtConfig?: { customDetection?: unknown } }).psadtConfig?.customDetection;
+      if (flag !== undefined && typeof flag !== 'boolean') {
+        return NextResponse.json({ error: 'Invalid custom detection setting' }, { status: 400 });
+      }
+      if (!isStoreCartItem(item) && item.psadtConfig?.customDetection) {
+        const validation = validateCustomDetectionRules(item.detectionRules);
+        if (!canUseCustomDetection(item) || !validation.valid) {
+          return NextResponse.json({ error: 'Invalid custom detection rules', message: validation.errors.join(' ') || 'Custom detection is supported only for ordinary catalog Win32 apps.' }, { status: 400 });
+        }
+      } else if (isStoreCartItem(item) && (item as unknown as { psadtConfig?: { customDetection?: boolean } }).psadtConfig?.customDetection) {
+        return NextResponse.json({ error: 'Custom detection is not supported for Store apps' }, { status: 400 });
+      }
+    }
+
     // Get database adapter (SQLite or Supabase)
     const db = getDatabase();
+
+    // This checkpoint precedes every Store/Win32 insert and curated QA demand.
+    // Neither request-level nor item-level forceCreate bypasses approval safety.
+    // Check the stored canonical ID and any legacy submitted casing before demand.
+    const approvalBlocks = await findPendingApprovalBlocks({ tenantId,
+      wingetIds: items.flatMap(item => {
+        const curated = typeof item.wingetId === 'string' &&
+          (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated')
+          ? findCuratedApp(item.wingetId) : undefined;
+        return curated ? [curated.packageId, item.wingetId] : [item.wingetId];
+      }) }, { db });
+    if (approvalBlocks.length) {
+      const block = approvalBlocks[0];
+      return NextResponse.json({ error: 'Intune approval unresolved', code: block.code,
+        message: block.message, package: { wingetId: block.wingetId }, retryable: false }, { status: 409 });
+    }
 
     // Partition items into store apps and win32 apps
     const storeItems: StoreCartItem[] = [];
@@ -377,6 +418,13 @@ export async function POST(request: NextRequest) {
           }, { status: error.retryable ? 503 : 409 });
         }
         throw error;
+      }
+    }
+
+    // Trusted manifest reconciliation can change the effective installer type.
+    for (const item of win32Items) {
+      if (item.psadtConfig?.customDetection && !canUseCustomDetection(item)) {
+        return NextResponse.json({ error: 'Custom detection is not supported for this resolved installer' }, { status: 400 });
       }
     }
 
@@ -583,7 +631,7 @@ export async function POST(request: NextRequest) {
           try {
             if (item.sourceType !== 'custom') {
               const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
-              let detectionRules = normalizeCatalogDetectionRules({
+              let detectionRules = requestedPsadtConfig.customDetection ? item.detectionRules : normalizeCatalogDetectionRules({
                 detectionRules: item.detectionRules,
                 fallbackDetectionRules: requestedPsadtConfig.detectionRules,
                 wingetId: item.wingetId,
@@ -592,7 +640,7 @@ export async function POST(request: NextRequest) {
                 markerPath: requestedPsadtConfig.registryMarkerPath,
                 installerType: item.nestedInstallerType || item.installerType,
               });
-              const inferredMarkerPath = requestedPsadtConfig.registryMarkerPath
+              const inferredMarkerPath = requestedPsadtConfig.customDetection || requestedPsadtConfig.registryMarkerPath
                 ? null
                 : inferSavedCustomMarkerPath({
                     detectionRules,
@@ -680,9 +728,9 @@ export async function POST(request: NextRequest) {
               status_message: qaDemand?.state === 'waiting'
                 ? qaDeferred
                   ? 'Preparing deployment while installation validation remains scheduled'
-                  : 'Running an isolated installation test to make sure this app works before deployment'
+                  : 'Waiting for installation validation before deployment'
                 : qaDemand?.state === 'failed'
-                  ? qaDemand.failureSummary
+                  ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                   : null,
               progress_percent: 0,
               execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
@@ -690,6 +738,9 @@ export async function POST(request: NextRequest) {
               qa_candidate_id: qaDemand?.candidateId || null,
               qa_requested_at: qaDemand ? now : null,
               qa_completed_at: qaDemand?.state === 'passed' ? now : null,
+              error_message: qaDemand?.state === 'failed'
+                ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                : null,
               error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
               error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
               error_category: qaDemand?.state === 'failed' ? 'installer' : null,
@@ -1057,3 +1108,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';

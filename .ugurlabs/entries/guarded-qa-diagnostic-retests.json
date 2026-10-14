@@ -1,0 +1,5 @@
+{
+  "title": "QA repairs preserve deployment holds",
+  "summary": "Guarded diagnostic retests can collect lifecycle evidence for a blocked installer without making it available for deployment. Customer and security holds remain enforced, publication recovery reuses completed evidence, and QA details distinguish a passed lifecycle from deployment availability.",
+  "type": "improved"
+}

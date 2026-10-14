@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { assertPackagingContract } from '@/lib/packaging-contract';
 import { inferSavedCustomMarkerPath } from '@/lib/registry-marker';
+import { validateCustomDetectionRules } from '@/lib/custom-detection';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
@@ -14,7 +15,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '25849ac512c211e616c135149ef1e059db367ebc',
+  packagerCommit: '665d6f4ec65d457edbd455605a54b4b223392457',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -639,6 +640,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Wacom's exact registered removal gains /s. Preserve unrelated coverage;
   // the release-aware check below requires affected Wacom profiles to retest.
   '60395492a3d51b2ff6f14b50ed7cd0c7f558be70',
+  // Retain the Wacom release and its per-profile compatibility exclusion.
+  // The next activation still requires isolated guest qualification and
+  // reviewed exclusions for the intervening generator changes.
+  '25849ac512c211e616c135149ef1e059db367ebc',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -1087,6 +1092,13 @@ export function validateCurrentQaPackageProfile(
   return validateQaPackageProfile(input, [QA_PSADT_TOOLCHAIN.packagerCommit]);
 }
 
+/** Historical evidence is a comparison witness, never a source of executable commands. */
+export function validateRecordedQaPackageProfile(
+  input: QaPackageProfileValidationInput
+): QaPackageProfileValidation {
+  return validateQaPackageProfile(input, QA_PACKAGER_RELEASE_HISTORY);
+}
+
 export function validateCompatiblePassedCatalogQaProfile(
   input: QaPackageProfileValidationInput
 ): QaPackageProfileValidation {
@@ -1360,12 +1372,17 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     : [];
   const parsedConfig = parseJsonObject<unknown>(input.psadtConfig, {});
   const rawConfig = (record(parsedConfig) || {}) as Partial<PSADTConfig>;
+  const preserveCustomDetection = rawConfig.customDetection === true;
+  if (preserveCustomDetection) {
+    const validation = validateCustomDetectionRules(parsedDetectionRulesValue);
+    if (!validation.valid) throw new Error(validation.errors.join(' '));
+  }
   const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, parsedDetectionRules);
   const installScope = resolveApplicationInstallScope(
     input.wingetId,
     input.installScope || 'machine'
   );
-  let detectionRules = normalizeCatalogDetectionRules({
+  let detectionRules = preserveCustomDetection ? parsedDetectionRules : normalizeCatalogDetectionRules({
     detectionRules: parsedDetectionRules,
     fallbackDetectionRules: rawConfig.detectionRules,
     wingetId: input.wingetId,
@@ -1374,7 +1391,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     markerPath: preliminaryConfig.registryMarkerPath,
     installerType: input.nestedInstallerType || input.installerType,
   });
-  const inferredMarkerPath = preliminaryConfig.registryMarkerPath
+  const inferredMarkerPath = preserveCustomDetection || preliminaryConfig.registryMarkerPath
     ? null
     : inferSavedCustomMarkerPath({
         detectionRules,

@@ -3,11 +3,13 @@ import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
-import { QA_PSADT_TOOLCHAIN, validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
+import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
-import { InstallerPreflightError } from '@/lib/installer-preflight';
-import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
+import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
+import { diagnoseInstallerSource, InstallerPreflightError } from '@/lib/installer-preflight';
+import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
+import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
@@ -201,6 +203,8 @@ export async function GET(request: Request) {
   }
 
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+  const refreshedHolds = await supabase.rpc('refresh_qa_installer_security_holds', {});
+  if (refreshedHolds.error) throw new Error('Installer security checks could not be refreshed');
   const curated = await dispatchCuratedQueue(supabase, now);
   if (curated.handled) return NextResponse.json({ success: true, ...curated, reconciled });
   let scanned = 0;
@@ -215,17 +219,14 @@ export async function GET(request: Request) {
   const supersededAt = new Date().toISOString();
 
   for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
-    let queueQuery = supabase
+    let queueQuery = orderQaQueue(supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts'
+        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts, next_retry_at'
       )
       .eq('test_level', 'psadt-package')
       .eq('status', 'queued')
-      .lte('next_retry_at', now.toISOString())
-      .order('priority', { ascending: false })
-      .order('enqueued_at', { ascending: true })
-      .order('id', { ascending: true })
+      .lte('next_retry_at', now.toISOString()))
       .limit(QUEUE_SCAN_PAGE_SIZE);
     if (cursor) {
       const enqueuedAt = postgrestQuoted(cursor.enqueuedAt);
@@ -241,6 +242,7 @@ export async function GET(request: Request) {
     scanned += page.length;
 
     const eligible = [];
+    const securityHolds = await loadInstallerSecurityHolds(supabase, page.map(row => row.installer_sha256));
     const invalidByReason = new Map<string, string[]>();
     const addInvalid = (reason: string, id: string) => {
       const ids = invalidByReason.get(reason) || [];
@@ -248,23 +250,12 @@ export async function GET(request: Request) {
       invalidByReason.set(reason, ids);
     };
     for (const candidate of page) {
-      if (!queueCursor(candidate)) {
-        addInvalid('queue-metadata-invalid', candidate.id);
+      const reason = qaQueueCandidateReason(candidate, now, securityHolds);
+      if (reason) {
+        if (reason !== 'source-retry-pending' && reason !== 'installer-security-hold') addInvalid(reason, candidate.id);
         continue;
       }
-      if (!isQaRunnerArchitectureSupported(candidate.architecture)) {
-        addInvalid('runner-architecture-unsupported', candidate.id);
-        continue;
-      }
-      const validation = validateCurrentQaPackageProfile({
-        testConfig: candidate.test_config,
-        candidatePackageProfileSha256: candidate.package_profile_sha256,
-        candidateWingetId: candidate.winget_id,
-        candidateVersion: candidate.version,
-        candidateArchitecture: candidate.architecture,
-        candidateInstallerSha256: candidate.installer_sha256,
-      });
-      if (validation.valid) {
+      {
         const compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
           wingetId: candidate.winget_id,
           version: candidate.version,
@@ -272,13 +263,18 @@ export async function GET(request: Request) {
           installerSha256: candidate.installer_sha256,
         });
         if (compatibilityBlock) {
-          addInvalid('package-compatibility-blocked', candidate.id);
-          continue;
+          const grant = compatibilityBlock.code === 'failed_managed_lifecycle'
+            ? await supabase.rpc('qa_retest_grant_eligible', { p_candidate_id: candidate.id })
+            : { data: false, error: null };
+          if (grant.error) throw grant.error;
+          if (grant.data !== true) {
+            addInvalid('package-compatibility-blocked', candidate.id);
+            continue;
+          }
         }
         eligible.push(candidate);
         continue;
       }
-      addInvalid(validation.reason, candidate.id);
     }
 
     for (const [reason, ids] of invalidByReason) {
@@ -340,6 +336,18 @@ export async function GET(request: Request) {
         });
       }
       if (claimError) throw claimError;
+      // The grant can expire or gain a customer/security hold after preflight.
+      // The locked claim rechecks it without occupying the VM; keep the queue moving.
+      if (!claimed && claim?.reason === 'package_compatibility_blocked') {
+        const { data: updated, error } = await supabase.from('qa_candidates')
+          .update({ status: 'superseded', finished_at: supersededAt,
+            failure_summary: 'Superseded before dispatch: package-compatibility-blocked.',
+            updated_at: supersededAt })
+          .eq('id', candidate.id).eq('status', 'queued').select('id');
+        if (error) throw error;
+        superseded += updated?.length || 0;
+        continue;
+      }
       // A lost compare-and-set means another dispatcher is already making
       // progress. Do not move on to a second row and violate single-flight QA.
       if (!claimed) {
@@ -495,12 +503,25 @@ export async function POST(request: Request) {
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = (await request.json().catch(() => null)) as { candidateId?: string } | null;
+  const body = (await request.json().catch(() => null)) as { candidateId?: string; mode?: string } | null;
   if (!body?.candidateId || !/^[0-9a-fA-F-]{36}$/.test(body.candidateId)) {
     return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
   }
 
+  if (body.mode !== undefined && body.mode !== 'source-diagnostic') {
+    return NextResponse.json({ error: 'Unknown operation mode' }, { status: 400 });
+  }
   const supabase = createServerClient();
+  if (body.mode === 'source-diagnostic') {
+    if (!UUID_PATTERN.test(body.candidateId)) return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
+    const { data, error } = await supabase.from('qa_candidates')
+      .select('winget_id,version,architecture,installer_url,installer_sha256,installer_type,test_config,test_level')
+      .eq('id', body.candidateId).eq('test_level', 'psadt-package').maybeSingle();
+    if (error) return NextResponse.json({ error: 'Candidate state unavailable' }, { status: 503 });
+    if (!data) return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+    const result = await diagnoseInstallerSource(buildQaCandidatePreflightRequest(data));
+    return NextResponse.json({ success: true, mode: body.mode, candidateId: body.candidateId, ...result });
+  }
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from('qa_candidates')

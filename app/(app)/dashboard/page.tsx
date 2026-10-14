@@ -21,6 +21,7 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { AdminConsentBanner } from '@/components/AdminConsentBanner';
 import { FilterPermissionNudge } from '@/components/FilterPermissionNudge';
 import { useDashboardStats } from '@/hooks/useAnalytics';
+import { useMspOptional } from '@/hooks/useMspOptional';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { RecentActivityList, PageHeader } from '@/components/dashboard';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
@@ -35,7 +36,9 @@ function getTimeBasedGreeting(): React.ReactNode {
 
 export default function DashboardPage() {
   const { user } = useMicrosoftAuth();
-  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const [statisticsScope, setStatisticsScope] = useState<'mine' | 'tenant'>('mine');
+  const { isMspUser } = useMspOptional();
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useDashboardStats(statisticsScope);
   const { errorType } = useOnboardingStatus();
   const { settings, setQuickStartDismissed } = useUserSettings();
   const [mounted, setMounted] = useState(false);
@@ -62,7 +65,7 @@ export default function DashboardPage() {
       color: 'error' | 'warning' | 'cyan';
     }> = [];
 
-    if (stats && stats.failed > 0) {
+    if (statisticsScope === 'mine' && stats && stats.failed > 0) {
       items.push({
         id: 'failed-deployments',
         icon: AlertCircle,
@@ -91,7 +94,7 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [stats, errorType]);
+  }, [stats, errorType, statisticsScope]);
 
   return (
     <div className="space-y-8">
@@ -160,7 +163,12 @@ export default function DashboardPage() {
       )}
 
       {/* Stat cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Deployment statistics scope">
+        <Button variant={statisticsScope === 'mine' ? 'default' : 'outline'} aria-pressed={statisticsScope === 'mine'} onClick={() => setStatisticsScope('mine')}><T>My deployments</T></Button>
+        <Button variant={statisticsScope === 'tenant' ? 'default' : 'outline'} aria-pressed={statisticsScope === 'tenant'} onClick={() => setStatisticsScope('tenant')}><T>All in tenant</T></Button>
+        <p className="text-sm text-text-muted">{statisticsScope === 'tenant' ? <T>Activity for the selected tenant</T> : isMspUser ? <T>Across all your tenants</T> : <T>Your deployment activity</T>}</p>
+      </div>
+      {statsError ? <div role="alert" className="text-status-error"><T>Unable to load deployment statistics. Please try again.</T></div> : <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title={<T>Total Deployed</T>}
           value={stats?.totalDeployed ?? 0}
@@ -199,7 +207,18 @@ export default function DashboardPage() {
           delay={4}
           href="/dashboard/uploads?status=failed"
         />
-      </div>
+      </div>}
+
+      {statisticsScope === 'tenant' && !statsError && stats?.perUser && (
+        <section className="glass-light rounded-xl p-6" aria-label="Deployments by user">
+          <h2 className="text-lg font-semibold mb-4"><T>Deployments by user</T></h2>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead><tr className="text-left"><th scope="col"><T>User</T></th><th scope="col"><T>Deployed</T></th><th scope="col"><T>Pending</T></th><th scope="col"><T>Failed</T></th></tr></thead>
+            <tbody>{stats.perUser.map((person, index) => <tr key={index}><th scope="row" className="text-left font-normal py-2">{person.userEmail}</th><td>{person.deployed}</td><td>{person.pending}</td><td>{person.failed}</td></tr>)}</tbody>
+          </table></div>
+          {stats.perUser.length === 0 && <p className="text-text-muted"><T>No deployment activity in this tenant.</T></p>}
+        </section>
+      )}
 
       {/* Main content grid */}
       <div className="grid gap-6 lg:grid-cols-2">
