@@ -78,10 +78,10 @@ export function buildCustomWingetId(publisher: string, displayName: string): str
   return `Custom.${publisherSlug}.${nameSlug}`;
 }
 
-export function isValidInstallerUrl(value: string): boolean {
+export function isValidInstallerUrl(value: string, { allowHttp = false }: { allowHttp?: boolean } = {}): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'https:';
+    return parsed.protocol === 'https:' || (allowHttp && parsed.protocol === 'http:');
   } catch {
     return false;
   }

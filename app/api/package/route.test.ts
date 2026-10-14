@@ -301,6 +301,36 @@ describe('POST /api/package (workflow dispatch)', () => {
     };
   }
 
+  it.each([
+    { wingetId: 'Custom.Example.App', sourceType: 'custom' },
+    { wingetId: 'Custom.Example.App' },
+  ])('rejects HTTP custom URLs before creating a job: %j', async (custom) => {
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({ ...custom, installerUrl: 'http://example.com/setup.exe' })] }),
+    }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain('valid HTTPS URL');
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves trusted catalog HTTP inputs without applying the custom app restriction', async () => {
+    isSupabaseServerConfiguredMock.mockReturnValue(false);
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x64', url: 'http://example.com/setup.exe', sha256: 'A'.repeat(64),
+      type: 'exe', scope: 'machine', silentArgs: '/S',
+    }]);
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({ installerUrl: 'http://example.com/setup.exe' })] }),
+    }));
+    expect(response.status).toBe(200);
+    expect(createMock).toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.QA_MAINTENANCE_MODE;

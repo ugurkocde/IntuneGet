@@ -315,13 +315,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate installer URLs for win32 items. Custom apps (issue #109)
-    // accept arbitrary user-provided URLs, so reject anything that is not
-    // a well-formed http(s) URL before queueing packaging jobs.
+    // require HTTPS. Preserve HTTP support for trusted catalog sources, whose
+    // manifest and hash are verified separately before dispatch.
     for (const item of win32Items) {
-      if (!isValidInstallerUrl(item.installerUrl)) {
+      const isCustom = item.sourceType === 'custom' || item.wingetId?.startsWith('Custom.');
+      if (!isValidInstallerUrl(item.installerUrl, { allowHttp: !isCustom })) {
         return NextResponse.json(
           {
-            error: `Invalid installer URL for "${item.displayName || item.wingetId}": the installer URL must be a valid http or https URL`,
+            error: `Invalid installer URL for "${item.displayName || item.wingetId}": the installer URL must be a valid ${isCustom ? 'HTTPS' : 'http or https'} URL`,
           },
           { status: 400 }
         );
