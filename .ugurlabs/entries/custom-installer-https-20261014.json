@@ -1,0 +1,5 @@
+{
+  "title": "Require HTTPS for custom installer URLs",
+  "summary": "Custom app creation and deployment validation now reject insecure installer URLs before packaging starts.",
+  "type": "fixed"
+}

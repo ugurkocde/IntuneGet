@@ -97,7 +97,7 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
     if (!installerUrl.trim()) {
       nextErrors.installerUrl = 'Installer URL is required';
     } else if (!isValidInstallerUrl(installerUrl.trim())) {
-      nextErrors.installerUrl = 'Must be a valid http:// or https:// URL';
+      nextErrors.installerUrl = 'Must be a valid HTTPS URL';
     }
     if (sha256.trim() && !isValidSha256(sha256.trim())) {
       nextErrors.sha256 = 'Must be a 64-character hexadecimal string';
