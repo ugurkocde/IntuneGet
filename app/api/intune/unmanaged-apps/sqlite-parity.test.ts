@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 const session = vi.hoisted(() => { vi.stubEnv('DATABASE_MODE', 'sqlite'); vi.stubEnv('DATABASE_PATH', ':memory:'); return { tenant: 'scan-tenant' }; });
 vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: async () => ({ userId: 'scan-user', tenantId: session.tenant }) }));
@@ -11,6 +11,7 @@ import { createServerClient } from '@/lib/supabase';
 import { GET } from './route';
 beforeEach(() => { closeSqliteDb(); session.tenant = 'scan-tenant'; vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ value: [{ id: 'detected-one', displayName: 'Fixture Scanner', platform: 'windows', deviceCount: 2 }] }), { status: 200 }))); });
 afterEach(() => { closeSqliteDb(); vi.unstubAllGlobals(); });
+afterAll(() => { vi.unstubAllEnvs(); });
 it('shows a locally persisted claim and hides it only after deployment', async () => {
   const claim = await sqliteDb.claimedApps.upsert({ user_id: 'scan-user', tenant_id: 'scan-tenant', discovered_app_id: 'detected-one', discovered_app_name: 'Fixture Scanner', winget_package_id: 'Fixture.Scanner' });
   await sqliteManualMappings.save({ tenant_id: 'scan-tenant', created_by: 'scan-user', discovered_app_name: ' FIXTURE SCANNER ', discovered_publisher: null, winget_package_id: 'Fixture.ChosenScanner' });

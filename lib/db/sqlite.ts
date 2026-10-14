@@ -119,9 +119,6 @@ function buildSetClause(
   return { clause: assignments.join(', '), values };
 }
 
-/**
- * SQLite implementation of the database adapter
- */
 type MappingRow = HostedSchema['public']['Tables']['manual_app_mappings']['Row'];
 type LocalMappingInput = Pick<MappingRow, 'discovered_app_name' | 'discovered_publisher' | 'winget_package_id'> & { tenant_id: string; created_by: string };
 const mappingRow = (row: unknown): MappingRow => {
@@ -154,6 +151,7 @@ export const sqliteManualMappings = {
   },
 };
 
+/** SQLite implementation of the database adapter. */
 export const sqliteDb: DatabaseAdapter = {
   customAppDefinitions: {
     async list(userId, tenantId, limit, offset) {
