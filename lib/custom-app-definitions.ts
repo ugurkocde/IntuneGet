@@ -23,7 +23,7 @@ export function parseCustomAppDefinition(value: unknown): CustomAppDefinition {
     if (input[key] === undefined && optional.has(key)) continue;
     if (typeof input[key] !== 'string') throw new Error('Invalid definition field');
     const text = input[key].trim();
-    if ((!text && !optional.has(key)) || text.length > (key === 'description' ? 4000 : 2048)) throw new Error('Invalid definition field');
+    if ((!text && !optional.has(key)) || text.includes('\0') || !text.isWellFormed() || text.length > (key === 'description' ? 4000 : 2048)) throw new Error('Invalid definition field');
     result[key] = text;
   }
   if (!['exe', 'msi', 'inno', 'nullsoft', 'burn'].includes(result.installerType) || !['x64', 'x86', 'arm64'].includes(result.architecture) || !['user', 'machine'].includes(result.installScope)) throw new Error('Invalid definition options');

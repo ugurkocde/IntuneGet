@@ -70,7 +70,10 @@ export function SavedCustomApps({ definition, onLoad }: Props) {
     <div className="flex gap-2">
       <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
         const current = generation.current;
-        const data = await call('POST', '', { ...(selectedId ? { id: selectedId } : {}), definition: definition() });
+        let details: CustomAppDefinition;
+        try { details = definition(); }
+        catch { throw new Error('Fill in the app name, publisher and installer details before saving.'); }
+        const data = await call('POST', '', { ...(selectedId ? { id: selectedId } : {}), definition: details });
         if (current !== generation.current) return;
         setSelectedId(data.definition.id);
         setRows(prev => [data.definition, ...prev.filter(item => item.id !== data.definition.id)]);

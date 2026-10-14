@@ -62,6 +62,10 @@ describe('saved custom app API', () => {
     expect((await POST(req('POST', { definition, junk: 'x'.repeat(16384) }))).status).toBe(413);
     expect(mocks.save).not.toHaveBeenCalled();
   });
+  it.each(['x'.repeat(16000), '\u20ac'.repeat(5334)])('reserves space for JSONB text formatting at the byte boundary', async junk => {
+    expect((await POST(req('POST', { definition, junk }))).status).toBe(413);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
   it('returns404 for inaccessible update and delete IDs', async () => {
     mocks.save.mockResolvedValue(null); mocks.remove.mockResolvedValue(false);
     expect((await POST(req('POST', { id, definition }))).status).toBe(404);

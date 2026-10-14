@@ -14,4 +14,7 @@ describe('custom app static metadata', () => {
   it.each([{ installerType: 'script' }, { architecture: 'any' }, { installScope: 'all' }, { iconUrl: 'http://example.test/icon.png' }, { publisher: '' }, { displayName: 'a'.repeat(2049) }, { installerType: 'exe' }, { description: [] }])('rejects invalid metadata %j', patch => {
     expect(() => parseCustomAppDefinition({ ...definition, ...patch })).toThrow();
   });
+  it.each(['bad\u0000name', 'bad\uD800name'])('rejects text PostgreSQL JSON cannot store', displayName => {
+    expect(() => parseCustomAppDefinition({ ...definition, displayName })).toThrow();
+  });
 });

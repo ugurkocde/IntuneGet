@@ -36,7 +36,8 @@ async function readBody(request: NextRequest): Promise<unknown> {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 16384) { await reader.cancel(); throw new Error('BODY_TOO_LARGE'); }
+      // Leave room for JSONB's spaces when it measures the normalized object.
+      if (size > 16000) { await reader.cancel(); throw new Error('BODY_TOO_LARGE'); }
       chunks.push(value);
     }
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
