@@ -20,6 +20,63 @@ import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
 import { JobProcessor } from '@/packager/src/job-processor';
 import type { PackagingJob } from '@/packager/src/job-poller';
 
+describe('bounded registration evidence', () => {
+  it('keeps the diagnostic calls and fail-closed guard on the shared generated route', () => {
+    expect(packager).toContain('Write-IntuneGetRegistrationEvidence -Application $selectedApplications[0] -Stage install');
+    expect(packager.match(/Write-IntuneGetRegistrationEvidence -Application \$registeredApplication -Stage uninstall/g)).toHaveLength(2);
+    expect(packager).toContain('The registered vendor uninstaller was not found: $registeredUninstallFile');
+  });
+  for (const shell of ['pwsh', 'powershell']) {
+  it.runIf(process.platform === 'win32')(`distinguishes missing registered paths without disclosing or probing other paths in ${shell}`, () => {
+    const generated = generateRegistryUninstallPackage('nullsoft');
+    const start = generated.indexOf('function Write-IntuneGetRegistrationEvidence');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const helper = generated.slice(start, generated.indexOf('function Install-ADTDeployment', start));
+    const result = spawnSync(shell, ['-NoProfile', '-Command', `${helper}
+$script:messages = @(); $script:probes = @()
+function Write-ADTLogEntry { param($Message, $Source) $script:messages += $Message }
+function Test-Path { param($LiteralPath, $PathType, $ErrorAction) $script:probes += $LiteralPath; return $LiteralPath.EndsWith('present.exe') }
+function Get-Item { param($LiteralPath, [switch]$Force, $ErrorAction) return [pscustomobject]@{ Attributes = [System.IO.FileAttributes]::Normal } }
+$entry = [pscustomobject]@{
+ PSPath = 'Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PRIVATE_SENTINEL'
+ Is64BitApplication = $false
+ UninstallStringFilePath = 'C:\\Windows\\system32\\config\\systemprofile\\AppData\\Local\\PRIVATE_SENTINEL\\missing.exe'
+ QuietUninstallStringFilePath = 'C:\\PRIVATE_SENTINEL\\present.exe'
+ InstallLocation = '\\\\PRIVATE_SENTINEL\\share'
+ DisplayIcon = 'PRIVATE_SENTINEL'
+ UninstallString = 'PRIVATE_SENTINEL'
+}
+Write-IntuneGetRegistrationEvidence -Application $entry -Stage install
+$entry.QuietUninstallStringFilePath = '\\\\PRIVATE_SENTINEL\\remote.exe'
+Write-IntuneGetRegistrationEvidence -Application $entry -Stage uninstall
+function Test-Path { throw 'PRIVATE_SENTINEL' }
+Write-IntuneGetRegistrationEvidence -Application $entry -Stage uninstall
+function Get-Item { param($LiteralPath, [switch]$Force, $ErrorAction) return [pscustomobject]@{ Attributes = [System.IO.FileAttributes]::ReparsePoint } }
+Write-IntuneGetRegistrationEvidence -Application $entry -Stage uninstall
+[pscustomobject]@{messages=$script:messages;probes=$script:probes} | ConvertTo-Json -Compress
+`], { encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    const output = JSON.parse(result.stdout.trim());
+    expect(output.messages).toHaveLength(4);
+    expect(output.messages[0]).toContain('stage=install registry=machine32 view=x86');
+    expect(output.messages[0]).toContain('uninstall=sysprof:missing quiet=local:exists');
+    expect(output.messages[1]).toContain('stage=uninstall');
+    expect(output.messages[1]).toContain('quiet=unsupported');
+    expect(output.messages[2]).toContain('uninstall=sysprof:unknown');
+    expect(output.messages[3]).toContain('uninstall=unsupported');
+    expect(output.probes).toHaveLength(3);
+    expect(output.probes.every((path: string) => /^[A-Z]:\\/i.test(path))).toBe(true);
+    for (const message of output.messages) {
+      expect(message).not.toMatch(/PRIVATE_SENTINEL|[A-Z]:\\|\\\\/i);
+      expect(message.length).toBeLessThanOrEqual(160);
+    }
+    expect(generated).toContain('Write-IntuneGetRegistrationEvidence -Application $selectedApplications[0] -Stage install');
+    expect(generated).toContain('Write-IntuneGetRegistrationEvidence -Application $registeredApplication -Stage uninstall');
+    expect(generated).toContain('The registered vendor uninstaller was not found: $registeredUninstallFile');
+  });
+  }
+});
+
 const packager = readFileSync(
   resolve(process.cwd(), '.github/scripts/Create-PSADTPackage.ps1'),
   'utf8'

@@ -125,7 +125,14 @@ async function evidencePrevious(app, release) {
  * each app's newest release so tenant auto-updates keep their settings.
  */
 export async function processConfigVerifications({ runs, releases, apps, readEvidence, authenticate, dispatch, rebuildConfig, slots, now }) {
-  const rows = await rest('curated_config_verifications?select=*&status=in.(requested,verifying,passed,failed)&order=requested_at.asc');
+  const rows = [];
+  for (let offset = 0; ;) {
+    const page = await rest(`curated_config_verifications?select=*&status=in.(requested,verifying,passed)&order=requested_at.asc,id.asc&limit=500&offset=${offset}`) || [];
+    if (!page.length) break;
+    rows.push(...page);
+    // Advance by the returned count so a smaller server row cap cannot hide work.
+    offset += page.length;
+  }
   const states = []; let dispatched = 0;
   const update = (id, patch) => rest(`curated_config_verifications?id=eq.${id}`, { method: 'PATCH', body: { ...patch, updated_at: now.toISOString() } });
 
@@ -144,6 +151,8 @@ export async function processConfigVerifications({ runs, releases, apps, readEvi
       continue;
     }
     if (rows.some(item => item.release_id === latest.id && item.psadt_config_sha256 === rebuilt.psadtConfigSha256)) continue;
+    const existing = await rest(`curated_config_verifications?release_id=eq.${encodeURIComponent(latest.id)}&psadt_config_sha256=eq.${encodeURIComponent(rebuilt.psadtConfigSha256)}&select=id&limit=1`);
+    if (existing?.length) continue;
     await rest('curated_config_verifications?on_conflict=release_id,psadt_config_sha256', { method: 'POST', prefer: 'resolution=ignore-duplicates', body: [{
       release_id: latest.id, app_id: row.app_id, winget_id: row.winget_id, version: latest.candidate.version,
       psadt_config_sha256: rebuilt.psadtConfigSha256, psadt_config: rebuilt.executionConfig, status: 'requested', tenant_id: row.tenant_id, requested_by_user_id: row.requested_by_user_id,

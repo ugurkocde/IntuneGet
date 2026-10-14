@@ -17,7 +17,13 @@ beforeAll(async () => {
     const path = url.replace('https://supabase.test/rest/v1/', '');
     calls.push({ method: init.method || 'GET', path, body: init.body ? JSON.parse(String(init.body)) : undefined });
     const key = Object.keys(responses).find(prefix => path.startsWith(prefix));
-    return new Response(key ? JSON.stringify(responses[key]) : '', { status: 200 });
+    let response = key ? responses[key] : undefined;
+    const params = new URLSearchParams(path.split('?')[1]);
+    if (Array.isArray(response) && params.has('offset')) {
+      const offset = Number(params.get('offset'));
+      response = response.slice(offset, offset + Number(params.get('limit')));
+    }
+    return new Response(key ? JSON.stringify(typeof response === 'function' ? response(path) : response) : '', { status: 200 });
   }));
   store = await import('./curated-qa-store.mjs');
 });
@@ -66,6 +72,24 @@ describe('custom configuration verification lifecycle', () => {
   const row = (overrides: Record<string, unknown>) => ({ id: '11111111-2222-4333-8444-555555555555', release_id: release.id, app_id: app.id, winget_id: app.packageId,
     psadt_config_sha256: 'c'.repeat(64), psadt_config: { deployMode: 'Silent' }, status: 'requested', github_run_id: null, failure_detail: null, updated_at: '2026-10-05T08:00:00Z', ...overrides });
   const base = { releases: [release], apps: CURATED_APPS, now, authenticate: async () => {}, rebuildConfig: rebuildCuratedExecutionConfig, slots: 1 };
+
+  it('dispatches a request after a capped page of passed history without modifying history', async () => {
+    const archived = Array.from({ length: 500 }, (_, index) => row({ id: `archived-${index}`, status: 'passed' }));
+    const pending = row({});
+    const all = [...archived, pending];
+    responses = { 'curated_config_verifications?select': (path: string) => {
+      const offset = Number(new URLSearchParams(path.split('?')[1]).get('offset') || 0);
+      return all.slice(offset, offset + 500);
+    } };
+    const dispatch = vi.fn(async () => ({ queued: true }));
+    await store.processConfigVerifications({ ...base, runs: [], readEvidence: async () => { throw new Error('none'); }, dispatch });
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(calls.some(call => call.method === 'PATCH')).toBe(false);
+    expect(archived.every(item => item.status === 'passed')).toBe(true);
+    const reads = calls.filter(call => call.method === 'GET' && call.path.startsWith('curated_config_verifications?select'));
+    expect(reads.map(call => new URLSearchParams(call.path.split('?')[1]).get('offset'))).toEqual(['0', '500', '501']);
+    expect(reads.every(call => call.path.includes('order=requested_at.asc,id.asc') && !call.path.includes('failed'))).toBe(true);
+  });
 
   it('keeps a persisted request queued until the minute dispatcher actually starts it', async () => {
     responses = { 'curated_config_verifications?select': [row({})] };
@@ -165,14 +189,18 @@ describe('custom configuration verification lifecycle', () => {
       psadt_config_sha256: rebuilt.psadtConfigSha256, psadt_config: rebuilt.executionConfig,
       updated_at: now.toISOString() });
     const snapshot = structuredClone(existing);
-    responses = { 'curated_config_verifications?select': [row({ status: 'passed' }), existing] };
+    responses = {
+      'curated_config_verifications?select': [row({ status: 'passed' }), ...(status === 'failed' ? [] : [existing])],
+      'curated_config_verifications?release_id': status === 'failed' ? [{ id: existing.id }] : [],
+    };
     const dispatch = vi.fn();
     await store.processConfigVerifications({ ...base, slots: 0, releases: [release, newer],
       runs: [], readEvidence: vi.fn(), dispatch });
     expect(calls.some(call => call.method === 'POST' || call.method === 'PATCH')).toBe(false);
     expect(dispatch).not.toHaveBeenCalled();
     expect(existing).toEqual(snapshot);
-    expect(calls[0].path).toContain('failed');
+    expect(calls[0].path).not.toContain('failed');
+    if (status === 'failed') expect(calls.some(call => call.path.includes('release_id=eq.') && call.path.includes('select=id&limit=1'))).toBe(true);
   });
 
   it('coalesces older passed configurations that rebuild to the same identity', async () => {

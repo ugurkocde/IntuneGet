@@ -40,4 +40,21 @@ describe('curated configuration carry-forward normalization', () => {
   it('rejects an unknown curated candidate', () => {
     expect(() => rebuildCuratedExecutionConfig({ ...next, candidate: { ...next.candidate, appId: 'unknown' } }, {})).toThrow(/Unknown curated app/);
   });
+
+  it('keeps the carried execution hash identical to the customer authorizer for saved reviewed settings', () => {
+    const saved = {
+      deployMode: 'Silent', processesToClose: [{ name: '7zFM', description: '7zFM' }],
+      reviewedUninstallArguments: ['--obsolete-release-argument'],
+      reviewedInstallArgumentsOverride: '/obsolete-install-override',
+      reviewedUninstallServiceNames: ['ObsoleteService'],
+    };
+    const rebuilt = rebuildCuratedExecutionConfig(next, saved);
+    const item = buildCuratedCartItem(app, next);
+    const comparison = compareCuratedExecution(app, next,
+      curatedWorkflowInput({ ...item, psadtConfig: rebuilt.executionConfig as unknown as typeof item.psadtConfig }));
+    expect(rebuilt.psadtConfigSha256).toBe(comparison.psadtConfigSha256);
+    expect(rebuilt.executionConfig.reviewedUninstallArguments).toContain('--obsolete-release-argument');
+    expect(rebuildCuratedExecutionConfig(next, rebuilt.executionConfig)).toEqual(rebuilt);
+    expect(saved.reviewedUninstallArguments).toEqual(['--obsolete-release-argument']);
+  });
 });

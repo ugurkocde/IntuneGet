@@ -8,6 +8,7 @@ const {
   getGitHubActionsHealthMock,
   isQaWorkflowRunCompletedMock,
   dispatchCuratedQueueMock,
+  readLiveQaInventoryMock,
 } = vi.hoisted(() => ({
   getPackageCompatibilityBlockMock: vi.fn(),
   cancelStaleWaitingQaRunsMock: vi.fn(),
@@ -16,12 +17,14 @@ const {
   getGitHubActionsHealthMock: vi.fn(),
   isQaWorkflowRunCompletedMock: vi.fn(),
   dispatchCuratedQueueMock: vi.fn(async () => ({ handled: false, dispatched: false })),
+  readLiveQaInventoryMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
 vi.mock('@/lib/qa/curated-queue', () => ({ dispatchCuratedQueue: dispatchCuratedQueueMock }));
+vi.mock('@/lib/qa/github-live-qa-inventory', () => ({ readLiveQaInventory: readLiveQaInventoryMock }));
 vi.mock('@/lib/qa/github-actions-health', () => ({
   getGitHubActionsHealth: getGitHubActionsHealthMock,
 }));
@@ -283,6 +286,7 @@ beforeEach(() => {
   dispatchQaCandidateMock.mockResolvedValue(undefined);
   getGitHubActionsHealthMock.mockResolvedValue({ operational: true, status: 'operational' });
   cancelStaleWaitingQaRunsMock.mockResolvedValue([]);
+  readLiveQaInventoryMock.mockResolvedValue({ state: 'complete', inventory: { total_count: 0, workflow_runs: [] } });
   isQaWorkflowRunCompletedMock.mockResolvedValue(false);
 });
 
@@ -296,6 +300,114 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-dispatch', () => {
+  const liveInventory = (status: string, id = 456) => ({
+    state: 'complete', inventory: { total_count: 1,
+      workflow_runs: [{ id, status, path: '.github/workflows/intune-qa.yml' }] },
+  });
+
+  it.each(['unknown', 'in_progress'])('defers idle claims and cleanup for %s inventory', async state => {
+    const stub = createSupabaseStub([candidate('catalog-default')]);
+    createServerClientMock.mockReturnValue(stub.client);
+    readLiveQaInventoryMock.mockResolvedValue(state === 'unknown' ? { state: 'unknown' } : liveInventory(state));
+    expect(await (await GET(cronRequest())).json()).toMatchObject({
+      reason: state === 'unknown' ? 'qa_inventory_unknown' : 'foreign_qa_run_active',
+    });
+    expect(cancelStaleWaitingQaRunsMock).not.toHaveBeenCalled();
+    expect(dispatchCuratedQueueMock).not.toHaveBeenCalled();
+    expect(stub.client.rpc).not.toHaveBeenCalled();
+    expect(stub.supersedePayloads).toEqual([]);
+  });
+
+  it.each(['unknown', 'in_progress'])('preserves a stalled candidate retry budget for %s inventory', async state => {
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 1,
+      dispatched_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      started_at: null, github_run_id: null };
+    const stub = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(stub.client);
+    readLiveQaInventoryMock.mockResolvedValue(state === 'unknown' ? { state: 'unknown' } : liveInventory(state));
+    expect(await (await GET(cronRequest())).json()).toMatchObject({
+      reason: state === 'unknown' ? 'qa_inventory_unknown' : 'foreign_qa_run_active',
+    });
+    expect(cancelStaleWaitingQaRunsMock).not.toHaveBeenCalled();
+    expect(dispatchCuratedQueueMock).not.toHaveBeenCalled();
+    expect(stub.client.rpc).not.toHaveBeenCalled();
+    expect(stub.rollbackIds).toEqual([]);
+    expect(stub.terminalErrorIds).toEqual([]);
+    expect(active.attempts).toBe(1);
+  });
+
+  it('retains stale never-started orphan cleanup and reads inventory first', async () => {
+    const stub = createSupabaseStub([candidate('catalog-default')]);
+    createServerClientMock.mockReturnValue(stub.client);
+    readLiveQaInventoryMock.mockResolvedValue(liveInventory('queued'));
+    cancelStaleWaitingQaRunsMock.mockResolvedValue([456]);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'stale_waiting_run_cancelled' });
+    expect(readLiveQaInventoryMock.mock.invocationCallOrder[0]).toBeLessThan(
+      cancelStaleWaitingQaRunsMock.mock.invocationCallOrder[0]);
+    expect(stub.client.rpc).not.toHaveBeenCalled();
+    expect(dispatchCuratedQueueMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['queued', 'waiting', 'pending', 'requested'])('defers new ordinary and curated claims behind an unstarted %s run', async status => {
+    const stub = createSupabaseStub([candidate('catalog-default')]);
+    createServerClientMock.mockReturnValue(stub.client);
+    readLiveQaInventoryMock.mockResolvedValue(liveInventory(status));
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'foreign_qa_run_pending', reconciled: 0 });
+    expect(cancelStaleWaitingQaRunsMock).toHaveBeenCalledTimes(1);
+    expect(dispatchCuratedQueueMock).not.toHaveBeenCalled();
+    expect(stub.client.rpc).not.toHaveBeenCalled();
+    expect(stub.supersedePayloads).toEqual([]);
+  });
+
+  it('does not mistake the candidate own unlinked queued run for an executing foreign owner', async () => {
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 1,
+      dispatched_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      started_at: null, github_run_id: null };
+    const stub = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(stub.client);
+    readLiveQaInventoryMock.mockResolvedValue(liveInventory('queued'));
+    cancelStaleWaitingQaRunsMock.mockResolvedValue([456]);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'stale_waiting_run_cancelled' });
+    expect(stub.rollbackIds).toEqual([]);
+    expect(stub.terminalErrorIds).toEqual([]);
+  });
+
+  it.each(['foreign', 'clear', 'unknown'])('checks live inventory after terminal reconciliation when it is %s', async state => {
+    const active = { ...candidate('catalog-default'), status: 'running', phase: 'publishing', attempts: 1,
+      dispatched_at: '2026-09-24T17:57:36Z', started_at: '2026-09-24T17:57:41Z', github_run_id: '123' };
+    const queued = candidate('deployment-config');
+    const stub = createSupabaseStub([queued], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(stub.client);
+    isQaWorkflowRunCompletedMock.mockResolvedValue(true);
+    if (state === 'foreign') readLiveQaInventoryMock.mockResolvedValue(liveInventory('in_progress'));
+    if (state === 'unknown') readLiveQaInventoryMock.mockResolvedValue({ state: 'unknown' });
+    const body = await (await GET(cronRequest())).json();
+    expect(body.reconciled).toBe(1);
+    expect(readLiveQaInventoryMock).toHaveBeenCalledTimes(1);
+    expect(cancelStaleWaitingQaRunsMock).not.toHaveBeenCalled();
+    expect(stub.terminalErrorIds).toEqual([active.id]);
+    if (state === 'clear') {
+      expect(dispatchCuratedQueueMock).toHaveBeenCalledTimes(1);
+      expect(stub.claimedIds).toEqual([queued.id]);
+    } else {
+      expect(body.reason).toBe(state === 'unknown' ? 'qa_inventory_unknown' : 'foreign_qa_run_pending');
+      expect(dispatchCuratedQueueMock).not.toHaveBeenCalled();
+      expect(stub.client.rpc).not.toHaveBeenCalled();
+    }
+  });
+
+  it('defers malformed linked run identity before cleanup or candidate mutations', async () => {
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 1,
+      dispatched_at: '2026-09-24T18:00:00Z', started_at: null, github_run_id: 'invalid' };
+    const stub = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(stub.client);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'qa_inventory_unknown' });
+    expect(cancelStaleWaitingQaRunsMock).not.toHaveBeenCalled();
+    expect(stub.rollbackIds).toEqual([]);
+    expect(stub.terminalErrorIds).toEqual([]);
+    expect(stub.client.rpc).not.toHaveBeenCalled();
+  });
+
   it('supersedes an exact held payload before claiming and dispatches an unaffected payload', async () => {
     const held = candidate('deployment-config');
     const allowed = candidate('catalog-default', 'B'.repeat(64));
@@ -598,6 +710,7 @@ describe('GET /api/cron/qa-dispatch', () => {
     createServerClientMock.mockReturnValue(client);
     expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'qa_active' });
     expect(cancelStaleWaitingQaRunsMock).not.toHaveBeenCalled();
+    expect(readLiveQaInventoryMock).not.toHaveBeenCalled();
   });
 
   it('supersedes an invalid row and dispatches the valid row behind it', async () => {
