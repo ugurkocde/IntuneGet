@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowCommit": "bb575e97432e44d3ef81553b9afdffafb1d4a395",
+    "websiteCommit": "753731600bba2ff197e6f0e60c29b39e3d322a74",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "38589192128",
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "nodejs-lts",
+    "version": "24.22.0",
+    "installerUrl": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-x64.msi",
+    "vendorSha256": "97ebad47ad35da4b59182a5fbe9fad2b1a1836f1042b4833ff5b4b9571175088",
+    "releaseNotesUrl": "https://nodejs.org/en/blog/release/v24.22.0",
+    "discoveredAt": "2026-10-14T15:24:37.01Z",
+    "id": "b5789f18b1b1278492ca55f5"
+  },
+  "previous": {
+    "appId": "nodejs-lts",
+    "version": "24.21.0",
+    "installerUrl": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-x64.msi",
+    "vendorSha256": "bb0eaee134f9357f22aea915ee793343e627aefc1e66488164bac6915bce2cac",
+    "releaseNotesUrl": "https://nodejs.org/en/blog/release/v24.21.0",
+    "discoveredAt": "2026-10-06T20:45:04.987Z",
+    "id": "5614ce68eec6e4439fef74d8"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "b5789f18b1b1278492ca55f5",
+      "installerSha256": "97ebad47ad35da4b59182a5fbe9fad2b1a1836f1042b4833ff5b4b9571175088",
+      "sourceUrl": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-x64.msi",
+      "finalOrigin": "https://nodejs.org",
+      "signature": {
+        "publisher": "OpenJS Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.461.24.0",
+        "installerSha256": "97ebad47ad35da4b59182a5fbe9fad2b1a1836f1042b4833ff5b4b9571175088",
+        "suspicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26090.9",
+        "malicious": 0,
+        "status": "clean",
+        "scannedAt": "2026-10-14T15:33:11.3296455Z"
+      }
+    },
+    "previous": {
+      "candidateId": "5614ce68eec6e4439fef74d8",
+      "installerSha256": "bb0eaee134f9357f22aea915ee793343e627aefc1e66488164bac6915bce2cac",
+      "sourceUrl": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-x64.msi",
+      "finalOrigin": "https://nodejs.org",
+      "signature": {
+        "publisher": "OpenJS Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.461.24.0",
+        "installerSha256": "bb0eaee134f9357f22aea915ee793343e627aefc1e66488164bac6915bce2cac",
+        "suspicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26090.9",
+        "malicious": 0,
+        "status": "clean",
+        "scannedAt": "2026-10-14T15:33:28.4294914Z"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "b5789f18b1b1278492ca55f5",
+    "packageId": "IntuneGet.Curated.NodeJSLTS",
+    "installerUrl": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-x64.msi",
+    "installerSha256": "97ebad47ad35da4b59182a5fbe9fad2b1a1836f1042b4833ff5b4b9571175088",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.NodeJSLTS",
+      "displayName": "Node.js LTS",
+      "publisher": "OpenJS Foundation",
+      "version": "24.22.0",
+      "architecture": "x64",
+      "installerSha256": "97ebad47ad35da4b59182a5fbe9fad2b1a1836f1042b4833ff5b4b9571175088",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Node.js LTS",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NodeJSLTS\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"24.22.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NodeJSLTS\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"24.22.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "6C8774E45193151FE3AAF48B109E8008544A4D9928B950B35336890EA4A70611",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.NodeJSLTS\",\"publisher\":\"IntuneGet QA\",\"version\":\"24.22.0\",\"wingetId\":\"IntuneGet.Curated.NodeJSLTS\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"24.22.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NodeJSLTS\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"D0C1ED8B524C150C0921D7A77A8DD8D8E79AB53D7B3F227394247AE779E10321\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"97EBAD47AD35DA4B59182A5FBE9FAD2B1A1836F1042B4833FF5B4B9571175088\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Node.js LTS\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"24.22.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_NodeJSLTS\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"ADBEE32CDC2C82CEFE2C9BEE11ACCD61BF08848CA074243EDA9D59D1B815D125\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"665d6f4ec65d457edbd455605a54b4b223392457\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "adbee32cdc2c82cefe2c9bee11accd61bf08848ca074243eda9d59d1b815d125",
+    "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+    "approvalRequired": true
+  },
+  "qa": {
+    "previousInstallerSha256": "bb0eaee134f9357f22aea915ee793343e627aefc1e66488164bac6915bce2cac",
+    "testLevel": "psadt-package",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "upgradeFromVersion": "24.21.0",
+    "executionProfileSha256": "6C8774E45193151FE3AAF48B109E8008544A4D9928B950B35336890EA4A70611",
+    "testedAt": "2026-10-14T15:35:59.7541931Z",
+    "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+    "installerSha256": "97ebad47ad35da4b59182a5fbe9fad2b1a1836f1042b4833ff5b4b9571175088",
+    "candidateId": "b5789f18b1b1278492ca55f5",
+    "executionContext": "LocalSystem",
+    "installerVersion": "24.22.0",
+    "architecture": "x64"
+  },
+  "verifiedAt": "2026-10-14T15:36:06.7711373Z",
+  "authenticatedArtifact": {
+    "id": 11906499372,
+    "sha256": "18cfaaf89eb4c714e2c74099bbaf74b81c84007bc4c067edfdd08797455b3f0f"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-14T18:29:33.588Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
