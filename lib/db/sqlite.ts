@@ -5,6 +5,7 @@
 
 import Database from 'better-sqlite3';
 import type { SavedCustomAppDefinition } from '@/lib/custom-app-definitions';
+import type { Database as HostedSchema } from '@/types/database';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import path from 'path';
 import fs from 'fs';
@@ -121,6 +122,38 @@ function buildSetClause(
 /**
  * SQLite implementation of the database adapter
  */
+type MappingRow = HostedSchema['public']['Tables']['manual_app_mappings']['Row'];
+type LocalMappingInput = Pick<MappingRow, 'discovered_app_name' | 'discovered_publisher' | 'winget_package_id'> & { tenant_id: string; created_by: string };
+const mappingRow = (row: unknown): MappingRow => {
+  const stored = row as Omit<MappingRow, 'is_verified'> & { is_verified: number };
+  return { ...stored, is_verified: stored.is_verified === 1 };
+};
+
+/** Local-only mappings share the adapter's connection and migration lifecycle. */
+export const sqliteManualMappings = {
+  async list(tenantId: string): Promise<MappingRow[]> {
+    return getDb().prepare('SELECT * FROM manual_app_mappings WHERE tenant_id = ? ORDER BY created_at DESC, id DESC').all(tenantId).map(mappingRow);
+  },
+  async save(input: LocalMappingInput): Promise<{ record: MappingRow; updated: boolean }> {
+    const database = getDb();
+    return database.transaction(() => {
+      const name = input.discovered_app_name.toLowerCase().trim();
+      const existing = database.prepare('SELECT id FROM manual_app_mappings WHERE tenant_id = ? AND discovered_app_name = ?').get(input.tenant_id, name) as { id: string } | undefined;
+      const now = new Date().toISOString();
+      const id = existing?.id ?? crypto.randomUUID();
+      if (existing) {
+        database.prepare('UPDATE manual_app_mappings SET discovered_publisher = ?, winget_package_id = ?, updated_at = ? WHERE tenant_id = ? AND id = ?').run(input.discovered_publisher, input.winget_package_id, now, input.tenant_id, id);
+      } else {
+        database.prepare('INSERT INTO manual_app_mappings (id, tenant_id, created_by, discovered_app_name, discovered_publisher, winget_package_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, input.tenant_id, input.created_by, name, input.discovered_publisher, input.winget_package_id, now, now);
+      }
+      return { record: mappingRow(database.prepare('SELECT * FROM manual_app_mappings WHERE tenant_id = ? AND id = ?').get(input.tenant_id, id)), updated: Boolean(existing) };
+    })();
+  },
+  async delete(id: string, tenantId: string): Promise<boolean> {
+    return getDb().prepare('DELETE FROM manual_app_mappings WHERE tenant_id = ? AND id = ?').run(tenantId, id).changes > 0;
+  },
+};
+
 export const sqliteDb: DatabaseAdapter = {
   customAppDefinitions: {
     async list(userId, tenantId, limit, offset) {

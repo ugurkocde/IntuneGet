@@ -1,0 +1,5 @@
+{
+  "title": "Link discovered apps on self hosted SQLite installations",
+  "summary": "Save manual package links locally and show existing claims when refreshing unmanaged apps. Tenant mappings stay isolated without requiring hosted database services.",
+  "type": "fixed"
+}
