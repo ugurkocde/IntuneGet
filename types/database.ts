@@ -23,6 +23,12 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      custom_app_definitions: {
+        Row: { id: string; user_id: string; tenant_id: string; definition: Json; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; tenant_id: string; definition: Json; created_at?: string; updated_at?: string };
+        Update: { definition?: Json; updated_at?: string };
+        Relationships: GenericRelationship[];
+      };
       qa_installer_security_holds: {
         Row: { sha256: string; malicious_verdicts: number; reason: string; first_held_at: string; verdict_at: string; next_check_at: string; checked_at: string | null; released_at: string | null; recheck_lease: string | null; recheck_lease_expires_at: string | null };
         Insert: { sha256: string; malicious_verdicts: number; first_held_at?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };

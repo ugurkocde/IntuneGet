@@ -23,6 +23,7 @@ import type {
   UpdateCheckResult,
 } from './types';
 import type { PostgrestError } from '@supabase/supabase-js';
+import type { SavedCustomAppDefinition } from '@/lib/custom-app-definitions';
 
 /**
  * Type guard to check if a response is an error
@@ -123,6 +124,27 @@ function getUploadHistoryQuery(supabase: ReturnType<typeof createServerClient>):
  * Supabase implementation of the database adapter
  */
 export const supabaseDb: DatabaseAdapter = {
+  customAppDefinitions: {
+    async list(userId, tenantId, limit, offset) {
+      const { data, error } = await createServerClient().from('custom_app_definitions').select('*').eq('user_id', userId).eq('tenant_id', tenantId).order('updated_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + limit - 1);
+      if (error) throw new Error('CUSTOM_DEFINITIONS_READ_FAILED');
+      return (data ?? []) as SavedCustomAppDefinition[];
+    },
+    async save(userId, tenantId, definition, id) {
+      const client = createServerClient();
+      const json = definition as unknown as import('@/types/database').Json;
+      const result = id
+        ? await client.from('custom_app_definitions').update({ definition: json, updated_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId).eq('tenant_id', tenantId).select('*').maybeSingle()
+        : await client.from('custom_app_definitions').insert({ user_id: userId, tenant_id: tenantId, definition: json }).select('*').single();
+      if (result.error) throw new Error('CUSTOM_DEFINITIONS_SAVE_FAILED');
+      return result.data as SavedCustomAppDefinition | null;
+    },
+    async delete(userId, tenantId, id) {
+      const { data, error } = await createServerClient().from('custom_app_definitions').delete().eq('id', id).eq('user_id', userId).eq('tenant_id', tenantId).select('id');
+      if (error) throw new Error('CUSTOM_DEFINITIONS_DELETE_FAILED');
+      return Boolean(data?.length);
+    },
+  },
   jobs: {
     /**
      * Get jobs by status

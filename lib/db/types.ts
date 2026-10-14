@@ -4,6 +4,7 @@
  */
 
 import type { Json } from '@/types/database';
+import type { CustomAppDefinition, SavedCustomAppDefinition } from '@/lib/custom-app-definitions';
 import type {
   AppUpdatePolicy,
   AutoUpdateHistory,
@@ -191,6 +192,11 @@ export interface JobStats {
  * Both SQLite and Supabase implementations must conform to this interface
  */
 export interface DatabaseAdapter {
+  customAppDefinitions: {
+    list(userId: string, tenantId: string, limit: number, offset: number): Promise<SavedCustomAppDefinition[]>;
+    save(userId: string, tenantId: string, definition: CustomAppDefinition, id?: string): Promise<SavedCustomAppDefinition | null>;
+    delete(userId: string, tenantId: string, id: string): Promise<boolean>;
+  };
   jobs: {
     /**
      * Get jobs by status

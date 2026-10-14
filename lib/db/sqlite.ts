@@ -4,6 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
+import type { SavedCustomAppDefinition } from '@/lib/custom-app-definitions';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import path from 'path';
 import fs from 'fs';
@@ -121,6 +122,27 @@ function buildSetClause(
  * SQLite implementation of the database adapter
  */
 export const sqliteDb: DatabaseAdapter = {
+  customAppDefinitions: {
+    async list(userId, tenantId, limit, offset) {
+      const rows = getDb().prepare('SELECT * FROM custom_app_definitions WHERE user_id = ? AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?').all(userId, tenantId, limit, offset) as Array<Omit<SavedCustomAppDefinition, 'definition'> & { definition: string }>;
+      return rows.map(row => ({ ...row, definition: JSON.parse(row.definition) }));
+    },
+    async save(userId, tenantId, definition, id) {
+      const database = getDb();
+      const now = new Date().toISOString();
+      if (id) {
+        if (!database.prepare('UPDATE custom_app_definitions SET definition = ?, updated_at = ? WHERE id = ? AND user_id = ? AND tenant_id = ?').run(JSON.stringify(definition), now, id, userId, tenantId).changes) return null;
+      } else {
+        id = crypto.randomUUID();
+        database.prepare('INSERT INTO custom_app_definitions (id, user_id, tenant_id, definition, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, userId, tenantId, JSON.stringify(definition), now, now);
+      }
+      const row = database.prepare('SELECT * FROM custom_app_definitions WHERE id = ? AND user_id = ? AND tenant_id = ?').get(id, userId, tenantId) as Omit<SavedCustomAppDefinition, 'definition'> & { definition: string };
+      return { ...row, definition: JSON.parse(row.definition) };
+    },
+    async delete(userId, tenantId, id) {
+      return getDb().prepare('DELETE FROM custom_app_definitions WHERE id = ? AND user_id = ? AND tenant_id = ?').run(id, userId, tenantId).changes > 0;
+    },
+  },
   jobs: {
     /**
      * Get jobs by status

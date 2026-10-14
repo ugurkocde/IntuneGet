@@ -268,6 +268,22 @@ export const MIGRATIONS: SqliteMigration[] = [
   },
 ];
 
+MIGRATIONS.push({
+  version: 6,
+  name: 'saved custom app definitions',
+  up: db => {
+    db.exec(`CREATE TABLE custom_app_definitions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      definition TEXT NOT NULL CHECK (json_valid(definition) AND json_type(definition) = 'object' AND length(CAST(definition AS BLOB)) <= 16384),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_custom_app_definitions_owner ON custom_app_definitions(user_id, tenant_id, updated_at DESC, id DESC);`);
+  },
+});
+
 export function getSqliteSchemaVersion(db: BetterSqlite3.Database): number {
   const value = db.pragma('user_version', { simple: true });
   return typeof value === 'number' ? value : 0;

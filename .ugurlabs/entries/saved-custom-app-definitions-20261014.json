@@ -1,0 +1,5 @@
+{
+  "title": "Reuse saved custom app details",
+  "summary": "Save custom application details on hosted and self hosted installations, then start a new version without retyping the publisher, installer type or commands. Each deployment still asks for a fresh version, installer URL and optional trusted hash.",
+  "type": "new"
+}

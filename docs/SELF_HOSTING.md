@@ -541,3 +541,7 @@ docker-compose up -d
 
 - GitHub Issues: [github.com/ugurkocde/IntuneGet/issues](https://github.com/ugurkocde/IntuneGet/issues)
 - Documentation: [github.com/ugurkocde/IntuneGet/docs](https://github.com/ugurkocde/IntuneGet/tree/main/docs)
+
+## Saved custom apps
+
+SQLite installations can save reusable custom app definitions and use **Deploy new version** in the custom app form. Definitions stay in the configured SQLite database and are scoped to the signed in account and tenant. New versions still require a fresh installer URL, version and optional hash. See [Custom apps](CUSTOM_APPS.md).
