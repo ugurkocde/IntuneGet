@@ -22,6 +22,9 @@ await sql(baseline.claimant);
 const testSecret='local-fixture-only',digest=crypto.createHash('sha256').update(testSecret).digest('hex');
 await sql(baseline.reporter.replace(/expected_secret_hash constant text := '[a-f0-9]{64}'/,`expected_secret_hash constant text := '${digest}'`));
 await sql(read('../../supabase/migrations/20261011075101_qa_guarded_diagnostic_retests.sql').replace(/\r\n/g,'\n'));
+await sql(read('../../supabase/migrations/20261012200751_qa_repair_current_profile_adoption.sql').replace(/\r\n/g,'\n'));
+await sql(read('../../supabase/migrations/20261012225940_qa_deployment_profile_adoption.sql').replace(/\r\n/g,'\n'));
+await sql(read('../../supabase/migrations/20261014222100_qa_terminal_failure_retest_guards.sql').replace(/\r\n/g,'\n'));
 const id='11111111-1111-4111-8111-111111111111',repair='22222222-2222-4222-8222-222222222222',sha='A'.repeat(64),pin='b'.repeat(40),canonical=JSON.stringify({toolchain:{packagerCommit:pin}}),profile=crypto.createHash('sha256').update(canonical).digest('hex').toUpperCase();
 async function seed(){
  await query(`insert into public.qa_pipeline_control(id,paused,required_packager_commit,scheduler_packager_commit,scheduler_seen_at) values('global',false,$1,$1,now())`,[pin]);
@@ -77,5 +80,32 @@ await test('deployment-profile diagnostic pass retains quarantine and customer s
  assert.equal((await query('select count(*)::int as n from public.qa_package_blocks')).rows[0].n,1);
  assert.deepEqual((await query('select id,status from public.packaging_jobs')).rows,before);
 });
-await pg.close();assert.equal(passed.length,28);
+
+async function settledFailure(){
+ await grant();await query("update public.qa_candidates set status='running',phase='publishing' where id=$1",[id]);
+ await query("select public.report_qa_candidate_result($1,$2,'failed','managed failure')",[testSecret,id]);
+ await query("insert into public.qa_package_results(winget_id,tested_version,architecture,installer_sha256,package_profile_sha256,outcome,tested_at_utc) values('Example.App','1','x64',$1,$2,'Failed',now())",[sha,profile]);
+}
+await test('settled publishing failure accepts the next guarded diagnostic without clearing quarantine',async()=>{
+ await settledFailure();assert.equal((await query('select phase from public.qa_candidates')).rows[0].phase,'publishing');
+ await grant();assert.equal(await eligible(),true);assert.equal((await query('select prior_requeues from public.qa_repair_requests')).rows[0].prior_requeues,1);
+ assert.equal((await query('select count(*)::int as n from public.qa_package_blocks')).rows[0].n,1);
+});
+await test('third settled diagnostic failure blocks the repair and refuses another grant',async()=>{
+ await settledFailure();for(let i=0;i<2;i++){await grant();await query("update public.qa_candidates set status='running',phase='publishing' where id=$1",[id]);await query("select public.report_qa_candidate_result($1,$2,'failed','managed failure')",[testSecret,id]);}
+ assert.deepEqual((await query('select status,prior_requeues from public.qa_repair_requests')).rows[0],{status:'blocked',prior_requeues:3});await assert.rejects(grant());
+});
+for(const [name,change]of[
+ ['pending publication',"update public.qa_candidates set status='error'"],
+ ['missing finish',"update public.qa_candidates set finished_at=null"],
+ ['no settled result',"delete from public.qa_package_results"],
+ ['wrong outcome',"update public.qa_package_results set outcome='Passed'"],
+ ['wrong installer',"update public.qa_package_results set installer_sha256=repeat('C',64)"],
+ ['wrong profile',"update public.qa_package_results set package_profile_sha256=repeat('D',64)"],
+ ['wrong app',"update public.qa_package_results set winget_id='Other.App'"],
+ ['wrong version',"update public.qa_package_results set tested_version='2'"],
+ ['wrong architecture',"update public.qa_package_results set architecture='x86'"],
+])await test(name+' retains the publication guard',async()=>{await settledFailure();await sql(change);await sql('savepoint denied_grant');await assert.rejects(grant());await sql('rollback to savepoint denied_grant');assert.equal((await query('select prior_requeues from public.qa_repair_requests')).rows[0].prior_requeues,1);});
+
+await pg.close();assert.equal(passed.length,39);
 }, 30000);
