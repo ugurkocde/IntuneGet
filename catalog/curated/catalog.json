@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-13T23:19:23.492Z",
-    "expiresAt": "2026-10-20T23:19:23.492Z",
+    "generatedAt": "2026-10-14T00:53:21.500Z",
+    "expiresAt": "2026-10-21T00:53:21.500Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -5678,10 +5678,92 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscodium/e439c1fccd810652dabc7c91.json"
           }
         }
+      },
+      {
+        "id": "chrome:c05e56943aab23a0cc996ac7",
+        "candidate": {
+          "appId": "chrome",
+          "version": "155.0.8059.80",
+          "installerUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://chromeenterprise.google/browser/",
+          "discoveredAt": "2026-10-13T21:18:47.509Z",
+          "id": "c05e56943aab23a0cc996ac7"
+        },
+        "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+        "executionProfileSha256": "E06B25D70A5171386BE713EF71D195FFF7223FC37409830794D9DCDB845AF904",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-14T00:53:21.500Z",
+        "evidence": {
+          "verifiedAt": "2026-10-14T00:36:55.7117884Z",
+          "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+          "installerVersion": "155.0.8059.80",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/c05e56943aab23a0cc996ac7.json",
+          "signature": {
+            "publisher": "Google LLC",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "89749b74ca6bdbf5f0d1a608c625cf98a5c43860",
+            "websiteCommit": "40a89667693db5398f259f89583c4312530a4c54",
+            "runId": "38490287431",
+            "runAttempt": 1,
+            "artifactId": "11862091065",
+            "artifactSha256": "f7366825cb23d0c3c3f6ad17c55b0a021197c55c794b7195660c766f7000e920"
+          },
+          "security": {
+            "suspicious": 0,
+            "status": "clean",
+            "malicious": 0,
+            "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+            "scanner": "defender",
+            "engineVersion": "1.1.26080.3",
+            "scannedAt": "2026-10-14T00:35:36.7248351Z",
+            "signatureVersion": "1.459.691.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/c05e56943aab23a0cc996ac7.json"
+          },
+          "qa": {
+            "candidateId": "c05e56943aab23a0cc996ac7",
+            "testedAt": "2026-10-14T00:36:49.9279713Z",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionProfileSha256": "E06B25D70A5171386BE713EF71D195FFF7223FC37409830794D9DCDB845AF904",
+            "architecture": "x64",
+            "testLevel": "psadt-package",
+            "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+            "executionContext": "LocalSystem",
+            "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+            "installerVersion": "155.0.8059.80",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: Google Chrome is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/c05e56943aab23a0cc996ac7.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "8xPaG0p8yF5+q3r0NxlUsJAqnAmn/7h6jllp5iALN7PppxuP+Zt3iG+lRqt3WRPWXsveDLI+0lQMcF2j+f8ABw=="
+  "signature": "ZzHJraBexU+gKdB3/nlcjU6mwzzrHAibTMReALXIWWzsyxMj4amCQg/gNiUxYs0AV7OuusVFQRkI9n9hCMlqCA=="
 }

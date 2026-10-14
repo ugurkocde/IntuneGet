@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "40a89667693db5398f259f89583c4312530a4c54",
+    "runAttempt": "1",
+    "runId": "38490287431",
+    "workflowCommit": "89749b74ca6bdbf5f0d1a608c625cf98a5c43860",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "chrome",
+    "version": "155.0.8059.80",
+    "installerUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://chromeenterprise.google/browser/",
+    "discoveredAt": "2026-10-13T21:18:47.509Z",
+    "id": "c05e56943aab23a0cc996ac7"
+  },
+  "previous": null,
+  "inspection": {
+    "current": {
+      "candidateId": "c05e56943aab23a0cc996ac7",
+      "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+      "sourceUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+      "finalOrigin": "https://dl.google.com",
+      "signature": {
+        "publisher": "Google LLC",
+        "status": "valid"
+      },
+      "security": {
+        "suspicious": 0,
+        "status": "clean",
+        "malicious": 0,
+        "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "scannedAt": "2026-10-14T00:35:36.7248351Z",
+        "signatureVersion": "1.459.691.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "c05e56943aab23a0cc996ac7",
+    "packageId": "IntuneGet.Curated.Chrome",
+    "installerUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+    "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Chrome",
+      "displayName": "Google Chrome",
+      "publisher": "Google LLC",
+      "version": "155.0.8059.80",
+      "architecture": "x64",
+      "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Google Chrome",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Chrome\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"155.0.8059.80\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Chrome\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"155.0.8059.80\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "E06B25D70A5171386BE713EF71D195FFF7223FC37409830794D9DCDB845AF904",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Chrome\",\"publisher\":\"IntuneGet QA\",\"version\":\"155.0.8059.80\",\"wingetId\":\"IntuneGet.Curated.Chrome\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"155.0.8059.80\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Chrome\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"0F8F5EA4FECAB917642ABC3102DB5EE7C864FAEB2E30FF9765669825EC8BA2F9\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"2734DC5577DCBAB49BE037E5A074AEF9948FACA14453B52DEFB01224C196A3F5\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Google Chrome\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"155.0.8059.80\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Chrome\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"8031423B505B5D8E64CEFC896E39F50DF78789FD628350BDCE06E28513E85682\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"665d6f4ec65d457edbd455605a54b4b223392457\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "8031423b505b5d8e64cefc896e39f50df78789fd628350bdce06e28513e85682",
+    "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+    "approvalRequired": true
+  },
+  "qa": {
+    "candidateId": "c05e56943aab23a0cc996ac7",
+    "testedAt": "2026-10-14T00:36:49.9279713Z",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionProfileSha256": "E06B25D70A5171386BE713EF71D195FFF7223FC37409830794D9DCDB845AF904",
+    "architecture": "x64",
+    "testLevel": "psadt-package",
+    "installerSha256": "2734dc5577dcbab49be037e5a074aef9948faca14453b52defb01224c196a3f5",
+    "executionContext": "LocalSystem",
+    "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+    "installerVersion": "155.0.8059.80",
+    "upgrade": {
+      "tested": false
+    }
+  },
+  "verifiedAt": "2026-10-14T00:36:55.7117884Z",
+  "authenticatedArtifact": {
+    "id": 11862091065,
+    "sha256": "f7366825cb23d0c3c3f6ad17c55b0a021197c55c794b7195660c766f7000e920"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-14T00:53:21.500Z",
+    "unsignedException": null,
+    "upgradeException": "Automated policy: Google Chrome is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+  }
+}
