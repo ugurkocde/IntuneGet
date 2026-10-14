@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isValidInstallerUrl } from '@/lib/custom-app';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { assertCuratedInstaller } from '@/lib/curated-catalog/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -450,6 +451,9 @@ export async function enforceInstallerPreflight(
   }
   if (input.sourceType === 'custom' || input.wingetId.startsWith('Custom.')) {
     if (isCuratedPackageId(input.wingetId)) throw new InstallerPreflightError('CURATED_RELEASE_UNAVAILABLE', 'Curated releases cannot use custom installer validation.');
+    if (!isValidInstallerUrl(input.installerUrl)) {
+      throw new InstallerPreflightError('INVALID_INSTALLER_URL', 'Custom installer URLs must use HTTPS.');
+    }
     return { cacheKey: '', status: 'skipped', source: 'custom' };
   }
   if (isHostedRuntime() && !getHealthClient()) {

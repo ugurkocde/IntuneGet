@@ -78,10 +78,10 @@ export function buildCustomWingetId(publisher: string, displayName: string): str
   return `Custom.${publisherSlug}.${nameSlug}`;
 }
 
-export function isValidInstallerUrl(value: string): boolean {
+export function isValidInstallerUrl(value: string, { allowHttp = false }: { allowHttp?: boolean } = {}): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === 'https:' || (allowHttp && parsed.protocol === 'http:');
   } catch {
     return false;
   }
@@ -116,7 +116,7 @@ export function buildCustomAppCartItem(input: CustomAppInput): CustomAppCartItem
     throw new Error('Display name, publisher, and version are required');
   }
   if (!isValidInstallerUrl(installerUrl)) {
-    throw new Error('Installer URL must be a valid http(s) URL');
+    throw new Error('Installer URL must be a valid HTTPS URL');
   }
   if (sha256 && !isValidSha256(sha256)) {
     throw new Error('SHA256 must be a 64-character hexadecimal string');

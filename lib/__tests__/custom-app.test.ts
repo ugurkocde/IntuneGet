@@ -52,9 +52,15 @@ describe('buildCustomWingetId', () => {
 });
 
 describe('isValidInstallerUrl', () => {
-  it('should accept http and https URLs', () => {
+  it('should accept HTTPS installer URLs and reject plain HTTP', () => {
     expect(isValidInstallerUrl('https://example.com/setup.exe')).toBe(true);
-    expect(isValidInstallerUrl('http://example.com/setup.msi')).toBe(true);
+    expect(isValidInstallerUrl('http://example.com/setup.msi')).toBe(false);
+  });
+
+  it('preserves HTTP validation only for explicitly allowed catalog inputs', () => {
+    expect(isValidInstallerUrl('http://example.com/setup.msi', { allowHttp: true })).toBe(true);
+    expect(isValidInstallerUrl('https://example.com/setup.msi', { allowHttp: true })).toBe(true);
+    expect(isValidInstallerUrl('ftp://example.com/setup.msi', { allowHttp: true })).toBe(false);
   });
 
   it('should reject non-http(s) schemes and malformed URLs', () => {
@@ -217,6 +223,9 @@ describe('buildCustomAppCartItem', () => {
   });
 
   it('should reject invalid installer URLs', () => {
+    expect(() =>
+      buildCustomAppCartItem(validInput({ installerUrl: 'http://example.com/setup.exe' }))
+    ).toThrow(/HTTPS/i);
     expect(() =>
       buildCustomAppCartItem(validInput({ installerUrl: 'ftp://example.com/setup.exe' }))
     ).toThrow(/Installer URL/);
