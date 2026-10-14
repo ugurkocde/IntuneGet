@@ -135,6 +135,11 @@ async function acquireViaClientSecret(tenantId: string): Promise<AppTokenResult>
   const errorCode: string | undefined = errorData.error;
   const errorDescription: string = errorData.error_description || '';
 
+  // Tenant errors can also use invalid_client; classify their specific code first.
+  if (/\bAADSTS(?:7000229|700016|65001)\b/.test(errorDescription)) {
+    return { ok: false, error: 'consent_not_granted', errorCode, errorDescription };
+  }
+
   // Server misconfiguration: invalid or expired client secret.
   if (
     errorCode === 'invalid_client' ||

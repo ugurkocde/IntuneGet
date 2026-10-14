@@ -5,10 +5,14 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getLiveInstallers } from '@/lib/manifest-api';
 import {
   hashRemoteInstaller,
+  probeInstallerSource,
+  type InstallerSourceDiagnostic,
   hashesEqual,
   InstallerDownloadDeadlineError,
+  InstallerDownloadSizeLimitError,
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
+import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import { normalizeQaInstallerType } from '@/lib/qa/candidate';
 import { resolveApplicationInstallerSelectionScope } from '@/lib/packaging-adapters';
 import type { NormalizedInstaller } from '@/types/winget';
@@ -16,6 +20,7 @@ import type { NormalizedInstaller } from '@/types/winget';
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
+const SIZE_LIMIT_TTL_MS = 24 * 60 * 60 * 1000;
 const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
 const PREFLIGHT_CACHE_SCHEMA_VERSION = '4';
 const LEASE_SECONDS = 240;
@@ -80,6 +85,7 @@ let healthClient: SupabaseClient | null | undefined;
 export function resetInstallerPreflightStateForTests(): void {
   memoryHealth.clear();
   inFlight.clear();
+  diagnosticInFlight.clear();
   healthClient = undefined;
 }
 
@@ -154,7 +160,7 @@ function throwForRow(row: InstallerHealthRow): never {
   throw new InstallerPreflightError(
     row.reason_code || 'INSTALLER_QUARANTINED',
     row.reason_message || 'This installer tuple is quarantined and cannot be dispatched',
-    row.status === 'error' && !['MANIFEST_CHANGED', 'MANIFEST_UNAVAILABLE'].includes(row.reason_code || ''),
+    row.status === 'error' && !['MANIFEST_CHANGED', 'MANIFEST_UNAVAILABLE', 'INSTALLER_TOO_LARGE'].includes(row.reason_code || ''),
     row.actual_sha256 || undefined,
   );
 }
@@ -377,6 +383,15 @@ async function performLivePreflight(
       bytes: downloaded.bytes,
     };
   } catch (error) {
+    if (error instanceof InstallerDownloadSizeLimitError) {
+      const normalized = new InstallerPreflightError('INSTALLER_TOO_LARGE', error.message, false);
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
+        reason_code: normalized.code,
+        reason_message: normalized.message,
+        expires_at: new Date(Date.now() + SIZE_LIMIT_TTL_MS).toISOString(),
+      }));
+      throw normalized;
+    }
     if (error instanceof InstallerPreflightError && !error.retryable) throw error;
 
     const normalized = error instanceof InstallerPreflightError
@@ -469,4 +484,36 @@ export async function quarantineInstaller(
     reason_code: reasonCode,
     reason_message: reasonMessage,
   }));
+}
+
+export interface InstallerSourceCheck {
+  probed: boolean;
+  reason?: string;
+  diagnostic?: InstallerSourceDiagnostic;
+}
+const diagnosticInFlight = new Map<string, Promise<InstallerSourceCheck>>();
+/** Read-only diagnosis: no lease, health acceptance, hash change or dispatch. */
+export async function diagnoseInstallerSource(input: InstallerPreflightRequest): Promise<InstallerSourceCheck> {
+  assertTrustedInput(input);
+  if (isCuratedPackageId(input.wingetId) || input.sourceType === 'curated' || input.sourceType === 'custom' || input.wingetId.startsWith('Custom.')) return { probed: false, reason: 'source_not_supported' };
+  if (isHostedRuntime() && !getHealthClient()) return { probed: false, reason: 'health_unavailable' };
+  const key = createInstallerHealthKey(input);
+  const existing = diagnosticInFlight.get(key);
+  if (existing) return existing;
+  if (diagnosticInFlight.size >= 4) return { probed: false, reason: 'diagnostic_busy' };
+  const operation = (async (): Promise<InstallerSourceCheck> => {
+    try {
+      const row = await readHealth(key);
+      if (row?.status === 'quarantined') return { probed: false, reason: 'quarantined' };
+      if (row?.status === 'checking' && row.lease_expires_at && Date.parse(row.lease_expires_at) > Date.now()) return { probed: false, reason: 'preflight_in_progress' };
+      const trustedUrl = input.manifestInstallerUrl || input.installerUrl;
+      if (input.installerUrl !== applyInstallerUrlOverride(input.wingetId, input.version, input.architecture || 'x64', trustedUrl)) return { probed: false, reason: 'source_changed' };
+      const installers = await getLiveInstallers(input.wingetId, input.version);
+      if (!installers.length) return { probed: false, reason: 'manifest_unavailable' };
+      if (!installerExistsInManifest(input, installers)) return { probed: false, reason: 'manifest_changed' };
+      return { probed: true, diagnostic: await probeInstallerSource(input.installerUrl) };
+    } catch { return { probed: false, reason: 'diagnostic_unavailable' }; }
+  })().finally(() => diagnosticInFlight.delete(key));
+  diagnosticInFlight.set(key, operation);
+  return operation;
 }

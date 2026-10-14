@@ -7,6 +7,7 @@ const {
   detectWingetChangesMock,
   resolveManifestMock,
   resolveDependenciesMock,
+  adoptRepairMock,
 } = vi.hoisted(() => ({
   getPackageCompatibilityBlockMock: vi.fn(),
   createServerClientMock: vi.fn(),
@@ -14,9 +15,14 @@ const {
   detectWingetChangesMock: vi.fn(),
   resolveManifestMock: vi.fn(),
   resolveDependenciesMock: vi.fn().mockResolvedValue([]),
+  adoptRepairMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
+vi.mock('@/lib/qa/repair-adoption', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/qa/repair-adoption')>(),
+  adoptRepairCurrentCandidate: adoptRepairMock,
+}));
 vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
 vi.mock('@/lib/qa/winget-changes', () => ({ detectWingetChanges: detectWingetChangesMock }));
 vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
@@ -397,6 +403,7 @@ beforeEach(() => {
     rateLimitedUntil: null,
   });
   resolveDependenciesMock.mockResolvedValue([]);
+  adoptRepairMock.mockReset().mockResolvedValue({outcome:'adopted',candidateId:'prepared'});
 });
 
 afterEach(() => {
@@ -406,6 +413,25 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-enqueue', () => {
+  it('adopts one repair before any poll or catalog scan', async () => {
+    const { client,pollRunInserts,candidateInserts }=createSupabaseStub({requiredPackagerCommit:QA_PSADT_TOOLCHAIN.packagerCommit});
+    createServerClientMock.mockReturnValue(client);
+    const response=await GET(cronRequest('?repair=22222222-2222-4222-8222-222222222222'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({outcome:'adopted',candidateId:'prepared'});
+    expect(adoptRepairMock).toHaveBeenCalledWith(client,expect.anything(),'22222222-2222-4222-8222-222222222222');
+    expect(pollRunInserts).toEqual([]);expect(candidateInserts).toEqual([]);expect(detectWingetChangesMock).not.toHaveBeenCalled();
+  });
+  it.each(['?repair=invalid','?repair=22222222-2222-4222-8222-222222222222&id=Example.App','?repair=22222222-2222-4222-8222-222222222222&ids=Example.App','?repair=22222222-2222-4222-8222-222222222222&repair=33333333-3333-4333-8333-333333333333'])('rejects ambiguous repair request %s before database access',async search=>{
+    const response=await GET(cronRequest(search));expect(response.status).toBe(400);expect(createServerClientMock).not.toHaveBeenCalled();expect(adoptRepairMock).not.toHaveBeenCalled();
+  });
+  it('does not inherit paused targeted recovery in repair mode',async()=>{
+    const {client,pollRunInserts}=createSupabaseStub({paused:true});createServerClientMock.mockReturnValue(client);
+    await GET(cronRequest('?repair=22222222-2222-4222-8222-222222222222'));expect(adoptRepairMock).not.toHaveBeenCalled();expect(pollRunInserts).toEqual([]);
+  });
+  it('retains authorization for repair mode',async()=>{
+    const response=await GET(new Request('https://example.test/api/cron/qa-enqueue?repair=22222222-2222-4222-8222-222222222222'));expect(response.status).toBe(401);expect(createServerClientMock).not.toHaveBeenCalled();expect(adoptRepairMock).not.toHaveBeenCalled();
+  });
   it('resumes a persisted cursor and stops after two bounded pages', async () => {
     const pages = [0, 1].map(page => Array.from({ length: 100 }, (_, index) =>
       profileCandidate({ id: `current-${page}-${index}`, wingetId: `Page${page}.App${String(index).padStart(3, '0')}`,

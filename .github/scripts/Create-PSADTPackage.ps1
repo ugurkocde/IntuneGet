@@ -2488,6 +2488,47 @@ $lines = @(
     "    DeployAppScriptVersion = '$psadtVersion'"
     '}'
     ''
+    'function Write-IntuneGetRegistrationEvidence'
+    '{'
+    '    param($Application, [ValidateSet(''install'', ''uninstall'')] [string]$Stage)'
+    '    # Advisory enums and booleans only. Never emit registry values, names, arguments or paths.'
+    '    try {'
+    '        $registry = ''unknown'''
+    '        $registryPath = [string]$Application.PSPath'
+    '        if ($registryPath -match ''(?i)HKEY_LOCAL_MACHINE\\'') {'
+    '            $registry = if ($registryPath -match ''(?i)\\WOW6432Node\\'') { ''machine32'' } else { ''machine64'' }'
+    '        } elseif ($registryPath -match ''(?i)HKEY_USERS\\S-1-5-18\\'') { $registry = ''system-user'' }'
+    '        elseif ($registryPath -match ''(?i)HKEY_(?:CURRENT_USER|USERS)\\'') { $registry = ''user'' }'
+    '        $view = if ($null -eq $Application.Is64BitApplication) { ''unknown'' } elseif ($Application.Is64BitApplication) { ''x64'' } else { ''x86'' }'
+    '        function Get-RegisteredPathEvidence($Value, $Type) {'
+    '            $path = [string]$Value'
+    '            if ([string]::IsNullOrWhiteSpace($path)) { return ''absent'' }'
+    '            # Refuse UNC, provider, device and relative paths; do not expand or derive alternatives.'
+    '            if ($path -notmatch ''^[A-Za-z]:\\'' -or $path -match ''[\x00-\x1f]'') { return ''unsupported'' }'
+    '            if ($path.Length -gt 1024 -or ([System.IO.DriveInfo]::new($path.Substring(0, 3))).DriveType -ne [System.IO.DriveType]::Fixed) { return ''unsupported'' }'
+    '            $placement = if ($path -match ''(?i)\\config\\systemprofile\\'') { ''sysprof'' } else { ''local'' }'
+    '            $parts = $path.Substring(3).Split([char]''\'', [System.StringSplitOptions]::RemoveEmptyEntries)'
+    '            if ($parts.Count -gt 32 -or @($parts | Where-Object { $_ -in @(''.'', ''..'') -or $_.Contains('':'') }).Count) { return ''unsupported'' }'
+    '            $parent = $path.Substring(0, 3)'
+    '            foreach ($part in $parts) {'
+    '                $parent = Join-Path $parent $part'
+    '                try { $item = Get-Item -LiteralPath $parent -Force -ErrorAction Stop } catch [System.Management.Automation.ItemNotFoundException] { return "$($placement):missing" } catch { return ''unknown'' }'
+    '                if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { return ''unsupported'' }'
+    '            }'
+    '            $exists = ''unknown'''
+    '            try { $exists = if (Test-Path -LiteralPath $path -PathType $Type -ErrorAction Stop) { ''exists'' } else { ''missing'' } } catch { }'
+    '            return "$($placement):$exists"'
+    '        }'
+    '        $uninstall = Get-RegisteredPathEvidence $Application.UninstallStringFilePath ''Leaf'''
+    '        $quiet = Get-RegisteredPathEvidence $Application.QuietUninstallStringFilePath ''Leaf'''
+    '        $location = Get-RegisteredPathEvidence $Application.InstallLocation ''Container'''
+    '        Write-ADTLogEntry -Message "Registration evidence: stage=$Stage registry=$registry view=$view uninstall=$uninstall quiet=$quiet location=$location" -Source ''RegistrationEvidence'''
+    '    } catch {'
+    '        # Diagnostic access or logging failures must never change the lifecycle result.'
+    '        try { Write-ADTLogEntry -Message "Registration evidence: stage=$Stage unavailable" -Source ''RegistrationEvidence'' } catch { }'
+    '    }'
+    '}'
+    ''
     'function Install-ADTDeployment'
     '{'
     '    [CmdletBinding()]'
@@ -2833,7 +2874,12 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                         ''
                         '    # Safely stage every portable archive entry before replacing the installed app'
                         $portableInstallPathLine
-                        '    $portableStageDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_Portable_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
+                        '    $installParent = [System.IO.Path]::GetDirectoryName($installPath)'
+                        '    $null = New-Item -Path $installParent -ItemType Directory -Force'
+                        '    if ((Get-Item -LiteralPath $installParent).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {'
+                        '        throw "Portable install parent must not be a reparse point."'
+                        '    }'
+                        '    $portableStageDir = [System.IO.Path]::Combine($installParent, "IntuneGet_Portable_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
                         '    $replacementStarted = $false'
                         '    try {'
                         '        $null = New-Item -Path $portableStageDir -ItemType Directory -Force'
@@ -2875,8 +2921,9 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                         )
                     }
                     $lines += @(
-                        '        $installParent = [System.IO.Path]::GetDirectoryName($installPath)'
-                        '        if ($installParent) { $null = New-Item -Path $installParent -ItemType Directory -Force }'
+                        '        if ((Test-Path -LiteralPath $installPath) -and ((Get-Item -LiteralPath $installPath).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {'
+                        '            throw "Portable install destination must not be a reparse point."'
+                        '        }'
                         '        $replacementStarted = $true'
                         '        if (Test-Path -LiteralPath $installPath) { Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction Stop }'
                         '        Move-Item -LiteralPath $portableStageDir -Destination $installPath -Force'
@@ -3475,6 +3522,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         '        $capturedUninstallKey = [string]$selectedApplications[0].PSChildName'
         '        $capturedUninstallName = [string]$selectedApplications[0].DisplayName'
         '        $capturedUninstallPublisher = [string]$selectedApplications[0].Publisher'
+        '        Write-IntuneGetRegistrationEvidence -Application $selectedApplications[0] -Stage install'
         '        Write-ADTLogEntry -Message "Captured vendor uninstall entry [$capturedUninstallName] ($capturedUninstallKey)." -Source ''Install-ADTDeployment'''
         '    } elseif ($multiProductInstallationVerified) {'
         '        Write-ADTLogEntry -Message "Verified reviewed multi-product installation from $($reviewedMultiProductMatches.Count) matching vendor registrations." -Source ''Install-ADTDeployment'''
@@ -3500,7 +3548,76 @@ if ($reviewedAppxInstallEvidenceConfigured) {
     )
 }
 
-if ($verifyInstall) {
+if (($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) -and
+    -not ($customInstallCommand -and -not $customInstallUsesPackagedInstaller)) {
+    $portableDeclaredPath = if ($isNestedPortable) { $NestedInstallerPath } elseif ($installerTypeLower -eq 'portable' -and $fileExtension -ne '.zip') { $installerFileName } else { '' }
+    $portableDeclaredPathEscaped = ConvertTo-PSSingleQuotedContent $portableDeclaredPath
+    $portableVerifyMachineLiteral = if ($IsUserScope) { '$false' } else { '$true' }
+    $lines += @($portableInstallPathLine,
+        "    `$portableDeclaredRelativePath = '$portableDeclaredPathEscaped'",
+        "    `$portableVerifyMachinePermissions = $portableVerifyMachineLiteral")
+    $lines += @'
+    $portableRoot = Get-Item -LiteralPath $installPath -ErrorAction Stop
+    if (-not $portableRoot.PSIsContainer -or ($portableRoot.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw 'Portable install directory must be a real directory.'
+    }
+    $portableItems = [System.Collections.Generic.List[System.IO.FileSystemInfo]]::new()
+    $portableItems.Add($portableRoot)
+    $portableDirectories = [System.Collections.Generic.Queue[string]]::new()
+    $portableDirectories.Enqueue($portableRoot.FullName)
+    while ($portableDirectories.Count -gt 0) {
+        foreach ($portableItem in @(Get-ChildItem -LiteralPath $portableDirectories.Dequeue() -Force -ErrorAction Stop)) {
+            if ($portableItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                throw 'Portable installed content must not contain reparse points.'
+            }
+            $portableItems.Add($portableItem)
+            if ($portableItem.PSIsContainer) { $portableDirectories.Enqueue($portableItem.FullName) }
+        }
+    }
+    if ($portableDeclaredRelativePath) {
+        $portableRootPrefix = $portableRoot.FullName.TrimEnd([char[]]@('\', '/')) + [System.IO.Path]::DirectorySeparatorChar
+        $portableDeclaredFile = [System.IO.Path]::GetFullPath((Join-Path $portableRoot.FullName $portableDeclaredRelativePath))
+        if (-not $portableDeclaredFile.StartsWith($portableRootPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath $portableDeclaredFile -PathType Leaf)) {
+            throw 'The declared portable executable was not installed inside its application directory.'
+        }
+    } elseif (@($portableItems | Where-Object { -not $_.PSIsContainer }).Count -eq 0) {
+        throw 'The portable archive did not install any files.'
+    }
+    if ($portableVerifyMachinePermissions) {
+        $portableUsersSid = 'S-1-5-32-545'
+        $portableBroadSids = @($portableUsersSid, 'S-1-5-11', 'S-1-1-0')
+        $portableRequiredRights = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+        $portableWriteRights = [System.Security.AccessControl.FileSystemRights]'Write,Delete,DeleteSubdirectoriesAndFiles,ChangePermissions,TakeOwnership'
+        foreach ($portableItem in $portableItems) {
+            $portableAcl = Get-Acl -LiteralPath $portableItem.FullName -ErrorAction Stop
+            $portableUserRights = [System.Security.AccessControl.FileSystemRights]0
+            foreach ($portableRule in $portableAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+                if (-not $portableRule.IsInherited) { throw 'Portable content must inherit destination permissions.' }
+                $portableRuleSid = $portableRule.IdentityReference.Value
+                if ($portableRuleSid -in $portableBroadSids) {
+                    if ($portableRule.AccessControlType -eq 'Allow' -and ($portableRule.FileSystemRights -band $portableWriteRights)) {
+                        throw 'Portable destination must not grant standard users write access.'
+                    }
+                    if ($portableRule.AccessControlType -eq 'Deny' -and ($portableRule.FileSystemRights -band $portableRequiredRights)) {
+                        throw 'Portable destination denies standard user read or execute access.'
+                    }
+                    if ($portableRuleSid -eq $portableUsersSid -and $portableRule.AccessControlType -eq 'Allow') {
+                        $portableUserRights = $portableUserRights -bor $portableRule.FileSystemRights
+                    }
+                }
+            }
+            if (($portableUserRights -band $portableRequiredRights) -ne $portableRequiredRights) {
+                throw 'Portable destination must allow standard users read and execute access.'
+            }
+        }
+    }
+    Write-ADTLogEntry -Message 'Verified portable installed files and destination permissions.' -Source 'Install-ADTDeployment'
+
+'@ -split "\r?\n"
+}
+
+if ($verifyInstall -and -not ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive)) {
     Write-Host "Post-install verification enabled"
     if ($reviewedAppxInstallEvidenceConfigured) {
         $lines += @(
@@ -3753,12 +3870,52 @@ if ($useManagedDirectoryLifecycle) {
             '    }'
             '    if (Test-Path -LiteralPath $managedInstallDirectory) {'
             '        Write-ADTLogEntry -Message "Starting reviewed managed uninstaller [$managedUninstallExecutable]." -Source ''Uninstall-ADTDeployment'''
-            '        $null = Start-ADTProcess -FilePath $managedUninstallExecutable -ArgumentList $managedUninstallArguments -WindowStyle Hidden -NoWait -PassThru'
+            '        $managedUninstallHandle = Start-ADTProcess -FilePath $managedUninstallExecutable -ArgumentList $managedUninstallArguments -WindowStyle Hidden -NoWait -PassThru'
+            '        $managedUninstallLaunchUtc = [DateTime]::UtcNow'
+            '        $managedUninstallNextHeartbeat = $managedUninstallLaunchUtc.AddSeconds(30)'
             "        `$managedUninstallDeadline = [DateTime]::UtcNow.AddMinutes($reviewedManagedUninstallTimeoutMinutes)"
+            '        $managedUninstallReadExit = {'
+            '            $exited = $false'
+            '            $exitCode = ''none'''
+            '            try {'
+            '                $exited = [bool]$managedUninstallHandle.Task.IsCompleted'
+            '                if ($exited) { $exitCode = [string]$managedUninstallHandle.Task.GetAwaiter().GetResult().ExitCode }'
+            '            } catch { $exitCode = ''unknown'' }'
+            '            @{ Exited = $exited; ExitCode = $exitCode }'
+            '        }'
             '        while ((Test-Path -LiteralPath $managedUninstallCompletionTarget) -and [DateTime]::UtcNow -lt $managedUninstallDeadline) {'
+            '            $managedUninstallNow = [DateTime]::UtcNow'
+            '            if ($managedUninstallNow -ge $managedUninstallNextHeartbeat) {'
+            '                $elapsedSec = [int][Math]::Floor(($managedUninstallNow - $managedUninstallLaunchUtc).TotalSeconds)'
+            '                $remainingSec = [int][Math]::Max(0, [Math]::Ceiling(($managedUninstallDeadline - $managedUninstallNow).TotalSeconds))'
+            '                $state = & $managedUninstallReadExit'
+            '                $launchedExited = $state.Exited'
+            '                $launchedExitCode = $state.ExitCode'
+            '                try { Write-ADTLogEntry -Message "Reviewed managed uninstall still waiting: elapsedSec=$elapsedSec remainingSec=$remainingSec launchedExited=$launchedExited launchedExitCode=$launchedExitCode" -Source ''Uninstall-ADTDeployment'' } catch {}'
+            '                $managedUninstallNextHeartbeat = [DateTime]::UtcNow.AddSeconds(30)'
+            '            }'
             '            Start-Sleep -Seconds 5'
             '        }'
             '        if (Test-Path -LiteralPath $managedUninstallCompletionTarget) {'
+            '            $elapsedSec = [int][Math]::Floor(([DateTime]::UtcNow - $managedUninstallLaunchUtc).TotalSeconds)'
+            '            $state = & $managedUninstallReadExit'
+            '            $launchedExited = $state.Exited'
+            '            $launchedExitCode = $state.ExitCode'
+            '            $exe = ''unknown'''
+            '            $entries = ''n/a'''
+            '            $procs = ''unavailable'''
+            '            try { $exe = Test-Path -LiteralPath $managedUninstallExecutable -PathType Leaf -ErrorAction Stop } catch {}'
+            '            try {'
+            '                if (Test-Path -LiteralPath $managedUninstallCompletionTarget -PathType Container) {'
+            '                    $count = @(Get-ChildItem -LiteralPath $managedUninstallCompletionTarget -Force -ErrorAction Stop | Select-Object -First 101).Count'
+            '                    $entries = if ($count -gt 100) { ''100+'' } else { [string]$count }'
+            '                }'
+            '            } catch { $entries = ''unknown'' }'
+            '            try {'
+            '                $prefix = $managedInstallDirectory.TrimEnd(''\'') + ''\'''
+            '                $procs = [string]@(Get-CimInstance Win32_Process -OperationTimeoutSec 15 -ErrorAction Stop | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }).Count'
+            '            } catch {}'
+            '            try { Write-ADTLogEntry -Message "Reviewed managed uninstall deadline: elapsedSec=$elapsedSec launchedExited=$launchedExited launchedExitCode=$launchedExitCode exe=$exe entries=$entries procs=$procs" -Severity 3 -Source ''Uninstall-ADTDeployment'' } catch {}'
             '            throw "The reviewed managed uninstaller did not remove [$managedUninstallCompletionTarget] before the completion deadline."'
             '        }'
             '        Write-ADTLogEntry -Message "Reviewed managed uninstall completed for [$managedUninstallCompletionTarget]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
@@ -3916,6 +4073,7 @@ if ($useManagedDirectoryLifecycle) {
             '    # Prefer an exact registered vendor removal helper while it exists. Retain the hash-verified'
             '    # packaged bundle as a durable fallback for disposable per-account Package Cache entries.'
             '    $registeredApplication = $installedApps[0]'
+            '    Write-IntuneGetRegistrationEvidence -Application $registeredApplication -Stage uninstall'
             '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
             '    $registeredUninstallProperty = if (-not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)) {'
             '        ''QuietUninstallString'''
@@ -4030,6 +4188,7 @@ if ($useManagedDirectoryLifecycle) {
     } else {
         $lines += @(
             '    $registeredApplication = $installedApps[0]'
+            '    Write-IntuneGetRegistrationEvidence -Application $registeredApplication -Stage uninstall'
             "    `$registeredInstallerType = '$(ConvertTo-PSSingleQuotedContent $registeredInstallerTypeLower)'"
             '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
             '    $capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {'

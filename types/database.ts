@@ -23,6 +23,12 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      qa_installer_security_holds: {
+        Row: { sha256: string; malicious_verdicts: number; reason: string; first_held_at: string; verdict_at: string; next_check_at: string; checked_at: string | null; released_at: string | null; recheck_lease: string | null; recheck_lease_expires_at: string | null };
+        Insert: { sha256: string; malicious_verdicts: number; first_held_at?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
+        Update: { malicious_verdicts?: number; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
+        Relationships: GenericRelationship[];
+      };
       qa_automation_state: {
         Row: { id: string; value: Json; updated_at: string };
         Insert: { id: string; value: Json; updated_at?: string };
@@ -1000,6 +1006,7 @@ export interface Database {
           presentation_profile_sha256: string | null;
           qa_candidate_id: string | null;
           qa_requested_at: string | null;
+          qa_resume_due_at: string;
           qa_completed_at: string | null;
         };
         Insert: {
@@ -1052,6 +1059,7 @@ export interface Database {
           presentation_profile_sha256?: string | null;
           qa_candidate_id?: string | null;
           qa_requested_at?: string | null;
+          qa_resume_due_at?: string;
           qa_completed_at?: string | null;
         };
         Update: {
@@ -1104,6 +1112,7 @@ export interface Database {
           presentation_profile_sha256?: string | null;
           qa_candidate_id?: string | null;
           qa_requested_at?: string | null;
+          qa_resume_due_at?: string;
           qa_completed_at?: string | null;
         };
         Relationships: GenericRelationship[];
@@ -2619,6 +2628,13 @@ export interface Database {
       };
     };
     Functions: {
+      next_qa_curated_security_eligible: { Args: Record<string, never>; Returns: Json };
+      qa_installer_security_waiting_errors: { Args: Record<string, never>; Returns: Json };
+      qa_curated_installer_security_held: { Args: { p_inputs: Json }; Returns: boolean };
+      refresh_qa_installer_security_holds: { Args: Record<string, never>; Returns: number };
+      record_qa_installer_security_refusal: { Args: { p_candidate_id: string; p_run_id: string; p_sha256: string; p_malicious: number; p_observed_at: string }; Returns: undefined };
+      claim_qa_installer_security_rechecks: { Args: { p_secret: string; p_candidate_id: string; p_limit: number }; Returns: Json };
+      complete_qa_installer_security_recheck: { Args: { p_secret: string; p_sha256: string; p_lease: string; p_malicious: number; p_suspicious: number; p_total_engines: number; p_analyzed_at: string }; Returns: boolean };
       begin_qa_live_curated_session: {
         Args: { p_app_id: string; p_version: string; p_architecture: string; p_upgrade_planned: boolean; p_host_custom_config: boolean; p_run_id: number | string; p_run_attempt: number };
         Returns: Json;
@@ -2646,6 +2662,10 @@ export interface Database {
       claim_qa_work: {
         Args: { p_kind: 'ordinary' | 'curated'; p_id: string; p_packager_commit: string };
         Returns: Json;
+      };
+      qa_retest_grant_eligible: {
+        Args: { p_candidate_id: string };
+        Returns: boolean;
       };
       qa_toolchain_backfill_page: {
         Args: { p_after?: string; p_limit?: number; p_terminal_retry_ids?: string[] };

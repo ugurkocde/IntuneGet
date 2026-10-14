@@ -82,6 +82,17 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('dispatches authored catalog detection rules with the matching QA identity', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const rules = [{ type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Test_App', valueName: 'Version', detectionType: 'version', operator: 'equal', detectionValue: '0.9.0' }];
+    const inputs = workflowInputs({ sourceType: 'winget', detectionRules: JSON.stringify(rules), psadtConfig: JSON.stringify({ customDetection: true, detectionRules: rules }) });
+    await triggerPackagingWorkflow(inputs, config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.parse(payload.client_payload.config.detectionRules)).toEqual(rules);
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({ customDetection: true, detectionRules: rules });
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ packageProfileSha256: buildQaPackageIdentityFromWorkflowInput({ ...inputs, detectionRules: payload.client_payload.config.detectionRules, psadtConfig: payload.client_payload.config.psadtConfig }).packageProfileSha256 }));
+  });
   it.each(['MSIX_UNINSTALL:{PACKAGE_NAME}', ' MSIX_UNINSTALL:{PACKAGE_NAME} '])(
     'replaces the generated MSIX identity placeholder %s with trusted manifest identity',
     async (uninstallCommand) => {

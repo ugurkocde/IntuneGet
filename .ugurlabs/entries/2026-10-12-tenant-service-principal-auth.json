@@ -1,0 +1,5 @@
+{
+  "title": "Show tenant consent guidance for missing applications",
+  "summary": "When Microsoft reports that an application is missing from a tenant, consent verification now directs the administrator to complete consent instead of reporting a server credential problem.",
+  "type": "fixed"
+}

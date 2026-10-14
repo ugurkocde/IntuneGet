@@ -1,5 +1,0 @@
-{
-  "title": "Keep custom configurations aligned with curated releases",
-  "summary": "Rebuild carried custom configurations against each signed curated release before requesting verification, so version detection and approval hashes agree while earlier audit results remain intact.",
-  "type": "fixed"
-}

@@ -26,6 +26,16 @@ export const msalConfig: Configuration = {
         if (containsPii) {
           return;
         }
+        // MSAL catches missing browser storage during SSR and uses memory storage.
+        // Keep browser errors and every other server diagnostic visible.
+        if (
+          typeof window === "undefined" &&
+          level === LogLevel.Error &&
+          !/[\r\n]/.test(message) &&
+          /^\[[^\]]*\] : \[\] : @azure\/msal-browser@\d+\.\d+\.\d+ : Error - ReferenceError: window is not defined$/.test(message)
+        ) {
+          return;
+        }
         switch (level) {
           case LogLevel.Error:
             console.error(message);
