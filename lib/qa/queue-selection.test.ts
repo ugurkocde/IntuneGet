@@ -9,6 +9,7 @@ vi.mock('@/lib/qa/live-session-data', () => ({ loadQaLiveCuratedSnapshot: async 
 vi.mock('@/lib/qa/github-actions-health', () => ({ getGitHubActionsHealth: async () => ({ operational: true }) }));
 vi.mock('@/lib/qa/github-actions-waiting-runs', () => ({ cancelStaleWaitingQaRuns: async () => [] }));
 vi.mock('@/lib/qa/github-actions-run-status', () => ({ isQaWorkflowRunCompleted: async () => false }));
+vi.mock('@/lib/qa/github-live-qa-inventory', () => ({ readLiveQaInventory: async () => ({ state: 'complete', inventory: { total_count: 0, workflow_runs: [] } }) }));
 import { GET } from '@/app/api/cron/qa-dispatch/route';
 import { getQaLiveSnapshot } from './live';
 import { buildQaPackageIdentity } from './package-profile';
