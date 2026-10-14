@@ -25,6 +25,7 @@ it('adopts only an inert, current exact tuple without resetting repair history',
     await pg.exec(read('../../supabase/migrations/20261011075101_qa_guarded_diagnostic_retests.sql'));
     const migrations = fs.readdirSync(new URL('../../supabase/migrations/', root)).filter(name => (name.endsWith('_qa_repair_current_profile_adoption.sql') || name.endsWith('_qa_deployment_profile_adoption.sql')));
     for (const migration of migrations) await pg.exec(read('../../supabase/migrations/' + migration));
+    await pg.exec(read('../../supabase/migrations/20261014222100_qa_terminal_failure_retest_guards.sql'));
     const old = '11111111-1111-4111-8111-111111111111', current = '33333333-3333-4333-8333-333333333333', repair = '22222222-2222-4222-8222-222222222222';
     const sha = 'A'.repeat(64), pin = 'b'.repeat(40);
     const canonical = JSON.stringify({ toolchain: { packagerCommit: pin } });
@@ -49,12 +50,24 @@ it('adopts only an inert, current exact tuple without resetting repair history',
       assert.equal((await pg.query('select public.qa_retest_grant_eligible($1) as ok',[current])).rows[0].ok,true);
       assert.equal((await pg.query('select count(*)::int as n from public.qa_package_blocks')).rows[0].n,1);
     } finally { await pg.exec('rollback'); }
+    await pg.exec('begin');
+    try {
+      await seed();const priorCanonical=JSON.stringify({toolchain:{packagerCommit:'c'.repeat(40)}});
+      const priorProfile=crypto.createHash('sha256').update(priorCanonical).digest('hex').toUpperCase();
+      await pg.query("update public.qa_candidates set status='failed',phase='publishing',package_profile_sha256=$2,test_config=$3 where id=$1",[old,priorProfile,{scope:'machine',profileKind:'catalog-default',packageProfileCanonicalJson:priorCanonical,packageProfileSha256:priorProfile}]);
+      await pg.query("insert into public.qa_package_results(winget_id,tested_version,architecture,installer_sha256,package_profile_sha256,outcome,tested_at_utc) values('Example.App','1','x64',$1,$2,'Failed',now())",[sha,priorProfile]);
+      assert.equal((await call()).rows[0].id,current);
+      assert.equal((await pg.query('select prior_requeues from public.qa_repair_requests')).rows[0].prior_requeues,2);
+      assert.equal((await pg.query('select count(*)::int as n from public.qa_retest_grants')).rows[0].n,0);
+      assert.equal((await pg.query('select count(*)::int as n from public.qa_package_blocks')).rows[0].n,1);
+    } finally { await pg.exec('rollback'); }
     const denials = [
       "update public.qa_repair_requests set prior_requeues=3",
       "update public.qa_repair_requests set status='blocked'",
       "update public.qa_repair_requests set failure_class='security'",
       "delete from public.qa_package_blocks",
-      "update public.qa_candidates set phase='publishing' where id='"+old+"'",
+      "update public.qa_candidates set status='error',phase='publishing' where id='"+old+"'",
+      "update public.qa_candidates set status='failed',phase='publishing' where id='"+old+"'",
       "update public.qa_candidates set status='queued' where id='"+old+"'",
       "update public.qa_candidates set installer_sha256=repeat('C',64) where id='"+current+"'",
       "update public.qa_candidates set installer_url='https://example.test/changed' where id='"+current+"'",
