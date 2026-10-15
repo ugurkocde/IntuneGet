@@ -4,6 +4,8 @@
  */
 
 import Database from 'better-sqlite3';
+import type { PackageAssignment, IntuneAppCategorySelection } from '@/types/upload';
+import type { Json } from '@/types/database';
 import type { SavedCustomAppDefinition } from '@/lib/custom-app-definitions';
 import type { Database as HostedSchema } from '@/types/database';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
@@ -118,6 +120,32 @@ function buildSetClause(
   }
   return { clause: assignments.join(', '), values };
 }
+
+/** Merge settings against the current row while holding the local write lock. */
+export const sqliteDeployedConfig = {
+  mergeFields(
+    id: string,
+    identity: { userId: string; tenantId: string; wingetId: string; intuneAppId: string },
+    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[] }
+  ): PackagingJob | null {
+    const database = getDb();
+    const where = "id = ? AND user_id = ? AND tenant_id = ? AND winget_id = ? AND intune_app_id = ? AND status = 'deployed' AND archived_at IS NULL";
+    const values = [id, identity.userId, identity.tenantId, identity.wingetId, identity.intuneAppId];
+    return database.transaction(() => {
+      const row = database.prepare(`SELECT * FROM packaging_jobs WHERE ${where}`).get(...values) as Record<string, unknown> | undefined;
+      if (!row) return null;
+      const job = parseJobRow(row);
+      const config = job.package_config;
+      if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+      const merged = { ...config };
+      if (patch.assignments !== undefined) merged.assignments = patch.assignments as unknown as Json;
+      if (patch.categories !== undefined) merged.categories = patch.categories as unknown as Json;
+      const result = database.prepare(`UPDATE packaging_jobs SET package_config = ?, updated_at = ? WHERE ${where}`)
+        .run(JSON.stringify(merged), new Date().toISOString(), ...values);
+      return result.changes === 1 ? { ...job, package_config: merged } : null;
+    }).immediate();
+  },
+};
 
 type MappingRow = HostedSchema['public']['Tables']['manual_app_mappings']['Row'];
 type LocalMappingInput = Pick<MappingRow, 'discovered_app_name' | 'discovered_publisher' | 'winget_package_id'> & { tenant_id: string; created_by: string };

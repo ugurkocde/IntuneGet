@@ -172,17 +172,10 @@ export async function PATCH(
           .eq('id', latestJob.id);
       }
     } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig)) {
-      const updatedConfig: Record<string, Json | undefined> = { ...localConfig };
-      if (assignments) updatedConfig.assignments = assignments as unknown as Json;
-      if (categories) updatedConfig.categories = categories as unknown as Json;
-      const saved = await localDb.jobs.update(localJob.id, { package_config: updatedConfig as Json }, {
-        user_id: user.userId,
-        tenant_id: tenantId,
-        winget_id: wingetId,
-        intune_app_id: intuneAppId,
-        status: 'deployed',
-        archived_at: null,
-      });
+      const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');
+      const saved = sqliteDeployedConfig.mergeFields(localJob.id, {
+        userId: user.userId, tenantId, wingetId: wingetId!, intuneAppId,
+      }, { assignments, categories });
       if (!saved) {
         return NextResponse.json(
           { error: 'Intune settings were updated, but the local deployment changed before they could be saved. Refresh the deployment before trying again.' },

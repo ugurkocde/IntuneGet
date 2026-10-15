@@ -15,7 +15,7 @@ vi.mock('@/lib/intune-api', () => ({
   getApp: async () => ({ displayName: 'Fixture app', rules: [] }),
   convertToGraphAssignments: (assignments: unknown) => assignments,
   assignToGroups: async (...args: unknown[]) => {
-    state.assign(...args);
+    await state.assign(...args);
     if (state.graphFails) throw new Error('Fixture Graph failure');
   },
   syncAppCategories: state.categories, setAppRules: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock('@/lib/db', async () => {
   return { getDatabase: () => sqliteDb, isSqliteMode: () => true };
 });
 
-import { sqliteDb, closeSqliteDb } from '@/lib/db/sqlite';
+import { sqliteDb, closeSqliteDb, sqliteDeployedConfig } from '@/lib/db/sqlite';
 import { PATCH } from './route';
 import { GET } from '../../deployed/config/route';
 
@@ -57,6 +57,42 @@ describe('deployed settings persistence with SQLite', () => {
       headers: { Authorization: 'Bearer fixture' },
     }));
     expect(await reopened.json()).toMatchObject({ config: { ...original, assignments }, intuneAppId: 'fixture-app' });
+  });
+
+  it('keeps concurrent assignment and category edits after both Graph calls complete', async () => {
+    const job = await create();
+    const categories = [{ id: 'new-category' }];
+    let releaseAssign!: () => void;
+    let enteredAssign!: () => void;
+    const entered = new Promise<void>(resolve => { enteredAssign = resolve; });
+    state.assign.mockImplementationOnce(() => {
+      enteredAssign();
+      return new Promise<void>(resolve => { releaseAssign = resolve; });
+    });
+    const first = call();
+    await entered;
+    expect((await call({ wingetId: 'Fixture.App', categories })).status).toBe(200);
+    releaseAssign();
+    expect((await first).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, assignments, categories });
+  });
+
+  it('refuses a save if local configuration becomes invalid during Graph work', async () => {
+    const job = await create();
+    state.assign.mockImplementationOnce(() => { void sqliteDb.jobs.update(job.id, { package_config: [] }); });
+    expect((await call()).status).toBe(409);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual([]);
+  });
+
+  it('reads the requested older app and never falls back for an unknown app ID', async () => {
+    await create({ intune_app_id: 'older-app', created_at: '2026-01-01T00:00:00Z' });
+    await create({ intune_app_id: 'newer-app', created_at: '2026-02-01T00:00:00Z' });
+    await call(undefined, 'older-app');
+    const get = (id: string) => GET(new NextRequest(`http://localhost/api/intune/apps/deployed/config?wingetId=Fixture.App&intuneAppId=${id}`, {
+      headers: { Authorization: 'Bearer fixture' },
+    }));
+    expect(await (await get('older-app')).json()).toMatchObject({ intuneAppId: 'older-app', config: { ...original, assignments } });
+    expect(await (await get('unknown-app')).json()).toEqual({ intuneAppId: null, config: null, deployedAt: null });
   });
 
   it('persists categories and explicit empty assignments', async () => {
@@ -118,7 +154,7 @@ describe('deployed settings persistence with SQLite', () => {
 
   it('returns an error if the local write fails after the Graph operation', async () => {
     const job = await create();
-    const update = vi.spyOn(sqliteDb.jobs, 'update').mockRejectedValueOnce(new Error('Fixture storage failure'));
+    const update = vi.spyOn(sqliteDeployedConfig, 'mergeFields').mockImplementationOnce(() => { throw new Error('Fixture storage failure'); });
     try { expect((await call()).status).toBe(500); }
     finally { update.mockRestore(); }
     expect(state.assign).toHaveBeenCalledOnce();
@@ -171,7 +207,7 @@ describe('deployed settings persistence with SQLite', () => {
 
   it('reports when a guarded update no longer matches the deployed job', async () => {
     const job = await create();
-    const update = vi.spyOn(sqliteDb.jobs, 'update').mockResolvedValueOnce(null);
+    const update = vi.spyOn(sqliteDeployedConfig, 'mergeFields').mockReturnValueOnce(null);
     try {
       const response = await call();
       expect(response.status).toBe(409);
