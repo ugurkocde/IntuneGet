@@ -29,10 +29,15 @@ function portableJob(verifyInstall: boolean): PackagingJob {
   };
 }
 
-function executeSyntheticInstall(verifyInstall: boolean, verifyPermissions: boolean, usersRights = 'ReadAndExecute') {
+function executeSyntheticInstall(verifyInstall: boolean, verifyPermissions: boolean, usersRights = 'ReadAndExecute', nestedPath: string | null = 'portable.exe') {
   const parent = realpathSync(tmpdir());
   const root = mkdtempSync(join(parent, 'intuneget-portable-contract-'));
   const job = portableJob(verifyInstall);
+  job.package_config = {
+    nestedInstallerType: 'portable',
+    ...(nestedPath === null ? {} : { nestedInstallerPath: nestedPath }),
+    psadtConfig: { verifyInstall },
+  };
   const install = generator.getInstallCommand.call(generator, job, 'portable.zip', '');
   const verification = verifyPermissions ? '' :
     generator.getPostInstallVerificationBlock.call(generator, job, job.display_name);
@@ -109,6 +114,14 @@ Write-Output 'SYNTHETIC_PORTABLE_OK'
 }
 
 describe('portable installation verification and inherited permissions', () => {
+  it.runIf(process.platform === 'win32').each([null, '', '   ', 'portable.exe'])(
+    'keeps local portable extraction valid with nested path %s', (nestedPath) => {
+      const result = executeSyntheticInstall(true, false, 'ReadAndExecute', nestedPath);
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('SYNTHETIC_PORTABLE_OK');
+    },
+  );
   it.runIf(process.platform === 'win32').each([false, true])(
     'verifies the actual extracted portable file without requiring ARP, verifyInstall=%s',
     (verifyInstall) => {

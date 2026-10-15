@@ -1618,9 +1618,11 @@ $registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip' -and
 
 $isNestedPortable = $installerTypeLower -eq 'zip' -and
     -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
-    $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable'
+    $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable' -and
+    -not [string]::IsNullOrWhiteSpace($NestedInstallerPath)
 $isPlainPortableArchive = $installerTypeLower -eq 'zip' -and
-    [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
+    ([string]::IsNullOrWhiteSpace($NestedInstallerType) -or
+        $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable') -and
     [string]::IsNullOrWhiteSpace($NestedInstallerPath)
 
 $portableFolderName = ($DisplayName -replace '[<>:"/\\|?*\x00-\x1f]', '_').Trim().TrimEnd('.')
