@@ -266,7 +266,7 @@ export class JobProcessor {
    * when the server refuses the request outright.
    */
   private async downloadFile(url: string, destPath: string): Promise<void> {
-    const fetch = (await import('node-fetch')).default;
+    const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     let response = await fetch(url);
 
     if (response.status === 403 || response.status === 406) {

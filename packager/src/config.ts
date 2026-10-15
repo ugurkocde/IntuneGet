@@ -7,10 +7,12 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from './logger.js';
+import { ProxyRouting } from './proxy-routing.js';
 
 const logger = createLogger('Config');
 
 export interface PackagerConfig {
+  proxy?: ProxyRouting;
   // Unique identifier for this packager instance
   packagerId: string;
 
@@ -98,6 +100,7 @@ export function loadConfig(): PackagerConfig {
   const requireSupabase = mode === 'supabase';
 
   const config: PackagerConfig = {
+    proxy: new ProxyRouting(process.env),
     packagerId: getEnvVar('PACKAGER_ID') || generatePackagerId(),
 
     mode,

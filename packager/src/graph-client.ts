@@ -6,6 +6,7 @@
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { ManagedIdentityCredential, type TokenCredential } from '@azure/identity';
 import { PackagerConfig } from './config.js';
+import { ProxyMsalNetwork } from './proxy-msal.js';
 import { createLogger, Logger } from './logger.js';
 
 const GRAPH_ENDPOINT = 'https://graph.microsoft.com/beta';
@@ -38,6 +39,8 @@ export class GraphClient {
         : new ManagedIdentityCredential();
     } else {
       this.msalClient = new ConfidentialClientApplication({
+        ...(config.proxy?.agentFor(new URL(`https://login.microsoftonline.com/${tenantId}`))
+          ? { system: { networkClient: new ProxyMsalNetwork(config.proxy) } } : {}),
         auth: {
           clientId: config.azure.clientId,
           clientSecret: config.azure.clientSecret,
@@ -97,7 +100,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
+    const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -126,7 +129,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
+    const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -162,7 +165,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
+    const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
@@ -198,7 +201,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
+    const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {

@@ -2,6 +2,7 @@ import fetch, { type RequestInfo, type RequestInit } from 'node-fetch';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { Agent } from 'node:http';
+import { Readable } from 'node:stream';
 
 function hostname(value: string): string {
   return value.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
@@ -53,7 +54,15 @@ export class ProxyRouting {
     if (!proxy || bypasses(url, this.exclusions)) return undefined;
     let agent = this.agents.get(protocol);
     if (!agent) {
-      agent = protocol === 'https:' ? new HttpsProxyAgent(proxy) : new HttpProxyAgent(proxy);
+      // Agent constructors can include their URL in opt-in debug output.
+      // Keep credentials out of that URL and supply them only as a proxy header.
+      const endpoint = new URL(proxy);
+      const authorization = endpoint.username || endpoint.password
+        ? 'Basic ' + Buffer.from(decodeURIComponent(endpoint.username) + ':' + decodeURIComponent(endpoint.password)).toString('base64') : undefined;
+      endpoint.username = '';
+      endpoint.password = '';
+      const options = { headers: () => authorization ? { 'Proxy-Authorization': authorization } : {} };
+      agent = protocol === 'https:' ? new HttpsProxyAgent(endpoint, options) : new HttpProxyAgent(endpoint, options);
       this.agents.set(protocol, agent);
     }
     return agent;
@@ -67,6 +76,25 @@ export class ProxyRouting {
     // The callback is evaluated for every redirect, including a protocol change.
     return fetch(input, this.enabled ? { ...init, agent: this.agentFor } : init);
   }
+
+  /** Fetch adapter for JSON API clients that use the platform Fetch types. */
+  readonly webFetch: typeof globalThis.fetch = async (input, init) => {
+    if (!this.enabled) return globalThis.fetch(input, init);
+    const request = new Request(input, init);
+    const response = await this.fetch(request.url, {
+      method: request.method,
+      headers: Array.from(request.headers.entries()),
+      signal: request.signal,
+      redirect: request.redirect,
+      body: request.body === null ? undefined : Buffer.from(await request.arrayBuffer()),
+    });
+    const noBody = request.method === 'HEAD' || [204, 205, 304].includes(response.status);
+    return new Response(!noBody && response.body ? Readable.toWeb(response.body as Readable) as ReadableStream<Uint8Array> : null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Array.from(response.headers.entries()),
+    });
+  };
 
   close(): void {
     for (const agent of this.agents.values()) agent.destroy();
