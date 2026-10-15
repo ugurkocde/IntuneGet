@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { char, summarizePowerShell, type PowerShellAstSummary } from '@/lib/__tests__/powershell-ast-helper';
 
@@ -187,6 +187,79 @@ function expectExactEmbedding(
 const value = (variant: Variant, field: string, adversarial: string) =>
   variant === 'benign' ? `${field} plain` : `${field} ${adversarial}`;
 const collapse = (text: string) => text.replace(/[\r\n]+/g, ' ').trim();
+
+// Execute only the emitted portable staging block, ending at its outer try AST.
+// Registry registration and the rest of the deployment script never execute.
+function executeHostedPortableArchive(script: string, shell: string) {
+  const parent = realpathSync(tmpdir());
+  const root = mkdtempSync(join(parent, 'intuneget-portable-staging-'));
+  const quote = (text: string) => text.replaceAll("'", "''");
+  writeFileSync(join(root, 'generated.ps1'), script);
+  try {
+    const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', `
+$ErrorActionPreference = 'Stop'
+$fixtureRoot = '${quote(root)}'
+$env:ProgramFiles = Join-Path $fixtureRoot 'program-files'
+$source = Join-Path $fixtureRoot 'source'
+$null = New-Item -ItemType Directory -Path $source,$env:ProgramFiles
+$tools = New-Item -ItemType Directory -Path (Join-Path $source 'tools')
+Set-Content -LiteralPath (Join-Path $tools.FullName 'tool.exe') -Value 'inert fixture, never executed'
+$installerPath = Join-Path $fixtureRoot 'fixture.zip'
+Compress-Archive -LiteralPath $tools.FullName -DestinationPath $installerPath
+$text = Get-Content -LiteralPath (Join-Path $fixtureRoot 'generated.ps1') -Raw
+$tokens = $null; $parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$parseErrors)
+if ($parseErrors.Count) { throw 'Generated portable script did not parse' }
+$start = $text.IndexOf('# Safely stage every portable archive entry before replacing the installed app')
+if ($start -lt 0) { throw 'Generated portable staging block missing' }
+$outerTry = @($ast.FindAll({ param($node)
+    $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.StartOffset -gt $start
+},$true) | Sort-Object { $_.Extent.StartOffset })[0]
+if (-not $outerTry) { throw 'Generated portable staging try missing' }
+$block = $text.Substring($start,$outerTry.Extent.EndOffset-$start)
+function Write-ADTLogEntry { param($Message,$Severity,$Source) }
+function Start-ADTProcess { throw 'Portable payload must never execute' }
+& ([scriptblock]::Create($block))
+$expected = Join-Path $env:ProgramFiles 'Portable Fixture\\tools\\tool.exe'
+if (-not (Test-Path -LiteralPath $expected -PathType Leaf)) { throw 'Inert archive was not fully extracted' }
+if ((Get-Content -LiteralPath $expected -Raw).Trim() -ne 'inert fixture, never executed') { throw 'Inert file changed' }
+'SYNTHETIC_HOSTED_PORTABLE_OK'
+`], { env: windowsPowerShellEnv, encoding: 'utf8', timeout: 30_000 });
+    return result;
+  } finally {
+    const target = realpathSync(root);
+    if (!target.startsWith(resolve(parent) + sep) || !target.split(sep).at(-1)?.startsWith('intuneget-portable-staging-')) {
+      throw new Error('Unsafe portable staging fixture cleanup');
+    }
+    rmSync(target, { recursive: true, force: true });
+  }
+}
+
+describe.runIf(canRunHostedPackager)('hosted nested portable metadata', () => {
+  it.each([undefined, '', '   ', 'tools/tool.exe'])(
+    'safely extracts an inert archive with nested path %s', (nestedInstallerPath) => {
+      const generated = runHostedPackager({
+        installerType: 'zip', installerFileName: 'fixture.zip', displayName: 'Portable Fixture',
+        publisher: 'Synthetic', version: '1.0.0', wingetId: 'Example.Portable',
+        silentSwitches: '', uninstallCommand: '', nestedInstallerType: 'portable', nestedInstallerPath,
+      });
+      // Execute first: the broken empty-path case must fail on the actual leaf check.
+      for (const shell of powershell51Available ? ['pwsh', 'powershell.exe'] : ['pwsh']) {
+        const result = executeHostedPortableArchive(generated.script, shell);
+        expect(result.error).toBeUndefined();
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toContain('SYNTHETIC_HOSTED_PORTABLE_OK');
+      }
+      if (nestedInstallerPath?.trim()) {
+        expect(generated.script).toContain('$declaredNestedPath');
+        expect(generated.script).toContain('Nested installer path escapes the portable staging directory');
+        expect(generated.script).toContain('Nested installer not found in archive');
+      } else {
+        expect(generated.script).not.toContain('$declaredNestedPath');
+      }
+    }, 90_000,
+  );
+});
 
 describe.runIf(canRunHostedPackager)('hosted PSADT generator string encoding', () => {
   it('embeds application identity, uninstall command and UI text exactly', () => {
