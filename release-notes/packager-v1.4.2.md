@@ -4,7 +4,7 @@ This update brings configurable proxy routing and packaging tool integrity check
 
 ## Proxy support
 
-`HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` configure the packager's Node request paths, including polling, client credential authentication, Microsoft Graph, downloads and Azure block uploads. TLS certificate validation remains enabled. Restart the service after changing its environment. Set both proxy variables when HTTP and HTTPS destinations need different routes.
+`HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` configure the packager's Node request paths, including polling, client credential authentication, Microsoft Graph, installer downloads and Azure block uploads. TLS certificate validation remains enabled. Restart the service after changing its environment. `HTTPS_PROXY` covers HTTPS destinations, including most packager traffic. `HTTP_PROXY` covers plain HTTP destinations. These settings are independent; set both when both destination types need a proxy.
 
 Lowercase proxy variables take precedence when nonempty. `NO_PROXY` supports hostnames, optional ports and `*`; CIDR ranges and Negotiate or Kerberos proxy authentication are not supported. Managed identity retains its existing Azure SDK credential path.
 
@@ -16,7 +16,7 @@ Tool versions and expected hashes are unchanged. A mismatch does not authorize s
 
 ## Dependency maintenance
 
-The packager includes the reviewed Supabase client 2.117.3 and UUID 14.0.2 updates, plus Node type definitions 26.6.4 for development. This release does not update the Azure Identity or MSAL dependencies.
+The packager includes the reviewed Supabase client 2.117.3 and UUID 14.0.2 updates, plus Node type definitions 26.6.4 for development. Proxy support uses the reviewed `http-proxy-agent` and `https-proxy-agent` 9.1.0 dependencies. This release does not update the Azure Identity or MSAL dependencies.
 
 ## Upgrade notes
 
@@ -27,7 +27,7 @@ npm install -g @ugurkocde/intuneget-packager@1.4.2
 intuneget-packager setup
 ```
 
-Existing installations need the pinned toolkit ZIP once so the packager can verify extracted files. Standalone setup uses PowerShell's existing download path, which may require separate proxy configuration on a proxy only network. Offline setup needs both the pinned executable and toolkit ZIP.
+Existing installations need the pinned toolkit ZIP once so the packager can verify extracted files. Packaging tool downloads during setup and the preliminary tool check before each job use PowerShell's existing download path when needed. They may require separate proxy configuration on a proxy only network, including for the first packaging job after an upgrade. Offline setup needs both the pinned executable and toolkit ZIP.
 
 A rejected cache is preserved. Restore the pinned content or set `TOOLS_DIR` to a fresh directory and run setup again. Use a directory outside linked or synced parent folders because reparse points are refused. Old toolkit layouts may need a fresh tools directory. Failed extraction staging is retained with a warning and is never used as the toolkit.
 
