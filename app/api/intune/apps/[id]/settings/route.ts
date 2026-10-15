@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerClientOrNull } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -156,6 +157,23 @@ export async function PATCH(
           .from('packaging_jobs')
           .update({ package_config: updatedConfig })
           .eq('id', latestJob.id);
+      }
+    } else if (wingetId && !supabase) {
+      const db = getDatabase();
+      // Match the row selected by the SQLite deployed-config reader.
+      const latestJob = (await db.jobs.getByUserId(user.userId)).find(
+        (job) => job.winget_id === wingetId && job.status === 'deployed'
+      );
+      const config = latestJob?.package_config;
+      if (latestJob && latestJob.tenant_id === tenantId && config && typeof config === 'object' && !Array.isArray(config)) {
+        const updatedConfig: Record<string, Json | undefined> = { ...config };
+        if (assignments) updatedConfig.assignments = assignments as unknown as Json;
+        if (categories) updatedConfig.categories = categories as unknown as Json;
+        await db.jobs.update(latestJob.id, { package_config: updatedConfig as Json }, {
+          user_id: user.userId,
+          tenant_id: tenantId,
+          status: 'deployed',
+        });
       }
     }
 

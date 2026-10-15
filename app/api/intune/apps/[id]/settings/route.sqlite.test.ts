@@ -1,0 +1,126 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { randomUUID } from 'node:crypto';
+
+const state = vi.hoisted(() => {
+  vi.stubEnv('DATABASE_PATH', ':memory:');
+  vi.stubEnv('DATABASE_MODE', 'sqlite');
+  return { authenticated: true, assign: vi.fn(), categories: vi.fn(), graphFails: false };
+});
+vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: async () => state.authenticated
+  ? { userId: 'fixture-owner', tenantId: 'fixture-tenant' } : null }));
+vi.mock('@/lib/supabase', () => ({ getServerClientOrNull: () => null }));
+vi.mock('@/lib/intune/graph-client', () => ({ getServicePrincipalToken: async () => 'fixture-token' }));
+vi.mock('@/lib/intune-api', () => ({
+  getApp: async () => ({ displayName: 'Fixture app', rules: [] }),
+  convertToGraphAssignments: (assignments: unknown) => assignments,
+  assignToGroups: async (...args: unknown[]) => {
+    state.assign(...args);
+    if (state.graphFails) throw new Error('Fixture Graph failure');
+  },
+  syncAppCategories: state.categories, setAppRules: vi.fn(),
+}));
+vi.mock('@/lib/requirement-rules', () => ({ buildCartItemRequirementRules: () => undefined }));
+vi.mock('@/lib/db', async () => {
+  const { sqliteDb } = await vi.importActual<typeof import('@/lib/db/sqlite')>('@/lib/db/sqlite');
+  return { getDatabase: () => sqliteDb, isSqliteMode: () => true };
+});
+
+import { sqliteDb, closeSqliteDb } from '@/lib/db/sqlite';
+import { PATCH } from './route';
+import { GET } from '../../deployed/config/route';
+
+const assignments = [{ type: 'allUsers', intent: 'available' }];
+const original = { assignments: [{ type: 'allUsers', intent: 'required' }], categories: [{ id: 'old-category' }], description: 'Keep this' };
+const call = (body: Record<string, unknown> = { wingetId: 'Fixture.App', assignments }) => PATCH(
+  new NextRequest('http://localhost/api/intune/apps/fixture-app/settings', {
+    method: 'PATCH', headers: { Authorization: 'Bearer fixture', 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }), { params: Promise.resolve({ id: 'fixture-app' }) });
+const create = async (overrides: Record<string, unknown> = {}) => {
+  const job = await sqliteDb.jobs.create({ id: randomUUID(), user_id: 'fixture-owner', tenant_id: 'fixture-tenant',
+    winget_id: 'Fixture.App', version: '1.0', display_name: 'Fixture app', installer_type: 'exe',
+    installer_url: 'https://fixture.invalid/app.exe', status: 'deployed', package_config: original, ...overrides });
+  await sqliteDb.jobs.update(job.id, { completed_at: '2026-01-01T00:00:00Z', intune_app_id: 'fixture-app', ...overrides });
+  return job;
+};
+
+describe('deployed settings persistence with SQLite', () => {
+  beforeEach(() => { closeSqliteDb(); vi.clearAllMocks(); state.authenticated = true; state.graphFails = false; });
+  afterAll(() => { closeSqliteDb(); vi.unstubAllEnvs(); });
+
+  it('persists the edited assignment intent and preserves other configuration', async () => {
+    const job = await create();
+    expect((await call()).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, assignments });
+    expect(state.assign).toHaveBeenCalledWith('fixture-token', 'fixture-app', assignments);
+    const reopened = await GET(new NextRequest('http://localhost/api/intune/apps/deployed/config?wingetId=Fixture.App', {
+      headers: { Authorization: 'Bearer fixture' },
+    }));
+    expect(await reopened.json()).toMatchObject({ config: { ...original, assignments }, intuneAppId: 'fixture-app' });
+  });
+
+  it('persists categories and explicit empty assignments', async () => {
+    const job = await create(); const categories = [{ id: 'new-category' }];
+    expect((await call({ wingetId: 'Fixture.App', assignments: [], categories })).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, assignments: [], categories });
+  });
+
+  it('does not persist when Graph rejects the edit', async () => {
+    const job = await create(); state.graphFails = true;
+    expect((await call()).status).toBe(500);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
+  it('requires authentication before Graph or database mutation', async () => {
+    const job = await create(); state.authenticated = false;
+    expect((await call()).status).toBe(401);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+    expect(state.assign).not.toHaveBeenCalled();
+  });
+
+  it('updates the newest created deployment that the config reader selects', async () => {
+    const older = await create({ created_at: '2026-01-01T00:00:00Z', completed_at: '2026-03-01T00:00:00Z' });
+    const newer = await create({ created_at: '2026-02-01T00:00:00Z', completed_at: '2026-02-01T00:00:00Z' });
+    expect((await call()).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(older.id))?.package_config).toEqual(original);
+    expect((await sqliteDb.jobs.getById(newer.id))?.package_config).toEqual({ ...original, assignments });
+  });
+
+  it('leaves another user, other applications, nondeployed and archived jobs unchanged', async () => {
+    const target = await create({ created_at: '2026-01-01T00:00:00Z' });
+    const others = await Promise.all([
+      create({ user_id: 'other-owner' }), create({ winget_id: 'Other.App' }),
+      create({ status: 'failed' }), create({ archived_at: '2026-01-02T00:00:00Z' }),
+    ]);
+    expect((await call()).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(target.id))?.package_config).toEqual({ ...original, assignments });
+    for (const job of others) expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
+  it('refuses to persist a selected deployment from another tenant', async () => {
+    const job = await create({ tenant_id: 'other-tenant' });
+    expect((await call()).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
+  it('preserves assignments when only categories change', async () => {
+    const job = await create(); const categories = [{ id: 'new-category' }];
+    expect((await call({ wingetId: 'Fixture.App', categories })).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, categories });
+  });
+
+  it('leaves local configuration unchanged without a package identity', async () => {
+    const job = await create();
+    expect((await call({ assignments })).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
+  it('returns an error if the local write fails after the Graph operation', async () => {
+    const job = await create();
+    const update = vi.spyOn(sqliteDb.jobs, 'update').mockRejectedValueOnce(new Error('Fixture storage failure'));
+    try { expect((await call()).status).toBe(500); }
+    finally { update.mockRestore(); }
+    expect(state.assign).toHaveBeenCalledOnce();
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+});
