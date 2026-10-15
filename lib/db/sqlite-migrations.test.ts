@@ -15,6 +15,20 @@ function columnNames(db: Database.Database, table: string): string[] {
 }
 
 describe('sqlite migrations', () => {
+  it('adds tenant mappings after version six without changing saved definitions', () => {
+    const db = new Database(':memory:');
+    for (const migration of MIGRATIONS.filter(migration => migration.version <= 6)) migration.up(db);
+    db.pragma('user_version = 6');
+    db.prepare('INSERT INTO custom_app_definitions (id, user_id, tenant_id, definition, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run('saved-fixture', 'user', 'tenant', '{"displayName":"Saved fixture"}', 'fixture', 'fixture');
+    runSqliteMigrations(db);
+    expect(getSqliteSchemaVersion(db)).toBe(7);
+    expect(db.prepare('SELECT definition FROM custom_app_definitions WHERE id = ?').get('saved-fixture')).toEqual({ definition: '{"displayName":"Saved fixture"}' });
+    const insert = db.prepare('INSERT INTO manual_app_mappings (id, tenant_id, created_by, discovered_app_name, winget_package_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    insert.run('mapping-one', 'tenant', 'user', 'fixture', 'Fixture.App', 'fixture', 'fixture');
+    expect(() => insert.run('mapping-two', 'tenant', 'user', 'fixture', 'Fixture.App', 'fixture', 'fixture')).toThrow(/UNIQUE/);
+    insert.run('mapping-three', 'other-tenant', 'user', 'fixture', 'Fixture.App', 'fixture', 'fixture');
+    db.close();
+  });
   it('creates every table and records the latest version on a fresh database', () => {
     const db = new Database(':memory:');
     runSqliteMigrations(db);
