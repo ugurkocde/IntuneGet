@@ -1,0 +1,5 @@
+{
+  "title": "Verify local packaging tools before use",
+  "summary": "Local packaging checks downloaded tools and cached toolkit files against pinned release hashes, refusing modified or incomplete caches before packaging continues.",
+  "type": "fixed"
+}

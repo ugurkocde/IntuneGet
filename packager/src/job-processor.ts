@@ -180,83 +180,55 @@ export class JobProcessor {
    * Ensure required tools are downloaded
    * This method is public to allow standalone tool setup without processing jobs
    */
-  async ensureToolsAvailable(): Promise<void> {
-    const toolsDir = this.config.paths.tools;
-    await fs.promises.mkdir(toolsDir, { recursive: true });
-
-    const intuneWinUtil = path.join(toolsDir, 'IntuneWinAppUtil.exe');
-    const psadtDir = path.join(toolsDir, 'PSAppDeployToolkit');
-
-    // A valid PSADT v4 template has Invoke-AppDeployToolkit.exe and the
-    // PSAppDeployToolkit module folder at its root. Packager versions before
-    // 1.2.0 extracted a v3-era layout (Toolkit/Deploy-Application.exe), so an
-    // existing folder is not enough - treat anything else as stale.
-    const isPsadtValid = () =>
-      fs.existsSync(path.join(psadtDir, 'Invoke-AppDeployToolkit.exe')) &&
-      fs.existsSync(path.join(psadtDir, 'PSAppDeployToolkit'));
-
-    if (fs.existsSync(psadtDir) && !isPsadtValid()) {
-      this.logger.warn('PSAppDeployToolkit folder has an outdated layout, re-downloading', {
-        psadtDir,
-      });
-      await fs.promises.rm(psadtDir, { recursive: true, force: true });
+  private toolManifest() {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'scripts', 'tool-manifest.json'), 'utf8')) as {
+      schemaVersion: number;
+      intuneWinAppUtil: {fileName:string;url:string;sha256:string};
+      psadtTemplate: {archiveName:string;extractDir:string;url:string;sha256:string};
+    };
+    if (manifest.schemaVersion !== 1 || manifest.intuneWinAppUtil?.fileName !== 'IntuneWinAppUtil.exe' ||
+        manifest.psadtTemplate?.archiveName !== 'PSAppDeployToolkit_Template_v4.zip' ||
+        manifest.psadtTemplate?.extractDir !== 'PSAppDeployToolkit' ||
+        [manifest.intuneWinAppUtil,manifest.psadtTemplate].some(tool =>
+          !/^[A-F0-9]{64}$/.test(tool.sha256) || !tool.url.startsWith('https://github.com/'))) {
+      throw new Error('Invalid packaging tool integrity manifest');
     }
-
-    // Check if tools exist
-    const intuneWinExists = fs.existsSync(intuneWinUtil);
-
-    if (!intuneWinExists || !fs.existsSync(psadtDir)) {
-      this.logger.info('Downloading required tools...');
-
-      // Run the download script
-      const scriptPath = path.join(__dirname, '..', 'scripts', 'download-tools.ps1');
-
-      // Check if script exists, if not use inline commands
-      if (!fs.existsSync(scriptPath)) {
-        await this.downloadToolsInline(toolsDir);
-      } else {
-        await this.runPowerShell(scriptPath, ['-ToolsDir', toolsDir]);
-      }
-    }
-
-    // Verify tools are now available
-    if (!fs.existsSync(intuneWinUtil)) {
-      throw new Error('IntuneWinAppUtil.exe not found after download');
-    }
-    if (!isPsadtValid()) {
-      throw new Error(
-        `PSAppDeployToolkit template is missing or incomplete at ${psadtDir}. ` +
-          'Delete the folder and run "intuneget-packager setup" to download it again.'
-      );
-    }
-
-    this.logger.debug('Tools verified', { toolsDir });
+    return manifest;
   }
 
-  /**
-   * Download tools without external script
-   */
+  private async verifyToolFile(file: string, expected: string): Promise<void> {
+    const stat = await fs.promises.lstat(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Tool integrity requires a regular file');
+    const actual = crypto.createHash('sha256').update(await fs.promises.readFile(file)).digest('hex');
+    if (actual.toUpperCase() !== expected.toUpperCase()) {
+      throw new Error('TOOL_HASH_MISMATCH: cached packaging tool differs from the pinned release; use a fresh tools directory or restore the pinned file');
+    }
+  }
+
+  async ensureToolsAvailable(): Promise<void> {
+    const toolsDir = this.config.paths.tools;
+    const manifest = this.toolManifest();
+    await fs.promises.mkdir(toolsDir, {recursive:true});
+    const exe = path.join(toolsDir,manifest.intuneWinAppUtil.fileName);
+    if (fs.existsSync(exe)) await this.verifyToolFile(exe,manifest.intuneWinAppUtil.sha256);
+    const script = path.join(__dirname,'..','scripts','download-tools.ps1');
+    if (fs.existsSync(script)) await this.runPowerShell(script,['-ToolsDir',toolsDir]);
+    else await this.downloadToolsInline(toolsDir);
+    await this.verifyToolFile(exe,manifest.intuneWinAppUtil.sha256);
+  }
+
+  /** The inline download path uses the same shipped toolkit verifier. */
   private async downloadToolsInline(toolsDir: string): Promise<void> {
-    // Download IntuneWinAppUtil
-    const intuneWinUrl = 'https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe';
-    const intuneWinPath = path.join(toolsDir, 'IntuneWinAppUtil.exe');
-
-    this.logger.info('Downloading IntuneWinAppUtil.exe...');
-    await this.downloadFile(intuneWinUrl, intuneWinPath);
-
-    // Download and extract PSAppDeployToolkit
-    const psadtUrl = 'https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip';
-    const psadtZipPath = path.join(toolsDir, 'psadt.zip');
-    const psadtDir = path.join(toolsDir, 'PSAppDeployToolkit');
-
-    this.logger.info('Downloading PSAppDeployToolkit...');
-    await this.downloadFile(psadtUrl, psadtZipPath);
-
-    // Extract using PowerShell
-    await this.runPowerShell(`Expand-Archive -Path '${psadtZipPath}' -DestinationPath '${psadtDir}' -Force`);
-
-    // Cleanup zip
-    await fs.promises.unlink(psadtZipPath);
+    const manifest = this.toolManifest();
+    const verifier = path.join(__dirname,'..','scripts','tool-integrity.ps1');
+    if (!fs.existsSync(verifier)) throw new Error('Packaging tool integrity verifier is missing; reinstall the packager');
+    const exe = path.join(toolsDir,manifest.intuneWinAppUtil.fileName);
+    const archive = path.join(toolsDir,manifest.psadtTemplate.archiveName);
+    if (!fs.existsSync(exe)) await this.downloadFile(manifest.intuneWinAppUtil.url,exe,manifest.intuneWinAppUtil.sha256);
+    await this.verifyToolFile(exe,manifest.intuneWinAppUtil.sha256);
+    if (!fs.existsSync(archive)) await this.downloadFile(manifest.psadtTemplate.url,archive,manifest.psadtTemplate.sha256);
+    await this.verifyToolFile(archive,manifest.psadtTemplate.sha256);
+    await this.runPowerShell(`$ErrorActionPreference = 'Stop'; . '${psSingleQuotedContent(verifier)}'; $manifest = Get-PackagerToolManifest; Initialize-VerifiedPsadt '${psSingleQuotedContent(toolsDir)}' $manifest`);
   }
 
   /**
@@ -265,7 +237,7 @@ export class JobProcessor {
    * browser User-Agent (and vice versa), so retry once with a browser UA
    * when the server refuses the request outright.
    */
-  private async downloadFile(url: string, destPath: string): Promise<void> {
+  private async downloadFile(url: string, destPath: string, expectedSha256?: string): Promise<void> {
     const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     let response = await fetch(url);
 
@@ -286,8 +258,16 @@ export class JobProcessor {
       throw new Error(`Failed to download ${url}: ${response.statusText}`);
     }
 
-    const buffer = await response.arrayBuffer();
-    await fs.promises.writeFile(destPath, Buffer.from(buffer));
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (expectedSha256) {
+      const actual = crypto.createHash('sha256').update(buffer).digest('hex');
+      if (actual.toUpperCase() !== expectedSha256.toUpperCase()) throw new Error('TOOL_HASH_MISMATCH: downloaded tool does not match the pinned release');
+      const temporary = destPath + '.part-' + crypto.randomUUID();
+      try {
+        await fs.promises.writeFile(temporary,buffer,{flag:'wx'});
+        await fs.promises.rename(temporary,destPath);
+      } finally { await fs.promises.unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
+    } else await fs.promises.writeFile(destPath,buffer);
   }
 
   /**
@@ -2513,7 +2493,7 @@ ${capturedIdentityValues}
     const outputDir = path.join(workDir, 'Output');
     await fs.promises.mkdir(outputDir, { recursive: true });
 
-    const intuneWinUtil = path.join(this.config.paths.tools, 'IntuneWinAppUtil.exe');
+    const cachedTool = path.join(this.config.paths.tools, 'IntuneWinAppUtil.exe');
 
     const setupFile = 'Invoke-AppDeployToolkit.exe';
     if (!fs.existsSync(path.join(packageDir, setupFile))) {
@@ -2525,12 +2505,22 @@ ${capturedIdentityValues}
 
     // Run IntuneWinAppUtil.exe. It reports some failures on stdout while still
     // exiting 0, so keep the output for diagnostics.
-    const toolOutput = await this.runProcess(intuneWinUtil, [
-      '-c', packageDir,
-      '-s', setupFile,
-      '-o', outputDir,
-      '-q', // Quiet mode
-    ]);
+    const toolDirectory = await fs.promises.mkdtemp(path.join(workDir,'verified-tool-'));
+    const intuneWinUtil = path.join(toolDirectory,'IntuneWinAppUtil.exe');
+    let toolOutput: string;
+    try {
+      await fs.promises.copyFile(cachedTool,intuneWinUtil,fs.constants.COPYFILE_EXCL);
+      await this.verifyToolFile(intuneWinUtil,this.toolManifest().intuneWinAppUtil.sha256);
+      toolOutput = await this.runProcess(intuneWinUtil, [
+        '-c', packageDir,
+        '-s', setupFile,
+        '-o', outputDir,
+        '-q',
+      ]);
+    } finally {
+      await fs.promises.unlink(intuneWinUtil).catch(error => { if (error.code !== 'ENOENT') throw error; });
+      await fs.promises.rmdir(toolDirectory);
+    }
 
     // Find the generated .intunewin file
     const files = await fs.promises.readdir(outputDir);

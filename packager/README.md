@@ -220,3 +220,11 @@ The configured route covers API and Supabase polling, MSAL client credential req
 `NO_PROXY` (or `no_proxy`) accepts comma or whitespace separated hostnames, optional ports, IPv6 addresses in brackets, and `*` for all hosts. A hostname also matches subdomains on a label boundary. `.example.com` and `*.example.com` have the same meaning as `example.com`. A specified port must match, including the default 80 or 443. CIDR ranges are not supported. The route is selected again on redirects.
 
 Basic proxy credentials may be supplied as percent encoded userinfo in the proxy URL. Keep that environment private. Plain HTTP proxy traffic is visible to the configured proxy; HTTPS destinations use CONNECT and retain TLS validation. Negotiate or Kerberos proxy authentication is not enabled. Avoid verbose network debug logging when credentials are configured.
+
+### Tool cache integrity
+
+Setup and every packaging job check IntuneWinAppUtil and the complete PSAppDeployToolkit cache against the pinned hashes in the shipped `scripts/tool-manifest.json`. These are the same versions and hashes used by the packaging workflow. A modified executable, extra or changed toolkit file, missing file, unsafe archive path or reparse point stops packaging before those tools are used.
+
+The packager retains the verified `PSAppDeployToolkit_Template_v4.zip` as the reference for checking extracted files. Existing installations download this archive once through the existing source URL. Offline setup needs both the pinned executable and the pinned archive. Manually supplied tools must match the pins. Microsoft changing its moving download does not authorize a new hash; a mismatch remains an error until a reviewed tool update.
+
+A rejected cache is left untouched. Restore the pinned files or configure a fresh tools directory and run setup again. Incomplete extraction staging is retained with a warning and is never used as a toolkit. The inline download path also requires the shipped integrity verifier; reinstall the packager if its scripts are missing. These checks assume the installed packager code and manifest are trusted; they do not protect against an attacker who can modify the packager itself.

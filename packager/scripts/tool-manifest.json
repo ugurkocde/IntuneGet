@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "intuneWinAppUtil": {
+    "fileName": "IntuneWinAppUtil.exe",
+    "url": "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe",
+    "sha256": "C1BA45B5CB939E84AF064BB7FF4B38FB3DFE33C8DC1078FD9B157672EAE671F6"
+  },
+  "psadtTemplate": {
+    "version": "4.1.8",
+    "archiveName": "PSAppDeployToolkit_Template_v4.zip",
+    "extractDir": "PSAppDeployToolkit",
+    "url": "https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip",
+    "sha256": "50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283"
+  }
+}
