@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { getDatabase, isSqliteMode } from '@/lib/db';
 import { matchDiscoveredApp, filterUserApps, isSystemApp, normalizeAppName } from '@/lib/matching/app-matcher';
 import { compareVersions } from '@/lib/version-compare';
 import { getServicePrincipalToken, invalidateServicePrincipalToken } from '@/lib/intune/graph-client';
@@ -327,6 +328,10 @@ export async function GET(request: NextRequest) {
       // cache (the service-principal token acquired next proves consent) and no
       // discovered-apps cache, so this always runs a live, cache-less scan.
       tenantId = user.tenantId;
+      const requestedTenant = request.headers.get('X-MSP-Tenant-Id');
+      if (isSqliteMode() && requestedTenant && requestedTenant !== tenantId) {
+        return NextResponse.json({ error: 'Not authorized to access other tenants' }, { status: 403 });
+      }
     }
 
     // Fetch fresh data from Graph API
@@ -532,8 +537,7 @@ export async function GET(request: NextRequest) {
     const now = new Date().toISOString();
     const unmanagedApps: UnmanagedApp[] = [];
 
-    // Get claimed apps + manual mappings. In sqlite mode there is no Supabase to
-    // query, so these stay empty: every app is unclaimed and auto-matched.
+    // Apply persisted tenant claims and manual mappings for either backend.
     const claimedMap = new Map<string, string>();
     const manualMappingMap = new Map<string, ManualMappingRow>();
 
@@ -555,6 +559,14 @@ export async function GET(request: NextRequest) {
 
       for (const m of manualMappings || []) {
         manualMappingMap.set(m.discovered_app_name.toLowerCase(), m);
+      }
+    } else if (isSqliteMode()) {
+      const { sqliteManualMappings } = await import('@/lib/db/sqlite');
+      for (const claim of await getDatabase().claimedApps.listByTenant(tenantId)) {
+        claimedMap.set(claim.discovered_app_id, claim.status);
+      }
+      for (const mapping of await sqliteManualMappings.list(tenantId)) {
+        manualMappingMap.set(mapping.discovered_app_name, mapping);
       }
     }
 
