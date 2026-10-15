@@ -1,0 +1,5 @@
+{
+  "title": "Portable archive metadata handling",
+  "summary": "Aligned the package generator's handling of missing nested portable paths with the local packager, while preserving validation for declared paths.",
+  "type": "fixed"
+}

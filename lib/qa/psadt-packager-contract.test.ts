@@ -21,6 +21,35 @@ import { JobProcessor } from '@/packager/src/job-processor';
 import type { PackagingJob } from '@/packager/src/job-poller';
 
 describe('bounded registration evidence', () => {
+  for (const shell of ['pwsh', 'powershell']) {
+    it.runIf(process.platform === 'win32')(`selects the ZDisk exact key and rejects WebView2 or duplicate keys in ${shell}`, () => {
+      const command = resolveApplicationUninstallCommand('YushengBeep.ZDiskCleanerPro', 'REGISTRY_UNINSTALL:ZDiskCleaner Pro');
+      const generated = generateRegistryUninstallPackage('nullsoft', 'ZDiskCleaner Pro', [], {}, [], 'YushengBeep.ZDiskCleanerPro', 'ZDiskCleaner Pro', '3.0.0', command, '/S');
+      const identity = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identity).toContain("'ZDiskCleanerPro'");
+      expect(selection).toBeDefined();
+      const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', `
+${identity}
+$zdisk = [pscustomobject]@{ PSChildName = 'ZDiskCleanerPro'; DisplayName = 'ZDiskCleanerPro'; Publisher = 'zdiskcleaner'; DisplayVersion = '3.0.0'; WindowsInstaller = $false }
+$edge = [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; DisplayName = 'Microsoft Edge WebView2 Runtime'; Publisher = 'Microsoft Corporation'; DisplayVersion = '154.0.4258.62'; WindowsInstaller = $false }
+$changedApplications = @($zdisk, $edge)
+${selection}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].PSChildName -ne 'ZDiskCleanerPro') { throw 'Wrong product selected' }
+$changedApplications = @($edge)
+${selection}
+if (@($selectedApplications).Count -ne 0) { throw 'WebView2 was selected' }
+$changedApplications = @($zdisk, $zdisk)
+${selection}
+if (@($selectedApplications).Count -ne 2) { throw 'Duplicate identity was collapsed' }
+`], { encoding: 'utf8', timeout: 30_000 });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = 'ZDiskCleanerPro'");
+      expect(generated).toContain('$_.PSChildName -eq $capturedUninstallKey');
+      const control = resolveApplicationUninstallCommand('YushengBeep.Other', 'REGISTRY_UNINSTALL:ZDiskCleaner Pro');
+      expect(control).toBe('REGISTRY_UNINSTALL:ZDiskCleaner Pro');
+    }, 30_000);
+  }
   it('keeps the diagnostic calls and fail-closed guard on the shared generated route', () => {
     expect(packager).toContain('Write-IntuneGetRegistrationEvidence -Application $selectedApplications[0] -Stage install');
     expect(packager.match(/Write-IntuneGetRegistrationEvidence -Application \$registeredApplication -Stage uninstall/g)).toHaveLength(2);

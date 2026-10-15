@@ -10,6 +10,14 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('binds ZDisk to its observed exact NSIS key without changing custom identities', () => {
+    const exact = 'REGISTRY_UNINSTALL_KEY:ZDiskCleanerPro:ZDiskCleanerPro';
+    expect(resolveApplicationUninstallCommand(' YushengBeep.ZDiskCleanerPro ', 'REGISTRY_UNINSTALL:ZDiskCleaner Pro')).toBe(exact);
+    for (const command of [exact, 'custom.exe /remove', 'REGISTRY_UNINSTALL:Other App', 'REGISTRY_UNINSTALL_KEY:other:ZDiskCleaner Pro']) {
+      expect(resolveApplicationUninstallCommand('YushengBeep.ZDiskCleanerPro', command)).toBe(command);
+    }
+    expect(resolveApplicationUninstallCommand('YushengBeep.Other', 'REGISTRY_UNINSTALL:ZDiskCleaner Pro')).toBe('REGISTRY_UNINSTALL:ZDiskCleaner Pro');
+  });
   it('adds documented silent removal only to the exact Bandizip identity', () => {
     for (const id of ['Bandisoft.Bandizip', ' bandisoft.bandizip ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
