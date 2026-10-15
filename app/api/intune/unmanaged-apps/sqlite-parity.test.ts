@@ -1,0 +1,31 @@
+import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+const session = vi.hoisted(() => { vi.stubEnv('DATABASE_MODE', 'sqlite'); vi.stubEnv('DATABASE_PATH', ':memory:'); return { tenant: 'scan-tenant' }; });
+vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: async () => ({ userId: 'scan-user', tenantId: session.tenant }) }));
+vi.mock('@/lib/supabase', () => ({ isSupabaseConfigured: () => false, createServerClient: vi.fn(() => { throw Error('No hosted database'); }) }));
+vi.mock('@/lib/intune/graph-client', () => ({ getServicePrincipalToken: async () => 'synthetic-token', invalidateServicePrincipalToken: vi.fn() }));
+vi.mock('@/lib/matching/app-matcher', () => ({ filterUserApps: (apps: unknown[]) => apps, isSystemApp: () => false, normalizeAppName: (name: string) => name.toLowerCase(), matchDiscoveredApp: () => ({ status: 'unmatched', wingetId: null, wingetName: null, confidence: 0, partialMatches: [] }) }));
+vi.mock('@/lib/db', async () => { const { sqliteDb } = await vi.importActual<typeof import('@/lib/db/sqlite')>('@/lib/db/sqlite'); return { getDatabase: () => sqliteDb, isSqliteMode: () => true }; });
+import { sqliteDb, sqliteManualMappings, closeSqliteDb } from '@/lib/db/sqlite';
+import { createServerClient } from '@/lib/supabase';
+import { GET } from './route';
+beforeEach(() => { closeSqliteDb(); session.tenant = 'scan-tenant'; vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ value: [{ id: 'detected-one', displayName: 'Fixture Scanner', platform: 'windows', deviceCount: 2 }] }), { status: 200 }))); });
+afterEach(() => { closeSqliteDb(); vi.unstubAllGlobals(); });
+afterAll(() => { vi.unstubAllEnvs(); });
+it('shows a locally persisted claim and hides it only after deployment', async () => {
+  const claim = await sqliteDb.claimedApps.upsert({ user_id: 'scan-user', tenant_id: 'scan-tenant', discovered_app_id: 'detected-one', discovered_app_name: 'Fixture Scanner', winget_package_id: 'Fixture.Scanner' });
+  await sqliteManualMappings.save({ tenant_id: 'scan-tenant', created_by: 'scan-user', discovered_app_name: ' FIXTURE SCANNER ', discovered_publisher: null, winget_package_id: 'Fixture.ChosenScanner' });
+  const request = () => new NextRequest('http://localhost/api/intune/unmanaged-apps?refresh=true', { headers: { Authorization: 'Bearer fixture' } });
+  const pending = await (await GET(request())).json();
+  expect(pending.apps).toHaveLength(1);
+  expect(pending.apps[0]).toMatchObject({ isClaimed: true, claimStatus: 'pending', matchedPackageId: 'Fixture.ChosenScanner', matchConfidence: 1 });
+  await sqliteDb.claimedApps.update(claim.id, 'scan-tenant', { status: 'deployed' });
+  expect((await (await GET(request())).json()).apps).toEqual([]);
+  session.tenant = 'other-scan-tenant';
+  expect((await (await GET(request())).json()).apps[0]).toMatchObject({ isClaimed: false, matchedPackageId: null });
+  expect(createServerClient).not.toHaveBeenCalled();
+});
+it('refuses a foreign tenant header before Graph access', async () => {
+  expect((await GET(new NextRequest('http://localhost/api/intune/unmanaged-apps', { headers: { Authorization: 'Bearer fixture', 'X-MSP-Tenant-Id': 'other-scan-tenant' } }))).status).toBe(403);
+  expect(fetch).not.toHaveBeenCalled();
+});

@@ -7,16 +7,45 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { isSqliteMode } from '@/lib/db';
 import type { ManualAppMapping, CreateMappingRequest } from '@/types/unmanaged';
 import type { Database } from '@/types/database';
 
 // Database row types from the Database schema
 type ManualMappingRow = Database['public']['Tables']['manual_app_mappings']['Row'];
 
+async function localMappings(request: NextRequest, method: 'GET' | 'POST' | 'DELETE') {
+  try {
+    const user = await parseAccessToken(request.headers.get('Authorization'));
+    if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const requestedTenant = request.headers.get('X-MSP-Tenant-Id');
+    if (requestedTenant && requestedTenant !== user.tenantId) return NextResponse.json({ error: 'Not authorized to access other tenants' }, { status: 403 });
+    const { sqliteManualMappings } = await import('@/lib/db/sqlite');
+    if (method === 'GET') {
+      return NextResponse.json({ mappings: (await sqliteManualMappings.list(user.tenantId)).map(formatMapping) });
+    }
+    if (method === 'DELETE') {
+      const id = request.nextUrl.searchParams.get('id');
+      if (!id) return NextResponse.json({ error: 'Missing mapping ID' }, { status: 400 });
+      const deleted = await sqliteManualMappings.delete(id, user.tenantId);
+      return deleted ? NextResponse.json({ success: true }) : NextResponse.json({ error: 'Mapping not found' }, { status: 404 });
+    }
+    const body = await request.json();
+    if (!body || typeof body.discoveredAppName !== 'string' || !body.discoveredAppName.trim() || typeof body.wingetPackageId !== 'string' || !body.wingetPackageId.trim() || (body.discoveredPublisher != null && typeof body.discoveredPublisher !== 'string')) {
+      return NextResponse.json({ error: 'Missing required fields: discoveredAppName and wingetPackageId' }, { status: 400 });
+    }
+    const { record, updated } = await sqliteManualMappings.save({ tenant_id: user.tenantId, created_by: user.userId, discovered_app_name: body.discoveredAppName, discovered_publisher: body.discoveredPublisher || null, winget_package_id: body.wingetPackageId.trim() });
+    return NextResponse.json({ mapping: formatMapping(record), updated }, { status: updated ? 200 : 201 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to process mapping' }, { status: 500 });
+  }
+}
+
 /**
  * GET - List all manual mappings for the tenant
  */
 export async function GET(request: NextRequest) {
+  if (!isSupabaseServerConfigured() && isSqliteMode()) return localMappings(request, 'GET');
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
@@ -86,6 +115,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   if (!isSupabaseServerConfigured()) {
+    if (isSqliteMode()) return localMappings(request, 'POST');
     return NextResponse.json(
       { error: 'Manual mappings require hosted services' },
       { status: 503 }
@@ -208,6 +238,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   if (!isSupabaseServerConfigured()) {
+    if (isSqliteMode()) return localMappings(request, 'DELETE');
     return NextResponse.json(
       { error: 'Manual mappings require hosted services' },
       { status: 503 }
