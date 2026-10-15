@@ -21,7 +21,7 @@ describe('sqlite migrations', () => {
     db.pragma('user_version = 6');
     db.prepare('INSERT INTO custom_app_definitions (id, user_id, tenant_id, definition, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run('saved-fixture', 'user', 'tenant', '{"displayName":"Saved fixture"}', 'fixture', 'fixture');
     runSqliteMigrations(db);
-    expect(getSqliteSchemaVersion(db)).toBe(7);
+    expect(getSqliteSchemaVersion(db)).toBe(LATEST_VERSION);
     expect(db.prepare('SELECT definition FROM custom_app_definitions WHERE id = ?').get('saved-fixture')).toEqual({ definition: '{"displayName":"Saved fixture"}' });
     const insert = db.prepare('INSERT INTO manual_app_mappings (id, tenant_id, created_by, discovered_app_name, winget_package_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     insert.run('mapping-one', 'tenant', 'user', 'fixture', 'Fixture.App', 'fixture', 'fixture');
