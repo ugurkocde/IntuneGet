@@ -151,8 +151,11 @@ export async function PATCH(
         .eq('user_id', user.userId)
         .eq('tenant_id', tenantId)
         .eq('winget_id', wingetId)
+        .eq('intune_app_id', intuneAppId)
         .eq('status', 'deployed')
         .order('completed_at', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -166,10 +169,28 @@ export async function PATCH(
         if (categories) {
           updatedConfig.categories = categories as unknown as Json;
         }
-        await supabase
+        const { data: saved, error: saveError } = await supabase
           .from('packaging_jobs')
           .update({ package_config: updatedConfig })
-          .eq('id', latestJob.id);
+          .eq('id', latestJob.id)
+          .eq('user_id', user.userId)
+          .eq('tenant_id', tenantId)
+          .eq('winget_id', wingetId)
+          .eq('intune_app_id', intuneAppId)
+          .eq('status', 'deployed')
+          .select('id')
+          .maybeSingle();
+        if (saveError || !saved) {
+          return NextResponse.json(
+            { error: 'Intune settings were updated, but the deployment configuration could not be saved. Refresh before trying again.' },
+            { status: 409 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'Intune settings were updated, but no matching deployment configuration was available to save. Refresh before trying again.' },
+          { status: 409 }
+        );
       }
     } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig)) {
       const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');

@@ -61,6 +61,8 @@ export async function GET(request: NextRequest) {
     if (intuneAppId !== null) query = query.eq('intune_app_id', intuneAppId);
     const { data, error } = await query
       .order('completed_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(1)
       .maybeSingle();
 
