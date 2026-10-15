@@ -4,6 +4,7 @@
  * POST - Create or update a policy
  */
 
+import { isAutoUpdateScope } from '@/types/update-policies';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
@@ -70,6 +71,7 @@ async function savePolicySqlite(userId: string, body: AppUpdatePolicyInput): Pro
     tenant_id: body.tenant_id,
     winget_id: body.winget_id,
     policy_type: body.policy_type,
+    ...(body.auto_update_scope !== undefined ? { auto_update_scope: body.auto_update_scope } : {}),
     pinned_version: body.policy_type === 'pin_version' ? derivedPinnedVersion : null,
     deployment_config: derivedDeploymentConfig,
     original_upload_history_id: derivedOriginalUploadHistoryId,
@@ -160,6 +162,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body: AppUpdatePolicyInput = await request.json();
+    if (body.auto_update_scope !== undefined && !isAutoUpdateScope(body.auto_update_scope)) {
+      return NextResponse.json({ error: 'Invalid auto_update_scope' }, { status: 400 });
+    }
 
     // Validate required fields
     if (!body.winget_id || !body.tenant_id || !body.policy_type) {
@@ -290,6 +295,7 @@ export async function POST(request: NextRequest) {
       tenant_id: body.tenant_id,
       winget_id: body.winget_id,
       policy_type: body.policy_type,
+      ...(body.auto_update_scope !== undefined ? { auto_update_scope: body.auto_update_scope } : {}),
       pinned_version: body.policy_type === 'pin_version' ? derivedPinnedVersion : null,
       deployment_config: (derivedDeploymentConfig || null) as Json,
       original_upload_history_id: derivedOriginalUploadHistoryId,

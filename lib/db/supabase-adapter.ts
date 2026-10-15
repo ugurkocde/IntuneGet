@@ -710,6 +710,7 @@ export const supabaseDb: DatabaseAdapter = {
             tenant_id: policy.tenant_id,
             winget_id: policy.winget_id,
             policy_type: policy.policy_type,
+            ...(policy.auto_update_scope !== undefined ? { auto_update_scope: policy.auto_update_scope } : {}),
             pinned_version: policy.pinned_version ?? null,
             deployment_config: (policy.deployment_config ?? null) as never,
             original_upload_history_id: policy.original_upload_history_id ?? null,

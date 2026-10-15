@@ -6,6 +6,7 @@ import type {
   AvailableUpdate,
   AutoUpdateHistoryWithPolicy,
   AppUpdatePolicyInput,
+  AutoUpdateScope,
   TriggerUpdateRequest,
   TriggerUpdateResponse,
 } from '@/types/update-policies';
@@ -307,9 +308,9 @@ export function useUpdatePolicy() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation<
-    { policy: unknown; created: boolean },
+    { policy: unknown; created?: boolean },
     Error,
-    AppUpdatePolicyInput
+    AppUpdatePolicyInput | { id: string; auto_update_scope: AutoUpdateScope }
   >({
     mutationFn: async (input) => {
       const token = await getAccessToken();
@@ -317,13 +318,14 @@ export function useUpdatePolicy() {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch('/api/update-policies', {
-        method: 'POST',
+      const scopeOnly = 'id' in input;
+      const response = await fetch(scopeOnly ? `/api/update-policies/${encodeURIComponent(input.id)}` : '/api/update-policies', {
+        method: scopeOnly ? 'PATCH' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(input),
+        body: JSON.stringify(scopeOnly ? { auto_update_scope: input.auto_update_scope } : input),
       });
 
       if (!response.ok) {

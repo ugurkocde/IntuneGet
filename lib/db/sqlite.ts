@@ -635,12 +635,13 @@ export const sqliteDb: DatabaseAdapter = {
       database
         .prepare(
           `INSERT INTO app_update_policies (
-             id, user_id, tenant_id, winget_id, policy_type, pinned_version,
+             id, user_id, tenant_id, winget_id, policy_type, auto_update_scope, pinned_version,
              deployment_config, original_upload_history_id, last_auto_update_at,
              last_auto_update_version, is_enabled, consecutive_failures, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (user_id, tenant_id, winget_id) DO UPDATE SET
              policy_type = excluded.policy_type,
+             auto_update_scope = CASE WHEN ? THEN excluded.auto_update_scope ELSE app_update_policies.auto_update_scope END,
              pinned_version = excluded.pinned_version,
              deployment_config = excluded.deployment_config,
              original_upload_history_id = excluded.original_upload_history_id,
@@ -653,6 +654,7 @@ export const sqliteDb: DatabaseAdapter = {
           policy.tenant_id,
           policy.winget_id,
           policy.policy_type,
+          policy.auto_update_scope ?? 'all',
           policy.pinned_version ?? null,
           policy.deployment_config ? JSON.stringify(policy.deployment_config) : null,
           policy.original_upload_history_id ?? null,
@@ -661,7 +663,8 @@ export const sqliteDb: DatabaseAdapter = {
           policy.is_enabled === false ? 0 : 1,
           policy.consecutive_failures ?? 0,
           policy.created_at || now,
-          policy.updated_at || now
+          policy.updated_at || now,
+          policy.auto_update_scope === undefined ? 0 : 1
         );
 
       const row = database

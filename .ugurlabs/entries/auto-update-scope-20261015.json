@@ -1,0 +1,1 @@
+{"title":"Choose which version updates deploy automatically","summary":"Select all updates, minor and major updates, or major updates only for each automatic update policy. Restricted scopes hold versions that cannot be compared safely and explain the hold while keeping manual deployment available.","type":"new"}

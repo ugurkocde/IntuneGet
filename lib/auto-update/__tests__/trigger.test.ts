@@ -1371,3 +1371,25 @@ describe('AutoUpdateTrigger curated licence attestation', () => {
     } finally { restore(); }
   });
 });
+
+
+describe('hosted automatic scope gate', () => {
+  it.each(['minor', 'major'] as const)('holds patch and unparseable changes before any DB work with %s', async scope => {
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const policy = { ...makePolicy({}), consecutive_failures: 0, auto_update_scope: scope };
+    for (const [currentVersion, latestVersion] of [['1.0.0', '1.0.1'], ['unknown', '2.0']]) {
+      const result = await trigger.triggerAutoUpdate(policy, { ...UPDATE_INFO, currentVersion, latestVersion });
+      expect(result).toMatchObject({ success: false, skipped: true, code: 'UPDATE_SCOPE_HELD' });
+      expect(result.skipReason).toContain('scope');
+    }
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+  it('manual bypass retains the normal deployment configuration guard', async () => {
+    const supabase = createSupabaseMock({});
+    const policy = { ...makePolicy({}), deployment_config: null, consecutive_failures: 0, auto_update_scope: 'major' as const };
+    const result = await makeTrigger(supabase).triggerAutoUpdate(policy, { ...UPDATE_INFO, latestVersion: '1.0.1' }, { bypassUpdateScope: true });
+    expect(result.error).toBe('No deployment configuration saved for this policy');
+    expect(result.skipped).not.toBe(true);
+  });
+});

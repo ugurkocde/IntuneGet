@@ -32,6 +32,7 @@ import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/typ
 import {
   DEFAULT_SAFETY_CONFIG,
   canAutoUpdate,
+  autoUpdateScopeReason,
   classifyUpdateType,
   shouldSkipUpdate,
   type AppUpdatePolicy,
@@ -61,7 +62,7 @@ export interface SqliteTriggerResult {
   success: boolean;
   skipped?: boolean;
   skipReason?: string;
-  code?: 'CURATED_LICENCE_NOT_ACCEPTED' | 'INTUNE_APPROVAL_PENDING';
+  code?: 'CURATED_LICENCE_NOT_ACCEPTED' | 'INTUNE_APPROVAL_PENDING' | 'UPDATE_SCOPE_HELD';
   error?: string;
   packagingJobId?: string;
   historyId?: string;
@@ -130,14 +131,17 @@ export async function triggerSqliteAutoUpdate(
   db: DatabaseAdapter,
   policy: AppUpdatePolicy,
   updateInfo: SqliteUpdateInfo,
-  options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean }
+  options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean }
 ): Promise<SqliteTriggerResult> {
   try {
     if (!canAutoUpdate(policy)) {
       return { success: false, skipped: true, skipReason: 'Policy does not allow auto-update or is disabled' };
     }
 
-    let config = policy.deployment_config as DeploymentConfig | null;
+const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.auto_update_scope, updateInfo.currentVersion, updateInfo.latestVersion);
+    if (scopeReason) return { success: false, skipped: true, code: 'UPDATE_SCOPE_HELD', skipReason: scopeReason };
+
+        let config = policy.deployment_config as DeploymentConfig | null;
     if (!config) {
       return { success: false, error: 'No deployment configuration saved for this policy' };
     }
@@ -380,6 +384,10 @@ export async function runSqliteUpdateCheck(
 
     const deployment = await db.uploadHistory.getLatest(policy.user_id, policy.tenant_id, policy.winget_id);
     if (!deployment) continue;
+    if (autoUpdateScopeReason(policy.auto_update_scope, deployment.version, latestVersion)) {
+      skipped += 1;
+      continue;
+    }
     // Only act when the deployed version is actually behind the catalog.
     if (compareVersions(deployment.version, latestVersion) >= 0) continue;
 

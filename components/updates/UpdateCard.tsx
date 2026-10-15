@@ -1,5 +1,7 @@
 'use client';
 
+import type { AutoUpdateScope } from '@/types/update-policies';
+
 import { T, Var } from "gt-next";
 import { motion, useReducedMotion, AnimatePresence } from 'framer-motion';
 import {
@@ -20,14 +22,14 @@ import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
 import { UpdatePolicySelector } from './UpdatePolicySelector';
 import { cn } from '@/lib/utils';
-import { classifyUpdateType } from '@/types/update-policies';
+import { autoUpdateScopeReason, classifyUpdateType } from '@/types/update-policies';
 import { fadeUp, springPresets } from '@/lib/animations/variants';
 import type { AvailableUpdate, UpdatePolicyType } from '@/types/update-policies';
 
 interface UpdateCardProps {
   update: AvailableUpdate;
   onTriggerUpdate: (update: AvailableUpdate) => Promise<void>;
-  onPolicyChange: (update: AvailableUpdate, policyType: UpdatePolicyType) => Promise<void>;
+  onPolicyChange: (update: AvailableUpdate, policyType: UpdatePolicyType, scope?: AutoUpdateScope) => Promise<void>;
   onDismiss?: (update: AvailableUpdate) => void;
   isUpdating?: boolean;
   index?: number;
@@ -88,13 +90,14 @@ export function UpdateCard({
 }: UpdateCardProps) {
   const shouldReduceMotion = useReducedMotion();
 
-  const handlePolicyChange = async (policyType: UpdatePolicyType) => {
-    await onPolicyChange(update, policyType);
+  const handlePolicyChange = async (policyType: UpdatePolicyType, scope?: AutoUpdateScope) => {
+    await onPolicyChange(update, policyType, scope);
   };
 
   const policyStatus = update.policy;
   const isAutoUpdateEnabled =
     policyStatus?.policy_type === 'auto_update' && policyStatus?.is_enabled;
+  const scopeReason = isAutoUpdateEnabled ? autoUpdateScopeReason(policyStatus?.auto_update_scope, update.current_version, update.latest_version) : null;
   const hasFailures = (policyStatus?.consecutive_failures || 0) > 0;
   const updateType = classifyUpdateType(update.current_version, update.latest_version);
   const typeConfig = updateTypeConfig[updateType];
@@ -121,6 +124,7 @@ export function UpdateCard({
             : 'border-black/[0.08] hover:border-accent-cyan/20 hover:shadow-soft-md'
       )}
     >
+      {scopeReason && <p className="px-4 py-2 text-xs text-status-warning" role="status"><T>{scopeReason}</T></p>}
       {/* Subtle gradient overlay on hover */}
       <div className={cn(
         'absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none',
@@ -256,6 +260,7 @@ export function UpdateCard({
         <div className="flex items-center justify-between pt-3 border-t border-black/[0.06]">
           <UpdatePolicySelector
             currentPolicy={policyStatus?.policy_type || null}
+            currentScope={policyStatus?.auto_update_scope}
             onPolicyChange={handlePolicyChange}
             size="sm"
             showLabel={false}
