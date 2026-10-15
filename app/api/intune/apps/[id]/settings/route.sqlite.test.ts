@@ -95,6 +95,14 @@ describe('deployed settings persistence with SQLite', () => {
     expect(await (await get('unknown-app')).json()).toEqual({ intuneAppId: null, config: null, deployedAt: null });
   });
 
+  it('does not save fields that were null and therefore not sent to Graph', async () => {
+    const job = await create();
+    expect((await call({ wingetId: 'Fixture.App', assignments: null, categories: null })).status).toBe(200);
+    expect(state.assign).not.toHaveBeenCalled();
+    expect(state.categories).not.toHaveBeenCalled();
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
   it('persists categories and explicit empty assignments', async () => {
     const job = await create(); const categories = [{ id: 'new-category' }];
     expect((await call({ wingetId: 'Fixture.App', assignments: [], categories })).status).toBe(200);
