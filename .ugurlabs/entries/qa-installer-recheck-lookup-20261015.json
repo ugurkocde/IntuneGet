@@ -1,0 +1,5 @@
+{
+  "title": "Keep installer security rechecks responsive as QA history grows",
+  "summary": "Improve held installer lookup performance while preserving the existing daily limits, priority order and security protections.",
+  "type": "fixed"
+}
