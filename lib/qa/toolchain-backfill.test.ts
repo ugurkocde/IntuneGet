@@ -16,7 +16,7 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate('25849ac512c211e616c135149ef1e059db367ebc', { wingetId: 'Wacom.OtherDriver', status: 'failed' })).toBe(false);
   });
   it('carries the preceding unconsumed retry targets without adding applications', () => {
-    const previous = terminalToolchainRetryTargets('25849ac512c211e616c135149ef1e059db367ebc');
+    const previous = terminalToolchainRetryTargets('665d6f4ec65d457edbd455605a54b4b223392457');
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(previous);
     const current = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     current.push('Unapproved.Extra');

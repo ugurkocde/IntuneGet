@@ -477,7 +477,7 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/S']);
   });
 
-  it('binds ZDisk customer and QA profiles to the observed key on the unchanged pin', () => {
+  it('binds ZDisk customer and QA profiles to the observed key on the approved scripts pin', () => {
     const workflow = {
       wingetId: 'YushengBeep.ZDiskCleanerPro', displayName: 'ZDiskCleaner Pro', publisher: 'YushengBeep',
       version: '3.0.0', architecture: 'x64', installerSha256: '504DED097EFDC098CBE707117A628808EA5C9F08BA03AC98CE23B8E2983B54CF',
@@ -488,7 +488,7 @@ describe('PSADT QA package identity', () => {
     expect(normalized.uninstallCommand).toBe(exact);
     const profile = normalized.identity.profile as { installer: { uninstallCommand: string }; toolchain: { packagerCommit: string } };
     expect(profile.installer.uninstallCommand).toBe(exact);
-    expect(profile.toolchain.packagerCommit).toBe('665d6f4ec65d457edbd455605a54b4b223392457');
+    expect(profile.toolchain.packagerCommit).toBe('1cc5fb513cf3c23120f2b0741d66f11ee435d409');
     const oldProfile = structuredClone(normalized.identity.profile) as typeof profile;
     oldProfile.installer.uninstallCommand = workflow.uninstallCommand;
     expect(qaSha256(canonicalQaJson(oldProfile))).not.toBe(normalized.identity.packageProfileSha256);
