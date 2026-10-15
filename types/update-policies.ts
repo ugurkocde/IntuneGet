@@ -184,7 +184,7 @@ export interface AvailableUpdate {
   policy?: {
     id: string;
     policy_type: UpdatePolicyType;
-  auto_update_scope?: AutoUpdateScope;
+    auto_update_scope?: AutoUpdateScope;
     is_enabled: boolean;
     pinned_version: string | null;
     last_auto_update_at: string | null;
@@ -229,8 +229,8 @@ export interface TriggerUpdateResponse {
       | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
       | 'INTUNE_APPROVAL_PENDING'
       | 'CURATED_CONFIG_VERIFICATION_FAILED'
-      | 'UPDATE_SCOPE_HELD'
-    | 'RATE_LIMIT_UNVERIFIED'
+        | 'UPDATE_SCOPE_HELD'
+      | 'RATE_LIMIT_UNVERIFIED'
       | 'PSADT_BACKFILL_UNAVAILABLE';
     packaging_job_id?: string;
     error?: string;
@@ -298,10 +298,14 @@ function parseComparableVersion(value: string): number[] | null {
 }
 
 export function classifyUpdateType(fromVersion: string, toVersion: string): UpdateType {
-  const from = parseComparableVersion(fromVersion);
-  const to = parseComparableVersion(toVersion);
-  // This fallback is for existing labels and history only, never scope decisions.
-  if (!from || !to) return 'patch';
+  // Preserve prefix based display/history labels for vendor prerelease suffixes.
+  // Restricted write decisions independently require the strict parser below.
+  const parseLabel = (value: string) => {
+    const match = value.trim().replace(/^[vV]/, '').match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    return match ? [Number(match[1]), Number(match[2] || 0), Number(match[3] || 0)] : [0, 0, 0];
+  };
+  const from = parseLabel(fromVersion);
+  const to = parseLabel(toVersion);
   if (to[0] > from[0]) return 'major';
   if (to[0] === from[0] && to[1] > from[1]) return 'minor';
   return 'patch';

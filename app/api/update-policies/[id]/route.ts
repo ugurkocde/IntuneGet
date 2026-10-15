@@ -1,4 +1,3 @@
-import { isAutoUpdateScope } from '@/types/update-policies';
 /**
  * Update Policy by ID API Routes
  * GET - Get a specific policy
@@ -6,6 +5,7 @@ import { isAutoUpdateScope } from '@/types/update-policies';
  * DELETE - Delete a specific policy
  */
 
+import { isAutoUpdateScope } from '@/types/update-policies';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
@@ -247,7 +247,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // Only include fields that are provided
     if (body.auto_update_scope !== undefined) updateData.auto_update_scope = body.auto_update_scope;
-  if (body.policy_type !== undefined) updateData.policy_type = body.policy_type;
+    if (body.policy_type !== undefined) updateData.policy_type = body.policy_type;
     if (body.pinned_version !== undefined) updateData.pinned_version = body.pinned_version;
     if (body.deployment_config !== undefined) {
       updateData.deployment_config = body.deployment_config as unknown as AppUpdatePolicyUpdate['deployment_config'];

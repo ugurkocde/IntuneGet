@@ -14,7 +14,7 @@ import {
   AutoUpdateTrigger,
   getLatestInstallerInfo,
 } from '@/lib/auto-update/trigger';
-import { AppUpdatePolicy, shouldSkipUpdate } from '@/types/update-policies';
+import { AppUpdatePolicy, autoUpdateScopeReason, shouldSkipUpdate } from '@/types/update-policies';
 import { getCatalogSource } from '@/lib/catalog';
 import { logValue } from '@/lib/server-log';
 
@@ -173,6 +173,11 @@ async function processAutoUpdates(
 
     // Check if update should be skipped based on policy
     if (shouldSkipUpdate(policy, update.latest_version)) {
+      result.skipped++;
+      continue;
+    }
+
+    if (autoUpdateScopeReason(policy.auto_update_scope, update.current_version, update.latest_version)) {
       result.skipped++;
       continue;
     }

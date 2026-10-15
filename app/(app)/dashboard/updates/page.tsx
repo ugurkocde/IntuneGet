@@ -286,11 +286,13 @@ export default function UpdatesPage() {
     scope?: AutoUpdateScope
   ) => {
     try {
-      await updatePolicy({
+      if (scope !== undefined) {
+        if (!update.policy) throw new Error('No saved policy to update');
+        await updatePolicy({ id: update.policy.id, auto_update_scope: scope });
+      } else await updatePolicy({
         winget_id: update.winget_id,
         tenant_id: update.tenant_id,
         policy_type: policyType,
-        ...(scope !== undefined ? { auto_update_scope: scope } : {}),
       });
       refetchUpdates();
     } catch (err) {
@@ -1058,11 +1060,12 @@ export default function UpdatesPage() {
         onOpenChange={setAutoUpdateModalOpen}
         policies={autoUpdatePolicies}
         onPolicyChange={async (policy, policyType, scope) => {
-          await updatePolicy({
+          if (scope !== undefined) {
+            await updatePolicy({ id: policy.id, auto_update_scope: scope });
+          } else await updatePolicy({
             winget_id: policy.winget_id,
             tenant_id: policy.tenant_id,
             policy_type: policyType,
-        ...(scope !== undefined ? { auto_update_scope: scope } : {}),
           });
         }}
       />

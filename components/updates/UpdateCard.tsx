@@ -124,7 +124,7 @@ export function UpdateCard({
             : 'border-black/[0.08] hover:border-accent-cyan/20 hover:shadow-soft-md'
       )}
     >
-      {scopeReason && <p className="px-4 py-2 text-xs text-status-warning" role="status">{scopeReason}</p>}
+      {scopeReason && <p className="px-4 py-2 text-xs text-status-warning" role="status"><T>{scopeReason}</T></p>}
       {/* Subtle gradient overlay on hover */}
       <div className={cn(
         'absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none',

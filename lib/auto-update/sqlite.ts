@@ -384,6 +384,10 @@ export async function runSqliteUpdateCheck(
 
     const deployment = await db.uploadHistory.getLatest(policy.user_id, policy.tenant_id, policy.winget_id);
     if (!deployment) continue;
+    if (autoUpdateScopeReason(policy.auto_update_scope, deployment.version, latestVersion)) {
+      skipped += 1;
+      continue;
+    }
     // Only act when the deployed version is actually behind the catalog.
     if (compareVersions(deployment.version, latestVersion) >= 0) continue;
 

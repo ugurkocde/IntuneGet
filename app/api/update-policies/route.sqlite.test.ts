@@ -160,3 +160,14 @@ it('validates scopes and preserves them on omitted POST and scope only PATCH', a
   parseAccessTokenMock.mockResolvedValue({ userId: 'u2', tenantId: 't2' });
   expect((await idRoute.PATCH(request('all'), params)).status).toBe(404);
 });
+
+
+it('scope only PATCH keeps a disabled policy and its custom deployment settings intact', async () => {
+  const { sqliteDb } = await import('@/lib/db/sqlite');
+  const config = { displayName: 'Custom saved', publisher: 'Fixture', architecture: 'x64', installerType: 'exe', installCommand: 'fixture.exe /custom', uninstallCommand: 'fixture.exe /remove', installScope: 'machine', detectionRules: [] };
+  const saved = await sqliteDb.updatePolicies.upsert({ user_id: 'u1', tenant_id: 't1', winget_id: 'Fixture.Custom', policy_type: 'auto_update', deployment_config: config, original_upload_history_id: 'original-fixture', is_enabled: false });
+  const request = new NextRequest('http://localhost/api/update-policies/id', { method: 'PATCH', headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' }, body: JSON.stringify({ auto_update_scope: 'major' }) });
+  const response = await idRoute.PATCH(request, { params: Promise.resolve({ id: saved.id }) });
+  expect(response.status).toBe(200);
+  expect((await response.json()).policy).toMatchObject({ auto_update_scope: 'major', is_enabled: false, original_upload_history_id: 'original-fixture', deployment_config: config });
+});

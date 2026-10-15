@@ -18,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { AutoUpdateScope, UpdatePolicyType } from '@/types/update-policies';
@@ -175,13 +176,13 @@ export function UpdatePolicySelector({
         {currentPolicy === 'auto_update' && (
           <>
             <DropdownMenuSeparator />
-            <p className="px-2 py-1 text-xs text-text-muted">Automatic update scope</p>
+            <DropdownMenuLabel><T>Automatic update scope</T></DropdownMenuLabel>
             {([['all', 'All updates'], ['minor', 'Minor and major'], ['major', 'Major only']] as const).map(([scope, label]) => (
               <DropdownMenuItem key={scope} disabled={disabled || isUpdating} onClick={() => handleScope(scope)}>
-                {label}{scope === currentScope && <Check className="ml-auto h-4 w-4" aria-label="Selected" />}
+                <T>{label}</T>{scope === currentScope && <Check className="ml-auto h-4 w-4" aria-label="Selected" />}
               </DropdownMenuItem>
             ))}
-            {currentScope === 'major' && <p className="px-2 py-1 text-xs text-status-warning">Major only can delay security fixes shipped in minor or patch releases.</p>}
+            {currentScope === 'major' && <p className="px-2 py-1 text-xs text-status-warning"><T>Major only can delay security fixes shipped in minor or patch releases.</T></p>}
           </>
         )}
         <DropdownMenuSeparator className="bg-overlay/[0.06] my-1" />

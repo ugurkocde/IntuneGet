@@ -10,6 +10,10 @@ describe('automatic update scopes', () => {
   ])('classifies %s to %s', (from, to, kind) => {
     expect(classifyUpdateType(from, to)).toBe(kind);
   });
+  it('preserves major warnings for suffixed versions while holding them under restricted scopes', () => {
+    expect(classifyUpdateType('1.2.3-rc1', '2.0.0')).toBe('major');
+    expect(autoUpdateScopeReason('major', '1.2.3-rc1', '2.0.0')).toContain('cannot be compared');
+  });
   it.each(['major', 'minor'])('fails closed for unknown versions under %s', scope => {
     expect(autoUpdateScopeReason(scope, 'unknown', '2.0')).toContain('cannot be compared');
     expect(autoUpdateScopeReason(scope, '1.0', '2.0-beta')).toContain('cannot be compared');

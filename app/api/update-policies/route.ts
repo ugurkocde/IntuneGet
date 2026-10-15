@@ -1,10 +1,10 @@
-import { isAutoUpdateScope } from '@/types/update-policies';
 /**
  * Update Policies API Routes
  * GET - List all policies for the user
  * POST - Create or update a policy
  */
 
+import { isAutoUpdateScope } from '@/types/update-policies';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
@@ -295,7 +295,7 @@ export async function POST(request: NextRequest) {
       tenant_id: body.tenant_id,
       winget_id: body.winget_id,
       policy_type: body.policy_type,
-    ...(body.auto_update_scope !== undefined ? { auto_update_scope: body.auto_update_scope } : {}),
+      ...(body.auto_update_scope !== undefined ? { auto_update_scope: body.auto_update_scope } : {}),
       pinned_version: body.policy_type === 'pin_version' ? derivedPinnedVersion : null,
       deployment_config: (derivedDeploymentConfig || null) as Json,
       original_upload_history_id: derivedOriginalUploadHistoryId,

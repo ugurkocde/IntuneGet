@@ -8,6 +8,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => children,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => children,
   DropdownMenuSeparator: () => null,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => children,
   DropdownMenuItem: ({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled: boolean }) => createElement('button', { onClick, disabled }, children),
 }));
 import { UpdatePolicySelector } from './UpdatePolicySelector';
