@@ -2114,6 +2114,14 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Quassel IRC',
     registeredRegistryKey: 'Quassel IRC',
   },
+  // QA run 38446100499 registered this exact NSIS key and name, alongside
+  // an unrelated WebView2 update. The catalog title contains a space that
+  // the vendor registration does not. Keep capture and removal key-bound.
+  'yushengbeep.zdiskcleanerpro': {
+    generatedDisplayName: 'ZDiskCleaner Pro',
+    registeredDisplayName: 'ZDiskCleanerPro',
+    registeredRegistryKey: 'ZDiskCleanerPro',
+  },
 };
 
 export function resolveApplicationUninstallCommand(

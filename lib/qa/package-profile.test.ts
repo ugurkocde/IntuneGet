@@ -477,6 +477,23 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/S']);
   });
 
+  it('binds ZDisk customer and QA profiles to the observed key on the unchanged pin', () => {
+    const workflow = {
+      wingetId: 'YushengBeep.ZDiskCleanerPro', displayName: 'ZDiskCleaner Pro', publisher: 'YushengBeep',
+      version: '3.0.0', architecture: 'x64', installerSha256: '504DED097EFDC098CBE707117A628808EA5C9F08BA03AC98CE23B8E2983B54CF',
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:ZDiskCleaner Pro', installScope: 'machine' as const,
+    };
+    const normalized = normalizeQaWorkflowPackageInput(workflow);
+    const exact = 'REGISTRY_UNINSTALL_KEY:ZDiskCleanerPro:ZDiskCleanerPro';
+    expect(normalized.uninstallCommand).toBe(exact);
+    const profile = normalized.identity.profile as { installer: { uninstallCommand: string }; toolchain: { packagerCommit: string } };
+    expect(profile.installer.uninstallCommand).toBe(exact);
+    expect(profile.toolchain.packagerCommit).toBe('665d6f4ec65d457edbd455605a54b4b223392457');
+    const oldProfile = structuredClone(normalized.identity.profile) as typeof profile;
+    oldProfile.installer.uninstallCommand = workflow.uninstallCommand;
+    expect(qaSha256(canonicalQaJson(oldProfile))).not.toBe(normalized.identity.packageProfileSha256);
+  });
+
   it('binds Quassel customer and QA packages to the exact NSIS registry identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Quassel.QuasselIRC',
@@ -3011,6 +3028,11 @@ describe('current catalog QA package validation', () => {
         ? { valid: false, reason: 'compatible-application-adapter-changed' }
         : { valid: true }
     );
+  });
+
+  it('rejects a prior-release ZDisk name-only profile instead of reusing a pass', () => {
+    const legacyIdentity = identityWithPackagerCommit(buildQaPackageIdentity({ ...input, wingetId: 'YushengBeep.ZDiskCleanerPro', uninstallCommand: 'REGISTRY_UNINSTALL:ZDiskCleaner Pro' }), 'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146');
+    expect(validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))).toMatchObject({ valid: false, reason: 'compatible-uninstall-identity-changed' });
   });
 
   it.each([
