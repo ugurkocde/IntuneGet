@@ -85,6 +85,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Install packager dependencies
+        working-directory: packager
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Run tests
         run: npm test
 
@@ -99,9 +103,7 @@ jobs:
 
       - name: Build packager
         working-directory: packager
-        run: |
-          npm ci --no-audit --no-fund
-          npm run build
+        run: npm run build
 
   lint:
     name: Lint
