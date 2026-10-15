@@ -143,3 +143,20 @@ describe('update policies route in SQLite mode', () => {
     expect(response.status).toBe(401);
   });
 });
+
+
+it('validates scopes and preserves them on omitted POST and scope only PATCH', async () => {
+  const base = { winget_id: 'Vendor.Scope', tenant_id: 't1', policy_type: 'notify' };
+  expect((await route.POST(postRequest({ ...base, auto_update_scope: 'typo' }))).status).toBe(400);
+  const created = await (await route.POST(postRequest({ ...base, auto_update_scope: 'major' }))).json();
+  expect(created.policy.auto_update_scope).toBe('major');
+  const omitted = await (await route.POST(postRequest(base))).json();
+  expect(omitted.policy.auto_update_scope).toBe('major');
+  const request = (scope: unknown) => new NextRequest('http://localhost/api/update-policies/id', { method: 'PATCH', headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' }, body: JSON.stringify({ auto_update_scope: scope }) });
+  const params = { params: Promise.resolve({ id: created.policy.id }) };
+  expect((await idRoute.PATCH(request('invalid'), params)).status).toBe(400);
+  const patched = await (await idRoute.PATCH(request('minor'), params)).json();
+  expect(patched.policy).toMatchObject({ auto_update_scope: 'minor', policy_type: 'notify', deployment_config: null });
+  parseAccessTokenMock.mockResolvedValue({ userId: 'u2', tenantId: 't2' });
+  expect((await idRoute.PATCH(request('all'), params)).status).toBe(404);
+});

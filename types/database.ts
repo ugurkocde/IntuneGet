@@ -1520,6 +1520,7 @@ export interface Database {
           tenant_id: string;
           winget_id: string;
           policy_type: 'auto_update' | 'notify' | 'ignore' | 'pin_version';
+          auto_update_scope: 'all' | 'minor' | 'major';
           pinned_version: string | null;
           deployment_config: Json | null;
           original_upload_history_id: string | null;
@@ -1536,6 +1537,7 @@ export interface Database {
           tenant_id: string;
           winget_id: string;
           policy_type?: 'auto_update' | 'notify' | 'ignore' | 'pin_version';
+          auto_update_scope?: 'all' | 'minor' | 'major';
           pinned_version?: string | null;
           deployment_config?: Json | null;
           original_upload_history_id?: string | null;
@@ -1552,6 +1554,7 @@ export interface Database {
           tenant_id?: string;
           winget_id?: string;
           policy_type?: 'auto_update' | 'notify' | 'ignore' | 'pin_version';
+          auto_update_scope?: 'all' | 'minor' | 'major';
           pinned_version?: string | null;
           deployment_config?: Json | null;
           original_upload_history_id?: string | null;

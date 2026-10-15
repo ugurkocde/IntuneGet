@@ -72,3 +72,15 @@ describe('sqlite migrations', () => {
     db.close();
   });
 });
+
+
+it('upgrades existing policies to all updates and constrains scope values', () => {
+  const db = new Database(':memory:');
+  for (const migration of MIGRATIONS.filter(m => m.version < 8)) migration.up(db);
+  db.pragma('user_version = 6');
+  db.exec("INSERT INTO app_update_policies (id,user_id,tenant_id,winget_id,policy_type) VALUES ('p','u','t','App.Test','notify')");
+  runSqliteMigrations(db);
+  expect(db.prepare('SELECT auto_update_scope FROM app_update_policies').get()).toEqual({ auto_update_scope: 'all' });
+  expect(() => db.exec("UPDATE app_update_policies SET auto_update_scope = 'unknown'")).toThrow();
+  db.close();
+});

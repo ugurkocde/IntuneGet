@@ -281,6 +281,13 @@ export const MIGRATIONS: SqliteMigration[] = [
       CREATE INDEX idx_custom_app_definitions_owner ON custom_app_definitions(user_id, tenant_id, updated_at DESC, id DESC);`);
     },
   },
+  {
+    version: 8,
+    name: 'automatic update scope',
+    up: db => {
+      db.exec("ALTER TABLE app_update_policies ADD COLUMN auto_update_scope TEXT NOT NULL DEFAULT 'all' CHECK (auto_update_scope IN ('all', 'minor', 'major'));");
+    },
+  },
 ];
 
 export function getSqliteSchemaVersion(db: BetterSqlite3.Database): number {

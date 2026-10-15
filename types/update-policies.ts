@@ -16,6 +16,7 @@ export type AutoUpdateStatus = 'pending' | 'packaging' | 'deploying' | 'complete
 
 // Update type classification
 export type UpdateType = 'patch' | 'minor' | 'major';
+export type AutoUpdateScope = 'all' | 'minor' | 'major';
 
 /**
  * Deployment configuration saved for auto-updates
@@ -86,6 +87,7 @@ export interface AppUpdatePolicy {
   tenant_id: string;
   winget_id: string;
   policy_type: UpdatePolicyType;
+  auto_update_scope?: AutoUpdateScope;
   pinned_version: string | null;
   deployment_config: DeploymentConfig | null;
   original_upload_history_id: string | null;
@@ -104,6 +106,7 @@ export interface AppUpdatePolicyInput {
   winget_id: string;
   tenant_id: string;
   policy_type: UpdatePolicyType;
+  auto_update_scope?: AutoUpdateScope;
   pinned_version?: string;
   deployment_config?: DeploymentConfig;
   original_upload_history_id?: string;
@@ -181,6 +184,7 @@ export interface AvailableUpdate {
   policy?: {
     id: string;
     policy_type: UpdatePolicyType;
+  auto_update_scope?: AutoUpdateScope;
     is_enabled: boolean;
     pinned_version: string | null;
     last_auto_update_at: string | null;
@@ -225,7 +229,8 @@ export interface TriggerUpdateResponse {
       | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
       | 'INTUNE_APPROVAL_PENDING'
       | 'CURATED_CONFIG_VERIFICATION_FAILED'
-      | 'RATE_LIMIT_UNVERIFIED'
+      | 'UPDATE_SCOPE_HELD'
+    | 'RATE_LIMIT_UNVERIFIED'
       | 'PSADT_BACKFILL_UNAVAILABLE';
     packaging_job_id?: string;
     error?: string;
@@ -284,23 +289,40 @@ export const DEFAULT_SAFETY_CONFIG: AutoUpdateSafetyConfig = {
 /**
  * Helper function to determine update type from version strings
  */
+function parseComparableVersion(value: string): number[] | null {
+  const normalized = value.trim().replace(/^[vV]/, '');
+  // Reject suffixes and nonnumeric schemes rather than guessing for a write gate.
+  if (!/^\d+(?:\.\d+){0,3}$/.test(normalized)) return null;
+  const parts = normalized.split('.').map(Number);
+  return parts.every(Number.isSafeInteger) ? [...parts, ...Array(4 - parts.length).fill(0)] : null;
+}
+
 export function classifyUpdateType(fromVersion: string, toVersion: string): UpdateType {
-  const parseSimple = (v: string) => {
-    const match = v.match(/^(\d+)\.(\d+)\.?(\d+)?/);
-    if (!match) return { major: 0, minor: 0, patch: 0 };
-    return {
-      major: parseInt(match[1], 10) || 0,
-      minor: parseInt(match[2], 10) || 0,
-      patch: parseInt(match[3], 10) || 0,
-    };
-  };
-
-  const from = parseSimple(fromVersion);
-  const to = parseSimple(toVersion);
-
-  if (to.major > from.major) return 'major';
-  if (to.minor > from.minor) return 'minor';
+  const from = parseComparableVersion(fromVersion);
+  const to = parseComparableVersion(toVersion);
+  // This fallback is for existing labels and history only, never scope decisions.
+  if (!from || !to) return 'patch';
+  if (to[0] > from[0]) return 'major';
+  if (to[0] === from[0] && to[1] > from[1]) return 'minor';
   return 'patch';
+}
+
+export function isAutoUpdateScope(value: unknown): value is AutoUpdateScope {
+  return value === 'all' || value === 'minor' || value === 'major';
+}
+
+/** A hold reason is shown without hiding the update or changing notifications. */
+export function autoUpdateScopeReason(scope: unknown, fromVersion: string, toVersion: string): string | null {
+  if (scope === undefined || scope === null || scope === 'all') return null;
+  if (!isAutoUpdateScope(scope)) return 'Invalid automatic update scope. Choose a supported scope.';
+  const from = parseComparableVersion(fromVersion);
+  const to = parseComparableVersion(toVersion);
+  if (!from || !to) return 'Held by scope: version formats cannot be compared safely. Deploy manually or choose All updates.';
+  const firstDifference = to.findIndex((part, index) => part !== from[index]);
+  if (firstDifference < 0 || to[firstDifference] < from[firstDifference]) return 'Held by scope: the target version is not newer.';
+  const kind = classifyUpdateType(fromVersion, toVersion);
+  if (kind === 'major' || (scope === 'minor' && kind === 'minor')) return null;
+  return scope === 'major' ? 'Held by scope: Major only excludes this update.' : 'Held by scope: Minor and major excludes patch updates.';
 }
 
 /**

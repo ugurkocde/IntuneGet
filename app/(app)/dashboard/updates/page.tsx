@@ -1,5 +1,7 @@
 'use client';
 
+import type { AutoUpdateScope } from '@/types/update-policies';
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { T, Var } from "gt-next";
 import { useRouter } from 'next/navigation';
@@ -280,13 +282,15 @@ export default function UpdatesPage() {
 
   const handlePolicyChange = useCallback(async (
     update: AvailableUpdate,
-    policyType: UpdatePolicyType
+    policyType: UpdatePolicyType,
+    scope?: AutoUpdateScope
   ) => {
     try {
       await updatePolicy({
         winget_id: update.winget_id,
         tenant_id: update.tenant_id,
         policy_type: policyType,
+        ...(scope !== undefined ? { auto_update_scope: scope } : {}),
       });
       refetchUpdates();
     } catch (err) {
@@ -1053,11 +1057,12 @@ export default function UpdatesPage() {
         open={autoUpdateModalOpen}
         onOpenChange={setAutoUpdateModalOpen}
         policies={autoUpdatePolicies}
-        onPolicyChange={async (policy, policyType) => {
+        onPolicyChange={async (policy, policyType, scope) => {
           await updatePolicy({
             winget_id: policy.winget_id,
             tenant_id: policy.tenant_id,
             policy_type: policyType,
+        ...(scope !== undefined ? { auto_update_scope: scope } : {}),
           });
         }}
       />

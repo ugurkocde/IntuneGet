@@ -97,3 +97,9 @@ The updates page provides:
 
 - `docs/API_REFERENCE.md`
 - `docs/ENV_REFERENCE.md`
+
+## Automatic update scope
+
+On the Updates page, choose an app's Auto update policy, then select All updates, Minor and major, or Major only. The same selector is available in the auto update apps list. Existing policies default to All updates on both hosted and SQLite installations.
+
+Restricted scopes compare numeric versions with up to four components and an optional leading v. Unparseable versions and nonforward changes are held with a visible explanation. The update remains available for manual deployment and notifications continue. Major only can delay security fixes shipped in minor or patch releases. Version scope does not indicate security severity.

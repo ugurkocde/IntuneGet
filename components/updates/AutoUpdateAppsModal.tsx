@@ -1,5 +1,7 @@
 'use client';
 
+import type { AutoUpdateScope } from '@/types/update-policies';
+
 import { T } from 'gt-next';
 import { RefreshCw } from 'lucide-react';
 import {
@@ -16,7 +18,7 @@ interface AutoUpdateAppsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   policies: AppUpdatePolicy[];
-  onPolicyChange: (policy: AppUpdatePolicy, policyType: UpdatePolicyType) => Promise<void>;
+  onPolicyChange: (policy: AppUpdatePolicy, policyType: UpdatePolicyType, scope?: AutoUpdateScope) => Promise<void>;
 }
 
 // Lists every app with auto-update enabled for the selected tenant. These
@@ -56,7 +58,8 @@ export function AutoUpdateAppsModal({ open, onOpenChange, policies, onPolicyChan
                   </div>
                   <UpdatePolicySelector
                     currentPolicy={policy.policy_type}
-                    onPolicyChange={(type) => onPolicyChange(policy, type)}
+                    currentScope={policy.auto_update_scope}
+                    onPolicyChange={(type, scope) => onPolicyChange(policy, type, scope)}
                     size="sm"
                   />
                 </li>

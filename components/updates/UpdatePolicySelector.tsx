@@ -20,11 +20,12 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { UpdatePolicyType } from '@/types/update-policies';
+import type { AutoUpdateScope, UpdatePolicyType } from '@/types/update-policies';
 
 interface UpdatePolicySelectorProps {
   currentPolicy?: UpdatePolicyType | null;
-  onPolicyChange: (policyType: UpdatePolicyType) => Promise<void>;
+  currentScope?: AutoUpdateScope;
+  onPolicyChange: (policyType: UpdatePolicyType, scope?: AutoUpdateScope) => Promise<void>;
   disabled?: boolean;
   size?: 'sm' | 'default';
   showLabel?: boolean;
@@ -79,6 +80,7 @@ const policyOptions: {
 
 export function UpdatePolicySelector({
   currentPolicy,
+  currentScope = 'all',
   onPolicyChange,
   disabled = false,
   size = 'default',
@@ -97,6 +99,13 @@ export function UpdatePolicySelector({
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleScope = async (scope: AutoUpdateScope) => {
+    if (scope === currentScope) return;
+    setIsUpdating(true);
+    try { await onPolicyChange('auto_update', scope); }
+    finally { setIsUpdating(false); }
   };
 
   const activeOptions = policyOptions.filter((o) => o.group === 'active');
@@ -163,6 +172,18 @@ export function UpdatePolicySelector({
           </DropdownMenuItem>
         ))}
 
+        {currentPolicy === 'auto_update' && (
+          <>
+            <DropdownMenuSeparator />
+            <p className="px-2 py-1 text-xs text-text-muted">Automatic update scope</p>
+            {([['all', 'All updates'], ['minor', 'Minor and major'], ['major', 'Major only']] as const).map(([scope, label]) => (
+              <DropdownMenuItem key={scope} disabled={disabled || isUpdating} onClick={() => handleScope(scope)}>
+                {label}{scope === currentScope && <Check className="ml-auto h-4 w-4" aria-label="Selected" />}
+              </DropdownMenuItem>
+            ))}
+            {currentScope === 'major' && <p className="px-2 py-1 text-xs text-status-warning">Major only can delay security fixes shipped in minor or patch releases.</p>}
+          </>
+        )}
         <DropdownMenuSeparator className="bg-overlay/[0.06] my-1" />
 
         {passiveOptions.map((option) => (
