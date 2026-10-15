@@ -32,10 +32,10 @@ import { GET } from '../../deployed/config/route';
 
 const assignments = [{ type: 'allUsers', intent: 'available' }];
 const original = { assignments: [{ type: 'allUsers', intent: 'required' }], categories: [{ id: 'old-category' }], description: 'Keep this' };
-const call = (body: Record<string, unknown> = { wingetId: 'Fixture.App', assignments }) => PATCH(
+const call = (body: Record<string, unknown> = { wingetId: 'Fixture.App', assignments }, appId = 'fixture-app') => PATCH(
   new NextRequest('http://localhost/api/intune/apps/fixture-app/settings', {
     method: 'PATCH', headers: { Authorization: 'Bearer fixture', 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  }), { params: Promise.resolve({ id: 'fixture-app' }) });
+  }), { params: Promise.resolve({ id: appId }) });
 const create = async (overrides: Record<string, unknown> = {}) => {
   const job = await sqliteDb.jobs.create({ id: randomUUID(), user_id: 'fixture-owner', tenant_id: 'fixture-tenant',
     winget_id: 'Fixture.App', version: '1.0', display_name: 'Fixture app', installer_type: 'exe',
@@ -78,12 +78,12 @@ describe('deployed settings persistence with SQLite', () => {
     expect(state.assign).not.toHaveBeenCalled();
   });
 
-  it('updates the newest created deployment that the config reader selects', async () => {
+  it('updates the most recently completed deployment that the config reader selects', async () => {
     const older = await create({ created_at: '2026-01-01T00:00:00Z', completed_at: '2026-03-01T00:00:00Z' });
     const newer = await create({ created_at: '2026-02-01T00:00:00Z', completed_at: '2026-02-01T00:00:00Z' });
     expect((await call()).status).toBe(200);
-    expect((await sqliteDb.jobs.getById(older.id))?.package_config).toEqual(original);
-    expect((await sqliteDb.jobs.getById(newer.id))?.package_config).toEqual({ ...original, assignments });
+    expect((await sqliteDb.jobs.getById(older.id))?.package_config).toEqual({ ...original, assignments });
+    expect((await sqliteDb.jobs.getById(newer.id))?.package_config).toEqual(original);
   });
 
   it('leaves another user, other applications, nondeployed and archived jobs unchanged', async () => {
@@ -99,8 +99,9 @@ describe('deployed settings persistence with SQLite', () => {
 
   it('refuses to persist a selected deployment from another tenant', async () => {
     const job = await create({ tenant_id: 'other-tenant' });
-    expect((await call()).status).toBe(200);
+    expect((await call()).status).toBe(409);
     expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+    expect(state.assign).not.toHaveBeenCalled();
   });
 
   it('preserves assignments when only categories change', async () => {
@@ -123,4 +124,69 @@ describe('deployed settings persistence with SQLite', () => {
     expect(state.assign).toHaveBeenCalledOnce();
     expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
   });
+
+  it('finds the matching tenant despite a newer deployment in another tenant', async () => {
+    const target = await create({ created_at: '2026-01-01T00:00:00Z' });
+    const other = await create({ tenant_id: 'other-tenant', created_at: '2026-02-01T00:00:00Z' });
+    expect((await call()).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(target.id))?.package_config).toEqual({ ...original, assignments });
+    expect((await sqliteDb.jobs.getById(other.id))?.package_config).toEqual(original);
+    const reopened = await GET(new NextRequest('http://localhost/api/intune/apps/deployed/config?wingetId=Fixture.App', {
+      headers: { Authorization: 'Bearer fixture' },
+    }));
+    expect(await reopened.json()).toMatchObject({ config: { ...original, assignments } });
+  });
+
+  it('finds the deployed app beyond the recent fifty user jobs', async () => {
+    const target = await create({ created_at: '2020-01-01T00:00:00Z' });
+    for (let index = 0; index < 51; index++) await create({ winget_id: `Other.App${index}` });
+    expect((await call()).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(target.id))?.package_config).toEqual({ ...original, assignments });
+    const reopened = await GET(new NextRequest('http://localhost/api/intune/apps/deployed/config?wingetId=Fixture.App', {
+      headers: { Authorization: 'Bearer fixture' },
+    }));
+    expect(await reopened.json()).toMatchObject({ config: { ...original, assignments } });
+  });
+
+  it('saves the requested Intune app without overwriting the latest deployment of the same package', async () => {
+    const older = await create({ intune_app_id: 'older-app', created_at: '2026-01-01T00:00:00Z' });
+    const newer = await create({ intune_app_id: 'newer-app', created_at: '2026-02-01T00:00:00Z' });
+    expect((await call(undefined, 'older-app')).status).toBe(200);
+    expect((await sqliteDb.jobs.getById(older.id))?.package_config).toEqual({ ...original, assignments });
+    expect((await sqliteDb.jobs.getById(newer.id))?.package_config).toEqual(original);
+    const reopened = await GET(new NextRequest('http://localhost/api/intune/apps/deployed/config?wingetId=Fixture.App', {
+      headers: { Authorization: 'Bearer fixture' },
+    }));
+    expect(await reopened.json()).toMatchObject({ config: original, intuneAppId: 'newer-app' });
+  });
+
+  it('reports missing local app identity without writing another app configuration', async () => {
+    const job = await create();
+    const response = await call(undefined, 'untracked-app');
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toContain('No matching local deployment');
+    expect(state.assign).not.toHaveBeenCalled();
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
+  it('reports when a guarded update no longer matches the deployed job', async () => {
+    const job = await create();
+    const update = vi.spyOn(sqliteDb.jobs, 'update').mockResolvedValueOnce(null);
+    try {
+      const response = await call();
+      expect(response.status).toBe(409);
+      expect((await response.json()).error).toContain('Intune settings were updated');
+    }
+    finally { update.mockRestore(); }
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+  });
+
+  for (const change of [{ status: 'cancelled' }, { archived_at: '2026-04-01T00:00:00Z' }, { intune_app_id: 'replacement-app' }]) {
+    it(`refuses a local save after the deployment changes ${Object.keys(change)[0]}`, async () => {
+      const job = await create();
+      state.assign.mockImplementationOnce(() => { void sqliteDb.jobs.update(job.id, change); });
+      expect((await call()).status).toBe(409);
+      expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
+    });
+  }
 });

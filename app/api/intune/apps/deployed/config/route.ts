@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
     if (!supabase) {
-      const job = (await getDatabase().jobs.getByUserId(user.userId)).find(
-        (item) => item.winget_id === wingetId && item.status === 'deployed'
+      const job = await getDatabase().jobs.getLatestDeployed(
+        user.userId, user.tenantId, wingetId
       );
       return NextResponse.json({
         config: job?.package_config ?? null,

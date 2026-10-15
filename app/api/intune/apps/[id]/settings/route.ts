@@ -99,6 +99,19 @@ export async function PATCH(
       wingetId?: string;
     };
 
+    // Validate the exact local deployment before changing its Intune settings.
+    const localDb = wingetId && !supabase ? getDatabase() : null;
+    const localJob = localDb && wingetId
+      ? await localDb.jobs.getLatestDeployed(user.userId, tenantId, wingetId, intuneAppId)
+      : null;
+    const localConfig = localJob?.package_config;
+    if (localDb && (!localJob || !localConfig || typeof localConfig !== 'object' || Array.isArray(localConfig))) {
+      return NextResponse.json(
+        { error: 'No matching local deployment configuration was found. Refresh before updating Intune settings.' },
+        { status: 409 }
+      );
+    }
+
     // Apply assignments
     if (assignments) {
       const productCode = existingApp.msiInformation?.productCode;
@@ -158,22 +171,23 @@ export async function PATCH(
           .update({ package_config: updatedConfig })
           .eq('id', latestJob.id);
       }
-    } else if (wingetId && !supabase) {
-      const db = getDatabase();
-      // Match the row selected by the SQLite deployed-config reader.
-      const latestJob = (await db.jobs.getByUserId(user.userId)).find(
-        (job) => job.winget_id === wingetId && job.status === 'deployed'
-      );
-      const config = latestJob?.package_config;
-      if (latestJob && latestJob.tenant_id === tenantId && config && typeof config === 'object' && !Array.isArray(config)) {
-        const updatedConfig: Record<string, Json | undefined> = { ...config };
-        if (assignments) updatedConfig.assignments = assignments as unknown as Json;
-        if (categories) updatedConfig.categories = categories as unknown as Json;
-        await db.jobs.update(latestJob.id, { package_config: updatedConfig as Json }, {
-          user_id: user.userId,
-          tenant_id: tenantId,
-          status: 'deployed',
-        });
+    } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig)) {
+      const updatedConfig: Record<string, Json | undefined> = { ...localConfig };
+      if (assignments) updatedConfig.assignments = assignments as unknown as Json;
+      if (categories) updatedConfig.categories = categories as unknown as Json;
+      const saved = await localDb.jobs.update(localJob.id, { package_config: updatedConfig as Json }, {
+        user_id: user.userId,
+        tenant_id: tenantId,
+        winget_id: wingetId,
+        intune_app_id: intuneAppId,
+        status: 'deployed',
+        archived_at: null,
+      });
+      if (!saved) {
+        return NextResponse.json(
+          { error: 'Intune settings were updated, but the local deployment changed before they could be saved. Refresh the deployment before trying again.' },
+          { status: 409 }
+        );
       }
     }
 

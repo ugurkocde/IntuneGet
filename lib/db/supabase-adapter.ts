@@ -195,6 +195,19 @@ export const supabaseDb: DatabaseAdapter = {
      * Get jobs by user ID
      * Auto-excludes terminal-state jobs older than 7 days
      */
+    async getLatestDeployed(userId, tenantId, wingetId, intuneAppId) {
+      let query = createServerClient().from('packaging_jobs').select('*')
+        .eq('user_id', userId).eq('tenant_id', tenantId).eq('winget_id', wingetId)
+        .eq('status', 'deployed').is('archived_at', null);
+      if (intuneAppId !== undefined) query = query.eq('intune_app_id', intuneAppId);
+      const { data, error } = await query
+        .order('completed_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false }).order('id', { ascending: false })
+        .limit(1).maybeSingle();
+      if (error) throw error;
+      return data as PackagingJob | null;
+    },
+
     async getByUserId(userId: string, limit: number = 50): Promise<PackagingJob[]> {
       const supabase = createServerClient();
 

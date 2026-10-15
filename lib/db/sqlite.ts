@@ -205,6 +205,19 @@ export const sqliteDb: DatabaseAdapter = {
      * Get jobs by user ID
      * Auto-excludes terminal-state jobs older than 7 days
      */
+    async getLatestDeployed(userId, tenantId, wingetId, intuneAppId) {
+      const values: string[] = [userId, tenantId, wingetId];
+      const appFilter = intuneAppId === undefined ? '' : ' AND intune_app_id = ?';
+      if (intuneAppId !== undefined) values.push(intuneAppId);
+      const row = getDb().prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE user_id = ? AND tenant_id = ? AND winget_id = ?
+          AND status = 'deployed' AND archived_at IS NULL${appFilter}
+        ORDER BY completed_at DESC, created_at DESC, id DESC LIMIT 1
+      `).get(...values) as Record<string, unknown> | undefined;
+      return row ? parseJobRow(row) : null;
+    },
+
     async getByUserId(userId: string, limit: number = 50): Promise<PackagingJob[]> {
       const database = getDb();
       // Return the most recent jobs for the user with no age cutoff, so the
