@@ -666,6 +666,9 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  get '1cc5fb513cf3c23120f2b0741d66f11ee435d409'() {
+    return [...terminalToolchainRetryTargets('665d6f4ec65d457edbd455605a54b4b223392457')];
+  },
   get '665d6f4ec65d457edbd455605a54b4b223392457'() {
     return [...terminalToolchainRetryTargets('25849ac512c211e616c135149ef1e059db367ebc')];
   },
