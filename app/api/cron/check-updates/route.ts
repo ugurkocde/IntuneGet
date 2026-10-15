@@ -14,7 +14,7 @@ import {
   AutoUpdateTrigger,
   getLatestInstallerInfo,
 } from '@/lib/auto-update/trigger';
-import { AppUpdatePolicy, shouldSkipUpdate } from '@/types/update-policies';
+import { AppUpdatePolicy, autoUpdateScopeReason, shouldSkipUpdate } from '@/types/update-policies';
 import { getCatalogSource } from '@/lib/catalog';
 import { logValue } from '@/lib/server-log';
 
@@ -177,6 +177,11 @@ async function processAutoUpdates(
       continue;
     }
 
+    if (autoUpdateScopeReason(policy.auto_update_scope, update.current_version, update.latest_version)) {
+      result.skipped++;
+      continue;
+    }
+
     try {
       // Get installer info for the new version
       const installerResolution = await getLatestInstallerInfo(
@@ -229,7 +234,7 @@ async function processAutoUpdates(
             `Rate limit could not be verified for ${update.winget_id}: ${triggerResult.skipReason}`
           );
         }
-        if (triggerResult.code === 'CURATED_LICENCE_NOT_ACCEPTED' || triggerResult.code?.startsWith('CURATED_CONFIG_VERIFICATION')) {
+        if (triggerResult.code === 'UPDATE_SCOPE_HELD' || triggerResult.code === 'CURATED_LICENCE_NOT_ACCEPTED' || triggerResult.code?.startsWith('CURATED_CONFIG_VERIFICATION')) {
           console.warn(`[auto-update] ${update.winget_id} skipped for tenant ${update.tenant_id}: ${triggerResult.skipReason}`);
         }
       } else {

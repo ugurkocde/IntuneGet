@@ -139,6 +139,17 @@ function makeRequest(body: Record<string, unknown>) {
 }
 
 describe('POST /api/update-policies', () => {
+  it('rejects invalid scopes before a hosted write and saves an explicit supported scope', async () => {
+    parseAccessTokenMock.mockResolvedValue({ userId: 'user-1', tenantId: 'tenant-1' });
+    const { supabase, insertPayloads } = createSupabaseMock({ existing_policy: null });
+    createServerClientMock.mockReturnValue(supabase);
+    const base = { winget_id: 'Vendor.Scope', tenant_id: 'tenant-1', policy_type: 'notify' };
+    expect((await POST(makeRequest({ ...base, auto_update_scope: 'unsafe' }))).status).toBe(400);
+    expect(insertPayloads).toHaveLength(0);
+    expect((await POST(makeRequest({ ...base, auto_update_scope: 'major' }))).status).toBe(200);
+    expect(insertPayloads[0].auto_update_scope).toBe('major');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     parseAccessTokenMock.mockResolvedValue({

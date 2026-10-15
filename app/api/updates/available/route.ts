@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
           {
             id: policy.id,
             policy_type: policy.policy_type,
+            auto_update_scope: policy.auto_update_scope,
             is_enabled: policy.is_enabled,
             pinned_version: policy.pinned_version,
             last_auto_update_at: policy.last_auto_update_at,
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest) {
     const wingetIds = [...new Set(updates.map((u) => u.winget_id))];
     let policiesQuery = supabase
       .from('app_update_policies')
-      .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, last_auto_update_version, consecutive_failures')
+      .select('id, winget_id, tenant_id, policy_type, auto_update_scope, is_enabled, pinned_version, last_auto_update_at, last_auto_update_version, consecutive_failures')
       .eq('user_id', user.userId)
       .in('winget_id', wingetIds);
 
@@ -166,6 +167,7 @@ export async function GET(request: NextRequest) {
         policyMap.set(key, {
           id: policy.id,
           policy_type: policy.policy_type,
+            auto_update_scope: policy.auto_update_scope,
           is_enabled: policy.is_enabled,
           pinned_version: policy.pinned_version,
           last_auto_update_at: policy.last_auto_update_at,

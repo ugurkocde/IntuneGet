@@ -1,5 +1,7 @@
 'use client';
 
+import type { AutoUpdateScope } from '@/types/update-policies';
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { T, Var } from "gt-next";
 import { useRouter } from 'next/navigation';
@@ -280,10 +282,14 @@ export default function UpdatesPage() {
 
   const handlePolicyChange = useCallback(async (
     update: AvailableUpdate,
-    policyType: UpdatePolicyType
+    policyType: UpdatePolicyType,
+    scope?: AutoUpdateScope
   ) => {
     try {
-      await updatePolicy({
+      if (scope !== undefined) {
+        if (!update.policy) throw new Error('No saved policy to update');
+        await updatePolicy({ id: update.policy.id, auto_update_scope: scope });
+      } else await updatePolicy({
         winget_id: update.winget_id,
         tenant_id: update.tenant_id,
         policy_type: policyType,
@@ -1053,8 +1059,10 @@ export default function UpdatesPage() {
         open={autoUpdateModalOpen}
         onOpenChange={setAutoUpdateModalOpen}
         policies={autoUpdatePolicies}
-        onPolicyChange={async (policy, policyType) => {
-          await updatePolicy({
+        onPolicyChange={async (policy, policyType, scope) => {
+          if (scope !== undefined) {
+            await updatePolicy({ id: policy.id, auto_update_scope: scope });
+          } else await updatePolicy({
             winget_id: policy.winget_id,
             tenant_id: policy.tenant_id,
             policy_type: policyType,

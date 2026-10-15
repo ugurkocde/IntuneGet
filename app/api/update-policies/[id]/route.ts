@@ -5,6 +5,7 @@
  * DELETE - Delete a specific policy
  */
 
+import { isAutoUpdateScope } from '@/types/update-policies';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
@@ -20,6 +21,7 @@ interface RouteParams {
 
 interface PolicyPatchBody {
   policy_type?: UpdatePolicyType;
+  auto_update_scope?: AppUpdatePolicy['auto_update_scope'];
   pinned_version?: string | null;
   deployment_config?: DeploymentConfig | null;
   is_enabled?: boolean;
@@ -69,6 +71,7 @@ async function patchPolicySqlite(id: string, userId: string, body: PolicyPatchBo
   }
 
   const updateData: Partial<AppUpdatePolicy> = { updated_at: new Date().toISOString() };
+  if (body.auto_update_scope !== undefined) updateData.auto_update_scope = body.auto_update_scope;
   if (body.policy_type !== undefined) updateData.policy_type = body.policy_type;
   if (body.pinned_version !== undefined) updateData.pinned_version = body.pinned_version;
   if (body.deployment_config !== undefined) updateData.deployment_config = body.deployment_config;
@@ -166,6 +169,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
     const body: PolicyPatchBody = await request.json();
+    if (body.auto_update_scope !== undefined && !isAutoUpdateScope(body.auto_update_scope)) {
+      return NextResponse.json({ error: 'Invalid auto_update_scope' }, { status: 400 });
+    }
 
     if (isSqliteMode()) {
       return patchPolicySqlite(id, user.userId, body);
@@ -240,6 +246,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     };
 
     // Only include fields that are provided
+    if (body.auto_update_scope !== undefined) updateData.auto_update_scope = body.auto_update_scope;
     if (body.policy_type !== undefined) updateData.policy_type = body.policy_type;
     if (body.pinned_version !== undefined) updateData.pinned_version = body.pinned_version;
     if (body.deployment_config !== undefined) {

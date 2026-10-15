@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
         const triggerResult = await autoUpdateTrigger.triggerAutoUpdate(
           policy as AppUpdatePolicy,
           installerInfo,
-          { skipRateLimits: true, skipPriorDeploymentCheck: true }
+          { skipRateLimits: true, skipPriorDeploymentCheck: true, bypassUpdateScope: true }
         );
 
         if (triggerResult.success && triggerResult.packagingJobId) {

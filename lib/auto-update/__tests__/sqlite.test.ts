@@ -297,3 +297,21 @@ describe('sqlite auto-update trigger safety', () => {
     expect(await db.jobs.getByTenantId('t1')).toHaveLength(0);
   });
 });
+
+
+it.each(['minor', 'major'] as const)('SQLite scope %s holds before history, jobs or QA work and preserves redeploy scope', async scope => {
+  const { db, triggerSqliteAutoUpdate } = await load();
+  const original = await seedDeployment(db);
+  const policy = await db.updatePolicies.update(original.id, 'u1', { auto_update_scope: scope });
+  const redeployed = await db.updatePolicies.upsert({ user_id: 'u1', tenant_id: 't1', winget_id: 'Vendor.App', policy_type: 'auto_update', deployment_config: deploymentConfig });
+  expect(redeployed.auto_update_scope).toBe(scope);
+  const create = vi.spyOn(db.jobs, 'create');
+  const history = vi.spyOn(db.autoUpdateHistory, 'create');
+  for (const currentVersion of ['1.0.0', 'unknown']) {
+    const result = await triggerSqliteAutoUpdate(db, policy!, { ...installerResolution().info, currentVersion, latestVersion: '1.0.1' });
+    expect(result).toMatchObject({ skipped: true, code: 'UPDATE_SCOPE_HELD' });
+  }
+  expect(create).not.toHaveBeenCalled();
+  expect(history).not.toHaveBeenCalled();
+  expect(acquireGraphTokenMock).not.toHaveBeenCalled();
+});

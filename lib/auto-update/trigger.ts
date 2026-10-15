@@ -13,6 +13,7 @@ import {
   DEFAULT_SAFETY_CONFIG,
   classifyUpdateType,
   canAutoUpdate,
+  autoUpdateScopeReason,
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
@@ -63,6 +64,7 @@ interface TriggerResult {
     | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
     | 'INTUNE_APPROVAL_PENDING'
     | 'CURATED_CONFIG_VERIFICATION_FAILED'
+    | 'UPDATE_SCOPE_HELD'
     | 'RATE_LIMIT_UNVERIFIED'
     | 'PSADT_BACKFILL_UNAVAILABLE';
 }
@@ -219,7 +221,7 @@ export class AutoUpdateTrigger {
   async triggerAutoUpdate(
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
-    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean }
+    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean }
   ): Promise<TriggerResult> {
     try {
       // Safety check 1: Verify policy allows auto-update
@@ -230,6 +232,9 @@ export class AutoUpdateTrigger {
           skipReason: 'Policy does not allow auto-update or is disabled',
         };
       }
+
+      const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.auto_update_scope, updateInfo.currentVersion, updateInfo.latestVersion);
+      if (scopeReason) return { success: false, skipped: true, code: 'UPDATE_SCOPE_HELD', skipReason: scopeReason };
 
       // Safety check 2: Verify deployment config exists
       if (!policy.deployment_config) {
