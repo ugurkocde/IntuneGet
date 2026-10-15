@@ -282,6 +282,24 @@ export const MIGRATIONS: SqliteMigration[] = [
     },
   },
   {
+    version: 7,
+    name: 'local manual application mappings',
+    up: database => {
+      database.exec(`CREATE TABLE manual_app_mappings (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        discovered_app_name TEXT NOT NULL,
+        discovered_publisher TEXT,
+        winget_package_id TEXT NOT NULL,
+        is_verified INTEGER NOT NULL DEFAULT 0 CHECK (is_verified IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (tenant_id, discovered_app_name)
+      );`);
+    },
+  },
+  {
     version: 8,
     name: 'automatic update scope',
     up: db => {

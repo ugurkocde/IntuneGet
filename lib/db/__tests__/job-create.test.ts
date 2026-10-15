@@ -49,7 +49,7 @@ function readStoredJob(id: string): Record<string, unknown> {
   closeDb?.();
   const stored = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
-    // Version 6 includes claimed apps and saved custom app definitions.
+    // Version 8 includes manual mappings and automatic update scope.
     expect(stored.pragma('user_version', { simple: true })).toBe(8);
     return stored.prepare('SELECT * FROM packaging_jobs WHERE id = ?').get(id) as Record<string, unknown>;
   } finally {
