@@ -91,7 +91,7 @@ describe('sqlite migrations', () => {
 it('upgrades existing policies to all updates and constrains scope values', () => {
   const db = new Database(':memory:');
   for (const migration of MIGRATIONS.filter(m => m.version < 8)) migration.up(db);
-  db.pragma('user_version = 6');
+  db.pragma('user_version = 7');
   db.exec("INSERT INTO app_update_policies (id,user_id,tenant_id,winget_id,policy_type) VALUES ('p','u','t','App.Test','notify')");
   runSqliteMigrations(db);
   expect(db.prepare('SELECT auto_update_scope FROM app_update_policies').get()).toEqual({ auto_update_scope: 'all' });
