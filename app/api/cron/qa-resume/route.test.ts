@@ -59,7 +59,7 @@ import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
 import { PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
-import { QaGateNotPassedError } from '@/lib/qa/gate';
+import { QaGateNotPassedError, QaGateError, QaSecurityGateError, QaCompatibilityGateError } from '@/lib/qa/gate';
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
@@ -181,6 +181,42 @@ describe('GET /api/cron/qa-resume', () => {
       wingetId: job.winget_id, version: job.version, installerSha256: job.installer_sha256,
     }));
   });
+
+  it.each(['one flag', 'two flags', 'failed install', 'compatibility', 'changed identity'])(
+    'preserves the customer gate disposition for %s', async (kind) => {
+      const job = {
+        id: 'gate-disposition-job', tenant_id: 'tenant-fake', winget_id: 'Vendor.App', version: '1.0',
+        status: 'awaiting_qa', qa_candidate_id: 'passed-candidate', architecture: 'x64',
+        installer_sha256: 'B'.repeat(64), execution_profile_sha256: 'A'.repeat(64),
+        package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64' },
+      };
+      const store = jobStore(job); let reads = 0;
+      createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') return ++reads === 1
+          ? chain({ data: [structuredClone(job)], error: null }) : store.updateQuery();
+        if (table === 'qa_candidates') return candidateQuery([{ id: 'passed-candidate', status: 'passed', package_profile_sha256: 'A'.repeat(64) }]);
+        if (table === 'qa_package_results') return chain({ data: { outcome: 'Passed' }, error: null });
+        throw new Error('Unexpected table');
+      }) });
+      const security = new QaSecurityGateError({ wingetId: job.winget_id, version: job.version, architecture: 'x64', malicious: kind === 'one flag' ? 1 : 2, totalEngines: 72 });
+      const gateError = kind === 'failed install' ? new QaGateError({ wingetId: job.winget_id, testedVersion: job.version, architecture: 'x64', testedAtUtc: '2026-10-16T00:00:00Z', classification: { signal: 'failed', bucket: 'unknown', confidence: 'low', evidence: 'Synthetic failed installation', remediation: 'Review the failed installation', source: 'heuristic' } })
+        : kind === 'compatibility' ? new QaCompatibilityGateError({ wingetId: job.winget_id, version: job.version, architecture: 'x64', installerSha256: job.installer_sha256, blockCode: 'failed_managed_lifecycle' }) : security;
+      enforceQaGateMock.mockImplementation(async () => {
+        if (kind === 'changed identity') store.row.installer_sha256 = 'C'.repeat(64);
+        throw gateError;
+      });
+      const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+      const terminal = kind !== 'one flag' && kind !== 'changed identity';
+      expect(await response.json()).toMatchObject({ resumed: 0, failed: terminal ? 1 : 0 });
+      expect(store.row.status).toBe(terminal ? 'qa_failed' : 'awaiting_qa');
+      if (kind === 'one flag') expect(store.row.status_message).toBe('VirusTotal: 1 engine flagged, rechecking daily');
+      else if (kind === 'two flags') expect(store.row.status_message).toBe('VirusTotal refused execution for this installer hash.');
+      else if (kind !== 'changed identity') expect(store.row.status_message).toContain(gateError.message);
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      if (terminal) expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id, 'failed', store.row.status_message);
+      else expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([1, 2, 3].flatMap((jobCount) => [true, false].flatMap((localPackager) =>
     [true, false].flatMap((isAutoUpdate) => [true, false].map((continuity) =>

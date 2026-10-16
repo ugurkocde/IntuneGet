@@ -164,8 +164,22 @@ describe('enforceQaGate', () => {
     it('fails closed when the reputation read fails', async () => {
       getPackageResultMock.mockResolvedValueOnce({ data: null, error: null });
       getPackageResultMock.mockResolvedValueOnce({ data: null, error: { message: 'unavailable' } });
-      await expect(enforceQaGate({ ...request, qaOverride: true })).rejects.toThrow('unavailable');
+      await expect(enforceQaGate({ ...request, qaOverride: true })).rejects.toMatchObject({ details: { reason: 'reputation' } });
     });
+
+    it.each([0, 1].flatMap(read => [false, true].map(transport => ({ read, transport }))))(
+      'keeps a failed verdict lookup as a resumable reputation hold: %j', async ({ read, transport }) => {
+        if (read) getPackageResultMock.mockResolvedValueOnce({ data: null, error: null });
+        if (transport) getPackageResultMock.mockRejectedValueOnce(new Error('synthetic transport failure'));
+        else getPackageResultMock.mockResolvedValueOnce({ data: null, error: { message: 'synthetic unavailable' } });
+        const error = await enforceQaGate({ ...request, qaOverride: true }).catch((error: unknown) => error);
+        expect(error).toMatchObject({
+          code: 'QA_NOT_PASSED_CURRENT_VERSION', details: { reason: 'reputation' },
+          cause: expect.objectContaining({ message: expect.stringContaining('synthetic') }),
+        });
+        expect((error as Error).message).not.toContain(installerSha256);
+      }
+    );
 
     it('describes the reputation hold without claiming the installation test failed', async () => {
       getPackageResultMock.mockResolvedValue({ data: { ...clean, virustotal_status: 'not_found' }, error: null });

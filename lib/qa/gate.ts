@@ -160,14 +160,14 @@ export async function enforceQaGate(input: {
   const architecture = (input.architecture || 'x64').toLowerCase();
   const installerSha256 = input.installerSha256?.trim().toUpperCase() || '';
   const packageProfileSha256 = input.packageProfileSha256?.trim().toUpperCase() || '';
-  const reputationHold = () => new QaGateNotPassedError({
+  const reputationHold = (cause?: unknown) => Object.assign(new QaGateNotPassedError({
     wingetId: input.wingetId,
     version: input.version,
     architecture,
     installerSha256,
     packageProfileSha256,
     reason: 'reputation',
-  });
+  }), cause === undefined ? {} : { cause });
 
   // Reviewed exact-payload compatibility blocks cannot be bypassed. These are
   // upstream or platform safety boundaries, not ordinary QA failures.
@@ -194,20 +194,24 @@ export async function enforceQaGate(input: {
   // Security gate: a malicious VirusTotal verdict for this exact installer
   // blocks packaging even when the installability gate is overridden.
   if (installerSha256) {
-    const { data: securityRow, error: securityError } = await createServerClient()
-      .from('qa_package_results')
-      .select('virustotal_malicious, virustotal_total_engines')
-      .eq('winget_id', input.wingetId)
-      .eq('tested_version', input.version)
-      .eq('architecture', architecture)
-      .eq('installer_sha256', installerSha256)
-      .gte('virustotal_malicious', 1)
-      .order('tested_at_utc', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (securityError) {
-      throw new Error(`Could not read the installer security verdict: ${securityError.message}`);
+    let securityResult;
+    try {
+      securityResult = await createServerClient()
+        .from('qa_package_results')
+        .select('virustotal_malicious, virustotal_total_engines')
+        .eq('winget_id', input.wingetId)
+        .eq('tested_version', input.version)
+        .eq('architecture', architecture)
+        .eq('installer_sha256', installerSha256)
+        .gte('virustotal_malicious', 1)
+        .order('tested_at_utc', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    } catch (error) {
+      throw reputationHold(error);
     }
+    const { data: securityRow, error: securityError } = securityResult;
+    if (securityError) throw reputationHold(securityError);
     const malicious = (securityRow?.virustotal_malicious as number | null) ?? 0;
     if (malicious >= 1) {
       throw new QaSecurityGateError({
@@ -223,20 +227,24 @@ export async function enforceQaGate(input: {
   // A successful lifecycle or an installability override does not establish
   // reputation. Only covered, clean evidence for these exact bytes can admit
   // packaging. QA owns public-installer submission and verdict refreshes.
-  const { data: reputationRow, error: reputationError } = await createServerClient()
-    .from('qa_package_results')
-    .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
-    .eq('winget_id', input.wingetId)
-    .eq('tested_version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
-    .order('tested_at_utc', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (reputationError) {
-    throw new Error(`Could not read the installer reputation verdict: ${reputationError.message}`);
+  let reputationResult;
+  try {
+    reputationResult = await createServerClient()
+      .from('qa_package_results')
+      .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
+      .eq('winget_id', input.wingetId)
+      .eq('tested_version', input.version)
+      .eq('architecture', architecture)
+      .eq('installer_sha256', installerSha256)
+      .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
+      .order('tested_at_utc', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  } catch (error) {
+    throw reputationHold(error);
   }
+  const { data: reputationRow, error: reputationError } = reputationResult;
+  if (reputationError) throw reputationHold(reputationError);
   if (
     reputationRow?.virustotal_status !== 'clean' ||
     reputationRow.virustotal_malicious !== 0 ||

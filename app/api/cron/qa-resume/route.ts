@@ -16,7 +16,8 @@ import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
-import { enforceQaGate } from '@/lib/qa/gate';
+import { enforceQaGate, describeQaGateError, QaGateError, QaGateNotPassedError, QaSecurityGateError, QaCompatibilityGateError } from '@/lib/qa/gate';
+import { installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
@@ -222,6 +223,19 @@ export async function GET(request: Request) {
       waiting++;
       continue;
     }
+    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T): T => {
+      const identityFields = [
+        ['qa_candidate_id', observed.qa_candidate_id],
+        ['installer_sha256', observed.installer_sha256],
+        ['architecture', observed.architecture],
+        ['package_config->>installerSha256', observedConfig?.installerSha256],
+        ['package_config->>architecture', observedConfig?.architecture],
+      ] as const;
+      for (const [column, value] of identityFields) {
+        query = value == null ? query.is(column, null) : query.eq(column, value);
+      }
+      return query;
+    };
     if (compatibilityBlock) {
       const now = new Date().toISOString();
       let failureUpdate = supabase
@@ -239,18 +253,7 @@ export async function GET(request: Request) {
         .eq('status', 'awaiting_qa');
       // Another invocation can relink this job without changing its status.
       // Fail only the raw stored identity that the lookup actually observed.
-      const identityFields = [
-        ['qa_candidate_id', observed.qa_candidate_id],
-        ['installer_sha256', observed.installer_sha256],
-        ['architecture', observed.architecture],
-        ['package_config->>installerSha256', observedConfig?.installerSha256],
-        ['package_config->>architecture', observedConfig?.architecture],
-      ] as const;
-      for (const [column, value] of identityFields) {
-        failureUpdate = value == null
-          ? failureUpdate.is(column, null)
-          : failureUpdate.eq(column, value);
-      }
+      failureUpdate = guardObservedIdentity(failureUpdate);
       const { data: blockedJob, error: blockError } = await failureUpdate
         .select('id')
         .maybeSingle();
@@ -345,9 +348,28 @@ export async function GET(request: Request) {
         sourceType: observedConfig?.sourceType,
         curatedReleaseId: observedConfig?.curatedReleaseId,
       });
-    } catch {
-      waitingIds.push(job.id);
-      waiting++;
+    } catch (error) {
+      const terminal = error instanceof QaGateError || error instanceof QaCompatibilityGateError ||
+        (error instanceof QaSecurityGateError && error.details.malicious >= 2);
+      const message = error instanceof QaSecurityGateError ? installerSecurityReason(error.details.malicious)
+        : error instanceof QaGateError || error instanceof QaCompatibilityGateError || error instanceof QaGateNotPassedError
+          ? describeQaGateError(error) : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
+      const patch = terminal ? {
+        status: 'qa_failed', status_message: message, error_message: message,
+        error_code: error.code, error_stage: 'validation', error_category: 'installer',
+        completed_at: new Date().toISOString(),
+      } : { status_message: message };
+      const result = await guardObservedIdentity(supabase.from('packaging_jobs').update(patch)
+        .eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
+      if (result.error) throw new Error('Could not preserve the customer gate disposition');
+      if (!result.data) continue;
+      if (terminal) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', message);
+      } else {
+        waitingIds.push(job.id);
+        waiting++;
+      }
       continue;
     }
 
