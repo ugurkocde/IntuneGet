@@ -12,6 +12,21 @@ async function fixture() {
   return f;
 }
 
+it.each(['wrong secret','expired lease'])('rejects %s before changing an unknown hold', async denial => {
+  const {pg}=await fixture();
+  try {
+    const active='22222222-2222-4222-8222-222222222222';
+    await pg.query("insert into qa_candidates(id,status,test_level,installer_sha256) values($1,'running','psadt-package',$2)",[active,'b'.repeat(64)]);
+    await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second'");
+    const lease=(await pg.query<{r:{lease:string}[]}>("select claim_qa_installer_security_rechecks('local-fixture-only',$1,1) r",[active])).rows[0].r[0].lease;
+    if (denial==='expired lease') await pg.exec("update qa_installer_security_holds set recheck_lease_expires_at=now()-interval '1 second'");
+    const before=(await pg.query('select * from qa_installer_security_holds')).rows[0];
+    await expect(pg.query("select complete_qa_installer_security_recheck($1,$2,$3,2,0,60,now()-interval '1 day')",[denial==='wrong secret'?'wrong':'local-fixture-only',hash,lease])).rejects.toThrow(denial==='wrong secret'?'QA authentication rejected':'Daily installer verdict lease rejected');
+    expect((await pg.query('select * from qa_installer_security_holds')).rows[0]).toEqual(before);
+    expect((await pg.query('select * from catalog_file_reputation')).rows).toHaveLength(0);
+  } finally {await pg.close();}
+},30000);
+
 it.each([1,2])('upgrades an unknown hold from older covered cache evidence with %i flags without lowering its release floor', async malicious => {
   const {pg} = await fixture();
   try {

@@ -1,5 +1,5 @@
 {
   "title": "Keep pending installer security findings accurate",
-  "summary": "Pending installer security checks now retain confirmed antivirus findings even when the analysis predates the pending check. Older clean evidence cannot release the hold.",
+  "summary": "Adds support for keeping antivirus findings on pending installer checks even when the analysis predates the check. Older clean results cannot release the hold.",
   "type": "fixed"
 }
