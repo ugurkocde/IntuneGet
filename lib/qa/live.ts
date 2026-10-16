@@ -507,7 +507,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const heldErrors = await supabase.rpc('qa_installer_security_waiting_errors', {});
   if (heldErrors.error || !Array.isArray(heldErrors.data)) throw new Error('Installer security waiting queue is unavailable');
   for (const held of heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string; malicious: number }>) {
-    if (!Number.isInteger(held.malicious) || held.malicious < 1) throw new Error('Installer security waiting queue is invalid');
+    if (!Number.isInteger(held.malicious) || held.malicious < 0 || held.malicious > 9999) throw new Error('Installer security waiting queue is invalid');
     waiting.push({ ...held, sourceRetry: false, securityHold: true, securityReason: installerSecurityReason(held.malicious) });
   }
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
