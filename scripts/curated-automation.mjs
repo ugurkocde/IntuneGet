@@ -297,8 +297,10 @@ async function plan() {
       alerts.push(`${app.name} ${candidate.version}: no earlier official installer is available, and this app requires a tested upgrade.`);
       continue;
     }
-    await dispatchVerification({ app_label: `${app.name} ${candidate.version} ${app.architecture} [${candidate.id}]`, candidate: JSON.stringify(candidate), previous: previous ? JSON.stringify(previous) : '' });
-    row.state = previous ? `Priority verification queued (upgrade from ${previous.version})` : 'Priority verification queued (vendor-managed, no upgrade test)';
+    const dispatchResult = await dispatchVerification({ app_label: `${app.name} ${candidate.version} ${app.architecture} [${candidate.id}]`, candidate: JSON.stringify(candidate), previous: previous ? JSON.stringify(previous) : '' });
+    row.state = dispatchResult?.held ? 'Held: reviewed QA repair required'
+      : dispatchResult?.existing ? 'Verification already queued or active'
+      : previous ? `Priority verification queued (upgrade from ${previous.version})` : 'Priority verification queued (vendor-managed, no upgrade test)';
   }
 
   // Decide whether the catalog must be signed again.

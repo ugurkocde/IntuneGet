@@ -68,6 +68,16 @@ describe('curated QA history', () => {
 });
 
 describe('custom configuration verification lifecycle', () => {
+  it('reports a refused held enqueue instead of inventing queued work', async () => {
+    responses = { 'rpc/enqueue_curated_verification': { held: true, reason: 'reviewed_no_go' } };
+    expect(await store.enqueueCuratedVerification({ candidate: JSON.stringify(release.candidate), app_label: `VS Code [${release.candidate.id}]` }))
+      .toEqual({ held: true, queued: false, reason: 'reviewed_no_go' });
+  });
+  it('distinguishes an existing queue no-op from a newly enqueued row', async () => {
+    responses = { 'rpc/enqueue_curated_verification': null };
+    expect(await store.enqueueCuratedVerification({ candidate: JSON.stringify(release.candidate), app_label: `VS Code [${release.candidate.id}]` }))
+      .toMatchObject({ queued: true, existing: true });
+  });
   const now = new Date('2026-10-05T09:00:00Z');
   const row = (overrides: Record<string, unknown>) => ({ id: '11111111-2222-4333-8444-555555555555', release_id: release.id, app_id: app.id, winget_id: app.packageId,
     psadt_config_sha256: 'c'.repeat(64), psadt_config: { deployMode: 'Silent' }, status: 'requested', github_run_id: null, failure_detail: null, updated_at: '2026-10-05T08:00:00Z', ...overrides });
