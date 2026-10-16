@@ -57,7 +57,9 @@ begin
   on conflict(sha256) do update set candidate_id=excluded.candidate_id,
     winget_id=excluded.winget_id,version=excluded.version,architecture=excluded.architecture,
     manifest_installer_url=excluded.manifest_installer_url,execution_installer_url=excluded.execution_installer_url,
-    preflight_cache_key=excluded.preflight_cache_key,verified_at=excluded.verified_at;
+    preflight_cache_key=excluded.preflight_cache_key,verified_at=excluded.verified_at
+  where qa_vt_submission_intents.upload_url_reserved_at is null
+    and qa_vt_submission_intents.upload_reserved_at is null;
 end;
 $$;
 revoke all on function public.record_qa_vt_submission_intent(uuid,text,text) from public,anon,authenticated;

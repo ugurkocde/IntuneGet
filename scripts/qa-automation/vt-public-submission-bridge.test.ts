@@ -110,3 +110,17 @@ it('seeds an unknown report from an already covered positive cache without weake
     expect((await pg.query<{reason:string}>('select failure_summary reason from qa_candidates where id=$1',[id])).rows[0].reason).toBe('VirusTotal refused execution for this installer hash.');
   }finally{await pg.close();}
 },30000);
+
+it('keeps the original owner able to record analysis after another candidate has the same public hash',async()=>{
+  const {pg}=await fixture();
+  try {
+    await pg.query('select record_qa_vt_submission_intent($1,$2,$3)',[id,'verified',url]);
+    await pg.query("select reserve_qa_vt_candidate_request('local-fixture-only',$1,$2,'upload')",[id,hash]);
+    await pg.query("insert into qa_candidates(id,status,test_level,winget_id,version,architecture,installer_sha256,installer_url) values($1,'dispatched','psadt-package','Example.App','1','x64',$2,$3)",[other,hash,url]);
+    await pg.query('select record_qa_vt_submission_intent($1,$2,$3)',[other,'verified',url]);
+    expect((await pg.query<{candidate_id:string}>('select candidate_id from qa_vt_submission_intents')).rows[0].candidate_id).toBe(id);
+    await pg.query("select record_qa_vt_submission_analysis('local-fixture-only',$1,$2,'original-analysis','submitted')",[id,hash]);
+    expect((await pg.query<{analysis_id:string}>('select analysis_id from qa_vt_submission_intents')).rows[0].analysis_id).toBe('original-analysis');
+    await expect(pg.query("select reserve_qa_vt_candidate_request('local-fixture-only',$1,$2,'upload')",[other,hash])).rejects.toThrow('intent unavailable');
+  }finally{await pg.close();}
+},30000);

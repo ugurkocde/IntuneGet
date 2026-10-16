@@ -9,7 +9,7 @@ afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();preflight.mockReset();
 it.each(['live','cache'])('records server %s provenance before GitHub dispatch',async source=>{
   preflight.mockResolvedValue({status:'healthy',source,cacheKey:'verified'});server.mockReturnValue({rpc});
   const fetchMock=vi.fn().mockResolvedValue(new Response(null,{status:204}));vi.stubGlobal('fetch',fetchMock);
-  rpc.mockImplementation(async()=>{expect(fetchMock).not.toHaveBeenCalled();return {error:null};});
+  rpc.mockImplementation(()=>({abortSignal:async(signal:AbortSignal)=>{expect(signal).toBeInstanceOf(AbortSignal);expect(fetchMock).not.toHaveBeenCalled();return {error:null};}}));
   await dispatchQaCandidate(candidate);
   expect(rpc).toHaveBeenCalledExactlyOnceWith('record_qa_vt_submission_intent',{p_candidate_id:candidate.id,p_cache_key:'verified',p_execution_url:candidate.installer_url});
   expect(fetchMock).toHaveBeenCalledOnce();
@@ -20,7 +20,7 @@ it.each(['Custom.Private','intuneget.curated.app'])('never records upload proven
   await dispatchQaCandidate({...candidate,winget_id});expect(rpc).not.toHaveBeenCalled();
 });
 it('continues dispatch without upload rights when the optional intent RPC fails',async()=>{
-  preflight.mockResolvedValue({status:'healthy',source:'live',cacheKey:'verified'});server.mockReturnValue({rpc});rpc.mockRejectedValue(new Error('fixture transport failure'));
+  preflight.mockResolvedValue({status:'healthy',source:'live',cacheKey:'verified'});server.mockReturnValue({rpc});rpc.mockImplementation(()=>({abortSignal:async()=>{throw new Error('fixture transport failure');}}));
   vi.spyOn(console,'warn').mockImplementation(()=>{});const fetchMock=vi.fn().mockResolvedValue(new Response(null,{status:204}));vi.stubGlobal('fetch',fetchMock);
   await dispatchQaCandidate(candidate);expect(fetchMock).toHaveBeenCalledOnce();expect(console.warn).toHaveBeenCalledWith('QA public installer submission intent unavailable');
 });
@@ -28,3 +28,10 @@ it('never records provenance or dispatches after a rejected manifest preflight',
   preflight.mockRejectedValue(new Error('manifest mismatch'));server.mockReturnValue({rpc});const fetchMock=vi.fn();vi.stubGlobal('fetch',fetchMock);
   await expect(dispatchQaCandidate(candidate)).rejects.toThrow('manifest mismatch');expect(rpc).not.toHaveBeenCalled();expect(fetchMock).not.toHaveBeenCalled();
 });
+
+it('bounds a stalled intent request without stalling ordinary dispatch',async()=>{
+  preflight.mockResolvedValue({status:'healthy',source:'live',cacheKey:'verified'});server.mockReturnValue({rpc});
+  rpc.mockImplementation(()=>({abortSignal:(signal:AbortSignal)=>new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}))}));
+  vi.spyOn(console,'warn').mockImplementation(()=>{});const fetchMock=vi.fn().mockResolvedValue(new Response(null,{status:204}));vi.stubGlobal('fetch',fetchMock);
+  await dispatchQaCandidate(candidate);expect(fetchMock).toHaveBeenCalledOnce();
+},5000);

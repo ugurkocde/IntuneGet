@@ -19,7 +19,7 @@ export async function recordPublicSubmissionIntent(
     const { error } = await client.rpc('record_qa_vt_submission_intent', {
       p_candidate_id: candidateId, p_cache_key: preflight.cacheKey,
       p_execution_url: request.installerUrl,
-    });
+    }).abortSignal(AbortSignal.timeout(2_000));
     if (error) throw new Error('Submission intent unavailable');
   } catch {
     // Do not log transport errors, URLs or customer configuration.
