@@ -189,6 +189,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // SJMCL's Tauri NSIS configuration uses the default currentUser install
+    // mode. WinGet omits Scope; keep QA and customer packages in user context.
+    // https://github.com/UNIkeEN/SJMCL/blob/v1.3.2/src-tauri/tauri.windows.conf.json
+    wingetId: 'SJMC.SJMCL',
+    requiredInstallScope: 'user',
+  },
+  {
     // Luniq's published Electron Builder configuration sets NSIS perMachine to
     // false and allowElevation to false. WinGet currently omits Scope, so the
     // generic machine default installs below LocalSystem's systemprofile and

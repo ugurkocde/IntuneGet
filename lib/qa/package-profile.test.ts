@@ -1673,6 +1673,22 @@ describe('PSADT QA package identity', () => {
     } });
   });
 
+  it('keeps SJMCL in its supported user context while preserving the exact installer and registered removal identity', () => {
+    const installerSha256 = 'D6673DA6AC1665110379F69B7DA8138506AB890AE7B6418DCE4636AA00AF619E';
+    const uninstallCommand = 'REGISTRY_UNINSTALL:SJMCL';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SJMC.SJMCL', displayName: 'SJMCL', publisher: 'SJMCL',
+      version: '1.3.2', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile).toMatchObject({ installer: {
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    } });
+  });
+
   it('binds WireSock CLI QA to the shared SDK registration adapter', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',
