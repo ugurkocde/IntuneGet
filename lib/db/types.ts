@@ -208,6 +208,9 @@ export interface DatabaseAdapter {
      */
     getById(id: string): Promise<PackagingJob | null>;
 
+    /** Most recently completed, unarchived deployment within an exact owner and tenant. */
+    getLatestDeployed(userId: string, tenantId: string, wingetId: string, intuneAppId?: string): Promise<PackagingJob | null>;
+
     /**
      * Get jobs by user ID
      */

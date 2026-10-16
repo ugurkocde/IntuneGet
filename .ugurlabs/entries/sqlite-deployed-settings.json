@@ -1,0 +1,5 @@
+{
+  "title": "Keep self hosted deployment settings in sync",
+  "summary": "Assignment and category edits now remain visible when reopening deployed app settings with the SQLite backend.",
+  "type": "fixed"
+}

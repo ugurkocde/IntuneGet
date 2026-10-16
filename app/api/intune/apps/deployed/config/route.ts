@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const wingetId = searchParams.get('wingetId');
+    const intuneAppId = searchParams.get('intuneAppId');
 
     if (!wingetId) {
       return NextResponse.json(
@@ -28,8 +29,8 @@ export async function GET(request: NextRequest) {
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
     if (!supabase) {
-      const job = (await getDatabase().jobs.getByUserId(user.userId)).find(
-        (item) => item.winget_id === wingetId && item.status === 'deployed'
+      const job = await getDatabase().jobs.getLatestDeployed(
+        user.userId, user.tenantId, wingetId, intuneAppId ?? undefined
       );
       return NextResponse.json({
         config: job?.package_config ?? null,
@@ -50,14 +51,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the most recent successfully deployed job's package_config
-    const { data, error } = await supabase
+    let query = supabase
       .from('packaging_jobs')
       .select('package_config, completed_at, intune_app_id')
       .eq('user_id', user.userId)
       .eq('tenant_id', tenantResolution.tenantId)
       .eq('winget_id', wingetId)
-      .eq('status', 'deployed')
+      .eq('status', 'deployed');
+    if (intuneAppId !== null) query = query.eq('intune_app_id', intuneAppId);
+    const { data, error } = await query
       .order('completed_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(1)
       .maybeSingle();
 

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerClientOrNull } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -98,6 +99,19 @@ export async function PATCH(
       wingetId?: string;
     };
 
+    // Validate the exact local deployment before changing its Intune settings.
+    const localDb = wingetId && !supabase ? getDatabase() : null;
+    const localJob = localDb && wingetId
+      ? await localDb.jobs.getLatestDeployed(user.userId, tenantId, wingetId, intuneAppId)
+      : null;
+    const localConfig = localJob?.package_config;
+    if (localDb && (!localJob || !localConfig || typeof localConfig !== 'object' || Array.isArray(localConfig))) {
+      return NextResponse.json(
+        { error: 'No matching local deployment configuration was found. Refresh before updating Intune settings.' },
+        { status: 409 }
+      );
+    }
+
     // Apply assignments
     if (assignments) {
       const productCode = existingApp.msiInformation?.productCode;
@@ -137,8 +151,11 @@ export async function PATCH(
         .eq('user_id', user.userId)
         .eq('tenant_id', tenantId)
         .eq('winget_id', wingetId)
+        .eq('intune_app_id', intuneAppId)
         .eq('status', 'deployed')
         .order('completed_at', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -152,10 +169,39 @@ export async function PATCH(
         if (categories) {
           updatedConfig.categories = categories as unknown as Json;
         }
-        await supabase
+        const { data: saved, error: saveError } = await supabase
           .from('packaging_jobs')
           .update({ package_config: updatedConfig })
-          .eq('id', latestJob.id);
+          .eq('id', latestJob.id)
+          .eq('user_id', user.userId)
+          .eq('tenant_id', tenantId)
+          .eq('winget_id', wingetId)
+          .eq('intune_app_id', intuneAppId)
+          .eq('status', 'deployed')
+          .select('id')
+          .maybeSingle();
+        if (saveError || !saved) {
+          return NextResponse.json(
+            { error: 'Intune settings were updated, but the deployment configuration could not be saved. Refresh before trying again.' },
+            { status: 409 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'Intune settings were updated, but no matching deployment configuration was available to save. Refresh before trying again.' },
+          { status: 409 }
+        );
+      }
+    } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig)) {
+      const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');
+      const saved = sqliteDeployedConfig.mergeFields(localJob.id, {
+        userId: user.userId, tenantId, wingetId: wingetId!, intuneAppId,
+      }, { assignments, categories });
+      if (!saved) {
+        return NextResponse.json(
+          { error: 'Intune settings were updated, but the local deployment changed before they could be saved. Refresh the deployment before trying again.' },
+          { status: 409 }
+        );
       }
     }
 
