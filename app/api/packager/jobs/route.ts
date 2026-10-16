@@ -145,10 +145,11 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         const message = isQaGateError(error) ? describeQaGateError(error)
           : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
-        await db.jobs.update(job.id, {
+        const held = await db.jobs.update(job.id, {
           status: 'awaiting_qa', status_message: message, completed_at: null,
           packager_id: null, packager_heartbeat_at: null, claimed_at: null, packaging_started_at: null,
-        }, { status: 'packaging', packager_id: packagerId });
+        }, { status: 'packaging', packaging_started_at: job.packaging_started_at });
+        if (!held) throw new Error('Could not preserve the installer security hold');
         return NextResponse.json({ claimed: false, error: message }, { status: 409 });
       }
     }
