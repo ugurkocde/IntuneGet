@@ -1,5 +1,6 @@
 import type { CuratedAppDefinition, CuratedCandidate, CuratedRelease, CuratedCatalogEnvelope, CuratedCatalogEntry } from './types';
 export class CuratedCatalogError extends Error { readonly code: 'CURATED_RELEASE_UNAVAILABLE'; constructor(message: string); }
+export class CuratedEvidenceMismatchError extends CuratedCatalogError { constructor(); }
 export const MIRROR_REDIRECT_POLICY: 'any-https-mirror-with-pinned-sha256';
 export function canonicalJson(value: unknown): string;
 export function sha256(value: string): string;

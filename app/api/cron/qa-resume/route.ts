@@ -18,6 +18,7 @@ import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliatio
 import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 import { enforceQaGate, describeQaGateError, QaGateError, QaGateNotPassedError, QaSecurityGateError, QaCompatibilityGateError } from '@/lib/qa/gate';
 import { installerSecurityReason } from '@/lib/qa/installer-security-holds';
+import { CuratedCatalogError, CuratedEvidenceMismatchError } from '@/lib/curated-catalog/core.mjs';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
@@ -350,13 +351,17 @@ export async function GET(request: Request) {
       });
     } catch (error) {
       const terminal = error instanceof QaGateError || error instanceof QaCompatibilityGateError ||
+        error instanceof CuratedEvidenceMismatchError ||
         (error instanceof QaSecurityGateError && error.details.malicious >= 2);
-      const message = error instanceof QaSecurityGateError ? installerSecurityReason(error.details.malicious)
+      const message = error instanceof CuratedEvidenceMismatchError
+        ? 'The requested package does not match its approved curated test evidence.'
+        : error instanceof CuratedCatalogError ? 'Curated release verification is pending. Packaging remains on hold.'
+        : error instanceof QaSecurityGateError ? installerSecurityReason(error.details.malicious)
         : error instanceof QaGateError || error instanceof QaCompatibilityGateError || error instanceof QaGateNotPassedError
           ? describeQaGateError(error) : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
       const patch = terminal ? {
         status: 'qa_failed', status_message: message, error_message: message,
-        error_code: error.code, error_stage: 'validation', error_category: 'installer',
+        error_code: error.code, error_stage: 'validation', error_category: error instanceof CuratedEvidenceMismatchError ? 'validation' : 'installer',
         completed_at: new Date().toISOString(),
       } : { status_message: message };
       const result = await guardObservedIdentity(supabase.from('packaging_jobs').update(patch)

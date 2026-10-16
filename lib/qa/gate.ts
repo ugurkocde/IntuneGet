@@ -1,5 +1,5 @@
 import { getCatalogSource } from '@/lib/catalog';
-import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { classifyQaFailure } from '@/lib/qa/classify';
 import { createServerClient } from '@/lib/supabase';
@@ -151,7 +151,7 @@ export async function enforceQaGate(input: {
     // packager release and every MSP batch, which passes no profile.
     if (input.sourceType === 'custom' || input.qaOverride || (input.architecture || app.architecture) !== app.architecture ||
         (input.installerSha256 && input.installerSha256.toLowerCase() !== release.installerSha256.toLowerCase())) {
-      throw new CuratedCatalogError('The requested package does not match its approved curated test evidence.');
+      throw new CuratedEvidenceMismatchError();
     }
     return;
   }
