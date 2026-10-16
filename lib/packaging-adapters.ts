@@ -718,6 +718,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedRegistryUninstallDisplayName: 'AionUi',
   },
   {
+    // The Tauri NSIS package registers the vendor productName rather than
+    // its catalog title. Capture only that exact registration for both QA
+    // and customer packages; other changed registrations remain excluded.
+    wingetId: 'TongTianLu.TongTopStore',
+    reviewedRegistryUninstallDisplayName: 'tongtop-store',
+  },
+  {
     // The 1.5.6-beta.1 catalog metadata calls the product `QTTabBar`, while the
     // nested MSI registers `QTTabBar 1.5.6.1 Beta(2024)`. QA run 33202083278
     // observed exactly one visible indiff MSI registration with that identity.

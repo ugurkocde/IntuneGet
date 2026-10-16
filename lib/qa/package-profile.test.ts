@@ -405,6 +405,37 @@ describe('PSADT QA package identity', () => {
       .toBe('AionUi');
   });
 
+  it('binds TongTop Store to its registered identity without changing the installer contract', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'TongTianLu.TongTopStore',
+      displayName: 'TongTop Store',
+      publisher: 'TongTianLu',
+      version: '0.7.1',
+      architecture: 'x64',
+      installerSha256: '7E91A3FFF5E6FB968B97874F9AF49AD24DD9AB08832344CD0FE7B6E57F891543',
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:TongTop Store',
+      installScope: 'user',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { sha256: string; silentArgs: string; installScope: string; uninstallCommand: string };
+      psadtConfig: { reviewedRegistryUninstallDisplayName?: string };
+    };
+
+    expect(profile.psadtConfig.reviewedRegistryUninstallDisplayName).toBe('tongtop-store');
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedRegistryUninstallDisplayName)
+      .toBe('tongtop-store');
+    expect(profile.installer).toMatchObject({
+      sha256: '7E91A3FFF5E6FB968B97874F9AF49AD24DD9AB08832344CD0FE7B6E57F891543',
+      silentArgs: '/S',
+      installScope: 'user',
+      uninstallCommand: 'REGISTRY_UNINSTALL:TongTop Store',
+    });
+    expect(applyApplicationPackagingAdapter('TongTianLu.TongTopStore.Other', DEFAULT_PSADT_CONFIG)
+      .reviewedRegistryUninstallDisplayName).toBeUndefined();
+  });
+
   it('binds QTTabBar customer and QA packages to the observed nested-MSI ARP identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'indiff.QTTabBar',
