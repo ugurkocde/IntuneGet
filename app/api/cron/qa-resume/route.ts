@@ -16,6 +16,7 @@ import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
+import { enforceQaGate } from '@/lib/qa/gate';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
@@ -324,6 +325,30 @@ export async function GET(request: Request) {
         waiting++;
         continue;
       }
+    }
+
+    // Keep reputation holds waiting before any claim. Local packaging has no
+    // later workflow gate, and a hosted dispatch failure must not turn a
+    // pending verdict into a terminal job failure.
+    try {
+      await enforceQaGate({
+        wingetId: job.winget_id,
+        version: job.version,
+        architecture: features.localPackager
+          ? observed.architecture || 'x64'
+          : observedConfig?.architecture || observed.architecture || 'x64',
+        installerSha256: features.localPackager
+          ? observed.installer_sha256 || ''
+          : observedConfig?.installerSha256 || observed.installer_sha256 || '',
+        packageProfileSha256: job.execution_profile_sha256 || '',
+        qaOverride: skipCustomerQa,
+        sourceType: observedConfig?.sourceType,
+        curatedReleaseId: observedConfig?.curatedReleaseId,
+      });
+    } catch {
+      waitingIds.push(job.id);
+      waiting++;
+      continue;
     }
 
     if (features.localPackager) {

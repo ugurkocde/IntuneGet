@@ -8,6 +8,7 @@ vi.mock('@/lib/intune-approval-guard', () => ({ findPendingApprovalBlocks: mocks
 vi.mock('@/lib/features', () => ({ getFeatureFlags: mocks.flags }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
 vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: mocks.dispatch }));
+vi.mock('@/lib/qa/gate', () => ({ enforceQaGate: vi.fn(async () => undefined) }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: mocks.completion }));
 vi.mock('@/lib/curated-catalog/licence', () => ({ assertCuratedLicenceAccepted: mocks.licence,
   CuratedLicenceError: class extends Error {} }));
