@@ -5,6 +5,7 @@ create function public.curated_verification_hold_valid(p jsonb)
 returns boolean language sql immutable set search_path = '' as $$
  select coalesce(jsonb_typeof(p) = 'object' and p->>'schemaVersion' = '1'
   and jsonb_typeof(p->'runId') = 'string' and p->>'runId' ~ '^[1-9][0-9]{0,19}$'
+  and jsonb_typeof(p->'attempt') = 'number' and p->>'attempt' ~ '^[1-9][0-9]{0,8}$'
   and jsonb_typeof(p->'profileSha256') = 'string' and p->>'profileSha256' ~ '^[a-fA-F0-9]{64}$'
   and jsonb_typeof(p->'packagerCommit') = 'string' and p->>'packagerCommit' ~ '^[a-f0-9]{40}$'
   and jsonb_typeof(p->'definitionSha256') = 'string' and p->>'definitionSha256' ~ '^[a-f0-9]{64}$'
@@ -36,6 +37,9 @@ begin
  if q.status not in ('queued','completed') then raise exception 'Candidate unavailable or dispatched'; end if;
  if q.updated_at is distinct from p_expected_updated_at then raise exception 'Curated queue row changed'; end if;
  if not exists(select 1 from public.curated_qa_runs h where h.github_run_id=p_hold->>'runId'
+  and h.kind='release' and h.config_verification_id is null
+  and h.github_run_attempt=(p_hold->>'attempt')::integer
+  and not exists(select 1 from public.curated_qa_runs newer where newer.github_run_id=h.github_run_id and newer.github_run_attempt>h.github_run_attempt)
   and h.outcome='Failed' and h.app_id=q.app_id and h.tested_version=q.version
   and q.kind='release' and q.verification_key='release:'||h.candidate_id
   and lower(h.package_profile_sha256)=lower(p_hold->>'profileSha256')

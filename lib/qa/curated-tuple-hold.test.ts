@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 let db: PGlite;
 const pin = 'a'.repeat(40), profile = 'b'.repeat(64), candidate = 'c'.repeat(24);
 const key = `release:${candidate}`;
-const hold = { schemaVersion: 1, runId: '42', profileSha256: profile, packagerCommit: pin,
+const hold = { schemaVersion: 1, runId: '42', attempt: 1, profileSha256: profile, packagerCommit: pin,
   definitionSha256: 'd'.repeat(64), diagnosticsSha256: 'e'.repeat(64),
   reviewRef: 'node:delegated-task:exact-no-go', reason: 'Reviewed previousInstall timeout; unchanged diagnostics.' };
 const enqueue = async (k = key, inputs: object = { candidate: JSON.stringify({ id: candidate, appId: 'firefox', version: '158.0' }) }) =>
@@ -21,7 +21,7 @@ beforeAll(async () => {
     create table qa_pipeline_control(id text primary key,paused boolean,required_packager_commit text,scheduler_packager_commit text,scheduler_seen_at timestamptz);
     create table qa_candidates(id uuid primary key,status text,priority int,enqueued_at timestamptz,next_retry_at timestamptz,test_level text,demand_source text,
       attempts int default 0,dispatched_at timestamptz,phase text,phase_started_at timestamptz,phase_updated_at timestamptz,failure_summary text,updated_at timestamptz);
-    create table curated_qa_runs(github_run_id text,app_id text,tested_version text,candidate_id text,outcome text,package_profile_sha256 text,packager_commit text);
+    create table curated_qa_runs(github_run_id text,github_run_attempt int,kind text,config_verification_id uuid,app_id text,tested_version text,candidate_id text,outcome text,package_profile_sha256 text,packager_commit text);
     grant all on qa_pipeline_control,qa_candidates,curated_qa_runs to service_role;`);
   for (const file of ['20261005193149_curated_priority_queue.sql', '20261016010507_curated_reviewed_tuple_hold.sql'])
     await db.exec(await readFile(new URL(`../../supabase/migrations/${file}`, import.meta.url), 'utf8'));
@@ -29,7 +29,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.exec('truncate curated_verification_queue,qa_pipeline_control,qa_candidates,curated_qa_runs');
   await db.query("insert into qa_pipeline_control values ('global',false,$1,$1,now())", [pin]);
-  await db.query("insert into curated_qa_runs values ('42','firefox','158.0',$1,'Failed',$2,$3)", [candidate,profile,pin]);
+  await db.query("insert into curated_qa_runs values ('42',1,'release',null,'firefox','158.0',$1,'Failed',$2,$3)", [candidate,profile,pin]);
   await enqueue();
 });
 afterAll(async () => db?.close());
@@ -93,6 +93,23 @@ describe('reviewed curated tuple hold', () => {
     expect(await row()).toEqual(before);
     await expect(applyHold({ ...hold, reviewRef: 'node:delegated-task:other' })).rejects.toThrow(/existing hold/i);
     expect(await row()).toEqual(before);
+  });
+  it('rejects a failed custom configuration as release evidence', async () => {
+    await db.exec("update curated_qa_runs set kind='config',config_verification_id='10000000-0000-4000-8000-000000000001'");
+    await expect(applyHold()).rejects.toThrow(/evidence/i);
+    expect((await row()).status).toBe('queued');
+  });
+  it('rejects a missing or wrong attempt and a failed attempt superseded by a passing rerun', async () => {
+    await expect(applyHold({ ...hold, attempt: 2 })).rejects.toThrow(/evidence/i);
+    await db.exec("insert into curated_qa_runs select github_run_id,2,kind,config_verification_id,app_id,tested_version,candidate_id,'Passed',package_profile_sha256,packager_commit from curated_qa_runs");
+    await expect(applyHold()).rejects.toThrow(/evidence/i);
+    expect((await row()).status).toBe('queued');
+  });
+  it('requires a positive integer attempt in metadata', async () => {
+    const absent = { ...hold } as Partial<typeof hold>;
+    delete absent.attempt;
+    for (const data of [absent, { ...hold, attempt: 0 }, { ...hold, attempt: '1' }, { ...hold, attempt: 1.5 }])
+      await expect(db.query('select hold_curated_verification($1,$2,$3)',[key,(await row()).updated_at,data])).rejects.toThrow(/metadata/i);
   });
   it('denies hold activation to browser roles', async () => {
     await db.exec('set role authenticated');
