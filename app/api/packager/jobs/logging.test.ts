@@ -17,6 +17,7 @@ vi.mock('@/lib/db', () => ({
 }));
 vi.mock('@/lib/features', () => ({ getFeatureFlags: () => ({ localPackager: true }) }));
 vi.mock('@/lib/supabase', () => ({
+  isSupabaseServerConfigured: () => false,
   createServerClient: () => ({
     from: () => ({ delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }) }) }),
   }),

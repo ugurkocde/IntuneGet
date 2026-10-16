@@ -6,7 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logValue } from '@/lib/server-log';
 import { getDatabase, verifyPackagerApiKey } from '@/lib/db';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { enforceQaGate, describeQaGateError, isQaGateError } from '@/lib/qa/gate';
+import type { Win32CartItem } from '@/types/upload';
 import { getFeatureFlags } from '@/lib/features';
 import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies/ensure-policy';
 import { validateCuratedPackagingJob } from '@/lib/curated-catalog/server';
@@ -130,6 +132,25 @@ export async function POST(request: NextRequest) {
       }, { status: 'packaging' });
       console.error(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) failed: ${logValue(error.message)}`);
       return NextResponse.json({ claimed: false, error: error.message, code: error.code }, { status: 409 });
+    }
+    if (isSupabaseServerConfigured()) {
+      const item = job.package_config as Win32CartItem | null;
+      try {
+        await enforceQaGate({
+          wingetId: job.winget_id, version: job.version, architecture: job.architecture || undefined,
+          installerSha256: job.installer_sha256 || undefined,
+          packageProfileSha256: job.execution_profile_sha256 || undefined,
+          qaOverride: item?.qaOverride, sourceType: item?.sourceType, curatedReleaseId: item?.curatedReleaseId,
+        });
+      } catch (error) {
+        const message = isQaGateError(error) ? describeQaGateError(error)
+          : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
+        await db.jobs.update(job.id, {
+          status: 'awaiting_qa', status_message: message, completed_at: null,
+          packager_id: null, packager_heartbeat_at: null, claimed_at: null, packaging_started_at: null,
+        }, { status: 'packaging', packager_id: packagerId });
+        return NextResponse.json({ claimed: false, error: message }, { status: 409 });
+      }
     }
     console.info(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) claimed by packager ${logValue(packagerId)}`);
     return NextResponse.json({

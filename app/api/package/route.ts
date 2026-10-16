@@ -46,7 +46,7 @@ import {
 } from '@/lib/installer-preflight';
 import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import { ensureQaDemand } from '@/lib/qa/demand';
-import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
+import { QaGateNotPassedError, describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import {
   applyApplicationPackagingAdapter,
@@ -899,21 +899,30 @@ export async function POST(request: NextRequest) {
             // compatibility evidence. A block there is a validation outcome
             // with its own reason, not a failure to start the workflow.
             const qaGateError = isQaGateError(result.reason) ? result.reason : null;
+            const reputationHold = qaGateError instanceof QaGateNotPassedError && qaGateError.details.reason === 'reputation';
             const dispatchError = qaGateError
               ? describeQaGateError(qaGateError)
               : result.reason instanceof Error ? result.reason.message : 'Unknown error';
             if (dispatch) {
               await db.jobs.update(dispatch.jobId, {
-                status: 'failed',
+                status: reputationHold ? 'awaiting_qa' : 'failed',
+                status_message: reputationHold ? dispatchError : null,
                 progress_percent: 0,
                 error_stage: qaGateError ? 'validation' : 'authenticate',
                 error_category: qaGateError ? null : 'network',
                 error_code: qaGateError ? qaGateError.code : 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
-                completed_at: new Date().toISOString(),
+                completed_at: reputationHold ? null : new Date().toISOString(),
               }).catch((updateError) => {
                 console.error(`Failed to mark dispatch ${dispatch.jobId} as failed:`, updateError);
               });
+            }
+            if (reputationHold && dispatch) {
+              jobs.push({ id: dispatch.jobId, user_id: userId, tenant_id: tenantId,
+                winget_id: dispatch.item.wingetId, version: dispatch.item.version,
+                display_name: dispatch.item.displayName, publisher: dispatch.item.publisher,
+                status: 'awaiting_qa', package_config: dispatch.item, created_at: dispatch.createdAt });
+              continue;
             }
             errors.push({
               wingetId: dispatch?.item.wingetId || 'unknown',

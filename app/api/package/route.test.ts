@@ -819,6 +819,20 @@ describe('POST /api/package (workflow dispatch)', () => {
     }));
   });
 
+  it('keeps unknown reputation awaiting QA instead of failing the customer job', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaGateNotPassedError({
+      wingetId: 'Test.App', version: '1.0.0', architecture: 'x64',
+      installerSha256: 'A'.repeat(64), packageProfileSha256: 'B'.repeat(64), reason: 'reputation',
+    }));
+    const body = await (await postSingleItem()).json();
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'awaiting_qa', completed_at: null,
+      status_message: expect.stringContaining('clean VirusTotal verdict'),
+    }));
+    expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
+    expect(body.errors).toBeUndefined();
+  });
+
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(
       new Error('Failed to trigger GitHub Actions workflow: 502 Bad Gateway')
