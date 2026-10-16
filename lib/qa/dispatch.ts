@@ -1,6 +1,7 @@
 import { getGitHubActionsConfig } from '@/lib/github-actions';
 import { enforceInstallerPreflight } from '@/lib/installer-preflight';
 import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
+import { recordPublicSubmissionIntent } from '@/lib/qa/submission-intent';
 import type { Json } from '@/types/database';
 
 export interface QaDispatchCandidate {
@@ -59,7 +60,8 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
   // can replace the bytes behind a mutable URL after WinGet publishes its
   // manifest. Verify the exact URL/hash tuple before consuming the runner so
   // QA never tests bytes that a customer upload would reject.
-  await enforceInstallerPreflight(preflightRequest);
+  const preflight = await enforceInstallerPreflight(preflightRequest);
+  await recordPublicSubmissionIntent(candidate.id, candidate.test_level, preflightRequest, preflight);
 
   const config = getGitHubActionsConfig();
   const url = `https://api.github.com/repos/${config.owner}/${config.workflowsRepo}/actions/workflows/intune-qa.yml/dispatches`;

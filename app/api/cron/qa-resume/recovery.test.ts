@@ -6,6 +6,7 @@ vi.mock('@/lib/msp/consent-verification', () => ({ verifyTenantConsent: mocks.co
 vi.mock('@/lib/features', () => ({ getFeatureFlags: () => ({ localPackager: true }) }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
 vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: vi.fn() }));
+vi.mock('@/lib/qa/gate', () => ({ enforceQaGate: vi.fn(async () => undefined) }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: vi.fn() }));
 vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: vi.fn() }));
 vi.mock('@/lib/catalog-installer-reconciliation', () => ({ reconcileCatalogInstaller: vi.fn() }));

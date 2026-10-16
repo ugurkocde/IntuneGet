@@ -8,6 +8,7 @@ vi.mock('@/lib/intune-approval-guard', () => ({ findPendingApprovalBlocks: mocks
 vi.mock('@/lib/features', () => ({ getFeatureFlags: mocks.flags }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
 vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: mocks.dispatch }));
+vi.mock('@/lib/qa/gate', () => ({ enforceQaGate: vi.fn(async () => undefined) }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: mocks.completion }));
 vi.mock('@/lib/curated-catalog/licence', () => ({ assertCuratedLicenceAccepted: mocks.licence,
   CuratedLicenceError: class extends Error {} }));
@@ -53,7 +54,14 @@ function database(rows: Row[], candidateStatus = 'passed', candidates?: Record<s
     };
     const builder = {
       select: () => builder,
-      eq: (key: string, value: unknown) => { filters.push(r => r[key] === value); return builder; },
+      eq: (key: string, value: unknown) => { filters.push(r => {
+        const [field, nested] = key.split('->>');
+        return (nested ? (r[field] as Record<string, unknown> | undefined)?.[nested] : r[field]) === value;
+      }); return builder; },
+      is: (key: string, value: null) => { filters.push(r => {
+        const [field, nested] = key.split('->>');
+        return ((nested ? (r[field] as Record<string, unknown> | undefined)?.[nested] : r[field]) ?? null) === value;
+      }); return builder; },
       lte: (key: string, value: string) => { filters.push(r => String(r[key]) <= value); return builder; },
       in: (key: string, values: unknown[]) => { filters.push(r => values.includes(r[key])); return builder; },
       order: (key: string) => { orders.push(key); return builder; },

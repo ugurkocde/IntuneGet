@@ -16,6 +16,9 @@ import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
+import { enforceQaGate, describeQaGateError, QaGateError, QaGateNotPassedError, QaSecurityGateError, QaCompatibilityGateError } from '@/lib/qa/gate';
+import { installerSecurityReason } from '@/lib/qa/installer-security-holds';
+import { CuratedCatalogError, CuratedEvidenceMismatchError } from '@/lib/curated-catalog/core.mjs';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
@@ -221,6 +224,19 @@ export async function GET(request: Request) {
       waiting++;
       continue;
     }
+    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T): T => {
+      const identityFields = [
+        ['qa_candidate_id', observed.qa_candidate_id],
+        ['installer_sha256', observed.installer_sha256],
+        ['architecture', observed.architecture],
+        ['package_config->>installerSha256', observedConfig?.installerSha256],
+        ['package_config->>architecture', observedConfig?.architecture],
+      ] as const;
+      for (const [column, value] of identityFields) {
+        query = value == null ? query.is(column, null) : query.eq(column, value);
+      }
+      return query;
+    };
     if (compatibilityBlock) {
       const now = new Date().toISOString();
       let failureUpdate = supabase
@@ -238,18 +254,7 @@ export async function GET(request: Request) {
         .eq('status', 'awaiting_qa');
       // Another invocation can relink this job without changing its status.
       // Fail only the raw stored identity that the lookup actually observed.
-      const identityFields = [
-        ['qa_candidate_id', observed.qa_candidate_id],
-        ['installer_sha256', observed.installer_sha256],
-        ['architecture', observed.architecture],
-        ['package_config->>installerSha256', observedConfig?.installerSha256],
-        ['package_config->>architecture', observedConfig?.architecture],
-      ] as const;
-      for (const [column, value] of identityFields) {
-        failureUpdate = value == null
-          ? failureUpdate.is(column, null)
-          : failureUpdate.eq(column, value);
-      }
+      failureUpdate = guardObservedIdentity(failureUpdate);
       const { data: blockedJob, error: blockError } = await failureUpdate
         .select('id')
         .maybeSingle();
@@ -326,6 +331,53 @@ export async function GET(request: Request) {
       }
     }
 
+    // Keep reputation holds waiting before any claim. Local packaging has no
+    // later workflow gate, and a hosted dispatch failure must not turn a
+    // pending verdict into a terminal job failure.
+    try {
+      await enforceQaGate({
+        wingetId: job.winget_id,
+        version: job.version,
+        architecture: features.localPackager
+          ? observed.architecture || 'x64'
+          : observedConfig?.architecture || observed.architecture || 'x64',
+        installerSha256: features.localPackager
+          ? observed.installer_sha256 || ''
+          : observedConfig?.installerSha256 || observed.installer_sha256 || '',
+        packageProfileSha256: job.execution_profile_sha256 || '',
+        qaOverride: skipCustomerQa,
+        sourceType: observedConfig?.sourceType,
+        curatedReleaseId: observedConfig?.curatedReleaseId,
+      });
+    } catch (error) {
+      const terminal = error instanceof QaGateError || error instanceof QaCompatibilityGateError ||
+        error instanceof CuratedEvidenceMismatchError ||
+        (error instanceof QaSecurityGateError && error.details.malicious >= 2);
+      const message = error instanceof CuratedEvidenceMismatchError
+        ? 'The requested package does not match its approved curated test evidence.'
+        : error instanceof CuratedCatalogError ? 'Curated release verification is pending. Packaging remains on hold.'
+        : error instanceof QaSecurityGateError ? installerSecurityReason(error.details.malicious)
+        : error instanceof QaGateError || error instanceof QaCompatibilityGateError || error instanceof QaGateNotPassedError
+          ? describeQaGateError(error) : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
+      const patch = terminal ? {
+        status: 'qa_failed', status_message: message, error_message: message,
+        error_code: error.code, error_stage: 'validation', error_category: error instanceof CuratedEvidenceMismatchError ? 'validation' : 'installer',
+        completed_at: new Date().toISOString(),
+      } : { status_message: message };
+      const result = await guardObservedIdentity(supabase.from('packaging_jobs').update(patch)
+        .eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
+      if (result.error) throw new Error('Could not preserve the customer gate disposition');
+      if (!result.data) continue;
+      if (terminal) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', message);
+      } else {
+        waitingIds.push(job.id);
+        waiting++;
+      }
+      continue;
+    }
+
     if (features.localPackager) {
       // The local packager can claim queued jobs straight from the database,
       // so the licence must be checked before the job is released to it.
@@ -395,7 +447,7 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString();
     const nextStatus = features.localPackager ? 'queued' : 'packaging';
-    const { data: claimed, error: claimError } = await supabase
+    const { data: claimed, error: claimError } = await guardObservedIdentity(supabase
       .from('packaging_jobs')
       .update({
         status: nextStatus,
@@ -406,7 +458,7 @@ export async function GET(request: Request) {
         packaging_started_at: features.localPackager ? null : now,
       })
       .eq('id', job.id)
-      .eq('status', 'awaiting_qa')
+      .eq('status', 'awaiting_qa'))
       .select('id')
       .maybeSingle();
     if (claimError) throw claimError;

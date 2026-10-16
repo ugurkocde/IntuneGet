@@ -1,0 +1,5 @@
+{
+  "title": "Bind public installer scans to verified sources",
+  "summary": "Adds support for recording verified public installer sources and limiting scan requests before submission. Private and custom installers do not receive upload rights. Activation awaits the remaining scanning components.",
+  "type": "improved"
+}

@@ -630,6 +630,13 @@ describe('application packaging adapters', () => {
     )).toBe('machine');
   });
 
+  it('keeps Negative Encoder on its machine-labelled manifest bytes while executing per-user', () => {
+    expect(resolveApplicationInstallScope('TedZyzsdy.NegativeEncoder', 'machine')).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope('TedZyzsdy.NegativeEncoder', 'user')).toBe('machine');
+    expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope('Example.App', 'user')).toBe('user');
+  });
+
   it('keeps Zoho Mail on its machine-labelled manifest bytes while executing per-user', () => {
     expect(resolveApplicationInstallScope('Zoho.Mail', 'machine')).toBe('user');
     expect(resolveApplicationInstallerSelectionScope(

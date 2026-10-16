@@ -405,6 +405,37 @@ describe('PSADT QA package identity', () => {
       .toBe('AionUi');
   });
 
+  it('binds TongTop Store to its registered identity without changing the installer contract', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'TongTianLu.TongTopStore',
+      displayName: 'TongTop Store',
+      publisher: 'TongTianLu',
+      version: '0.7.1',
+      architecture: 'x64',
+      installerSha256: '7E91A3FFF5E6FB968B97874F9AF49AD24DD9AB08832344CD0FE7B6E57F891543',
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:TongTop Store',
+      installScope: 'user',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { sha256: string; silentArgs: string; installScope: string; uninstallCommand: string };
+      psadtConfig: { reviewedRegistryUninstallDisplayName?: string };
+    };
+
+    expect(profile.psadtConfig.reviewedRegistryUninstallDisplayName).toBe('tongtop-store');
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedRegistryUninstallDisplayName)
+      .toBe('tongtop-store');
+    expect(profile.installer).toMatchObject({
+      sha256: '7E91A3FFF5E6FB968B97874F9AF49AD24DD9AB08832344CD0FE7B6E57F891543',
+      silentArgs: '/S',
+      installScope: 'user',
+      uninstallCommand: 'REGISTRY_UNINSTALL:TongTop Store',
+    });
+    expect(applyApplicationPackagingAdapter('TongTianLu.TongTopStore.Other', DEFAULT_PSADT_CONFIG)
+      .reviewedRegistryUninstallDisplayName).toBeUndefined();
+  });
+
   it('binds QTTabBar customer and QA packages to the observed nested-MSI ARP identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'indiff.QTTabBar',
@@ -1671,6 +1702,54 @@ describe('PSADT QA package identity', () => {
     expect(normalized.identity.profile).toMatchObject({ installer: {
       installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
     } });
+  });
+
+  it('keeps SJMCL in its supported user context while preserving the exact installer and registered removal identity', () => {
+    const installerSha256 = 'D6673DA6AC1665110379F69B7DA8138506AB890AE7B6418DCE4636AA00AF619E';
+    const uninstallCommand = 'REGISTRY_UNINSTALL:SJMCL';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SJMC.SJMCL', displayName: 'SJMCL', publisher: 'SJMCL',
+      version: '1.3.2', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile).toMatchObject({ installer: {
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    } });
+  });
+
+  it('uses the user context for scope-less tldraw NSIS packages without changing installer or removal identity', () => {
+    const installerSha256 = '348170429F89291367A437A74CFACE9A06803EFA3E7A20016E615BB9DF55FCAB';
+    const uninstallCommand = 'REGISTRY_UNINSTALL:tldraw offline';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'tldraw.tldraw-offline', displayName: 'tldraw offline', publisher: 'tldraw.com',
+      version: '1.22.0', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    });
+  });
+
+  it('uses Negative Encoder user context while preserving the machine-labelled installer bytes and removal identity', () => {
+    const installerSha256 = '7F4F03C46C657352A96694C4220AE834000F0F80E0A6D6F013C5EC865BD33413';
+    const uninstallCommand = 'REGISTRY_UNINSTALL:消极压制';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'TedZyzsdy.NegativeEncoder', displayName: '消极压制', publisher: 'TedZyzsdy',
+      version: '5.2.0', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    });
   });
 
   it('binds WireSock CLI QA to the shared SDK registration adapter', () => {

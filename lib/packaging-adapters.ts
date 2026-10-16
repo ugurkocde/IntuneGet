@@ -189,6 +189,29 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // SJMCL's Tauri NSIS configuration uses the default currentUser install
+    // mode. WinGet omits Scope; keep QA and customer packages in user context.
+    // https://github.com/UNIkeEN/SJMCL/blob/v1.3.2/src-tauri/tauri.windows.conf.json
+    wingetId: 'SJMC.SJMCL',
+    requiredInstallScope: 'user',
+  },
+  {
+    // WinGet omits Scope. Run 38882720391 registered tldraw in SYSTEM's
+    // user hive with the vendor uninstaller already missing at install capture.
+    // Use the real user context; the physical missing-file mechanism is unconfirmed.
+    wingetId: 'tldraw.tldraw-offline',
+    requiredInstallScope: 'user',
+  },
+  {
+    // The vendor NSIS source requests user execution, installs in LocalAppData
+    // and registers removal in HKCU. WinGet explicitly labels these bytes as
+    // machine scope; retain that selection while correcting execution context.
+    // https://github.com/zyzsdy/NegativeEncoder/blob/v5.2.0.0/install/NegativeEncoder.nsi
+    wingetId: 'TedZyzsdy.NegativeEncoder',
+    requiredInstallScope: 'user',
+    reviewedInstallerSelectionScope: 'machine',
+  },
+  {
     // Luniq's published Electron Builder configuration sets NSIS perMachine to
     // false and allowElevation to false. WinGet currently omits Scope, so the
     // generic machine default installs below LocalSystem's systemprofile and
@@ -702,6 +725,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // https://github.com/iOfficeAI/AionUi/blob/v2.1.53/packages/desktop/electron-builder.yml
     wingetId: 'Lumysia.AionUiCommunity',
     reviewedRegistryUninstallDisplayName: 'AionUi',
+  },
+  {
+    // The Tauri NSIS package registers the vendor productName rather than
+    // its catalog title. Capture only that exact registration for both QA
+    // and customer packages; other changed registrations remain excluded.
+    wingetId: 'TongTianLu.TongTopStore',
+    reviewedRegistryUninstallDisplayName: 'tongtop-store',
   },
   {
     // The 1.5.6-beta.1 catalog metadata calls the product `QTTabBar`, while the

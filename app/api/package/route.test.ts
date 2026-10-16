@@ -22,7 +22,11 @@ const {
   getPackageEligibilityBlocksMock,
   isSupabaseServerConfiguredMock,
   curatedState,
+  actualDispatch,
+  reputationFetch,
 } = vi.hoisted(() => ({
+  actualDispatch: { realSupabase: false, run: null as typeof import('@/lib/github-actions').triggerPackagingWorkflow | null },
+  reputationFetch: vi.fn(),
   curatedState: { envelope: {} as Record<string, unknown> },
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
@@ -71,10 +75,8 @@ vi.mock('@/lib/msp/consent-verification', () => ({
   verifyTenantConsent: verifyTenantConsentMock,
 }));
 
-vi.mock('@/lib/github-actions', () => ({
-  isGitHubActionsConfigured: isGitHubActionsConfiguredMock,
-  triggerPackagingWorkflow: triggerPackagingWorkflowMock,
-}));
+vi.mock('@/lib/github-actions', async (original) => { actualDispatch.run = (await original<typeof import('@/lib/github-actions')>()).triggerPackagingWorkflow; return { isGitHubActionsConfigured: isGitHubActionsConfiguredMock, triggerPackagingWorkflow: triggerPackagingWorkflowMock }; });
+vi.mock('@/lib/winget-dependencies', () => ({ resolveWingetPackageDependencies: vi.fn(async () => []) }));
 
 vi.mock('@/lib/config', () => ({
   getAppConfig: getAppConfigMock,
@@ -102,10 +104,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/supabase', () => ({
-  createServerClient: vi.fn(),
-  isSupabaseServerConfigured: isSupabaseServerConfiguredMock,
-}));
+vi.mock('@/lib/supabase', async () => { const { createClient } = await import('@supabase/supabase-js'); return { createServerClient: () => actualDispatch.realSupabase ? createClient('https://database.example.test', 'fake-key', { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: reputationFetch } }) : undefined, isSupabaseServerConfigured: isSupabaseServerConfiguredMock }; });
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
   resolveTargetTenantId: vi.fn(async ({ tokenTenantId }: { tokenTenantId: string }) => ({
@@ -127,7 +126,7 @@ import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
-beforeEach(() => getApprovalFailuresMock.mockResolvedValue([]));
+beforeEach(() => { getApprovalFailuresMock.mockResolvedValue([]); actualDispatch.realSupabase = false; });
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
@@ -818,6 +817,57 @@ describe('POST /api/package (workflow dispatch)', () => {
       error_message: expect.stringContaining('Installation testing has not passed yet for Test.App 1.0.0 (x64)'),
     }));
   });
+
+  it('keeps unknown reputation awaiting QA instead of failing the customer job', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaGateNotPassedError({
+      wingetId: 'Test.App', version: '1.0.0', architecture: 'x64',
+      installerSha256: 'A'.repeat(64), packageProfileSha256: 'B'.repeat(64), reason: 'reputation',
+    }));
+    const body = await (await postSingleItem()).json();
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'awaiting_qa', completed_at: null,
+      status_message: expect.stringContaining('clean VirusTotal verdict'),
+    }));
+    expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
+    expect(body.errors).toBeUndefined();
+  });
+
+  it.each(['unknown', 'override', 'read error', 'no engines', 'fractional engines', 'suspicious', 'clean'])(
+    'runs the real hosted dispatch gate through the customer request: %s', async (kind) => {
+      actualDispatch.realSupabase = true;
+      const dispatchFetch = vi.fn(async () => new Response(null, { status: 204 }));
+      vi.stubGlobal('fetch', dispatchFetch);
+      triggerPackagingWorkflowMock.mockImplementation(input => actualDispatch.run!(input, {
+        token: 'synthetic-only', owner: 'fixture-owner', repo: 'fixture-product', workflowsRepo: 'fixture-workflows', workflowFile: 'fixture.yml', ref: 'main',
+      }, { skipRunCapture: true }));
+      reputationFetch.mockImplementation(async input => {
+        const url = new URL(String(input)); let result: unknown;
+        if (url.pathname.endsWith('/qa_package_blocks')) result = null;
+        else if (url.pathname.endsWith('/qa_package_results')) {
+          expect(url.searchParams.get('installer_sha256')).toBe('eq.' + 'A'.repeat(64));
+          if (url.searchParams.has('virustotal_malicious')) result = null;
+          else if (url.searchParams.get('select')?.includes('virustotal_status')) {
+            if (kind === 'read error') return new Response(JSON.stringify({ message: 'synthetic unavailable' }), { status: 503, headers: { 'content-type': 'application/json' } });
+            result = { virustotal_status: kind === 'unknown' || kind === 'override' ? 'not_found' : 'clean',
+              virustotal_malicious: 0, virustotal_suspicious: kind === 'suspicious' ? 1 : 0,
+              virustotal_total_engines: kind === 'no engines' ? 0 : kind === 'fractional engines' ? 0.5 : 72 };
+          } else result = { winget_id: 'Test.App', tested_version: '1.0.0', architecture: 'x64', installer_sha256: 'A'.repeat(64), outcome: 'Passed' };
+        } else throw new Error('Unexpected fixture request');
+        return new Response(JSON.stringify(result), { status: 200, headers: { 'content-type': 'application/json' } });
+      });
+      try {
+        const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+          method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: [makeWin32Item({ qaOverride: kind === 'override' })] }),
+        }));
+        const body = await response.json();
+        expect(body.jobs).toEqual([expect.objectContaining({ status: kind === 'clean' ? 'packaging' : 'awaiting_qa' })]);
+        expect(dispatchFetch).toHaveBeenCalledTimes(kind === 'clean' ? 1 : 0);
+        if (kind === 'clean') expect(dispatchFetch).toHaveBeenCalledWith('https://api.github.com/repos/fixture-owner/fixture-workflows/dispatches', expect.objectContaining({ method: 'POST' }));
+        if (kind !== 'clean') expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: 'awaiting_qa', completed_at: null }));
+      } finally { vi.unstubAllGlobals(); }
+    }
+  );
 
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(

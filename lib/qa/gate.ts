@@ -1,5 +1,5 @@
 import { getCatalogSource } from '@/lib/catalog';
-import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { classifyQaFailure } from '@/lib/qa/classify';
 import { createServerClient } from '@/lib/supabase';
@@ -44,11 +44,14 @@ export class QaGateNotPassedError extends Error {
         | 'version'
         | 'architecture'
         | 'installer_sha256'
-        | 'package_profile';
+        | 'package_profile'
+        | 'reputation';
     }
   ) {
     super(
-      `Installation testing has not passed yet for ${details.wingetId} ${details.version} (${details.architecture})`
+      details.reason === 'reputation'
+        ? `Installer reputation is not verified clean for ${details.wingetId} ${details.version} (${details.architecture})`
+        : `Installation testing has not passed yet for ${details.wingetId} ${details.version} (${details.architecture})`
     );
     this.name = 'QaGateNotPassedError';
   }
@@ -115,6 +118,9 @@ export function describeQaGateError(error: AnyQaGateError): string {
     return `${error.message}. Packaging is blocked for this version until the finding is reviewed. Earlier versions with a clean verdict remain available.`;
   }
   if (error instanceof QaGateNotPassedError) {
+    if (error.details.reason === 'reputation') {
+      return `${error.message}. Packaging will resume after a clean VirusTotal verdict with engine coverage is available.`;
+    }
     return `${error.message}. Automatic deployment will resume after the installation test passes.`;
   }
   const { classification, testedAtUtc } = error.details;
@@ -145,7 +151,7 @@ export async function enforceQaGate(input: {
     // packager release and every MSP batch, which passes no profile.
     if (input.sourceType === 'custom' || input.qaOverride || (input.architecture || app.architecture) !== app.architecture ||
         (input.installerSha256 && input.installerSha256.toLowerCase() !== release.installerSha256.toLowerCase())) {
-      throw new CuratedCatalogError('The requested package does not match its approved curated test evidence.');
+      throw new CuratedEvidenceMismatchError();
     }
     return;
   }
@@ -154,6 +160,14 @@ export async function enforceQaGate(input: {
   const architecture = (input.architecture || 'x64').toLowerCase();
   const installerSha256 = input.installerSha256?.trim().toUpperCase() || '';
   const packageProfileSha256 = input.packageProfileSha256?.trim().toUpperCase() || '';
+  const reputationHold = (cause?: unknown) => Object.assign(new QaGateNotPassedError({
+    wingetId: input.wingetId,
+    version: input.version,
+    architecture,
+    installerSha256,
+    packageProfileSha256,
+    reason: 'reputation',
+  }), cause === undefined ? {} : { cause });
 
   // Reviewed exact-payload compatibility blocks cannot be bypassed. These are
   // upstream or platform safety boundaries, not ordinary QA failures.
@@ -175,23 +189,29 @@ export async function enforceQaGate(input: {
     }
   }
 
+  if (!installerSha256) throw reputationHold();
+
   // Security gate: a malicious VirusTotal verdict for this exact installer
   // blocks packaging even when the installability gate is overridden.
   if (installerSha256) {
-    const { data: securityRow, error: securityError } = await createServerClient()
-      .from('qa_package_results')
-      .select('virustotal_malicious, virustotal_total_engines')
-      .eq('winget_id', input.wingetId)
-      .eq('tested_version', input.version)
-      .eq('architecture', architecture)
-      .eq('installer_sha256', installerSha256)
-      .gte('virustotal_malicious', 1)
-      .order('tested_at_utc', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (securityError) {
-      throw new Error(`Could not read the installer security verdict: ${securityError.message}`);
+    let securityResult;
+    try {
+      securityResult = await createServerClient()
+        .from('qa_package_results')
+        .select('virustotal_malicious, virustotal_total_engines')
+        .eq('winget_id', input.wingetId)
+        .eq('tested_version', input.version)
+        .eq('architecture', architecture)
+        .eq('installer_sha256', installerSha256)
+        .gte('virustotal_malicious', 1)
+        .order('tested_at_utc', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    } catch (error) {
+      throw reputationHold(error);
     }
+    const { data: securityRow, error: securityError } = securityResult;
+    if (securityError) throw reputationHold(securityError);
     const malicious = (securityRow?.virustotal_malicious as number | null) ?? 0;
     if (malicious >= 1) {
       throw new QaSecurityGateError({
@@ -202,6 +222,38 @@ export async function enforceQaGate(input: {
         totalEngines: (securityRow?.virustotal_total_engines as number | null) ?? null,
       });
     }
+  }
+
+  // A successful lifecycle or an installability override does not establish
+  // reputation. Only covered, clean evidence for these exact bytes can admit
+  // packaging. QA owns public-installer submission and verdict refreshes.
+  let reputationResult;
+  try {
+    reputationResult = await createServerClient()
+      .from('qa_package_results')
+      .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
+      .eq('winget_id', input.wingetId)
+      .eq('tested_version', input.version)
+      .eq('architecture', architecture)
+      .eq('installer_sha256', installerSha256)
+      .order('tested_at_utc', { ascending: false })
+      .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+  } catch (error) {
+    throw reputationHold(error);
+  }
+  const { data: reputationRow, error: reputationError } = reputationResult;
+  if (reputationError) throw reputationHold(reputationError);
+  if (
+    reputationRow?.virustotal_status !== 'clean' ||
+    reputationRow.virustotal_malicious !== 0 ||
+    reputationRow.virustotal_suspicious !== 0 ||
+    typeof reputationRow.virustotal_total_engines !== 'number' ||
+    !Number.isInteger(reputationRow.virustotal_total_engines) ||
+    reputationRow.virustotal_total_engines <= 0
+  ) {
+    throw reputationHold();
   }
 
   if (!input.requirePassed && input.qaOverride) return;
