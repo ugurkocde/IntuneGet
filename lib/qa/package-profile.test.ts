@@ -1736,6 +1736,22 @@ describe('PSADT QA package identity', () => {
     });
   });
 
+  it('uses Negative Encoder user context while preserving the machine-labelled installer bytes and removal identity', () => {
+    const installerSha256 = '7F4F03C46C657352A96694C4220AE834000F0F80E0A6D6F013C5EC865BD33413';
+    const uninstallCommand = 'REGISTRY_UNINSTALL:消极压制';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'TedZyzsdy.NegativeEncoder', displayName: '消极压制', publisher: 'TedZyzsdy',
+      version: '5.2.0', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    });
+  });
+
   it('binds WireSock CLI QA to the shared SDK registration adapter', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',

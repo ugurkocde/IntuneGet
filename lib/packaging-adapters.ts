@@ -203,6 +203,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // The vendor NSIS source requests user execution, installs in LocalAppData
+    // and registers removal in HKCU. WinGet explicitly labels these bytes as
+    // machine scope; retain that selection while correcting execution context.
+    // https://github.com/zyzsdy/NegativeEncoder/blob/v5.2.0.0/install/NegativeEncoder.nsi
+    wingetId: 'TedZyzsdy.NegativeEncoder',
+    requiredInstallScope: 'user',
+    reviewedInstallerSelectionScope: 'machine',
+  },
+  {
     // Luniq's published Electron Builder configuration sets NSIS perMachine to
     // false and allowElevation to false. WinGet currently omits Scope, so the
     // generic machine default installs below LocalSystem's systemprofile and
