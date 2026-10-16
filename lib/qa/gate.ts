@@ -236,8 +236,8 @@ export async function enforceQaGate(input: {
       .eq('tested_version', input.version)
       .eq('architecture', architecture)
       .eq('installer_sha256', installerSha256)
-      .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
       .order('tested_at_utc', { ascending: false })
+      .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
   } catch (error) {
