@@ -28,13 +28,14 @@ function fixture() {
   let compatibilityReads = 0, sourceReads = 0;
   const errors = new Set<string>();
   const securityHolds: Array<Record<string, unknown>> = [];
+  const heldErrors: Array<Record<string, unknown>> = [];
   const blocks: Array<Record<string, unknown>> = [{ winget_id: held.winget_id, version: held.version, architecture: held.architecture, installer_sha256: held.installer_sha256, block_code: 'failed_managed_lifecycle', detail: 'reviewed tuple' }];
   const retries = [{ source_key: qaSourceKey(source), next_retry_at: '2099-01-02T00:00:00Z' }];
   const client = {
     rpc: vi.fn(async (name: string, args: { p_id?: string; p_candidate_id?: string }) => {
       if (name === 'qa_retest_grant_eligible') return { data: grants.has(args.p_candidate_id!), error: errors.has(name) ? { message: 'grant unavailable' } : null };
       if (name === 'refresh_qa_installer_security_holds') return { data: 0, error: null };
-      if (name === 'qa_installer_security_waiting_errors') return { data: [], error: null };
+      if (name === 'qa_installer_security_waiting_errors') return { data: heldErrors, error: null };
       if (name !== 'claim_qa_work') throw new Error('Unexpected RPC');
       claimed.push(args.p_id!); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null };
     }),
@@ -63,8 +64,20 @@ function fixture() {
       return builder;
     },
   };
-  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
+  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, heldErrors, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
+it('shows an unknown coverage error in waiting without breaking the live snapshot or dispatching it', async () => {
+  const f=fixture(); const pending={...f.first,status:'error'};
+  f.rows.splice(0,f.rows.length,pending);
+  f.heldErrors.push({candidate:pending,malicious:0,nextCheckAt:'2099-01-01T00:00:00Z'});
+  f.securityHolds.push({sha256:'a'.repeat(64),malicious_verdicts:0,next_check_at:'2099-01-01T00:00:00Z',released_at:null});
+  mocks.client.mockReturnValue(f.client);mocks.dispatch.mockResolvedValue(undefined);process.env.CRON_SECRET='test-secret';
+  const live=await getQaLiveSnapshot();
+  expect(live.queue.next).toEqual([]);
+  expect(live.queue.waiting).toEqual([expect.objectContaining({wingetId:f.first.winget_id,reason:'VirusTotal: awaiting engine coverage, rechecking daily',next_check_at:'2099-01-01T00:00:00Z'})]);
+  await GET(new Request('https://example.com/api/cron/qa-dispatch',{headers:{authorization:'Bearer test-secret'}}));
+  expect(f.claimed).toEqual([]);expect(mocks.dispatch).not.toHaveBeenCalled();
+});
 it.each([1, 2])('shows %s malicious verdicts in waiting and never dispatches twice within one minute', async (malicious) => {
   const f = fixture();
   // Every original row shares the refused hash, including other app identities.

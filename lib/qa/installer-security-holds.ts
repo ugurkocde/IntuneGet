@@ -4,6 +4,7 @@ import type { Database } from '@/types/database';
 export interface InstallerSecurityHold { nextCheckAt: string; reason: string }
 export type InstallerSecurityHolds = ReadonlyMap<string, InstallerSecurityHold>;
 export function installerSecurityReason(malicious: number): string {
+  if (malicious === 0) return 'VirusTotal: awaiting engine coverage, rechecking daily';
   return malicious === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.';
 }
 
@@ -16,7 +17,7 @@ export async function loadInstallerSecurityHolds(client: SupabaseClient<Database
     const result = await client.from('qa_installer_security_holds').select('sha256,next_check_at,malicious_verdicts').in('sha256', normalized.slice(offset, offset + 100)).is('released_at', null);
     if (result.error) throw new Error('Installer security eligibility is unavailable');
     for (const row of result.data || []) {
-      if (!/^[a-f0-9]{64}$/.test(row.sha256) || !Number.isFinite(Date.parse(row.next_check_at)) || !Number.isInteger(row.malicious_verdicts) || row.malicious_verdicts < 1) throw new Error('Installer security eligibility is invalid');
+      if (!/^[a-f0-9]{64}$/.test(row.sha256) || !Number.isFinite(Date.parse(row.next_check_at)) || !Number.isInteger(row.malicious_verdicts) || row.malicious_verdicts < 0 || row.malicious_verdicts > 9999) throw new Error('Installer security eligibility is invalid');
       holds.set(row.sha256, { nextCheckAt: row.next_check_at, reason: installerSecurityReason(row.malicious_verdicts) });
     }
   }

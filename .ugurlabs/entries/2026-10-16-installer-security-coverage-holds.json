@@ -1,0 +1,5 @@
+{
+  "title": "Preserve installer security holds while scans are pending",
+  "summary": "Adds support for keeping installer checks on hold until antivirus engine coverage is available, with a shared request budget for scanning services. Existing flagged installer protections remain in place.",
+  "type": "improved"
+}
