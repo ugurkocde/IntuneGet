@@ -182,6 +182,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Grok Bot installs per user below LocalAppData. Its deployment guidance
+    // requires user context; WinGet omits Scope, so override the machine default.
+    // https://docs.x.ai/grok-bot/deployment
+    wingetId: 'xAI.GrokBot',
+    requiredInstallScope: 'user',
+  },
+  {
     // Luniq's published Electron Builder configuration sets NSIS perMachine to
     // false and allowElevation to false. WinGet currently omits Scope, so the
     // generic machine default installs below LocalSystem's systemprofile and
