@@ -1657,6 +1657,22 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
   });
 
+  it('keeps GrokBot in the vendor-supported user context without changing its installer or removal identity', () => {
+    const uninstallCommand = 'REGISTRY_UNINSTALL_PRODUCT:{8DB316BB-B3E2-5DD2-9554-ECCCB62BE362}:Grok Bot';
+    const installerSha256 = 'BE14F2F2067D86334360F5D4F7C94515886EF795DF25645AA883D3983C4AB4AA';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'xAI.GrokBot', displayName: 'Grok Bot', publisher: 'xAI',
+      version: '0.71.2', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile).toMatchObject({ installer: {
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    } });
+  });
+
   it('binds WireSock CLI QA to the shared SDK registration adapter', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',

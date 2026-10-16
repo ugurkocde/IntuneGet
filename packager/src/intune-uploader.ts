@@ -407,7 +407,7 @@ export class IntuneUploader {
     }
 
     try {
-      const fetch = (await import('node-fetch')).default;
+      const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
       const response = await fetch(iconUrl);
 
       if (!response.ok) {
@@ -536,7 +536,7 @@ export class IntuneUploader {
     azureStorageUri: string,
     onProgress?: (percent: number) => Promise<void>
   ): Promise<void> {
-    const fetch = (await import('node-fetch')).default;
+    const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
     const fileHandle = await fs.promises.open(filePath, 'r');
     const stats = await fileHandle.stat();
     const fileSize = stats.size;

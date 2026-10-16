@@ -1,0 +1,5 @@
+{
+  "title": "Use configured proxies in the local packager",
+  "summary": "The local packager routes API, sign in, Graph, installer and upload requests through configured HTTP or HTTPS proxies and respects proxy bypass rules.",
+  "type": "fixed"
+}

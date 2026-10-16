@@ -63,6 +63,7 @@ export class JobPoller {
       this.logger.info('Using HTTP API mode');
     } else {
       this.supabase = createClient(config.supabase.url, config.supabase.serviceRoleKey, {
+        ...(config.proxy?.enabled ? { global: { fetch: config.proxy.webFetch } } : {}),
         auth: {
           persistSession: false,
           autoRefreshToken: false,

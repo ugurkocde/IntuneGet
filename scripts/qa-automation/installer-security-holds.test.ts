@@ -4,6 +4,82 @@ import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { expect, it } from 'vitest';
 
+it('keeps daily recheck selection bounded at backlog scale without changing order or guards', async () => {
+  const { pg, read } = await historicalFixture();
+  const selection = `select h.sha256 from public.qa_installer_security_holds h
+    where released_at is null and next_check_at <= now()
+      and exists (select 1 from public.qa_candidates c where lower(c.installer_sha256)=h.sha256
+        and c.test_level='psadt-package' and c.status <> 'superseded')
+    order by (select max(c.priority) from public.qa_candidates c where lower(c.installer_sha256)=h.sha256)
+      desc nulls last, next_check_at, sha256`;
+  type Plan = { 'Total Cost': number; 'Node Type': string; 'Relation Name'?: string; Plans?: Plan[] };
+  const plan = async (sql: string) => (await pg.query<{ 'QUERY PLAN': Array<{ Plan: Plan }> }>(sql)).rows[0]['QUERY PLAN'][0].Plan;
+  const nodes = (p: Plan): Plan[] => [p, ...(p.Plans ?? []).flatMap(nodes)];
+  try {
+    await pg.exec(read('../../supabase/migrations/20261012153307_qa_installer_security_holds.sql'));
+    await pg.exec(`insert into qa_candidates(id,installer_sha256,test_level,status,priority)
+      select gen_random_uuid(), case when g%2=0 then upper(repeat(md5((g%1130)::text),2))
+        else repeat(md5((g%1130)::text),2) end,
+        case when g%5=0 then 'installer' else 'psadt-package' end,
+        case when g%7=0 then 'superseded' else 'failed' end,
+        case when g%1130=1 or g%13=0 then null else g%17 end
+      from generate_series(1,12000) g;
+      update qa_candidates set priority=9999,test_level='installer',status='superseded'
+        where installer_sha256=upper(repeat(md5('0'),2));
+      insert into qa_candidates(id,installer_sha256,test_level,status,priority)
+        values(gen_random_uuid(),repeat(md5('0'),2),'psadt-package','failed',1);
+      update qa_candidates set status='superseded' where lower(installer_sha256)=repeat(md5('4'),2);
+      insert into qa_installer_security_holds(sha256,malicious_verdicts,next_check_at)
+        select repeat(md5(g::text),2),1,now()-interval '2 days' from generate_series(0,1129) g;
+      update qa_installer_security_holds set next_check_at=now()+interval '1 day' where sha256=repeat(md5('2'),2);
+      update qa_installer_security_holds set released_at=now() where sha256=repeat(md5('3'),2);
+      analyze qa_candidates; analyze qa_installer_security_holds;`);
+    // The reference aggregates each candidate once. MAX intentionally includes
+    // superseded/non-PSADT candidates, while eligibility has its own predicate.
+    const reference = (await pg.query<{ sha256: string }>(`select h.sha256
+      from qa_installer_security_holds h join (
+        select lower(installer_sha256) hash,max(priority) priority,
+          bool_or(test_level='psadt-package' and status <> 'superseded') eligible
+        from qa_candidates group by lower(installer_sha256)
+      ) c on c.hash=h.sha256 where h.released_at is null and h.next_check_at<=now() and c.eligible
+      order by c.priority desc nulls last,h.next_check_at,h.sha256`)).rows.map(x => x.sha256);
+    const before = await plan('explain (format json) ' + selection + ' limit 5');
+    const definitions = () => pg.query(`select proname,pg_get_functiondef(p.oid) definition
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'
+      and proname in ('authenticate_qa_installer_recheck','claim_qa_installer_security_rechecks',
+        'complete_qa_installer_security_recheck','guard_qa_installer_security','lock_qa_installer_security') order by proname`);
+    const guardsBefore = (await definitions()).rows;
+    if (!process.env.QA_RECHECK_INDEX_BASELINE) {
+      await pg.exec(read('../../supabase/migrations/20261015140303_qa_installer_recheck_lookup_index.sql'));
+    }
+    const after = await plan('explain (format json) ' + selection + ' limit 5');
+    expect(after['Total Cost']).toBeLessThan(before['Total Cost'] / 10);
+    expect(nodes(after).some(n => n['Relation Name']==='qa_candidates' && /Index/.test(n['Node Type']))).toBe(true);
+    await pg.exec('set plan_cache_mode=force_generic_plan; prepare daily_recheck(integer) as ' + selection + ' limit $1');
+    const generic = await plan('explain (format json) execute daily_recheck(5)');
+    expect(generic['Total Cost']).toBeLessThan(before['Total Cost'] / 10);
+    expect(nodes(generic).some(n => n['Relation Name']==='qa_candidates' && /Index/.test(n['Node Type']))).toBe(true);
+    await pg.exec('deallocate daily_recheck; reset plan_cache_mode');
+    expect((await pg.query<{ sha256: string }>(selection)).rows.map(x => x.sha256)).toEqual(reference);
+    expect((await definitions()).rows).toEqual(guardsBefore);
+    expect(reference[0]).toBe(crypto.createHash('md5').update('0').digest('hex').repeat(2));
+    expect(reference.at(-1)).toBe(crypto.createHash('md5').update('1').digest('hex').repeat(2));
+    const active='33333333-3333-4333-8333-333333333333';
+    await pg.query("insert into qa_candidates(id,installer_sha256,status,test_level) values($1,$2,'running','psadt-package')",[active,'e'.repeat(64)]);
+    await pg.exec('set role anon; set statement_timeout=\'3s\'');
+    try {
+      for (const limit of [0,6,null]) await expect(pg.query('select claim_qa_installer_security_rechecks($1,$2,$3)', ['local-fixture-only',active,limit])).rejects.toThrow('Invalid daily lookup limit');
+      await expect(pg.query('select claim_qa_installer_security_rechecks($1,$2,5)', ['wrong',active])).rejects.toThrow('QA authentication rejected');
+      await expect(pg.query('select claim_qa_installer_security_rechecks($1,$2,5)', ['local-fixture-only','44444444-4444-4444-8444-444444444444'])).rejects.toThrow('active QA run');
+      const claimed=(await pg.query<{ r:Array<{sha256:string;lease:string}> }>('select claim_qa_installer_security_rechecks($1,$2,5) r',['local-fixture-only',active])).rows[0].r;
+      expect(claimed.map(x=>x.sha256)).toEqual(reference.slice(0,5));
+      expect(claimed.every(x=>/^[a-f0-9-]{36}$/.test(x.lease))).toBe(true);
+    } finally { await pg.exec('reset role; reset statement_timeout'); }
+    expect((await pg.query<{ n:number }>('select count(*)::int n from qa_installer_security_holds where recheck_lease is not null')).rows[0].n).toBe(5);
+    expect((await pg.query<{ n:number }>('select count(*)::int n from qa_installer_security_holds where released_at is not null')).rows[0].n).toBe(1);
+  } finally { await pg.close(); }
+}, 60000);
+
 async function historicalFixture() {
   const pg = new PGlite({ extensions: { pgcrypto } });
   const read = (path: string) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
