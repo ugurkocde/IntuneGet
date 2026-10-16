@@ -196,6 +196,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // WinGet omits Scope. Run 38882720391 registered tldraw in SYSTEM's
+    // user hive with the vendor uninstaller already missing at install capture.
+    // Use the real user context; the physical missing-file mechanism is unconfirmed.
+    wingetId: 'tldraw.tldraw-offline',
+    requiredInstallScope: 'user',
+  },
+  {
     // Luniq's published Electron Builder configuration sets NSIS perMachine to
     // false and allowElevation to false. WinGet currently omits Scope, so the
     // generic machine default installs below LocalSystem's systemprofile and

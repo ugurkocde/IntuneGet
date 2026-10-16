@@ -1689,6 +1689,22 @@ describe('PSADT QA package identity', () => {
     } });
   });
 
+  it('uses the user context for scope-less tldraw NSIS packages without changing installer or removal identity', () => {
+    const installerSha256 = '348170429F89291367A437A74CFACE9A06803EFA3E7A20016E615BB9DF55FCAB';
+    const uninstallCommand = 'REGISTRY_UNINSTALL:tldraw offline';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'tldraw.tldraw-offline', displayName: 'tldraw offline', publisher: 'tldraw.com',
+      version: '1.22.0', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'user', silentArgs: '/S', uninstallCommand, sha256: installerSha256,
+    });
+  });
+
   it('binds WireSock CLI QA to the shared SDK registration adapter', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',
