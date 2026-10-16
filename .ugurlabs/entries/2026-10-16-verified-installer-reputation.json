@@ -1,0 +1,5 @@
+{
+  "title": "Require verified installer reputation before packaging",
+  "summary": "WinGet packaging waits for a clean VirusTotal verdict with engine coverage for the exact installer. A passed installation test or manual installation override cannot bypass a pending or flagged reputation check.",
+  "type": "fixed"
+}

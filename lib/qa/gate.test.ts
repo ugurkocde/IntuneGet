@@ -46,6 +46,7 @@ import {
   QaGateError,
   QaGateNotPassedError,
   QaSecurityGateError,
+  describeQaGateError,
 } from './gate';
 
 const installerSha256 = 'A'.repeat(64);
@@ -85,6 +86,10 @@ const failedRow = {
   detection_rules_sha256: 'E'.repeat(64),
   packager_commit: 'f'.repeat(40),
   package_content_sha256: 'F'.repeat(64),
+  virustotal_status: 'clean',
+  virustotal_malicious: 0,
+  virustotal_suspicious: 0,
+  virustotal_total_engines: 72,
 } satisfies QaResultRow;
 
 describe('enforceQaGate', () => {
@@ -94,6 +99,80 @@ describe('enforceQaGate', () => {
     getPackageCompatibilityBlockMock.mockResolvedValue(null);
     getPackageResultMock.mockReset();
     packageEqMock.mockReset();
+  });
+
+  describe('known clean reputation', () => {
+    const request = {
+      wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64',
+      installerSha256, packageProfileSha256,
+    };
+    const clean = {
+      ...failedRow, outcome: 'Passed', virustotal_status: 'clean',
+      virustotal_malicious: 0, virustotal_suspicious: 0, virustotal_total_engines: 72,
+    };
+
+    it.each([
+      { virustotal_status: 'not_found', virustotal_total_engines: null },
+      { virustotal_status: null },
+      { virustotal_status: 'error' },
+      { virustotal_status: 'skipped' },
+      { virustotal_total_engines: 0 },
+      { virustotal_total_engines: null },
+      { virustotal_malicious: null },
+      { virustotal_suspicious: null },
+      { virustotal_status: 'suspicious', virustotal_suspicious: 1 },
+      { virustotal_suspicious: 2 },
+    ])('holds an exact Passed payload with unverified or unclean reputation: %j', async (verdict) => {
+      for (const mode of [{ requirePassed: true }, {}, { qaOverride: true }]) {
+        getPackageResultMock.mockResolvedValue({ data: { ...clean, ...verdict }, error: null });
+        getQaResultMock.mockResolvedValue({ ...clean, ...verdict });
+        await expect(enforceQaGate({ ...request, ...mode })).rejects.toMatchObject({
+          code: 'QA_NOT_PASSED_CURRENT_VERSION', details: { reason: 'reputation' },
+        });
+      }
+    });
+
+    it('holds missing exact-hash evidence even if the catalog has a clean pass', async () => {
+      getPackageResultMock.mockResolvedValue({ data: null, error: null });
+      getQaResultMock.mockResolvedValue({ ...clean, installer_sha256: 'F'.repeat(64) });
+      await expect(enforceQaGate({ ...request, qaOverride: true })).rejects.toMatchObject({
+        details: { reason: 'reputation' },
+      });
+      expect(packageEqMock).toHaveBeenCalledWith('installer_sha256', installerSha256);
+    });
+
+    it('holds requests without a payload hash, including overrides', async () => {
+      getQaResultMock.mockResolvedValue(clean);
+      for (const qaOverride of [false, true]) {
+        await expect(enforceQaGate({ ...request, installerSha256: undefined, qaOverride }))
+          .rejects.toMatchObject({ details: { reason: 'reputation' } });
+      }
+    });
+
+    it('allows the exact payload only with a clean covered verdict', async () => {
+      getPackageResultMock.mockResolvedValue({ data: clean, error: null });
+      await expect(enforceQaGate({ ...request, requirePassed: true })).resolves.toBeUndefined();
+      await expect(enforceQaGate({ ...request, qaOverride: true })).resolves.toBeUndefined();
+    });
+
+    it('does not apply public installer reputation checks to custom uploads', async () => {
+      await expect(enforceQaGate({ ...request, sourceType: 'custom' })).resolves.toBeUndefined();
+      expect(getPackageResultMock).not.toHaveBeenCalled();
+      expect(getQaResultMock).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the reputation read fails', async () => {
+      getPackageResultMock.mockResolvedValueOnce({ data: null, error: null });
+      getPackageResultMock.mockResolvedValueOnce({ data: null, error: { message: 'unavailable' } });
+      await expect(enforceQaGate({ ...request, qaOverride: true })).rejects.toThrow('unavailable');
+    });
+
+    it('describes the reputation hold without claiming the installation test failed', async () => {
+      getPackageResultMock.mockResolvedValue({ data: { ...clean, virustotal_status: 'not_found' }, error: null });
+      const error = await enforceQaGate(request).catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(QaGateNotPassedError);
+      expect(describeQaGateError(error as QaGateNotPassedError)).toContain('clean VirusTotal verdict');
+    });
   });
 
   it.each([false, true])('blocks the failed SQL Server payload with override=%s', async (qaOverride) => {
@@ -348,26 +427,34 @@ describe('enforceQaGate', () => {
 
   it('blocks a failed exact version and architecture', async () => {
     getQaResultMock.mockResolvedValue(failedRow);
+    getPackageResultMock.mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: failedRow, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
     await expect(
-      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64' })
+      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64', installerSha256 })
     ).rejects.toBeInstanceOf(QaGateError);
   });
 
   it.each([
     { version: '26.8.0', architecture: 'x64' },
     { version: '26.7.0', architecture: 'arm64' },
-  ])('allows stale or architecture-mismatched failures', async (input) => {
+  ])('ignores stale installation failures when exact clean reputation exists', async (input) => {
     getQaResultMock.mockResolvedValue(failedRow);
-    await expect(enforceQaGate({ wingetId: 'OpenJS.NodeJS', ...input })).resolves.toBeUndefined();
+    getPackageResultMock.mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: failedRow, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    await expect(enforceQaGate({ wingetId: 'OpenJS.NodeJS', ...input, installerSha256 })).resolves.toBeUndefined();
   });
 
-  it('allows an explicit override and missing data', async () => {
+  it('allows an installability override only with exact clean reputation', async () => {
     getQaResultMock.mockResolvedValue(failedRow);
+    getPackageResultMock.mockResolvedValue({ data: failedRow, error: null });
     await expect(
-      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64', qaOverride: true })
+      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64', installerSha256, qaOverride: true })
     ).resolves.toBeUndefined();
     getQaResultMock.mockResolvedValue(null);
-    await expect(enforceQaGate({ wingetId: 'Unknown.App', version: '1.0' })).resolves.toBeUndefined();
+    await expect(enforceQaGate({ wingetId: 'Unknown.App', version: '1.0' }))
+      .rejects.toMatchObject({ details: { reason: 'reputation' } });
   });
 
   it('reuses a passed app version regardless of the requested PSADT profile', async () => {
@@ -790,6 +877,9 @@ describe('enforceQaGate', () => {
   });
 
   it('blocks a flagged current version even when its installation test passed', async () => {
+    getPackageResultMock.mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: failedRow, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
     getQaResultMock.mockResolvedValue({
       ...failedRow,
       outcome: 'Passed',
@@ -798,22 +888,22 @@ describe('enforceQaGate', () => {
       virustotal_total_engines: 72,
     });
     await expect(
-      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64' })
+      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64', installerSha256 })
     ).rejects.toBeInstanceOf(QaSecurityGateError);
   });
 
-  it('does not block on suspicious-only or missing VirusTotal verdicts', async () => {
-    getQaResultMock.mockResolvedValue({
+  it('holds suspicious-only verdicts under the known clean policy', async () => {
+    getPackageResultMock.mockResolvedValue({ data: {
       ...failedRow,
       outcome: 'Passed',
       virustotal_status: 'suspicious',
       virustotal_malicious: 0,
       virustotal_suspicious: 3,
       virustotal_total_engines: 72,
-    });
+    }, error: null });
     await expect(
-      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64' })
-    ).resolves.toBeUndefined();
+      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64', installerSha256 })
+    ).rejects.toMatchObject({ details: { reason: 'reputation' } });
   });
 
   it('does not allow a manual override to bypass strict automatic QA', async () => {
