@@ -447,7 +447,7 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString();
     const nextStatus = features.localPackager ? 'queued' : 'packaging';
-    const { data: claimed, error: claimError } = await supabase
+    const { data: claimed, error: claimError } = await guardObservedIdentity(supabase
       .from('packaging_jobs')
       .update({
         status: nextStatus,
@@ -458,7 +458,7 @@ export async function GET(request: Request) {
         packaging_started_at: features.localPackager ? null : now,
       })
       .eq('id', job.id)
-      .eq('status', 'awaiting_qa')
+      .eq('status', 'awaiting_qa'))
       .select('id')
       .maybeSingle();
     if (claimError) throw claimError;

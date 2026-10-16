@@ -189,7 +189,7 @@ describe('GET /api/cron/qa-resume', () => {
     }));
   });
 
-  it.each(['one flag', 'two flags', 'failed install', 'compatibility', 'curated', 'curated override', 'curated architecture', 'curated pending', 'curated withdrawn', 'curated changed identity', 'changed identity']
+  it.each(['one flag', 'two flags', 'failed install', 'compatibility', 'curated', 'curated override', 'curated architecture', 'curated pending', 'curated withdrawn', 'curated changed identity', 'changed identity', 'clean changed identity']
     .flatMap((kind) => [true, false].map((localPackager) => ({ kind, localPackager }))))(
     'preserves the customer gate disposition for %j', async ({ kind, localPackager }) => {
       getFeatureFlagsMock.mockReturnValue({ localPackager });
@@ -225,6 +225,7 @@ describe('GET /api/cron/qa-resume', () => {
           : kind.startsWith('curated') ? new CuratedEvidenceMismatchError() : security;
       enforceQaGateMock.mockImplementation(async (input) => {
         if (kind.includes('changed identity')) store.row.installer_sha256 = 'C'.repeat(64);
+        if (kind === 'clean changed identity') return;
         if (kind.startsWith('curated')) {
           const actual = await vi.importActual<typeof import('@/lib/qa/gate')>('@/lib/qa/gate');
           return actual.enforceQaGate(input);

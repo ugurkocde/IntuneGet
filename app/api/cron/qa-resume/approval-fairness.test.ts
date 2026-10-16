@@ -54,7 +54,14 @@ function database(rows: Row[], candidateStatus = 'passed', candidates?: Record<s
     };
     const builder = {
       select: () => builder,
-      eq: (key: string, value: unknown) => { filters.push(r => r[key] === value); return builder; },
+      eq: (key: string, value: unknown) => { filters.push(r => {
+        const [field, nested] = key.split('->>');
+        return (nested ? (r[field] as Record<string, unknown> | undefined)?.[nested] : r[field]) === value;
+      }); return builder; },
+      is: (key: string, value: null) => { filters.push(r => {
+        const [field, nested] = key.split('->>');
+        return ((nested ? (r[field] as Record<string, unknown> | undefined)?.[nested] : r[field]) ?? null) === value;
+      }); return builder; },
       lte: (key: string, value: string) => { filters.push(r => String(r[key]) <= value); return builder; },
       in: (key: string, values: unknown[]) => { filters.push(r => values.includes(r[key])); return builder; },
       order: (key: string) => { orders.push(key); return builder; },
