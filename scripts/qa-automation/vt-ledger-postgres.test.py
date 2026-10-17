@@ -26,7 +26,8 @@ LEDGER = ["20261016190552_qa_vt_coverage_holds_and_quota",
           "20261017005156_qa_vt_metadata_rechecks",
           "20261017032327_qa_vt_ledger_acl",
           "20261017142911_qa_vt_submission_dispatch_binding",
-          "20261017150846_qa_vt_terminal_lookup_proof"]
+          "20261017150846_qa_vt_terminal_lookup_proof",
+          "20261017152014_qa_vt_terminal_verdict_completion"]
 SECRET = "local-fixture-only"
 CID = "11111111-1111-4111-8111-111111111111"
 MID = "22222222-2222-4222-8222-222222222222"
@@ -285,6 +286,19 @@ def contracts():
     denied(upload, "admission rejected")
     assert value("select count(*) from qa_vt_requests") == 5
     print("PASS exact terminal dispatch selection and ambiguous submission without retry or refund")
+    reset()
+    candidate(status="error")
+    sql("insert into qa_vt_submission_intents(sha256,candidate_id,winget_id,version,architecture,manifest_installer_url,execution_installer_url,preflight_cache_key,verified_at,dispatch_started_at,dispatch_attempt,profile_sha256,github_run_id) select lower(installer_sha256),id,winget_id,version,architecture,installer_url,installer_url,'synthetic',now(),dispatched_at,attempts,package_profile_sha256,github_run_id from qa_candidates where id=" + literal(CID))
+    terminal_request = value(request, "service_role")["reservationId"]
+    completion = "select complete_qa_vt_metadata_recheck('local-fixture-only','" + terminal_request + "',200,null,0,0,60,now())"
+    rows = parallel([completion] * 2)
+    assert sum(r.returncode == 0 for r in rows) == 1
+    assert any("reservation rejected" in r.stderr for r in rows)
+    assert value("select response_recorded_at is not null from qa_vt_requests")
+    assert value("select status='found' and total_engines=60 and engine_count_version=2 from catalog_file_reputation where sha256=" + literal(HASH))
+    assert value("select malicious_verdicts=3 and released_at is null from qa_installer_security_holds where sha256=repeat('f',64)")
+    sql("delete from catalog_file_reputation where sha256=" + literal(HASH))
+    print("PASS concurrent terminal completion is once-only and preserves security holds")
     # Daily hold lease and metadata claims use that same admission ledger.
     reset()
     candidate()
