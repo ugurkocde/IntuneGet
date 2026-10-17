@@ -107,7 +107,9 @@ def fixture():
                              "expected_secret_hash constant text := '" + hashlib.sha256(SECRET.encode()).hexdigest() + "'",
                              baseline["reporter"].replace("\r\n", "\n"))
     assert count == 1
-    statements += [baseline["claimant"], reporter,
+    # PGlite accepts each function at EOF without a terminator; psql needs a
+    # separator when those same fixture definitions share one stdin stream.
+    statements += [baseline["claimant"].rstrip() + ";\n", reporter.rstrip() + ";\n",
                    migration("20261011075101_qa_guarded_diagnostic_retests")]
     statements += [migration(name) for name in PREREQUISITES]
     sql("\n".join(statements))
