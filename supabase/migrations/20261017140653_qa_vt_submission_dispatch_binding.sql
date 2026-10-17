@@ -38,8 +38,9 @@ returns boolean language sql stable security invoker set search_path = '' as $$
       and i.verified_at>statement_timestamp()-interval '6 hours'
       and i.verified_at<=statement_timestamp()
       and public.qa_vt_submission_identity(i.candidate_id,i.sha256)
+      -- A known file needs a metadata lookup, never another installer upload.
       and not exists(select 1 from public.catalog_file_reputation r where r.sha256=i.sha256
-        and r.status='found' and (r.malicious>0 or r.suspicious>0))
+        and r.status='found')
       -- Unknown holds have a zero floor and stay in place throughout submission.
       and not exists(select 1 from public.qa_installer_security_holds h
         where h.sha256=i.sha256 and h.released_at is null and h.malicious_verdicts>0)

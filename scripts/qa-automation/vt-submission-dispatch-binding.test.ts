@@ -70,6 +70,7 @@ it('rejects a newer source tuple, positive cache, positive hold, package block a
     const changes=[
       "insert into qa_candidates(id,status,test_level,winget_id,version,architecture,installer_sha256,enqueued_at) values(gen_random_uuid(),'queued','psadt-package','Example.App','2','x64',repeat('c',64),now()+interval '1 second')",
       "insert into catalog_file_reputation(sha256,status,malicious,suspicious) values(repeat('a',64),'found',0,1)",
+      "insert into catalog_file_reputation(sha256,status,malicious,suspicious,total_engines,engine_count_version,analyzed_at,checked_at,retry_after) values(repeat('a',64),'found',0,0,60,2,now(),now(),now()+interval '1 day')",
       "insert into qa_installer_security_holds(sha256,malicious_verdicts) values(repeat('a',64),1)",
       "insert into qa_package_blocks(winget_id,version,architecture,installer_sha256) values('Example.App','1','x64',repeat('A',64))",
       "update qa_vt_submission_intents set verified_at=now()-interval '7 hours'",
