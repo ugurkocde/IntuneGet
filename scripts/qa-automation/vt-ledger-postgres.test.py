@@ -25,7 +25,7 @@ LEDGER = ["20261016190552_qa_vt_coverage_holds_and_quota",
           "20261016210756_qa_vt_public_submission_bridge",
           "20261017005156_qa_vt_metadata_rechecks",
           "20261017032327_qa_vt_ledger_acl",
-          "20261017140653_qa_vt_submission_dispatch_binding"]
+          "20261017142911_qa_vt_submission_dispatch_binding"]
 SECRET = "local-fixture-only"
 CID = "11111111-1111-4111-8111-111111111111"
 MID = "22222222-2222-4222-8222-222222222222"

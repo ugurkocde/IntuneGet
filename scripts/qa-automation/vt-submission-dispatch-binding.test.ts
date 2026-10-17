@@ -6,7 +6,7 @@ const url='https://example.test/public.exe', secret='local-fixture-only';
 async function fixture() {
   const f=await historicalFixture();
   for(const n of ['20260714201549_installer_preflight_health','20261012153307_qa_installer_security_holds','20261016190552_qa_vt_coverage_holds_and_quota','20261016201507_qa_vt_positive_hold_upgrade','20261016210756_qa_vt_public_submission_bridge','20261017005156_qa_vt_metadata_rechecks','20261017032327_qa_vt_ledger_acl']) await f.pg.exec(f.read('../../supabase/migrations/'+n+'.sql'));
-  if(!process.env.QA_VT_DISPATCH_BASELINE) await f.pg.exec(f.read('../../supabase/migrations/20261017140653_qa_vt_submission_dispatch_binding.sql'));
+  if(!process.env.QA_VT_DISPATCH_BASELINE) await f.pg.exec(f.read('../../supabase/migrations/20261017142911_qa_vt_submission_dispatch_binding.sql'));
   await f.pg.query("insert into qa_candidates(id,status,test_level,winget_id,version,architecture,installer_sha256,installer_url,package_profile_sha256,attempts,dispatched_at,enqueued_at) values($1,'dispatched','psadt-package','Example.App','1','x64',$2,$3,$4,1,now(),now())",[id,hash,url,profile]);
   await f.pg.query("insert into installer_health(cache_key,winget_id,version,architecture,installer_url,expected_sha256,actual_sha256,status,checked_at,expires_at) values('verified','Example.App','1','x64',$1,upper($2),upper($2),'healthy',now(),now()+interval '1 hour')",[url,hash]);
   return f;
