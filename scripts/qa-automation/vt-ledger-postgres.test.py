@@ -24,7 +24,8 @@ LEDGER = ["20261016190552_qa_vt_coverage_holds_and_quota",
           "20261016201507_qa_vt_positive_hold_upgrade",
           "20261016210756_qa_vt_public_submission_bridge",
           "20261017005156_qa_vt_metadata_rechecks",
-          "20261017032327_qa_vt_ledger_acl"]
+          "20261017032327_qa_vt_ledger_acl",
+          "20261017140653_qa_vt_submission_dispatch_binding"]
 SECRET = "local-fixture-only"
 CID = "11111111-1111-4111-8111-111111111111"
 MID = "22222222-2222-4222-8222-222222222222"
@@ -133,6 +134,9 @@ def candidate(candidate_id=CID, status="running", hash_value=HASH):
     sql("insert into qa_candidates(id,status,test_level,installer_sha256,package_profile_sha256,github_run_id,phase,finished_at) values(" +
         ",".join(map(literal, [candidate_id, status, "psadt-package", hash_value, PROFILE, "12345", "publishing"])) +
         "," + ("null" if status == "running" else "now()") + ")")
+    sql("update qa_candidates set winget_id='Fixture.App',version='1',architecture='x64',"
+        "installer_url='https://example.invalid/installer',attempts=1,dispatched_at=now(),enqueued_at=now() "
+        "where id=" + literal(candidate_id))
 
 
 def reserve():
@@ -255,12 +259,22 @@ def contracts():
     denied(request.replace(SECRET, "wrong"), "authentication")
     print("PASS concurrent candidate allowance and authentication")
     sql("insert into qa_vt_submission_intents(sha256,candidate_id,winget_id,version,architecture,manifest_installer_url,execution_installer_url,preflight_cache_key,verified_at) values('" + HASH + "','" + CID + "','Fixture.App','1','x64','https://example.invalid/installer','https://example.invalid/installer','synthetic',now())")
+    sql("update qa_vt_submission_intents i set dispatch_started_at=c.dispatched_at,dispatch_attempt=c.attempts,"
+        "profile_sha256=c.package_profile_sha256,github_run_id=c.github_run_id from qa_candidates c where c.id=i.candidate_id")
+    sql("update qa_candidates set status='error',finished_at=now() where id=" + literal(CID))
+    selected = value("select claim_qa_vt_metadata_recheck('local-fixture-only')", "service_role")
+    assert selected["stop"] == "no_eligible_work" and selected["nextSubmission"]["candidateId"] == CID
     upload = request.replace("'hash_lookup'", "'upload_url'")
     rows = parallel([upload] * 2)
     assert sum(r.returncode == 0 for r in rows) == 1
     assert any("already reserved or stale" in r.stderr for r in rows)
     assert value("select count(*) from qa_vt_requests") == 3
     print("PASS concurrent upload URL reservation deduplication (synthetic intent only)")
+    assert value(upload.replace("'upload_url'", "'upload'"), "service_role")["reservationId"]
+    sql("select record_qa_vt_submission_analysis('local-fixture-only','" + CID + "','" + HASH + "',null,'ambiguous')", "service_role")
+    denied(upload, "admission rejected")
+    assert value("select count(*) from qa_vt_requests") == 4
+    print("PASS exact terminal dispatch selection and ambiguous submission without retry or refund")
     # Daily hold lease and metadata claims use that same admission ledger.
     reset()
     candidate()
