@@ -121,6 +121,66 @@ ${timeout}
     expect(JSON.stringify(value.captures)).not.toContain('PRIVATE_CANARY');
   });
 
+  it('keeps diagnostic filesystem calls out of the parent process', () => {
+    const value = run(`
+function Set-Content { param($LiteralPath, $Encoding, [Parameter(ValueFromPipeline=$true)]$Value) process { Start-Sleep -Seconds 30 } }
+$watch = [Diagnostics.Stopwatch]::StartNew()
+${timeout}
+@{ outcome=$outcome; rootStopped=$launched[0].WaitForExit(1000); seconds=$watch.Elapsed.TotalSeconds; captures=@(Read-Captures) } | ConvertTo-Json -Depth 8
+`);
+    expect(value.outcome).toEqual({ ExitCode: -1, TimedOut: true, Output: 'Timed out after 1 seconds' });
+    expect(value.rootStopped).toBe(true);
+    expect(value.seconds).toBeLessThan(7);
+    expect(value.captures).toHaveLength(1);
+  });
+
+  it.each(['write', 'cleanup'])('bounds stalled diagnostic %s and stops only its worker tree', scenario => {
+    const name = scenario === 'write' ? 'Write-ScannerTimeoutCapture' : 'Get-ScannerTimeoutCaptureResult';
+    const value = run(`
+function ${name} {
+ $worker = [Diagnostics.Process]::GetCurrentProcess()
+ $record = @{ workerId=$PID; workerTicks=$worker.StartTime.ToUniversalTime().Ticks }
+ ${scenario === 'cleanup' ? `$child = Microsoft.PowerShell.Management\\Start-Process -FilePath ([Environment]::ProcessPath) -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand',[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('Start-Sleep -Seconds 30'))) -PassThru -NoNewWindow
+ $record.childId=$child.Id; $record.childTicks=$child.StartTime.ToUniversalTime().Ticks` : ''}
+ [IO.File]::WriteAllText((Join-Path $env:LOCALAPPDATA 'worker-marker.json'), ($record | ConvertTo-Json))
+ Start-Sleep -Seconds 30
+}
+$watch = [Diagnostics.Stopwatch]::StartNew()
+${timeout}
+$marker = Join-Path $directory 'worker-marker.json'
+$seen = Test-Path -LiteralPath $marker
+$workerStopped = $false; $childStopped = $false
+if ($seen) {
+ $record = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
+ foreach ($kind in @('worker','child')) {
+  $id = $record.($kind + 'Id'); $ticks = $record.($kind + 'Ticks')
+  $stopped = $true
+  if ($id) {
+   $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+   if ($p) { try { if ($p.StartTime.ToUniversalTime().Ticks -eq $ticks) { $stopped = $p.WaitForExit(1000); if (-not $stopped) { $p.Kill() } } } finally { $p.Dispose() } }
+  }
+  if ($kind -eq 'worker') { $workerStopped=$stopped } else { $childStopped=$stopped }
+ }
+}
+@{ outcome=$outcome; markerSeen=$seen; workerStopped=$workerStopped; childStopped=$childStopped; rootStopped=$launched[0].WaitForExit(1000); seconds=$watch.Elapsed.TotalSeconds; captures=@(Read-Captures) } | ConvertTo-Json -Depth 8
+`);
+    expect(value.outcome).toEqual({ ExitCode: -1, TimedOut: true, Output: 'Timed out after 1 seconds' });
+    expect(value.markerSeen).toBe(true);
+    expect(value.workerStopped).toBe(true);
+    expect(value.childStopped).toBe(true);
+    expect(value.rootStopped).toBe(true);
+    expect(value.seconds).toBeLessThan(7);
+    expect(value.captures).toEqual([]);
+  });
+
+  it('keeps the encoded worker command below the Windows command line limit', () => {
+    const value = run(`
+$script = Get-ScannerTimeoutWorkerScript -RootProcessId 100 -RootStartedUtcTicks ([DateTime]::UtcNow.Ticks) -DeadlineUtcTicks ([DateTime]::UtcNow.AddMilliseconds(4000).Ticks)
+@{ length=([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))).Length } | ConvertTo-Json
+`);
+    expect(value.length).toBeLessThan(30000);
+  });
+
   it('rejects missing or reused roots and earlier children while bounding the tree', () => {
     const value = run(`
 $start = [DateTime]::UtcNow

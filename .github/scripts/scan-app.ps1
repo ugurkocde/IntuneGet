@@ -139,21 +139,21 @@ function ConvertTo-ScannerTimeoutCapture {
         descendant_count = $children.Count; truncated = $value.truncated; children = $children }
 }
 
-function Save-ScannerTimeoutCapture {
-    param([Diagnostics.Process]$Process, [long]$StartedUtcTicks)
+function Get-ScannerTimeoutCaptureResult {
+    param([int]$RootProcessId, [long]$RootStartedUtcTicks, [long]$DeadlineUtcTicks)
 
     $safe = @{ captured = $false; capture_error = $true }
     $stdout = Join-Path $env:TEMP "scanner-timeout-$([Guid]::NewGuid()).out"
     $stderr = Join-Path $env:TEMP "scanner-timeout-$([Guid]::NewGuid()).err"
     $helper = $null
-    $watch = [Diagnostics.Stopwatch]::StartNew()
     try {
-        if ($StartedUtcTicks -le 0) { throw 'Unverified root' }
-        $script = Get-ScannerTimeoutCaptureScript -RootProcessId $Process.Id -RootStartedUtcTicks $StartedUtcTicks
+        if ($RootStartedUtcTicks -le 0) { throw 'Unverified root' }
+        $script = Get-ScannerTimeoutCaptureScript -RootProcessId $RootProcessId -RootStartedUtcTicks $RootStartedUtcTicks
         $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
         $helper = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $encoded) `
             -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        if (-not $helper.WaitForExit([Math]::Max(0, 5000 - [int]$watch.ElapsedMilliseconds))) { throw 'Capture deadline' }
+        $remaining = [int][Math]::Max(0, ($DeadlineUtcTicks - [DateTime]::UtcNow.Ticks) / [TimeSpan]::TicksPerMillisecond)
+        if (-not $helper.WaitForExit($remaining)) { throw 'Capture deadline' }
         if ($helper.ExitCode -ne 0 -or (Get-Item -LiteralPath $stdout).Length -gt 16384) { throw 'Invalid helper output' }
         $safe = ConvertTo-ScannerTimeoutCapture -Json (Get-Content -LiteralPath $stdout -Raw)
     } catch { } finally {
@@ -161,13 +161,70 @@ function Save-ScannerTimeoutCapture {
         if ($helper) { try { if (-not $helper.HasExited) { $helper.Kill() } } catch { }; $helper.Dispose() }
         Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
     }
+    return $safe
+}
+
+function Write-ScannerTimeoutCapture {
+    param([hashtable]$Capture, [long]$DeadlineUtcTicks)
+
     try {
         $directory = Join-Path $env:LOCALAPPDATA 'Packages/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe/LocalState/DiagOutputDir'
         [void][IO.Directory]::CreateDirectory($directory)
-        $safe.capture_ms = [int][Math]::Min([int]::MaxValue, $watch.ElapsedMilliseconds)
+        $elapsed = ([DateTime]::UtcNow.Ticks - $DeadlineUtcTicks) / [TimeSpan]::TicksPerMillisecond + 4000
+        $Capture.capture_ms = [int][Math]::Clamp($elapsed, 0, [int]::MaxValue)
         $path = Join-Path $directory "IntuneGet-Uninstall-Timeout-$([Guid]::NewGuid()).json"
-        $safe | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path -Encoding utf8NoBOM
+        $Capture | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path -Encoding utf8NoBOM
     } catch { } # Diagnostics must never change the scan result or its error text.
+}
+
+function Get-ScannerTimeoutWorkerScript {
+    param([int]$RootProcessId, [long]$RootStartedUtcTicks, [long]$DeadlineUtcTicks)
+
+    # Each trusted function is shipped once, followed only by typed integers.
+    $functions = @(
+        'function Select-ScannerTimeoutProcesses {' + ${function:Select-ScannerTimeoutProcesses}.ToString() + "}`n"
+        'function Get-ScannerTimeoutCaptureScript {' + ${function:Get-ScannerTimeoutCaptureScript}.ToString() + "}`n"
+        'function ConvertTo-ScannerTimeoutCapture {' + ${function:ConvertTo-ScannerTimeoutCapture}.ToString() + "}`n"
+        'function Get-ScannerTimeoutCaptureResult {' + ${function:Get-ScannerTimeoutCaptureResult}.ToString() + "}`n"
+        'function Write-ScannerTimeoutCapture {' + ${function:Write-ScannerTimeoutCapture}.ToString() + "}`n"
+    ) -join ''
+    return '$ErrorActionPreference = ''Stop''; $ProgressPreference = ''SilentlyContinue'';' + "`n" + $functions +
+        'try { $capture = Get-ScannerTimeoutCaptureResult -RootProcessId ' + $RootProcessId +
+        ' -RootStartedUtcTicks ' + $RootStartedUtcTicks + ' -DeadlineUtcTicks ' + $DeadlineUtcTicks +
+        '; Write-ScannerTimeoutCapture -Capture $capture -DeadlineUtcTicks ' + $DeadlineUtcTicks + ' | Out-Null } catch { }'
+}
+
+function Save-ScannerTimeoutCapture {
+    param([Diagnostics.Process]$Process, [long]$StartedUtcTicks)
+
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $worker = $null
+    try {
+        if ($StartedUtcTicks -le 0) { return }
+        $deadline = [DateTime]::UtcNow.AddMilliseconds(4000).Ticks
+        $script = Get-ScannerTimeoutWorkerScript -RootProcessId $Process.Id -RootStartedUtcTicks $StartedUtcTicks -DeadlineUtcTicks $deadline
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+        if ($encoded.Length -ge 30000) { return }
+        $info = [Diagnostics.ProcessStartInfo]::new()
+        $info.FileName = [Environment]::ProcessPath
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardInput = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        foreach ($argument in @('-NoProfile', '-NonInteractive', '-EncodedCommand', $encoded)) { $info.ArgumentList.Add($argument) }
+        $worker = [Diagnostics.Process]::Start($info)
+        $worker.StandardInput.Close()
+        # All diagnostic file IO is in this worker. Never read its output pipes.
+        [void]$worker.WaitForExit([Math]::Max(0, 5000 - [int]$watch.ElapsedMilliseconds))
+    } catch { } finally {
+        if ($worker) {
+            try {
+                # The observed root is our sibling, never in this worker's tree.
+                if (-not $worker.HasExited) { $worker.Kill($true); [void]$worker.WaitForExit(500) }
+            } catch { } finally { $worker.Dispose() }
+        }
+    }
 }
 
 function Invoke-Winget {
