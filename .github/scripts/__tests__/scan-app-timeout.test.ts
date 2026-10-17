@@ -11,11 +11,18 @@ const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   /^(PATH|SystemRoot|WINDIR|TEMP|TMP|PATHEXT|ProgramFiles|ProgramFiles\(x86\)|ProgramW6432|PSModulePath)$/i.test(key)));
 
-function run(body: string, source = scanner) {
+/**
+ * Runs trusted scanner functions using benign processes and a private fixture.
+ * The clean child environment carries no credentials; CIM cases need Windows.
+ */
+function run(body: string, source = scanner, withoutInheritedTemp = false) {
   const directory = mkdtempSync(join(tmpdir(), 'scanner-PRIVATE_CANARY-'));
   const script = `
+trap { [Console]::Error.WriteLine($_.ToString()); exit 1 }
 $ErrorActionPreference = 'Stop'
+${withoutInheritedTemp ? '$env:TEMP = $null; $env:TMP = $null' : ''}
 $env:LOCALAPPDATA = ${quote(directory)}
+$env:TEMP = $env:TMP = ${quote(directory)}
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile(${quote(source)}, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Source parse failed' }
@@ -42,7 +49,7 @@ exit 0
   try {
     const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
       { encoding: 'utf8', env: cleanEnv, timeout: 20000, windowsHide: true, maxBuffer: 256 * 1024 });
-    expect(result.status, result.stderr).toBe(0);
+    expect(result.status, `${result.stderr}\n${result.stdout}`).toBe(0);
     return JSON.parse(result.stdout.trim());
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
@@ -54,6 +61,15 @@ $outcome = Invoke-Winget -Arguments @('-NoProfile', '-NonInteractive', '-Command
 `;
 
 describe.runIf(available)('scanner timeout diagnostics', () => {
+  it('runs the benign process fixture without inherited TEMP or TMP', () => {
+    const value = run(`
+$outcome = Invoke-Winget -Arguments @('-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 30') -TimeoutSeconds 1
+@{ outcome=$outcome; captures=@(Read-Captures) } | ConvertTo-Json -Depth 5
+`, scanner, true);
+    expect(value.outcome).toEqual({ ExitCode: -1, TimedOut: true, Output: 'Timed out after 1 seconds' });
+    expect(value.captures).toEqual([]);
+  });
+
   it.runIf(process.platform === 'win32')('writes a private capture on timeout and preserves the original error', () => {
     const value = run(`${timeout}
 @{ outcome = $outcome; captures = @(Read-Captures) } | ConvertTo-Json -Depth 8
