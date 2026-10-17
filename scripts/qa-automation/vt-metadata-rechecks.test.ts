@@ -109,3 +109,52 @@ it('rejects malformed success, escalates exhausted work honestly, and reports me
     await expect(f.pg.query("select qa_vt_request_stats('wrong')")).rejects.toThrow('authentication');
   }finally{await f.pg.close();}
 },30000);
+
+it('keeps rerun429 deferral and separates metadata calls from VM lookup allowance',async()=>{
+  const f=await fixture();try {
+    await pending(f);const first=(await claim(f)).rows[0].r;
+    await f.pg.exec("update qa_vt_metadata_rechecks set lease_expires_at=now()-interval '1 second'");
+    await expect(f.pg.query("select complete_qa_vt_metadata_recheck('local-fixture-only',$1,200,null,0,0,60,now())",[first.lease])).rejects.toThrow('lease');
+    await f.pg.query("select complete_qa_vt_metadata_recheck('local-fixture-only',$1,429,now()+interval '9 days')",[first.lease]);
+    await f.pg.exec("update qa_vt_request_budget set blocked_until=null;update qa_candidates set status='running',github_run_id='67890',finished_at=null");
+    const r=(await f.pg.query<{r:{reservationId:string}}>("select reserve_qa_vt_candidate_request('local-fixture-only',$1,$2,'hash_lookup') r",[id,hash])).rows[0].r;
+    expect(r.reservationId).toBeTruthy();
+    await f.pg.query("select report_qa_vt_candidate_rate_limit('local-fixture-only',$1,$2,now()+interval '9 days')",[id,r.reservationId]);
+    expect((await f.pg.query('select * from qa_vt_metadata_rechecks')).rows).toHaveLength(2);
+    expect((await f.pg.query<{blocked:boolean}>("select blocked_until>now()+interval '8 days' as blocked from qa_vt_request_budget")).rows[0].blocked).toBe(true);
+    expect((await f.pg.query('select * from qa_vt_requests where metadata_candidate_id is not null and candidate_id is null')).rows).toHaveLength(1);
+    await expect(f.pg.query("select report_qa_vt_candidate_rate_limit('local-fixture-only',$1,$2,now()+interval '1 day')",[id,first.reservationId])).rejects.toThrow('binding');
+  }finally{await f.pg.close();}
+},30000);
+
+it('rejects implausible deadlines without truncating them and escalates old work',async()=>{
+  const f=await fixture();try {
+    await pending(f);const c=(await claim(f)).rows[0].r;
+    await expect(f.pg.query("select complete_qa_vt_metadata_recheck('local-fixture-only',$1,429,'9999-12-31')",[c.lease])).rejects.toThrow('Invalid');
+    expect((await f.pg.query<{state:string}>('select state from qa_vt_metadata_rechecks')).rows[0].state).toBe('leased');
+    expect((await f.pg.query<{blocked_until:Date|null}>('select blocked_until from qa_vt_request_budget')).rows[0].blocked_until).toBeNull();
+    await f.pg.exec("update qa_vt_metadata_rechecks set first_queued_at=now()-interval '15 days',lease_expires_at=now()-interval '1 second'");
+    expect((await claim(f)).rows[0].r.stop).toBe('no_eligible_work');
+    expect((await f.pg.query<{state:string}>('select state from qa_vt_metadata_rechecks')).rows[0].state).toBe('escalated');
+  }finally{await f.pg.close();}
+},30000);
+
+it('lets only the existing security refresh consume a newly covered clean cache',async()=>{
+  const f=await fixture();try {
+    await pending(f);
+    await f.pg.exec("update qa_candidates set status='running',phase='scanning_installer'");
+    await f.pg.query("select report_qa_candidate_result('local-fixture-only',$1,'error','VirusTotal: awaiting engine coverage, rechecking daily')",[id]);
+    await f.pg.exec("update qa_candidates set phase='publishing',finished_at=now()");
+    const c=(await claim(f)).rows[0].r;
+    await f.pg.query("select complete_qa_vt_metadata_recheck('local-fixture-only',$1,200,null,0,0,60,now())",[c.lease]);
+    expect((await f.pg.query<{released_at:Date|null}>('select released_at from qa_installer_security_holds')).rows[0].released_at).toBeNull();
+    expect((await f.pg.query<{status:string}>('select status from qa_candidates')).rows[0].status).toBe('error');
+    await f.pg.query('select refresh_qa_installer_security_holds()');
+    expect((await f.pg.query<{released_at:Date|null}>('select released_at from qa_installer_security_holds')).rows[0].released_at).toBeNull();
+    // Advance the existing daily hold window in the fixture only.
+    await f.pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second',verdict_at=now()-interval '1 minute',checked_at=null");
+    await f.pg.query('select refresh_qa_installer_security_holds()');
+    expect((await f.pg.query<{released_at:Date|null}>('select released_at from qa_installer_security_holds')).rows[0].released_at).toBeTruthy();
+    expect((await f.pg.query<{status:string}>('select status from qa_candidates')).rows[0].status).toBe('queued');
+  }finally{await f.pg.close();}
+},30000);

@@ -3,8 +3,10 @@
 alter table public.qa_vt_request_budget add column metering_started_at timestamptz
   not null default clock_timestamp();
 
+alter table public.qa_vt_requests add column metadata_candidate_id uuid;
+
 create table public.qa_vt_metadata_rechecks (
-  candidate_id uuid primary key,
+  candidate_id uuid not null,
   sha256 text not null check (sha256 ~ '^[a-f0-9]{64}$' and sha256 <> repeat('0',64)),
   profile_sha256 text not null check (profile_sha256 ~ '^[A-Fa-f0-9]{64}$'),
   run_id text not null check (run_id ~ '^[1-9][0-9]*$'),
@@ -15,7 +17,8 @@ create table public.qa_vt_metadata_rechecks (
   lease uuid, lease_expires_at timestamptz, reservation_id uuid,
   last_http_status integer not null default 429 check (last_http_status between 0 and 599),
   malicious integer, suspicious integer, total_engines integer,
-  analyzed_at timestamptz, checked_at timestamptz
+  analyzed_at timestamptz, checked_at timestamptz,
+  primary key(candidate_id,run_id)
 );
 create index qa_vt_metadata_rechecks_due_idx on public.qa_vt_metadata_rechecks(retry_at)
   where state in ('pending','leased');
@@ -23,12 +26,15 @@ alter table public.qa_vt_metadata_rechecks enable row level security;
 revoke all on public.qa_vt_metadata_rechecks from public,anon,authenticated,service_role;
 grant select on public.qa_vt_metadata_rechecks to service_role;
 
--- Retain a provider's absolute deadline, including one beyond seven days.
+-- Retain the full absolute deadline, including beyond seven days. Reject
+-- implausible dates beyond31days rather than silently truncating them.
+-- A caller receiving this error must retain its hold and escalate invalid
+-- provider metadata, never retry inline or turn the result clean.
 create function public.defer_qa_vt_requests_until(p_reservation uuid,p_retry_at timestamptz)
 returns void language plpgsql security invoker set search_path = '' as $$
 declare stamp timestamptz := clock_timestamp();
 begin
-  if p_retry_at is null or not isfinite(p_retry_at) or p_retry_at <= stamp then
+  if p_retry_at is null or not isfinite(p_retry_at) or p_retry_at <= stamp or p_retry_at>stamp+interval '31 days' then
     raise exception 'Invalid VirusTotal retry deadline';
   end if;
   perform pg_advisory_xact_lock(hashtextextended('intuneget-vt-request-budget',0));
@@ -67,7 +73,9 @@ begin
   insert into public.qa_vt_metadata_rechecks(candidate_id,sha256,profile_sha256,run_id,retry_at)
   values(c.id,lower(c.installer_sha256),c.package_profile_sha256,c.github_run_id,
     greatest(p_retry_at,stamp+interval '60 seconds'))
-  on conflict(candidate_id) do update set retry_at=greatest(qa_vt_metadata_rechecks.retry_at,excluded.retry_at)
+  on conflict(candidate_id,run_id) do update set retry_at=greatest(qa_vt_metadata_rechecks.retry_at,excluded.retry_at),
+    state=case when qa_vt_metadata_rechecks.state in ('resolved','escalated') then 'pending' else qa_vt_metadata_rechecks.state end,
+    last_http_status=429
   where qa_vt_metadata_rechecks.sha256=excluded.sha256
     and qa_vt_metadata_rechecks.profile_sha256=excluded.profile_sha256
     and qa_vt_metadata_rechecks.run_id=excluded.run_id;
@@ -110,20 +118,20 @@ begin
     and cached.checked_at>stamp-interval '7 days' and cached.checked_at<=stamp and cached.retry_after>stamp then
     update public.qa_vt_metadata_rechecks set state='resolved',lease=null,lease_expires_at=null,
       last_http_status=200,malicious=cached.malicious,suspicious=cached.suspicious,
-      total_engines=cached.total_engines,analyzed_at=cached.analyzed_at,checked_at=stamp
-      where candidate_id=item.candidate_id;
+      total_engines=cached.total_engines,analyzed_at=cached.analyzed_at,checked_at=cached.checked_at
+      where candidate_id=item.candidate_id and run_id=item.run_id;
     return jsonb_build_object('cached',true,'candidateId',item.candidate_id);
   end if;
   reservation := public.reserve_qa_vt_request(item.sha256,'hash_lookup');
   if reservation->>'reservationId' is null then
     update public.qa_vt_metadata_rechecks set state='pending',lease=null,lease_expires_at=null,
-      retry_at=greatest(retry_at,(reservation->>'retryAt')::timestamptz) where candidate_id=item.candidate_id;
+      retry_at=greatest(retry_at,(reservation->>'retryAt')::timestamptz) where candidate_id=item.candidate_id and run_id=item.run_id;
     return reservation;
   end if;
-  update public.qa_vt_requests set candidate_id=item.candidate_id where id=(reservation->>'reservationId')::uuid;
+  update public.qa_vt_requests set metadata_candidate_id=item.candidate_id where id=(reservation->>'reservationId')::uuid;
   update public.qa_vt_metadata_rechecks set state='leased',lease=gen_random_uuid(),
     lease_expires_at=stamp+interval '2 minutes',attempts=attempts+1,
-    reservation_id=(reservation->>'reservationId')::uuid where candidate_id=item.candidate_id returning * into item;
+    reservation_id=(reservation->>'reservationId')::uuid where candidate_id=item.candidate_id and run_id=item.run_id returning * into item;
   return jsonb_build_object('candidateId',item.candidate_id,'sha256',item.sha256,
     'lease',item.lease,'reservationId',item.reservation_id);
 end;
@@ -131,6 +139,8 @@ $$;
 revoke all on function public.claim_qa_vt_metadata_recheck(text) from public,anon,authenticated;
 grant execute on function public.claim_qa_vt_metadata_recheck(text) to anon,service_role;
 
+-- Qualified newer cache evidence is also consumed by the existing reviewed
+-- installer security-hold refresh path; it grants no VM or release credit.
 create function public.complete_qa_vt_metadata_recheck(p_secret text,p_lease uuid,p_http_status integer,
   p_retry_at timestamptz default null,p_malicious integer default null,p_suspicious integer default null,
   p_total_engines integer default null,p_analyzed_at timestamptz default null) returns void
@@ -142,8 +152,11 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('intuneget-qa-dispatch',0));
   stamp := clock_timestamp();
   select * into item from public.qa_vt_metadata_rechecks where lease=p_lease
-    and state='leased' and lease_expires_at>stamp for update;
-  if not found or p_http_status is null or p_http_status not between 0 and 599 then
+    and state='leased' for update;
+  -- A late 429 can still defer globally while this exact lease has not been
+  -- replaced. Success never accepts an expired lease. Future HTTP timeout <2min.
+  if not found or p_http_status is null or p_http_status not between 0 and 599
+    or (item.lease_expires_at<=stamp and p_http_status<>429) then
     raise exception 'QA VirusTotal metadata lease rejected';
   end if;
   if p_http_status=200 then
@@ -174,15 +187,15 @@ begin
     end if;
     update public.qa_vt_metadata_rechecks set state='resolved',last_http_status=200,
       malicious=cached.malicious,suspicious=cached.suspicious,total_engines=cached.total_engines,
-      analyzed_at=cached.analyzed_at,checked_at=stamp,lease=null,lease_expires_at=null where candidate_id=item.candidate_id;
+      analyzed_at=cached.analyzed_at,checked_at=cached.checked_at,lease=null,lease_expires_at=null where candidate_id=item.candidate_id and run_id=item.run_id;
   else
-    if p_retry_at is not null and (not isfinite(p_retry_at) or p_retry_at<=stamp) then
+    if p_retry_at is not null and (not isfinite(p_retry_at) or p_retry_at<=stamp or p_retry_at>stamp+interval '31 days') then
       raise exception 'Invalid VirusTotal metadata retry deadline';
     end if;
     p_retry_at := greatest(p_retry_at,stamp+interval '15 minutes');
     if p_http_status=429 then perform public.defer_qa_vt_requests_until(item.reservation_id,p_retry_at); end if;
     update public.qa_vt_metadata_rechecks set state='pending',last_http_status=p_http_status,
-      retry_at=greatest(retry_at,p_retry_at),lease=null,lease_expires_at=null where candidate_id=item.candidate_id;
+      retry_at=greatest(retry_at,p_retry_at),lease=null,lease_expires_at=null where candidate_id=item.candidate_id and run_id=item.run_id;
   end if;
 end;
 $$;
