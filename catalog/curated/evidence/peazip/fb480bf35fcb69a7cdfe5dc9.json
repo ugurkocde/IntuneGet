@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "39010848859",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "1209d463852e0ffd277853cb9f069df285cbb84d",
+    "runAttempt": "1",
+    "websiteCommit": "ce8da1a072ddb048d70bbf79f995f549ad5c1d43"
+  },
+  "candidate": {
+    "appId": "peazip",
+    "version": "11.4.0",
+    "installerUrl": "https://github.com/peazip/PeaZip/releases/download/11.4.0/peazip-11.4.0.WIN64.exe",
+    "vendorSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+    "releaseNotesUrl": "https://github.com/peazip/PeaZip/releases/tag/11.4.0",
+    "discoveredAt": "2026-10-17T06:32:36.861Z",
+    "id": "fb480bf35fcb69a7cdfe5dc9"
+  },
+  "previous": {
+    "appId": "peazip",
+    "version": "11.3.0",
+    "installerUrl": "https://github.com/peazip/PeaZip/releases/download/11.3.0/peazip-11.3.0.WIN64.exe",
+    "vendorSha256": "cb52763da39ef44f6b8ce3619eb76817aa8b2e4c3518c406dc5cc2857bcaeb76",
+    "releaseNotesUrl": "https://github.com/peazip/PeaZip/releases/tag/11.3.0",
+    "discoveredAt": "2026-10-08T13:29:08.047Z",
+    "id": "811353888aa317fc0b0b5c14"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "fb480bf35fcb69a7cdfe5dc9",
+      "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+      "sourceUrl": "https://github.com/peazip/PeaZip/releases/download/11.4.0/peazip-11.4.0.WIN64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": null,
+        "status": "unsigned"
+      },
+      "security": {
+        "malicious": 0,
+        "scanner": "defender",
+        "status": "clean",
+        "scannedAt": "2026-10-17T06:47:38.3873999Z",
+        "signatureVersion": "1.461.65.0",
+        "engineVersion": "1.1.26090.9",
+        "suspicious": 0,
+        "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3"
+      }
+    },
+    "previous": {
+      "candidateId": "811353888aa317fc0b0b5c14",
+      "installerSha256": "cb52763da39ef44f6b8ce3619eb76817aa8b2e4c3518c406dc5cc2857bcaeb76",
+      "sourceUrl": "https://github.com/peazip/PeaZip/releases/download/11.3.0/peazip-11.3.0.WIN64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": null,
+        "status": "unsigned"
+      },
+      "security": {
+        "malicious": 0,
+        "scanner": "defender",
+        "status": "clean",
+        "scannedAt": "2026-10-17T06:47:51.9135769Z",
+        "signatureVersion": "1.461.65.0",
+        "engineVersion": "1.1.26090.9",
+        "suspicious": 0,
+        "installerSha256": "cb52763da39ef44f6b8ce3619eb76817aa8b2e4c3518c406dc5cc2857bcaeb76"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "fb480bf35fcb69a7cdfe5dc9",
+    "packageId": "IntuneGet.Curated.PeaZip",
+    "installerUrl": "https://github.com/peazip/PeaZip/releases/download/11.4.0/peazip-11.4.0.WIN64.exe",
+    "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.PeaZip",
+      "displayName": "PeaZip",
+      "publisher": "Giorgio Tani",
+      "version": "11.4.0",
+      "architecture": "x64",
+      "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:{5A2BC38A-406C-4A5B-BF45-6991F9A05325}_is1:PeaZip",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PeaZip\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"11.4.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PeaZip\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"11.4.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "1AF43FF69C30EB0E85C7C5A43DDD7DEF2274A925A154B1204D3B1FE879BEC3B1",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.PeaZip\",\"publisher\":\"IntuneGet QA\",\"version\":\"11.4.0\",\"wingetId\":\"IntuneGet.Curated.PeaZip\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"11.4.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PeaZip\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"58AE8457A03B0AE715C7AA2EE518C9595758B6E68DC9751A34BDBFE48A8F39F0\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"7C7E70F4BB64B0F8E6F088C33BB14D7791D9A7C1A762D062F3BFEC1BBB8AC9D3\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:{5A2BC38A-406C-4A5B-BF45-6991F9A05325}_is1:PeaZip\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"11.4.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PeaZip\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"EF52EEB0EB738F342D51245CD01740482350EA34F86284BBEA2293D19417B3CF\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "ef52eeb0eb738f342d51245cd01740482350ea34f86284bbea2293d19417b3cf",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "architecture": "x64",
+    "upgradeFromVersion": "11.3.0",
+    "testLevel": "psadt-package",
+    "previousInstallerSha256": "cb52763da39ef44f6b8ce3619eb76817aa8b2e4c3518c406dc5cc2857bcaeb76",
+    "installerVersion": "11.4.0",
+    "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+    "testedAt": "2026-10-17T06:50:18.0474669Z",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "executionProfileSha256": "1AF43FF69C30EB0E85C7C5A43DDD7DEF2274A925A154B1204D3B1FE879BEC3B1",
+    "executionContext": "LocalSystem",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "candidateId": "fb480bf35fcb69a7cdfe5dc9"
+  },
+  "verifiedAt": "2026-10-17T06:50:27.2711359Z",
+  "authenticatedArtifact": {
+    "id": 12093236606,
+    "sha256": "16e1ee684d3f6f031c004aba363e6da3f84349287e5e25f8c75cb4fef3c3570c"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-17T10:20:47.905Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

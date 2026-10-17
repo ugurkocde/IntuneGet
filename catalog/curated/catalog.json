@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-15T22:22:39.430Z",
-    "expiresAt": "2026-10-22T22:22:39.430Z",
+    "generatedAt": "2026-10-17T10:20:47.905Z",
+    "expiresAt": "2026-10-24T10:20:47.905Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -6370,10 +6370,186 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/b750d55739ecacc59df304c0.json"
           }
         }
+      },
+      {
+        "id": "starship:1aa373a87dd5358cc7f9ffaa",
+        "candidate": {
+          "appId": "starship",
+          "version": "1.27.0",
+          "installerUrl": "https://github.com/starship/starship/releases/download/v1.27.0/starship-x86_64-pc-windows-msvc.msi",
+          "vendorSha256": "b3b2e17e318d2d96f62d2213830d42587b6c4d35933a8e506b6e83a52151937e",
+          "releaseNotesUrl": "https://github.com/starship/starship/releases/tag/v1.27.0",
+          "discoveredAt": "2026-10-17T09:42:50.025Z",
+          "id": "1aa373a87dd5358cc7f9ffaa"
+        },
+        "installerSha256": "b3b2e17e318d2d96f62d2213830d42587b6c4d35933a8e506b6e83a52151937e",
+        "executionProfileSha256": "37187C5E969BD16A6AD37BDDACB794A54D3E687165E7C385D3D901AB55DA514E",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-17T10:20:47.905Z",
+        "evidence": {
+          "verifiedAt": "2026-10-17T10:02:44.8818509Z",
+          "installerSha256": "b3b2e17e318d2d96f62d2213830d42587b6c4d35933a8e506b6e83a52151937e",
+          "installerVersion": "1.27.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/starship/1aa373a87dd5358cc7f9ffaa.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "SignPath Foundation"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "2eb802617dd5cde618cc4c79ae8c1fa8ce71adae",
+            "websiteCommit": "ce8da1a072ddb048d70bbf79f995f549ad5c1d43",
+            "runId": "39022955211",
+            "runAttempt": 1,
+            "artifactId": "12097453417",
+            "artifactSha256": "a305686689a2aff78e66e40a3c14c65e836ecaa009b1cdeeb4b0077c27489aee"
+          },
+          "security": {
+            "engineVersion": "1.1.26090.9",
+            "scannedAt": "2026-10-17T10:01:00.3293352Z",
+            "suspicious": 0,
+            "installerSha256": "b3b2e17e318d2d96f62d2213830d42587b6c4d35933a8e506b6e83a52151937e",
+            "malicious": 0,
+            "status": "clean",
+            "signatureVersion": "1.461.67.0",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/starship/1aa373a87dd5358cc7f9ffaa.json"
+          },
+          "qa": {
+            "testLevel": "psadt-package",
+            "testedAt": "2026-10-17T10:02:40.206933Z",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "candidateId": "1aa373a87dd5358cc7f9ffaa",
+            "previousInstallerSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+            "executionProfileSha256": "37187C5E969BD16A6AD37BDDACB794A54D3E687165E7C385D3D901AB55DA514E",
+            "upgradeFromVersion": "1.26.0",
+            "executionContext": "LocalSystem",
+            "installerSha256": "b3b2e17e318d2d96f62d2213830d42587b6c4d35933a8e506b6e83a52151937e",
+            "installerVersion": "1.27.0",
+            "architecture": "x64",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/starship/1aa373a87dd5358cc7f9ffaa.json"
+          }
+        }
+      },
+      {
+        "id": "peazip:fb480bf35fcb69a7cdfe5dc9",
+        "candidate": {
+          "appId": "peazip",
+          "version": "11.4.0",
+          "installerUrl": "https://github.com/peazip/PeaZip/releases/download/11.4.0/peazip-11.4.0.WIN64.exe",
+          "vendorSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+          "releaseNotesUrl": "https://github.com/peazip/PeaZip/releases/tag/11.4.0",
+          "discoveredAt": "2026-10-17T06:32:36.861Z",
+          "id": "fb480bf35fcb69a7cdfe5dc9"
+        },
+        "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+        "executionProfileSha256": "1AF43FF69C30EB0E85C7C5A43DDD7DEF2274A925A154B1204D3B1FE879BEC3B1",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-17T10:20:47.905Z",
+        "evidence": {
+          "verifiedAt": "2026-10-17T06:50:27.2711359Z",
+          "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+          "installerVersion": "11.4.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/peazip/fb480bf35fcb69a7cdfe5dc9.json",
+          "signature": {
+            "publisher": null,
+            "status": "unsigned"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "1209d463852e0ffd277853cb9f069df285cbb84d",
+            "websiteCommit": "ce8da1a072ddb048d70bbf79f995f549ad5c1d43",
+            "runId": "39010848859",
+            "runAttempt": 1,
+            "artifactId": "12093236606",
+            "artifactSha256": "16e1ee684d3f6f031c004aba363e6da3f84349287e5e25f8c75cb4fef3c3570c"
+          },
+          "security": {
+            "malicious": 0,
+            "scanner": "defender",
+            "status": "clean",
+            "scannedAt": "2026-10-17T06:47:38.3873999Z",
+            "signatureVersion": "1.461.65.0",
+            "engineVersion": "1.1.26090.9",
+            "suspicious": 0,
+            "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/peazip/fb480bf35fcb69a7cdfe5dc9.json"
+          },
+          "qa": {
+            "architecture": "x64",
+            "upgradeFromVersion": "11.3.0",
+            "testLevel": "psadt-package",
+            "previousInstallerSha256": "cb52763da39ef44f6b8ce3619eb76817aa8b2e4c3518c406dc5cc2857bcaeb76",
+            "installerVersion": "11.4.0",
+            "installerSha256": "7c7e70f4bb64b0f8e6f088c33bb14d7791d9a7c1a762d062f3bfec1bbb8ac9d3",
+            "testedAt": "2026-10-17T06:50:18.0474669Z",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "executionProfileSha256": "1AF43FF69C30EB0E85C7C5A43DDD7DEF2274A925A154B1204D3B1FE879BEC3B1",
+            "executionContext": "LocalSystem",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "candidateId": "fb480bf35fcb69a7cdfe5dc9",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/peazip/fb480bf35fcb69a7cdfe5dc9.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "kL7LbSXU/oK1mjIcJmksac/7dCyy29Ulf4/5hREwiRglewSKAPAOooIQzuC/H7QhIhmS7PcPAf0ueJyKSrvjCQ=="
+  "signature": "KzgCw8Mobc1V+LzjgRH2nh5NCimv4Yd0Xqn1Ms0U3DaHSLChpeY+EF5It5DpCJN4sA51DDYN5Kqc4X27n2ZUBQ=="
 }
