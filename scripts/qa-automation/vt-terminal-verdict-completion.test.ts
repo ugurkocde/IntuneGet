@@ -5,8 +5,8 @@ const id='11111111-1111-4111-8111-111111111111',hash='a'.repeat(64),profile='B'.
 async function fixture(){
   const f=await historicalFixture();
   for(const n of ['20260714201549_installer_preflight_health','20261012153307_qa_installer_security_holds','20261016190552_qa_vt_coverage_holds_and_quota','20261016201507_qa_vt_positive_hold_upgrade','20261016210756_qa_vt_public_submission_bridge','20261017005156_qa_vt_metadata_rechecks','20261017032327_qa_vt_ledger_acl','20261017142911_qa_vt_submission_dispatch_binding']) await f.pg.exec(f.read('../../supabase/migrations/'+n+'.sql'));
-  await f.pg.exec(f.read('../../supabase/migrations/20261017150846_qa_vt_terminal_lookup_proof.sql'));
-  if(!process.env.QA_VT_VERDICT_BASELINE)await f.pg.exec(f.read('../../supabase/migrations/20261017152014_qa_vt_terminal_verdict_completion.sql'));
+  await f.pg.exec(f.read('../../supabase/migrations/20261017162556_qa_vt_terminal_lookup_proof.sql'));
+  if(!process.env.QA_VT_VERDICT_BASELINE)await f.pg.exec(f.read('../../supabase/migrations/20261017162626_qa_vt_terminal_verdict_completion.sql'));
   await f.pg.query("insert into qa_candidates(id,status,test_level,winget_id,version,architecture,installer_sha256,installer_url,package_profile_sha256,attempts,dispatched_at,enqueued_at,github_run_id) values($1,'dispatched','psadt-package','Example.App','1','x64',$2,'https://example.test/public.exe',$3,1,now()-interval '1 minute',now()-interval '2 minutes','12345')",[id,hash,profile]);
   await f.pg.query("insert into installer_health(cache_key,winget_id,version,architecture,installer_url,expected_sha256,actual_sha256,status,checked_at,expires_at) values('verified','Example.App','1','x64','https://example.test/public.exe',upper($1),upper($1),'healthy',now()-interval '30 seconds',now()+interval '1 hour')",[hash]);
   await f.pg.query("select record_qa_vt_submission_intent($1,'verified','https://example.test/public.exe')",[id]);
