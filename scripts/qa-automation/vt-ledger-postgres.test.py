@@ -25,7 +25,8 @@ LEDGER = ["20261016190552_qa_vt_coverage_holds_and_quota",
           "20261016210756_qa_vt_public_submission_bridge",
           "20261017005156_qa_vt_metadata_rechecks",
           "20261017032327_qa_vt_ledger_acl",
-          "20261017142911_qa_vt_submission_dispatch_binding"]
+          "20261017142911_qa_vt_submission_dispatch_binding",
+          "20261017150846_qa_vt_terminal_lookup_proof"]
 SECRET = "local-fixture-only"
 CID = "11111111-1111-4111-8111-111111111111"
 MID = "22222222-2222-4222-8222-222222222222"
@@ -264,16 +265,25 @@ def contracts():
     sql("update qa_candidates set status='error',finished_at=now() where id=" + literal(CID))
     selected = value("select claim_qa_vt_metadata_recheck('local-fixture-only')", "service_role")
     assert selected["stop"] == "no_eligible_work" and selected["nextSubmission"]["candidateId"] == CID
+    # The terminal phase has its own bounded allowance after the two in-run
+    # requests. A caller must attest an actual provider404 for this exact slot.
+    denied(request.replace("'hash_lookup'", "'upload_url'"), "provider404")
+    proof_request = value(request, "service_role")["reservationId"]
+    sql("select record_qa_vt_submission_analysis('local-fixture-only','" + CID + "','" + HASH + "','" + proof_request + "','not_found')", "service_role")
+    denied("select record_qa_vt_submission_analysis('local-fixture-only','" + CID + "','" + HASH + "','" + proof_request + "','not_found')", "reservation")
     upload = request.replace("'hash_lookup'", "'upload_url'")
     rows = parallel([upload] * 2)
     assert sum(r.returncode == 0 for r in rows) == 1
     assert any("already reserved or stale" in r.stderr for r in rows)
-    assert value("select count(*) from qa_vt_requests") == 3
+    assert value("select count(*) from qa_vt_requests") == 4
     print("PASS concurrent upload URL reservation deduplication (synthetic intent only)")
+    # Advance the synthetic request timestamps past the minute window without
+    # refunding or deleting any reservation, so the fifth total slot can run.
+    sql("update qa_vt_requests set reserved_at=reserved_at-interval '2 minutes'")
     assert value(upload.replace("'upload_url'", "'upload'"), "service_role")["reservationId"]
     sql("select record_qa_vt_submission_analysis('local-fixture-only','" + CID + "','" + HASH + "',null,'ambiguous')", "service_role")
     denied(upload, "admission rejected")
-    assert value("select count(*) from qa_vt_requests") == 4
+    assert value("select count(*) from qa_vt_requests") == 5
     print("PASS exact terminal dispatch selection and ambiguous submission without retry or refund")
     # Daily hold lease and metadata claims use that same admission ledger.
     reset()
