@@ -49,6 +49,23 @@ $$;
 revoke all on function public.defer_qa_vt_requests_until(uuid,timestamptz) from public,anon,authenticated;
 grant execute on function public.defer_qa_vt_requests_until(uuid,timestamptz) to service_role;
 
+-- Same authenticated reservation-owner boundary as the existing seconds API,
+-- but daily rechecks and future reserved operations retain an absolute deadline.
+create function public.defer_qa_vt_candidate_requests_until(p_secret text,p_candidate_id uuid,
+  p_reservation uuid,p_retry_at timestamptz) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform public.authenticate_qa_installer_recheck(p_secret);
+  perform pg_advisory_xact_lock(hashtextextended('intuneget-qa-dispatch',0));
+  if not exists(select 1 from public.qa_vt_requests where id=p_reservation and candidate_id=p_candidate_id) then
+    raise exception 'QA VirusTotal reservation owner rejected';
+  end if;
+  perform public.defer_qa_vt_requests_until(p_reservation,p_retry_at);
+end;
+$$;
+revoke all on function public.defer_qa_vt_candidate_requests_until(text,uuid,uuid,timestamptz) from public,anon,authenticated;
+grant execute on function public.defer_qa_vt_candidate_requests_until(text,uuid,uuid,timestamptz) to anon,service_role;
+
 -- Called only after a reserved candidate lookup actually returned HTTP429.
 -- Authentication and reservation ownership are the existing reporter boundary.
 -- A generic publication error alone is never sufficient to enqueue work.

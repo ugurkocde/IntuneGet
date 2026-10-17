@@ -19,6 +19,20 @@ async function pending(f: Awaited<ReturnType<typeof fixture>>) {
 }
 const claim=(f:Awaited<ReturnType<typeof fixture>>,secret='local-fixture-only')=>f.pg.query<{r:{lease:string;reservationId:string;retryAt:string;stop:string;cached:boolean}}>('select claim_qa_vt_metadata_recheck($1) r',[secret]);
 
+it('defers daily reservations through the same authenticated owner boundary without a seven-day clamp',async()=>{
+  const f=await fixture();try {
+    const lease='22222222-2222-4222-8222-222222222222', heldHash='b'.repeat(64);
+    await f.pg.query("insert into qa_installer_security_holds(sha256,malicious_verdicts,recheck_lease,recheck_lease_expires_at) values($1,1,$2,now()+interval '2 minutes')",[heldHash,lease]);
+    const reservation=(await f.pg.query<{r:{reservationId:string}}>("select reserve_qa_vt_candidate_request('local-fixture-only',$1,$2,'hash_lookup',$3) r",[id,heldHash,lease])).rows[0].r.reservationId;
+    await expect(f.pg.query("select defer_qa_vt_candidate_requests_until('wrong',$1,$2,now()+interval '9 days')",[id,reservation])).rejects.toThrow('authentication');
+    await expect(f.pg.query("select defer_qa_vt_candidate_requests_until('local-fixture-only',$1,$2,now()+interval '9 days')",[lease,reservation])).rejects.toThrow('owner');
+    await f.pg.query("select defer_qa_vt_candidate_requests_until('local-fixture-only',$1,$2,now()+interval '9 days')",[id,reservation]);
+    expect((await f.pg.query<{blocked:boolean}>("select blocked_until>now()+interval '8 days' blocked from qa_vt_request_budget")).rows[0].blocked).toBe(true);
+    expect((await f.pg.query('select * from qa_vt_metadata_rechecks')).rows).toHaveLength(0);
+    expect((await f.pg.query<{released_at:Date|null}>('select released_at from qa_installer_security_holds')).rows[0].released_at).toBeNull();
+  }finally{await f.pg.close();}
+},30000);
+
 it('preserves a full absolute provider deadline beyond seven days',async()=>{
   const f=await fixture();try {
     const r=(await f.pg.query<{r:{reservationId:string}}>("select reserve_qa_vt_request($1,'hash_lookup') r",[hash])).rows[0].r;
