@@ -97,6 +97,11 @@ def fixture():
         statements.append("create table " + table["name"] + " (" + ",".join(columns) + ");")
     statements.append("create table public.catalog_file_reputation(sha256 text primary key,status text,malicious integer,suspicious integer,total_engines integer,analyzed_at timestamptz,checked_at timestamptz,retry_after timestamptz,engine_count_version integer);")
     statements.append("grant usage on schema public,extensions to service_role;grant all on all tables in schema public to service_role;")
+    # Match Supabase's inherited grants so migration revocations are exercised,
+    # rather than mistaking a missing schema grant for table ACL protection.
+    statements.append("grant usage on schema public to anon,authenticated;"
+                      "alter default privileges in schema public grant all on tables to anon,authenticated,service_role;"
+                      "alter default privileges in schema public grant all on functions to anon,authenticated,service_role;")
     baseline = json.loads((FIXTURES / "diagnostic-retest-functions.json").read_text())
     reporter, count = re.subn(r"expected_secret_hash constant text := '[a-f0-9]{64}'",
                              "expected_secret_hash constant text := '" + hashlib.sha256(SECRET.encode()).hexdigest() + "'",
@@ -284,11 +289,11 @@ def contracts():
     assert value("select malicious_verdicts=3 and released_at is null from qa_installer_security_holds where sha256=repeat('f',64)")
     print("PASS daily lease dedupe, concurrent metadata claim and late429 deferral without security release")
     for role in ("anon", "authenticated"):
-        denied("select * from qa_vt_requests", "permission denied", role)
+        denied("select * from qa_vt_requests", "permission denied for table", role)
     for statement in ("blocked_until=null", "blocked_until=now()", "metering_started_at=now()", "id=false"):
         denied("update qa_vt_request_budget set " + statement, "may only be extended")
     for statement in ("delete from qa_vt_requests", "truncate qa_vt_requests", "update qa_vt_requests set reserved_at=now()"):
-        denied(statement, "permission denied")
+        denied(statement, "permission denied for table")
     stats = value("select qa_vt_request_stats('local-fixture-only')", "service_role")
     assert stats["meteredReservationsOnly"] is True
     assert stats["untrackedBefore"] == value("select to_json(metering_started_at) from qa_vt_request_budget")
