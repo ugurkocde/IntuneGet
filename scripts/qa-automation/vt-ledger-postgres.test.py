@@ -389,6 +389,20 @@ def contracts():
     for role in ('anon', 'authenticated', 'service_role'):
         denied('select * from qa_vt_upload_url_recovery_grants', 'permission denied for table', role)
     print('PASS audited URL recovery, concurrent single consumption and unchanged actual-upload guard')
+    post_analysis = (ROOT/'supabase/tests/qa_vt_post_analysis_hash_recheck.sql').read_text()
+    setup = post_analysis.split('-- Post-migration assertions')[0]
+    baseline = setup + "do $$ begin if claim_qa_vt_metadata_recheck('local-fixture-only')->>'lease' is not null then raise exception 'Baseline unexpectedly admits exhausted analysis';end if;end $$;rollback;"
+    sql(baseline)
+    print('PASS regression reproduces missing post-analysis metadata lease before migration')
+    sql(migration('20261018230638_qa_vt_post_analysis_hash_recheck'))
+    for http_status in (200, 404, 0, 429):
+        sql("set qa.test_http_status='"+str(http_status)+"';"+post_analysis)
+    sql(setup.replace('begin;', '', 1))
+    attempts = parallel(["select claim_qa_vt_metadata_recheck('local-fixture-only')"]*2)
+    claims = [json.loads(r.stdout) for r in attempts if r.returncode == 0]
+    assert len(claims) == 2 and sum(bool(c.get('lease')) for c in claims) == 1
+    assert value("select count(*) from qa_vt_requests where operation='hash_lookup'") == 1
+    print('PASS post-analysis exact-hash completion,404 parking,temporary retries,exclusions and concurrent single lease')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
