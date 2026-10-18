@@ -74,7 +74,8 @@ begin
         and (q.last_http_status is distinct from 404
           or (q.state='pending' and q.preflight_completed_at is null
             and q.preflight_attempts<2 and q.attempts<6
-            and public.qa_vt_terminal_public_source(c.id)))
+            and public.qa_vt_terminal_public_source(c.id)
+            and not exists(select 1 from public.qa_vt_request_budget where id=true and blocked_until>stamp)))
         and (q.last_http_status=404 or not exists(select 1 from public.qa_vt_requests r
           where r.sha256=q.sha256 and r.metadata_candidate_id is not null
             and r.reserved_at>stamp-interval '1 hour'))))

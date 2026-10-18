@@ -51,6 +51,7 @@ begin
     raise exception 'Preflight preference displaced waiting customer demand';end if;
   -- A provider block must neither spend quota nor relabel a genuine404 for lookup.
   truncate public.qa_vt_requests;
+  delete from public.packaging_jobs where id='30000000-0000-4000-8000-000000000003';
   update public.qa_vt_metadata_rechecks set state='resolved' where candidate_id=unseen;
   update public.qa_vt_request_budget set blocked_until=now()+interval '1 hour';
   select retry_at into old_retry from public.qa_vt_metadata_rechecks where candidate_id=preflight;
@@ -59,6 +60,18 @@ begin
     or exists(select 1 from public.qa_vt_requests)
     or (select retry_at from public.qa_vt_metadata_rechecks where candidate_id=preflight)<>old_retry then
     raise exception 'Blocked404 spent quota or reset its retry deadline';end if;
+  -- Quota-free cached resolution must proceed despite the blocked404 priority.
+  update public.qa_vt_metadata_rechecks set state='pending',lease=null,lease_expires_at=null
+    where candidate_id=unseen;
+  insert into public.catalog_file_reputation(sha256,status,malicious,suspicious,total_engines,
+    engine_count_version,analyzed_at,checked_at,retry_after)
+    values(repeat('f',64),'found',0,0,70,2,now()-interval '1 hour',now()-interval '1 hour',now()+interval '6 days');
+  claim:=public.claim_qa_vt_metadata_recheck('local-fixture-only');
+  if claim->>'cached' is distinct from 'true' or claim->>'candidateId' is distinct from unseen::text
+    or exists(select 1 from public.qa_vt_requests)
+    or (select retry_at from public.qa_vt_metadata_rechecks where candidate_id=preflight)<>old_retry then
+    raise exception 'Blocked404 starved quota-free cached resolution';end if;
+  delete from public.catalog_file_reputation;
   update public.qa_vt_request_budget set blocked_until=null;
   -- Exhausted and non-public preflights remain excluded after the new sort key.
   update public.qa_vt_metadata_rechecks set preflight_attempts=2 where candidate_id=preflight;
