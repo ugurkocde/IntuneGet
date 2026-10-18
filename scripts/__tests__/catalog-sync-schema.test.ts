@@ -7,6 +7,7 @@ const directory = resolve(import.meta.dirname, '../../supabase/migrations');
 const files = readdirSync(directory).filter((name) => name.endsWith('_restore_curated_upstream_miss_count.sql'));
 if (files.length !== 1) throw new Error('Expected one catalog counter restoration migration');
 const migration = readFileSync(resolve(directory, files[0]), 'utf8');
+/** Mirror the atomic migration unit used by production and PostgreSQL CI. */
 const apply = (db: PGlite) => db.transaction((tx) => tx.exec(migration));
 
 describe('hourly catalog sync counter migration', () => {

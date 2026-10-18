@@ -11,18 +11,22 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def contracts(sql):
+    """Check missing, compatible and incompatible counter schemas in an isolated database."""
     files = list((ROOT / 'supabase/migrations').glob('*_restore_curated_upstream_miss_count.sql'))
     assert len(files) == 1
     migration = files[0].read_text()
     database = 'catalog_contract_' + uuid.uuid4().hex
 
     def run(text, check=True):
+        """Route every fixture query through the caller's pinned CI-only transport."""
         return sql(text, database=database, check=check)
 
     def value(query):
+        """Read a single structured assertion result without parsing psql formatting."""
         return json.loads(run('select to_json(v) from (' + query + ') v').stdout)
 
     def snapshot():
+        """Capture the access controls that an additive catalog migration must preserve."""
         return value("select c.relrowsecurity,c.relacl::text,"
                      "(select coalesce(json_agg(row_to_json(p)),'[]'::json) from "
                      "(select policyname,permissive,roles,cmd,qual,with_check from pg_policies "
@@ -30,6 +34,7 @@ def contracts(sql):
                      "from pg_class c where c.oid='public.curated_apps'::regclass")
 
     def apply(check=True):
+        """Execute the migration as one transaction, including expected failure cases."""
         # psql's explicit transaction mirrors apply_migration's atomic unit.
         return run('begin;\n' + migration + '\ncommit;', check)
 
