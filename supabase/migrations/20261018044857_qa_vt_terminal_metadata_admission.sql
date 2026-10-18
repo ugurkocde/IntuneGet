@@ -47,7 +47,9 @@ language sql stable security invoker set search_path = '' as $$
     and not exists(select 1 from public.qa_vt_submission_intents i
       where i.sha256=lower(c.installer_sha256) and
         (i.outcome<>'pending' or i.upload_url_reserved_at is not null or i.upload_reserved_at is not null
-          or i.analysis_id is not null or i.analysis_recorded_at is not null)))
+          or i.analysis_id is not null or i.analysis_recorded_at is not null
+          or exists(select 1 from public.qa_candidates active where active.id=i.candidate_id
+            and active.status in ('dispatched','running')))))
 $$;
 revoke all on function public.qa_vt_terminal_public_source(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.qa_vt_terminal_public_source(uuid) to service_role;
@@ -228,4 +230,3 @@ begin
     'lease',item.lease,'reservationId',item.reservation_id);
 end;
 $function$
-
