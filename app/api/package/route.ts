@@ -63,6 +63,7 @@ import {
   PACKAGE_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
 import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
+import { enrichCustomerQaStatus } from '@/lib/customer-qa-status';
 
 export const maxDuration = 300;
 
@@ -1069,7 +1070,8 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      return NextResponse.json({ job });
+      const [displayJob] = await enrichCustomerQaStatus([job]);
+      return NextResponse.json({ job: displayJob });
     }
 
     // List the signed-in user's jobs. Use the token's userId (the same value
@@ -1099,7 +1101,7 @@ export async function GET(request: NextRequest) {
       }
 
       const tenantJobs = await db.jobs.getByTenantId(tenantId, 50);
-      return NextResponse.json({ jobs: tenantJobs, scope: 'tenant' });
+      return NextResponse.json({ jobs: await enrichCustomerQaStatus(tenantJobs), scope: 'tenant' });
     }
 
     const jobs = await db.jobs.getByUserId(user.userId, 50);
@@ -1108,7 +1110,7 @@ export async function GET(request: NextRequest) {
     // deployments where the cleanup cron is not running)
     const healedJobs = await healStaleJobs(db, jobs);
 
-    return NextResponse.json({ jobs: healedJobs });
+    return NextResponse.json({ jobs: await enrichCustomerQaStatus(healedJobs) });
   } catch (err) {
     console.error('[Package] Failed to fetch jobs:', err);
     const detail = !isSupabaseServerConfigured() && err instanceof Error ? err.message : null;

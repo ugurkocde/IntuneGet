@@ -1,0 +1,5 @@
+{
+  "title": "Explain deployment validation holds",
+  "summary": "Deployment cards show why installation validation is waiting and the next scheduled check when available, including installer security checks and source retries.",
+  "type": "improved"
+}

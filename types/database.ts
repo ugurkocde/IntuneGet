@@ -35,6 +35,12 @@ export interface Database {
         Update: { malicious_verdicts?: number; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
         Relationships: GenericRelationship[];
       };
+      catalog_file_reputation: {
+        Row: { sha256: string; status: 'pending' | 'found' | 'not_found' | 'error'; malicious: number | null; suspicious: number | null; total_engines: number | null; analyzed_at: string | null; checked_at: string | null; retry_after: string; requested_at: string; priority: number };
+        Insert: { sha256: string; status?: 'pending' | 'found' | 'not_found' | 'error'; malicious?: number | null; suspicious?: number | null; total_engines?: number | null; analyzed_at?: string | null; checked_at?: string | null; retry_after?: string; requested_at?: string; priority?: number };
+        Update: Partial<Database['public']['Tables']['catalog_file_reputation']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_automation_state: {
         Row: { id: string; value: Json; updated_at: string };
         Insert: { id: string; value: Json; updated_at?: string };

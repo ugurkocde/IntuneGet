@@ -46,8 +46,10 @@ import { ErrorDisplay } from '@/components/ErrorDisplay';
 import { EspProfileSelector } from '@/components/EspProfileSelector';
 import { PageHeader, AnimatedStatCard, StatCardGrid, AnimatedEmptyState, SkeletonCard, SkeletonGrid } from '@/components/dashboard';
 import type { PackageAssignment } from '@/types/upload';
+import type { CustomerQaStatus } from '@/types/customer-qa';
 
 interface PackagingJob {
+  qa_status?: CustomerQaStatus;
   id: string;
   user_id: string;
   user_email?: string | null;
@@ -684,7 +686,10 @@ function UploadJobCard({
   const statusConfig = {
     awaiting_qa: {
       icon: ShieldCheck,
-      label: 'Testing app',
+      label: job.qa_status?.category === 'testing' ? 'Testing app'
+        : job.qa_status?.category === 'unavailable' ? 'Validation status unavailable'
+          : ['installer_security_hold', 'source_retry', 'reputation_unknown'].includes(job.qa_status?.category || '') ? 'Validation on hold'
+            : 'Waiting for validation',
       color: 'text-accent-violet',
       bg: 'bg-accent-violet/10',
       border: 'border-l-accent-violet',
@@ -947,7 +952,7 @@ function UploadJobCard({
               progress={job.progress_percent}
               status={job.status}
               statusMessage={job.status === 'awaiting_qa'
-                ? 'Waiting for installation validation before deployment'
+                ? job.qa_status?.message || 'Validation status is temporarily unavailable. Next event: updated validation information.'
                 : job.status_message}
               startTime={job.status === 'awaiting_qa'
                 ? job.qa_requested_at || job.created_at
@@ -962,6 +967,16 @@ function UploadJobCard({
               )}
               qaHref={job.qa_candidate_id ? '/qa' : undefined}
             />
+          )}
+          {job.status === 'awaiting_qa' && job.qa_status?.nextEventAt && Number.isFinite(Date.parse(job.qa_status.nextEventAt)) && (
+            <p className="mt-2 text-xs text-text-muted">
+              {Date.parse(job.qa_status.nextEventAt) <= Date.now()
+                ? <T>Next check due since</T>
+                : <T>Next check scheduled for</T>}{' '}
+              <time dateTime={job.qa_status.nextEventAt} translate="no">
+                {new Date(job.qa_status.nextEventAt).toLocaleString()}
+              </time>
+            </p>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">

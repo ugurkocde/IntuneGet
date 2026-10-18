@@ -5,6 +5,8 @@ import type { PackagingJob } from '@/lib/db/types';
 const {
   getDatabaseMock,
   getByUserIdMock,
+  enrichQaMock,
+  getByTenantIdMock,
   getByIdMock,
   getApprovalFailuresMock,
   updateMock,
@@ -30,6 +32,8 @@ const {
   curatedState: { envelope: {} as Record<string, unknown> },
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
+  enrichQaMock: vi.fn(async (jobs: PackagingJob[]) => jobs),
+  getByTenantIdMock: vi.fn(),
   getByIdMock: vi.fn(),
   getApprovalFailuresMock: vi.fn(),
   updateMock: vi.fn(),
@@ -62,6 +66,7 @@ vi.mock('@/catalog/curated/catalog.json', async (importOriginal) => {
 vi.mock('@/lib/db', () => ({
   getDatabase: getDatabaseMock,
 }));
+vi.mock('@/lib/customer-qa-status', () => ({ enrichCustomerQaStatus: enrichQaMock }));
 
 vi.mock('@/lib/auth-utils', () => ({
   parseAccessToken: parseAccessTokenMock,
@@ -156,6 +161,7 @@ function minutesAgo(minutes: number): string {
 describe('GET /api/package (userId listing)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    enrichQaMock.mockImplementation(async jobs => jobs);
     delete process.env.QA_MAINTENANCE_MODE;
     delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     // The list path now authenticates and uses the token's userId.
@@ -168,6 +174,7 @@ describe('GET /api/package (userId listing)', () => {
     getDatabaseMock.mockReturnValue({
       jobs: {
         getByUserId: getByUserIdMock,
+        getByTenantId: getByTenantIdMock,
         getById: getByIdMock,
         update: updateMock,
       },
@@ -175,6 +182,34 @@ describe('GET /api/package (userId listing)', () => {
     updateMock.mockImplementation(async (id: string, data: Partial<PackagingJob>) =>
       makeJob({ id, ...data })
     );
+  });
+
+  it('adds hold display evidence only after selecting the authorized user jobs', async () => {
+    const own = makeJob({ id: 'owned', status: 'awaiting_qa' });
+    getByUserIdMock.mockResolvedValue([own]);
+    enrichQaMock.mockResolvedValue([{ ...own, qa_status: { category: 'source_retry', message: 'Installer source checks are deferred.', nextEventAt: '2030-01-01T00:00:00Z' } }] as PackagingJob[]);
+    const response = await GET(new NextRequest('http://localhost/api/package'));
+    expect((await response.json()).jobs[0].qa_status.category).toBe('source_retry');
+    expect(enrichQaMock).toHaveBeenCalledWith([own]);
+  });
+
+  it('does not enrich a foreign job or an unauthenticated request', async () => {
+    getByIdMock.mockResolvedValue(makeJob({ user_id: 'someone-else' }));
+    expect((await GET(new NextRequest('http://localhost/api/package?jobId=foreign'))).status).toBe(404);
+    expect(enrichQaMock).not.toHaveBeenCalled();
+    parseAccessTokenMock.mockResolvedValue(null);
+    expect((await GET(new NextRequest('http://localhost/api/package'))).status).toBe(401);
+    expect(enrichQaMock).not.toHaveBeenCalled();
+  });
+
+  it('enriches the authorized tenant list and single job paths', async () => {
+    const own = makeJob({ user_id: 'user-1', status: 'awaiting_qa' });
+    getByTenantIdMock.mockResolvedValue([own]); getByIdMock.mockResolvedValue(own);
+    await GET(new NextRequest('http://localhost/api/package?scope=tenant'));
+    await GET(new NextRequest('http://localhost/api/package?jobId=owned'));
+    expect(enrichQaMock).toHaveBeenCalledTimes(2);
+    expect(enrichQaMock).toHaveBeenNthCalledWith(1, [own]);
+    expect(enrichQaMock).toHaveBeenNthCalledWith(2, [own]);
   });
 
   it('marks stale intermediate jobs as failed and returns the corrected status', async () => {
