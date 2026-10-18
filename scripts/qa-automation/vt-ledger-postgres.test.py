@@ -338,6 +338,9 @@ def contracts():
     assert stats["meteredReservationsOnly"] is True
     assert stats["untrackedBefore"] == value("select to_json(metering_started_at) from qa_vt_request_budget")
     print("PASS nonowner ACL, monotonic hold and honest metering boundary")
+    sql(migration('20261018044857_qa_vt_terminal_metadata_admission'))
+    sql((ROOT/'supabase/tests/qa_vt_terminal_metadata_admission.sql').read_text())
+    print('PASS shared terminal admission, fresh preflight and genuine404 quota contract')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 

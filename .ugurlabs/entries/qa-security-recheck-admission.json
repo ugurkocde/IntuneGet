@@ -1,0 +1,5 @@
+{
+  "title": "Recover pending application security checks",
+  "summary": "Application security checks can recover missing scan evidence through shared verification while preserving installer integrity checks and security holds.",
+  "type": "fixed"
+}
