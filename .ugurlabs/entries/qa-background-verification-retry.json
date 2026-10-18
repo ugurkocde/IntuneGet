@@ -1,0 +1,5 @@
+{
+  "title": "Avoid repeated background verification requests",
+  "summary": "Background verification prioritizes unresolved applications and avoids repeating completed reputation lookups while preserving existing security holds.",
+  "type": "fixed"
+}

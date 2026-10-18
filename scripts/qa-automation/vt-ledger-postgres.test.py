@@ -347,6 +347,10 @@ def contracts():
     sql(migration('20261018130856_qa_vt_fair_metadata_selection'))
     sql((ROOT/'supabase/tests/qa_vt_fair_metadata_selection.sql').read_text())
     print('PASS fair public and metadata offers, fallback, quota and cursor ACL')
+    sql(migration('20261018140859_qa_vt_metadata_drain'))
+    sql((ROOT/'supabase/tests/qa_vt_fair_metadata_selection.sql').read_text())
+    sql((ROOT/'supabase/tests/qa_vt_metadata_drain.sql').read_text())
+    print('PASS metadata drain, completed404, passed/cache, source guard and tuple backoff')
     reset()
     for n in range(1, 7):
         candidate(str(uuid.uuid4()), 'error', format(n, '064x'))
