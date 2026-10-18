@@ -351,6 +351,10 @@ def contracts():
     sql((ROOT/'supabase/tests/qa_vt_fair_metadata_selection.sql').read_text())
     sql((ROOT/'supabase/tests/qa_vt_metadata_drain.sql').read_text())
     print('PASS metadata drain, completed404, passed/cache, source guard and tuple backoff')
+    sql(migration('20261018163200_qa_vt_preflight_priority'))
+    for name in ('qa_vt_terminal_metadata_admission', 'qa_vt_fair_metadata_selection', 'qa_vt_metadata_drain', 'qa_vt_preflight_priority'):
+        sql((ROOT/'supabase/tests'/ (name+'.sql')).read_text())
+    print('PASS preflight priority, null-status fairness, customer priority and no404 replay')
     reset()
     for n in range(1, 7):
         candidate(str(uuid.uuid4()), 'error', format(n, '064x'))
