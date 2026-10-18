@@ -4,22 +4,34 @@ import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { qaSourceKey, qaSourceRetryAtMany } from '@/lib/qa/source-backoff';
 import type { Database } from '@/types/database';
+import { describeQaGateError, QaGateNotPassedError } from '@/lib/qa/gate';
 
 type Candidate = Pick<Database['public']['Tables']['qa_candidates']['Row'], 'id' | 'winget_id' | 'version' | 'architecture' | 'installer_url' | 'installer_sha256' | 'package_profile_sha256' | 'status' | 'phase' | 'next_retry_at'>;
 type Result = Pick<Database['public']['Tables']['qa_package_results']['Row'], 'package_profile_sha256' | 'winget_id' | 'tested_version' | 'architecture' | 'installer_sha256' | 'virustotal_status' | 'virustotal_malicious' | 'virustotal_suspicious'>;
 const unavailable: CustomerQaStatus = { category: 'unavailable', message: 'Validation status is temporarily unavailable. Next event: updated validation information.', nextEventAt: null };
+const reputationUnknown: CustomerQaStatus = { category: 'reputation_unknown', message: 'Installer reputation is not yet verified. Next event: a verified security verdict.', nextEventAt: null };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const digest = /^[a-f0-9]{64}$/i;
 const time = (value: string | null | undefined) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
 const same = (a: string | null, b: string | null) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const tupleMatches = (job: PackagingJob, row: Candidate) => same(job.winget_id, row.winget_id) && job.version === row.version && same(job.architecture, row.architecture) && same(job.installer_sha256, row.installer_sha256);
 
+/** Recognize a recorded gate disposition without rendering arbitrary stored text. */
+function storedReputationHold(job: PackagingJob): CustomerQaStatus {
+  if (job.error_code !== null && job.error_code !== 'QA_NOT_PASSED_CURRENT_VERSION') return { ...unavailable };
+  const expected = describeQaGateError(new QaGateNotPassedError({
+    wingetId: job.winget_id, version: job.version, architecture: (job.architecture || 'x64').toLowerCase(),
+    installerSha256: '', packageProfileSha256: '', reason: 'reputation',
+  }));
+  return { ...(job.status_message === expected ? reputationUnknown : unavailable) };
+}
+
 // Called only with jobs already authorized by the package GET route. These
 // SELECTs supply display evidence; none of their results decide a write.
 export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
   const waiting = jobs.filter(job => job.status === 'awaiting_qa');
   if (!waiting.length) return jobs;
-  const fallback = () => jobs.map(job => job.status === 'awaiting_qa' ? { ...job, qa_status: { ...unavailable } } : job);
+  const fallback = () => jobs.map(job => job.status === 'awaiting_qa' ? { ...job, qa_status: storedReputationHold(job) } : job);
   const ids = [...new Set(waiting.map(job => job.qa_candidate_id).filter((id): id is string => typeof id === 'string' && uuid.test(id)))];
   if (!isSupabaseServerConfigured() || !ids.length || ids.length > 50) return fallback();
   try {
@@ -44,7 +56,7 @@ export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]):
     return jobs.map(job => {
       if (job.status !== 'awaiting_qa') return job;
       const candidate = rows.find(row => row.id === job.qa_candidate_id);
-      if (!candidate || !tupleMatches(job, candidate)) return { ...job, qa_status: { ...unavailable } };
+      if (!candidate || !tupleMatches(job, candidate)) return { ...job, qa_status: storedReputationHold(job) };
       const hold = holds.get(candidate.installer_sha256.toLowerCase());
       const cached = reputation.data?.find(row => same(row.sha256, candidate.installer_sha256));
       const result = (results.data as Result[]).find(row => row.package_profile_sha256 === candidate.package_profile_sha256 && same(row.winget_id, candidate.winget_id) && row.tested_version === candidate.version && same(row.architecture, candidate.architecture) && same(row.installer_sha256, candidate.installer_sha256));
@@ -56,11 +68,11 @@ export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]):
       } else {
         const sourceTimes = [candidate.next_retry_at, retries.get(qaSourceKey(candidate))].map(time).filter((t): t is string => t !== null && Date.parse(t) > Date.now()).sort();
         if (sourceTimes.length) status = { category: 'source_retry', message: 'Installer source checks are deferred. Next event: a scheduled source check.', nextEventAt: sourceTimes.at(-1)! };
-        else if (result && (!result.virustotal_status || ['not_found', 'error', 'skipped', 'unknown'].includes(result.virustotal_status))) status = { category: 'reputation_unknown', message: 'Installer reputation is not yet verified. Next event: a verified security verdict.', nextEventAt: null };
+        else if (result && (!result.virustotal_status || ['not_found', 'error', 'skipped', 'unknown'].includes(result.virustotal_status))) status = { ...reputationUnknown };
         else if (candidate.phase === 'publishing') status = { category: 'publication', message: 'Installation validation has finished. Next event: publication of the verified result.', nextEventAt: null };
         else if (['dispatched', 'running'].includes(candidate.status)) status = { category: 'testing', message: 'Installation validation is in progress. Next event: the completed validation result.', nextEventAt: null };
         else if (candidate.status === 'queued') status = { category: 'queued', message: 'Waiting for installation validation. Next event: an available validation slot.', nextEventAt: null };
-        else status = { ...unavailable };
+        else status = storedReputationHold(job);
       }
       return { ...job, qa_status: status };
     });

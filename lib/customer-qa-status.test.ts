@@ -1,5 +1,6 @@
 import { enrichCustomerQaStatus } from './customer-qa-status';
 import type { PackagingJob } from '@/lib/db/types';
+import { describeQaGateError, QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 const { state, from, holds, retries } = vi.hoisted(() => ({
   state: { configured: true, candidates: [] as Record<string, unknown>[], results: [] as Record<string, unknown>[], reputation: [] as Record<string, unknown>[], error: false },
   from: vi.fn(), holds: vi.fn(), retries: vi.fn(),
@@ -72,4 +73,54 @@ it('keeps jobs usable when evidence fails or QA is not configured', async () => 
 it('does not query for completed jobs or invalid candidate ids', async () => {
   const done = job({ status: 'deployed' }); expect(await enrichCustomerQaStatus([done])).toEqual([done]);
   expect((await enrichCustomerQaStatus([job({ qa_candidate_id: 'untrusted' })]))[0].qa_status?.category).toBe('unavailable'); expect(from).not.toHaveBeenCalled();
+});
+
+const reputationMessage = (patch = {}) => describeQaGateError(new QaGateNotPassedError({
+  wingetId: 'Example.App', version: '1.0', architecture: 'x64', installerSha256: hash,
+  packageProfileSha256: profile, reason: 'reputation', ...patch,
+}));
+const recordedJob = (patch = {}) => job({ status_message: reputationMessage(), error_code: 'QA_NOT_PASSED_CURRENT_VERSION', ...patch });
+function expectPrivateFree(status: unknown) {
+  expect(JSON.stringify(status)).not.toMatch(/VirusTotal|engine|https?:|[a-f0-9]{64}|10000000-0000|\u2013|\u2014/i);
+}
+it.each(['QA_NOT_PASSED_CURRENT_VERSION', null])('preserves a recognized stored reputation reason when candidate has passed, code %s', async error_code => {
+  state.candidates = [candidate({ status: 'passed' })];
+  const status = (await enrichCustomerQaStatus([recordedJob({ error_code })]))[0].qa_status;
+  expect(status).toMatchObject({ category: 'reputation_unknown', nextEventAt: null }); expectPrivateFree(status);
+});
+it.each(['missing id', 'query error', 'query exception', 'stale candidate', 'not configured'])('preserves the safe recorded reason through unavailable evidence: %s', async failure => {
+  const patch = failure === 'missing id' ? { qa_candidate_id: null } : {};
+  if (failure === 'query error') state.error = true;
+  if (failure === 'query exception') from.mockImplementation(() => { throw Error('https://private.test?token=secret RawEngine'); });
+  if (failure === 'stale candidate') state.candidates = [candidate({ version: '2.0' })];
+  if (failure === 'not configured') state.configured = false;
+  const status = (await enrichCustomerQaStatus([recordedJob(patch)]))[0].qa_status;
+  expect(status?.category).toBe('reputation_unknown'); expectPrivateFree(status);
+});
+it.each([
+  { status_message: reputationMessage({ reason: 'missing' }) },
+  { status_message: describeQaGateError(new QaSecurityGateError({ wingetId: 'Example.App', version: '1.0', architecture: 'x64', malicious: 1, totalEngines: 68 })) },
+  { status_message: reputationMessage({ wingetId: 'Other.App' }) },
+  { status_message: reputationMessage({ version: '2.0' }) },
+  { status_message: reputationMessage({ architecture: 'arm64' }) },
+  { error_code: 'QA_SECURITY_FLAGGED_CURRENT_VERSION' },
+  { status_message: reputationMessage() + ' ' },
+  { status_message: reputationMessage() + ' https://private.test?token=secret' },
+  { status_message: reputationMessage() + hash },
+])('does not expose or reinterpret unrecognized stored text %j', async patch => {
+  state.candidates = [candidate({ status: 'passed' })];
+  const status = (await enrichCustomerQaStatus([recordedJob(patch)]))[0].qa_status;
+  expect(status?.category).toBe('unavailable'); expectPrivateFree(status);
+});
+it('keeps live evidence ahead of a recorded reputation reason', async () => {
+  state.candidates = [candidate({ status: 'running' })];
+  expect((await enrichCustomerQaStatus([recordedJob()]))[0].qa_status?.category).toBe('testing');
+  state.candidates = [candidate({ phase: 'publishing' })];
+  expect((await enrichCustomerQaStatus([recordedJob()]))[0].qa_status?.category).toBe('publication');
+  state.candidates = [candidate()];
+  expect((await enrichCustomerQaStatus([recordedJob()]))[0].qa_status?.category).toBe('queued');
+  retries.mockResolvedValue(new Map([[id, '2030-01-01T00:00:00Z']]));
+  expect((await enrichCustomerQaStatus([recordedJob()]))[0].qa_status?.category).toBe('source_retry');
+  holds.mockResolvedValue(new Map([[hash, { reason: 'VirusTotal: 1 engine flagged, rechecking daily', nextCheckAt: '2030-01-01' }]]));
+  expect((await enrichCustomerQaStatus([recordedJob()]))[0].qa_status?.category).toBe('installer_security_hold');
 });
