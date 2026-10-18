@@ -254,7 +254,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                       </span>
                     </div>
                     {job.status === 'blocked_upstream' && (
-                      <p className="text-xs text-text-muted mt-1 max-w-[200px]">{customerUpstreamStatus(null).message}</p>
+                      <p className="text-xs text-text-muted mt-1 max-w-[200px]">{customerUpstreamStatus(job.error_code ?? null).message}</p>
                     )}
                     {job.status !== 'blocked_upstream' && job.error_message && (
                       <p className="text-xs text-red-400 mt-1 truncate max-w-[200px]">

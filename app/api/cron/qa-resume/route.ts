@@ -14,6 +14,7 @@ import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { ensureQaDemand } from '@/lib/qa/demand';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 import { enforceQaGate, describeQaGateError, QaGateError, QaGateNotPassedError, QaSecurityGateError, QaCompatibilityGateError } from '@/lib/qa/gate';
@@ -24,6 +25,8 @@ import type { Json } from '@/types/database';
 import { holdCustomerUpstreamJob, reopenCustomerUpstreamJobs } from '@/lib/customer-upstream-recovery';
 
 const RESUME_BATCH_SIZE = 25;
+const MANIFEST_FAILURE_MESSAGE = 'The selected package could not be validated. Review your selection before trying again.';
+const TERMINAL_MANIFEST_CODES = new Set(['MANIFEST_UNAVAILABLE', 'INSTALLER_TYPE_UNAVAILABLE', 'INSTALL_SCOPE_UNAVAILABLE', 'SILENT_INSTALL_UNAVAILABLE']);
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
@@ -112,21 +115,50 @@ export async function GET(request: Request) {
       // installer command that passed in the VM. Explicit PSADT command
       // overrides remain authoritative inside reconcileCatalogInstaller.
       if (item.sourceType !== 'custom') {
-        const reconciled = await reconcileCatalogInstaller({
-          ...item,
-          wingetId: job.winget_id,
-          displayName: job.display_name || item.displayName,
-          publisher: job.publisher || item.publisher,
-          version: job.version,
-          architecture: (job.architecture || item.architecture) as Win32CartItem['architecture'],
-          installerUrl: job.installer_url || item.installerUrl,
-          installerSha256: job.installer_sha256 || item.installerSha256,
-          installerType: (job.installer_type || item.installerType) as Win32CartItem['installerType'],
-          installCommand: job.install_command || item.installCommand,
-          uninstallCommand: job.uninstall_command || item.uninstallCommand,
-          installScope: (job.install_scope || item.installScope) as Win32CartItem['installScope'],
-        });
-        item = reconciled.item;
+        try {
+          const reconciled = await reconcileCatalogInstaller({
+            ...item,
+            wingetId: job.winget_id,
+            displayName: job.display_name || item.displayName,
+            publisher: job.publisher || item.publisher,
+            version: job.version,
+            architecture: (job.architecture || item.architecture) as Win32CartItem['architecture'],
+            installerUrl: job.installer_url || item.installerUrl,
+            installerSha256: job.installer_sha256 || item.installerSha256,
+            installerType: (job.installer_type || item.installerType) as Win32CartItem['installerType'],
+            installCommand: job.install_command || item.installCommand,
+            uninstallCommand: job.uninstall_command || item.uninstallCommand,
+            installScope: (job.install_scope || item.installScope) as Win32CartItem['installScope'],
+          });
+          item = reconciled.item;
+        } catch (error) {
+          const terminal = error instanceof InstallerPreflightError && !error.retryable && TERMINAL_MANIFEST_CODES.has(error.code);
+          if (!terminal) {
+            waitingIds.push(job.id); waiting++; continue;
+          }
+          // Fail only this unchanged execution input. Never expose producer text,
+          // or overwrite a cancellation, relink, or concurrently dispatched job.
+          let update = supabase.from('packaging_jobs').update({
+            status: 'qa_failed', status_message: MANIFEST_FAILURE_MESSAGE,
+            error_message: MANIFEST_FAILURE_MESSAGE, error_code: error.code,
+            error_stage: 'validation', error_category: 'installer',
+            completed_at: new Date().toISOString(),
+          }).eq('id', job.id).eq('status', 'awaiting_qa')
+            .eq('updated_at', job.updated_at).eq('winget_id', job.winget_id).eq('version', job.version)
+            .is('cancelled_at', null).is('archived_at', null).is('github_run_id', null).is('intune_app_id', null);
+          for (const [field, value] of [
+            ['qa_candidate_id', job.qa_candidate_id], ['installer_url', job.installer_url],
+            ['installer_sha256', job.installer_sha256], ['architecture', job.architecture],
+            ['package_config->>installerSha256', item.installerSha256], ['package_config->>architecture', item.architecture],
+          ] as const) update = value == null ? update.is(field, null) : update.eq(field, value);
+          const result = await update.select('id').maybeSingle();
+          if (result.error) { waitingIds.push(job.id); waiting++; continue; }
+          if (result.data) {
+            failed++;
+            await handleAutoUpdateJobCompletion(job.id, 'failed', MANIFEST_FAILURE_MESSAGE);
+          }
+          continue;
+        }
       }
       const installerType = item.installerType || job.installer_type || 'exe';
       const demand = await ensureQaDemand(supabase, {

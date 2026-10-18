@@ -62,6 +62,7 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 }));
 
 import { GET } from './route';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
@@ -153,6 +154,58 @@ describe('GET /api/cron/qa-resume', () => {
       item,
       trustedInstallers: [],
     }));
+  });
+
+  it.each(['removed', 'metadata mismatch', 'unrecognized preflight', 'retryable', 'unknown', 'concurrent cancel', 'concurrent config', 'concurrent version', 'concurrent candidate', 'write error'])('isolates manifest reconciliation failure from the remaining batch: %s', async kind => {
+    const job = {
+      id: 'recovered-job', winget_id: 'Vendor.App', version: '1.0', status: 'awaiting_qa',
+      updated_at: '2026-10-18T00:00:00Z', qa_candidate_id: null, architecture: 'x64',
+      installer_url: 'https://example.test/old.exe', installer_sha256: 'B'.repeat(64),
+      cancelled_at: null, archived_at: null, github_run_id: null, intune_app_id: null,
+      package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64' },
+      is_auto_update: true,
+    };
+    const store = jobStore(job);
+    const later = { ...job, id: 'later-job', qa_candidate_id: 'later-candidate' };
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') {
+        if (++reads === 1) return chain({ data: [structuredClone(job), later], error: null });
+        if (kind === 'write error' && reads === 2) return chain({ data: null, error: { message: 'synthetic private database error' } });
+        return store.updateQuery();
+      }
+      if (table === 'qa_candidates') return candidateQuery([{ id: 'later-candidate', status: 'queued' }]);
+      throw new Error('Unexpected table');
+    }) });
+    reconcileCatalogInstallerMock.mockImplementation(async () => {
+      if (kind === 'concurrent cancel') store.row.cancelled_at = '2026-10-18T00:01:00Z';
+      if (kind === 'concurrent config') store.row.updated_at = '2026-10-18T00:01:00Z';
+      if (kind === 'concurrent version') store.row.version = '2.0';
+      if (kind === 'concurrent candidate') store.row.qa_candidate_id = 'new-candidate';
+      if (kind === 'unknown') throw new Error('https://private.invalid/secret tenant-private');
+      throw new InstallerPreflightError(kind === 'metadata mismatch' ? 'MANIFEST_CHANGED' : kind === 'unrecognized preflight' ? 'NEW_UNKNOWN_CODE' : kind === 'retryable' ? 'UPSTREAM_UNAVAILABLE' : 'MANIFEST_UNAVAILABLE', 'https://private.invalid/secret tenant-private', kind === 'retryable');
+    });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ resumed: 0, failed: kind === 'removed' ? 1 : 0 });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ wingetId: later.winget_id }));
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(findPendingApprovalBlocksMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(store.row)).not.toContain('private.invalid');
+    expect(JSON.stringify(body)).not.toContain('tenant-private');
+    if (kind === 'removed') {
+      expect(store.row.status).toBe('qa_failed');
+      expect(store.row.error_message).toBe('The selected package could not be validated. Review your selection before trying again.');
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledOnce();
+    } else {
+      expect(store.row.status).toBe('awaiting_qa');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+      if (['retryable', 'unknown', 'metadata mismatch', 'unrecognized preflight', 'write error'].includes(kind)) {
+        expect(store.writes.some(write => vi.mocked(write.update).mock.calls.some(([patch]) => 'qa_resume_due_at' in patch))).toBe(true);
+      }
+    }
   });
 
   it.each(['held', 'evidence unavailable'])('never reaches packaging or Graph while an upstream job is %s', async outcome => {

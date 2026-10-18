@@ -154,6 +154,8 @@ export async function GET(request: NextRequest) {
         version: job.version,
         status: job.status,
         status_message: job.status_message,
+        error_code: job.error_code === 'UPSTREAM_SOURCE_BACKOFF' || job.error_code === 'UPSTREAM_METADATA_MISMATCH'
+          ? job.error_code : null,
         progress_percent: job.progress_percent,
         error_message: job.error_message,
         intune_app_id: job.intune_app_id,
