@@ -55,7 +55,7 @@ begin
     raise exception 'Positive hold bypassed';end if;
   delete from public.qa_installer_security_holds where sha256=h;
   insert into public.installer_health(cache_key,winget_id,version,architecture,installer_url,expected_sha256,status)
-    values('post-analysis-quarantine','Fixture.PostAnalysis','1','x64','https://example.invalid/post-analysis',h,'quarantined');
+    values('post-analysis-quarantine','Fixture.PostAnalysis','1','x64','https://example.invalid/post-analysis',upper(h),'quarantined');
   if public.qa_vt_post_analysis_hash_recheck_ready(cid,h,'99101',repeat('B',64),now()) then
     raise exception 'Installer quarantine bypassed';end if;
   delete from public.installer_health where cache_key='post-analysis-quarantine';
