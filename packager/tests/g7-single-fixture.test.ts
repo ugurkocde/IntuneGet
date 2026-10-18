@@ -5,16 +5,16 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 
 const mocks = vi.hoisted(() => ({ config: vi.fn(), validate: vi.fn(), process: vi.fn(), post: vi.fn() }));
-vi.mock('../dist/config.js', () => ({ loadConfig: mocks.config, validateConfig: mocks.validate }));
-vi.mock('../dist/graph-client.js', () => ({ GraphClient: class { post = undefined; } }));
-vi.mock('../dist/job-processor.js', () => ({ JobProcessor: class {
+class GraphClient { post = undefined; }
+class JobProcessor {
   constructor(private config: unknown, private sink: unknown) {}
   processJob(job: unknown) { return mocks.process(this.config, this.sink, job); }
-} }));
+}
 // The operator command is JavaScript and is not part of the TypeScript build.
 // @ts-expect-error No declaration file for the one-off proof script.
-import { fixtureJob, runSingleFixture } from '../qa/g7-single-fixture.mjs';
-import { GraphClient } from '../dist/graph-client.js';
+import { fixtureJob, runSingleFixture as executeFixture } from '../qa/g7-single-fixture.mjs';
+const runSingleFixture = (proof: string, expectedTenant: string) => executeFixture(proof, expectedTenant,
+  async () => ({ loadConfig: mocks.config, validateConfig: mocks.validate, JobProcessor, GraphClient }));
 
 const tenant = '11111111-1111-4111-8111-111111111111';
 const appId = '22222222-2222-4222-8222-222222222222';

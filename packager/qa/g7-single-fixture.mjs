@@ -50,7 +50,14 @@ export function fixtureJob(tenantId, marker) {
   return job;
 }
 
-export async function runSingleFixture(proofDirectory, expectedDevTenant) {
+async function productModules() {
+  const config = await import('../dist/config.js');
+  const { JobProcessor } = await import('../dist/job-processor.js');
+  const { GraphClient } = await import('../dist/graph-client.js');
+  return { ...config, JobProcessor, GraphClient };
+}
+
+export async function runSingleFixture(proofDirectory, expectedDevTenant, loadProduct = productModules) {
   if (process.platform !== 'linux' || Number(process.versions.node.split('.')[0]) < 22) {
     throw new Error('LINUX_NODE22_REQUIRED');
   }
@@ -69,9 +76,8 @@ export async function runSingleFixture(proofDirectory, expectedDevTenant) {
   for (const key of Object.keys(savedConsole)) console[key] = () => {};
   let GraphClient, originalPost, ledgerFd;
   try {
-    const { loadConfig, validateConfig } = await import('../dist/config.js');
-    const { JobProcessor } = await import('../dist/job-processor.js');
-    ({ GraphClient } = await import('../dist/graph-client.js'));
+    const { loadConfig, validateConfig, JobProcessor, GraphClient: ProductGraphClient } = await loadProduct();
+    GraphClient = ProductGraphClient;
     originalPost = GraphClient.prototype.post;
     const config = loadConfig();
     if (validateConfig(config).length || config.azure.tenantId?.toLowerCase() !== expectedDevTenant.toLowerCase()) throw new Error('DEV_CONFIGURATION_MISMATCH');
