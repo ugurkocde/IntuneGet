@@ -177,6 +177,43 @@ describe('classifyWingetSyncRun', () => {
   });
 });
 
+describe('conditional version directory reads', () => {
+  it('accepts an authenticated 304 without reading a body', async () => {
+    const response = new Response(null, { status: 304 });
+    const body = vi.spyOn(response, 'text');
+    const fetchImpl = vi.fn().mockResolvedValue(response);
+    const client = createWingetManifestClient({ token: 'test-token', fetchImpl, maxRetries: 0 });
+    await expect(client.fetchVersionsWithValidator('Example.App', '"old"'))
+      .resolves.toEqual({ notModified: true, versions: [], etag: '"old"' });
+    expect(fetchImpl.mock.calls[0][1].headers['If-None-Match']).toBe('"old"');
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it('returns changed versions and a new authenticated ETag', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify([{ type: 'dir', name: '2.0' }]), { headers: { etag: 'W/"new"' } }));
+    const client = createWingetManifestClient({ token: 'test-token', fetchImpl, maxRetries: 0 });
+    await expect(client.fetchVersionsWithValidator('Example.App', '"old"'))
+      .resolves.toEqual({ notModified: false, versions: ['2.0'], etag: 'W/"new"' });
+  });
+
+  it('drops the validator and returned ETag when falling back to anonymous auth', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response('', { status: 429 }))
+      .mockResolvedValueOnce(new Response('[]', { headers: { etag: '"anonymous"' } }));
+    const client = createWingetManifestClient({ token: 'test-token', fetchImpl, maxRetries: 0 });
+    await expect(client.fetchVersionsWithValidator('Example.App', '"old"'))
+      .resolves.toEqual({ notModified: false, versions: [], etag: null });
+    expect(fetchImpl.mock.calls[0][1].headers['If-None-Match']).toBe('"old"');
+    expect(fetchImpl.mock.calls[1][1].headers['If-None-Match']).toBeUndefined();
+  });
+
+  it.each([undefined, '*', '"bad\r\nheader"'])('rejects unsolicited 304 with validator %j', async etag => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
+    const client = createWingetManifestClient({ token: 'test-token', fetchImpl, maxRetries: 0 });
+    await expect(client.fetchVersionsWithValidator('Example.App', etag)).rejects.toMatchObject({ code: 'HTTP_304' });
+  });
+});
+
 
 describe('bulk manifest sync', () => {
   it('uses raw files with a token without spending Contents API quota', async () => {
