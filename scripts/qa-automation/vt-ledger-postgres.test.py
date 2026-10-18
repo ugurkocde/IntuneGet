@@ -344,6 +344,22 @@ def contracts():
     sql(migration('20261018104456_qa_vt_terminal_newer_index'))
     sql((ROOT/'supabase/tests/qa_vt_terminal_newer_index.sql').read_text())
     print('PASS case-insensitive newer-candidate expression index at catalog scale')
+    sql(migration('20261018130856_qa_vt_fair_metadata_selection'))
+    sql((ROOT/'supabase/tests/qa_vt_fair_metadata_selection.sql').read_text())
+    print('PASS fair public and metadata offers, fallback, quota and cursor ACL')
+    reset()
+    for n in range(1, 7):
+        candidate(str(uuid.uuid4()), 'error', format(n, '064x'))
+    sql("update qa_candidates set winget_id='Fixture.Concurrent.'||id")
+    sql("select admit_qa_vt_terminal_metadata_rechecks('local-fixture-only')", 'service_role')
+    replies = [json.loads(r.stdout) for r in parallel(["select claim_qa_vt_metadata_recheck('local-fixture-only')"] * 2)]
+    leased = [r for r in replies if r.get('lease')]
+    assert len(leased) == 2 and len({r['sha256'] for r in leased}) == 2
+    assert value('select count(*) from qa_vt_requests') == 2
+    for role in ('anon', 'authenticated', 'service_role'):
+        denied('select * from qa_vt_claim_lane', 'permission denied for table', role)
+        denied("update qa_vt_claim_lane set last_lane='public'", 'permission denied for table', role)
+    print('PASS concurrent fair claims serialize and API roles cannot pin cursor')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
