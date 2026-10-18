@@ -19,8 +19,10 @@ function client(): SupabaseClient<Database> {
   return { from(table: string) {
     const filters: Array<(row: Row) => boolean> = [];
     let patch: Row | undefined, limit = Infinity;
+    const order: string[] = [];
     const q = {
-      select: () => q, order: () => q,
+      select: () => q, order: (key: string) => { order.push(key); return q; },
+      ilike: (key: string, value: string) => { filters.push(row => String(row[key]).toLowerCase() === value.toLowerCase()); return q; },
       eq: (key: string, value: unknown) => { filters.push(row => row[key] === value); return q; },
       is: (key: string, value: unknown) => { filters.push(row => (row[key] ?? null) === value); return q; },
       lte: (key: string, value: string) => { filters.push(row => Date.parse(String(row[key])) <= Date.parse(value)); return q; },
@@ -30,7 +32,8 @@ function client(): SupabaseClient<Database> {
       run: () => {
         if (errors.has(table)) return { data: null, error: { message: 'private failure' } };
         if (patch && beforeWrite) { const hook = beforeWrite; beforeWrite = undefined; hook(); }
-        const selected = (rows[table] || []).filter(row => filters.every(f => f(row))).slice(0, limit);
+        const selected = (rows[table] || []).filter(row => filters.every(f => f(row)))
+          .sort((a, b) => { for (const key of order) { const n = String(a[key]).localeCompare(String(b[key])); if (n) return n; } return 0; }).slice(0, limit);
         if (patch) for (const row of selected) { calls.push({ table, patch }); Object.assign(row, structuredClone(patch), { updated_at: new Date().toISOString() }); }
         return { data: structuredClone(selected), error: null };
       },
@@ -116,11 +119,14 @@ it('keeps an unrelated manifest change blocked and advances only its customer ba
 });
 it('never accepts a different version from reconciliation', async () => {
   await block(); rows.qa_winget_poll_state[0].head_sha = 'b'.repeat(40); reconcile.mockResolvedValue({ item: { ...item, version: '2.0' } });
-  expect(await reopenCustomerUpstreamJobs(client())).toBe(0); expect(calls).toEqual([]);
+  expect(await reopenCustomerUpstreamJobs(client())).toBe(0); expect(job().status).toBe('blocked_upstream');
+  expect(Date.parse(job().qa_resume_due_at)).toBeGreaterThan(Date.now());
 });
 it('retains the old baseline and job when a manifest lookup fails', async () => {
   await block(); rows.qa_winget_poll_state[0].head_sha = 'b'.repeat(40); reconcile.mockRejectedValue(new Error('private'));
-  expect(await reopenCustomerUpstreamJobs(client())).toBe(0); expect(calls).toEqual([]);
+  expect(await reopenCustomerUpstreamJobs(client())).toBe(0); expect(job().status).toBe('blocked_upstream');
+  expect(job().error_details).toMatchObject({ upstreamManifestSha: 'a'.repeat(40) });
+  expect(Date.parse(job().qa_resume_due_at)).toBeGreaterThan(Date.now());
 });
 it('can recheck through normal gates after the recorded cooldown even if the feed stalls', async () => {
   await block(); (job().error_details as Record<string, unknown>).upstreamRetryAt = '2000-01-01T00:00:00Z';
@@ -131,4 +137,42 @@ it('does not reopen a concurrently cancelled job', async () => {
   reconcile.mockResolvedValue({ item: { ...item, installerUrl: 'https://example.test/fixed.exe' } });
   beforeWrite = () => Object.assign(job(), { status: 'cancelled' });
   expect(await reopenCustomerUpstreamJobs(client())).toBe(0); expect(job().status).toBe('cancelled');
+});
+
+it('moves ten unavailable manifests out of the way so the eleventh job can resume', async () => {
+  await block(); const template = structuredClone(rows.packaging_jobs[0]);
+  rows.packaging_jobs = Array.from({ length: 11 }, (_, i) => ({ ...structuredClone(template),
+    id: 'job' + String(i).padStart(2, '0'), package_config: { ...item, displayName: i === 10 ? 'last' : 'unavailable' },
+  }));
+  rows.qa_winget_poll_state[0].head_sha = 'b'.repeat(40);
+  reconcile.mockImplementation(async input => {
+    if (input.displayName !== 'last') throw new Error('MANIFEST_UNAVAILABLE');
+    return { item: { ...input, installerUrl: 'https://example.test/fixed.exe' } };
+  });
+  expect(await reopenCustomerUpstreamJobs(client())).toBe(0);
+  expect(rows.packaging_jobs.slice(0, 10).every(row => Date.parse(String(row.qa_resume_due_at)) > Date.now())).toBe(true);
+  expect(await reopenCustomerUpstreamJobs(client())).toBe(1);
+  expect(rows.packaging_jobs[10].status).toBe('awaiting_qa');
+});
+
+it.each(['unknown code', 'configuration mismatch'])('reschedules skipped rows: %s', async kind => {
+  await block();
+  if (kind === 'unknown code') rows.packaging_jobs[0].error_code = 'UNKNOWN';
+  else rows.packaging_jobs[0].package_config = { ...item, version: '2.0' };
+  expect(await reopenCustomerUpstreamJobs(client())).toBe(0);
+  expect(job().status).toBe('blocked_upstream');
+  expect(Date.parse(job().qa_resume_due_at)).toBeGreaterThan(Date.now());
+});
+it('recognizes a lowercase stored security hash without reclassifying it as upstream', async () => {
+  rows.qa_package_results = [{ winget_id: item.wingetId, tested_version: item.version, architecture: item.architecture, installer_sha256: digest.toLowerCase(), virustotal_malicious: 1 }];
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(false); expect(calls).toEqual([]);
+});
+it.each(['version', 'wingetId', 'installerUrl', 'installerSha256', 'architecture'])('does not classify a divergent customer configuration: %s', async field => {
+  rows.packaging_jobs[0].package_config = { ...item, [field]: 'other' };
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(false); expect(calls).toEqual([]);
+});
+it('honors the route work deadline before starting another manifest read', async () => {
+  await block(); rows.qa_winget_poll_state[0].head_sha = 'b'.repeat(40);
+  expect(await reopenCustomerUpstreamJobs(client(), Date.now() - 1)).toBe(0);
+  expect(reconcile).not.toHaveBeenCalled(); expect(calls).toEqual([]);
 });

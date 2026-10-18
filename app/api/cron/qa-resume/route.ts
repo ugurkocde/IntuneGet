@@ -569,8 +569,8 @@ export async function GET(request: Request) {
   let reopened = 0;
   let recoveryDeferred = false;
   let upstreamReopened = 0;
-  if (Date.now() - startedAt < 40_000) {
-    try { upstreamReopened = await reopenCustomerUpstreamJobs(supabase); }
+  if (Date.now() - startedAt < 35_000) {
+    try { upstreamReopened = await reopenCustomerUpstreamJobs(supabase, startedAt + 45_000); }
     catch { recoveryDeferred = true; }
   }
   try {

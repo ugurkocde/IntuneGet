@@ -35,6 +35,9 @@ export async function holdCustomerUpstreamJob(client: SupabaseClient<Database>, 
   if (job.status !== 'awaiting_qa' || !job.qa_candidate_id || job.github_run_id || job.intune_app_id ||
       job.cancelled_at || job.archived_at || !item || item.sourceType === 'custom' || item.sourceType === 'curated' ||
       !job.installer_sha256 || !hash.test(job.installer_sha256) || !job.installer_url) return false;
+  if (item.wingetId !== job.winget_id || item.version !== job.version ||
+      !same(item.architecture || 'x64', job.architecture) || item.installerUrl !== job.installer_url ||
+      !same(item.installerSha256, job.installer_sha256)) return false;
   const { data: candidate, error } = await client.from('qa_candidates')
     .select('id,winget_id,version,architecture,installer_url,installer_sha256,status,phase')
     .eq('id', job.qa_candidate_id).maybeSingle();
@@ -50,9 +53,9 @@ export async function holdCustomerUpstreamJob(client: SupabaseClient<Database>, 
         architecture: job.architecture || 'x64', installerUrl: job.installer_url,
         installerSha256: job.installer_sha256, installerType: item.installerType, installScope: item.installScope })).maybeSingle(),
     loadInstallerSecurityHolds(client, [job.installer_sha256]),
-    client.from('qa_package_results').select('installer_sha256').eq('winget_id', job.winget_id)
-      .eq('tested_version', job.version).eq('architecture', job.architecture || 'x64')
-      .eq('installer_sha256', job.installer_sha256.toUpperCase())
+    client.from('qa_package_results').select('installer_sha256').eq('winget_id', candidate.winget_id)
+      .eq('tested_version', job.version).eq('architecture', candidate.architecture)
+      .ilike('installer_sha256', job.installer_sha256)
       .or('virustotal_malicious.gt.0,virustotal_suspicious.gt.0').limit(1),
   ]);
   if (backoff.error || health.error || security.error) throw new Error('Upstream validation evidence is unavailable');
@@ -85,7 +88,7 @@ export async function holdCustomerUpstreamJob(client: SupabaseClient<Database>, 
 
 /** Re-evaluate the selected version after QA's existing manifest feed moves.
  * This returns jobs to normal validation only, never directly to packaging. */
-export async function reopenCustomerUpstreamJobs(client: SupabaseClient<Database>): Promise<number> {
+export async function reopenCustomerUpstreamJobs(client: SupabaseClient<Database>, deadline = Date.now() + 10_000): Promise<number> {
   const now = Date.now();
   const { data: jobs, error } = await client.from('packaging_jobs').select('*')
     .eq('status', 'blocked_upstream').lte('qa_resume_due_at', new Date(now).toISOString())
@@ -96,21 +99,33 @@ export async function reopenCustomerUpstreamJobs(client: SupabaseClient<Database
   const head = await feedHead(client);
   let reopened = 0;
   for (const job of jobs) {
-    if (!['UPSTREAM_SOURCE_BACKOFF', 'UPSTREAM_METADATA_MISMATCH'].includes(job.error_code || '')) continue;
+    if (Date.now() >= deadline) break;
+    const write = async (patch: Database['public']['Tables']['packaging_jobs']['Update']) => {
+      let query = client.from('packaging_jobs').update(patch).eq('id', job.id)
+        .eq('status', 'blocked_upstream').eq('updated_at', job.updated_at).eq('version', job.version)
+        .is('archived_at', null).is('cancelled_at', null).is('github_run_id', null).is('intune_app_id', null);
+      query = job.error_code == null ? query.is('error_code', null) : query.eq('error_code', job.error_code);
+      const result = await query.select('id').maybeSingle();
+      if (result.error) throw new Error('Could not recheck the upstream job block');
+      return result.data;
+    };
+    const defer = () => write({ qa_resume_due_at: new Date(Date.now() + 15 * minute).toISOString() });
+    if (!['UPSTREAM_SOURCE_BACKOFF', 'UPSTREAM_METADATA_MISMATCH'].includes(job.error_code || '')) { await defer(); continue; }
     const previous = details(job);
     const item = job.package_config as unknown as Win32CartItem | null;
-    if (!item || item.version !== job.version || item.wingetId !== job.winget_id) continue;
+    if (!item || item.version !== job.version || item.wingetId !== job.winget_id) { await defer(); continue; }
     const fallbackDue = Date.parse(String(previous.upstreamRetryAt || '')) <= now;
     let wake = false;
-    let retryAt = new Date(now + minute).toISOString();
+    let retryAt = new Date(now + 5 * minute).toISOString();
     if ((head && head !== previous.upstreamManifestSha) || fallbackDue) {
       try {
         const reconciled = await reconcileCatalogInstaller(item);
         // Even a malformed provider response cannot switch a customer's version.
-        if (reconciled.item.version !== job.version || reconciled.item.wingetId !== job.winget_id) continue;
+        if (reconciled.item.version !== job.version || reconciled.item.wingetId !== job.winget_id) throw new Error('Selected version changed');
         wake = fallbackDue || fingerprint(reconciled.item) !== previous.upstreamFingerprint;
       } catch {
         // Retain the old cursor so a transient manifest failure is retried.
+        await defer();
         continue;
       }
     }
@@ -120,13 +135,7 @@ export async function reopenCustomerUpstreamJobs(client: SupabaseClient<Database
       qa_candidate_id: null, error_code: null, error_message: null, error_stage: null, error_category: null,
       error_details: null, qa_resume_due_at: retryAt,
     } : { error_details: { ...previous, upstreamManifestSha: head } as Json, qa_resume_due_at: retryAt };
-    const result = await client.from('packaging_jobs').update(patch).eq('id', job.id)
-      .eq('status', 'blocked_upstream').eq('error_code', job.error_code!)
-      .eq('updated_at', job.updated_at).eq('version', job.version)
-      .is('archived_at', null).is('cancelled_at', null).is('github_run_id', null).is('intune_app_id', null)
-      .select('id').maybeSingle();
-    if (result.error) throw new Error('Could not recheck the upstream job block');
-    if (wake && result.data) reopened++;
+    if (await write(patch) && wake) reopened++;
   }
   return reopened;
 }
