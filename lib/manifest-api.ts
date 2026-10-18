@@ -75,6 +75,12 @@ function githubReadHeaders(accept: string): Record<string, string> {
 const manifestCache = new Map<string, { data: WingetManifest; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// These listings are never served without a fresh upstream 304. Keep the
+// credential in one private process slot, not in cache keys or persisted data.
+const versionListingCache = new Map<string, { etag: string; versions: readonly string[]; storedAt: number }>();
+let versionListingCacheToken: string | undefined;
+const VERSION_LISTING_CACHE_LIMIT = 128;
+
 // Supabase client for server-side operations
 function getSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -139,16 +145,39 @@ export async function fetchAvailableVersionsLive(
   options: { strict?: boolean } = {},
 ): Promise<string[]> {
   const { basePath } = getManifestPaths(wingetId);
+  const url = `${GITHUB_API_BASE}/${basePath}`;
+  const headers = githubReadHeaders('application/vnd.github.v3+json');
+  const authorization = headers.Authorization;
+  if (versionListingCacheToken !== authorization) {
+    versionListingCache.clear();
+    versionListingCacheToken = authorization;
+  }
+  const entry = versionListingCache.get(url);
+  const age = entry ? Date.now() - entry.storedAt : Number.POSITIVE_INFINITY;
+  const cached = authorization && entry && age >= 0 && age <= CACHE_TTL ? entry : undefined;
+  if (entry && !cached) versionListingCache.delete(url);
+  if (cached) headers['If-None-Match'] = cached.etag;
 
   try {
-    const response = await fetch(`${GITHUB_API_BASE}/${basePath}`, {
-      headers: githubReadHeaders('application/vnd.github.v3+json'),
+    const response = await fetch(url, {
+      headers,
       cache: 'no-store', // Avoid stale cache issues in edge runtime
       signal: AbortSignal.timeout(5_000),
     });
 
+    if (response.status === 304) {
+      if (!cached) throw new GitHubUnavailableError(304);
+      // A concurrent request may have rotated credentials or replaced this
+      // entry. Its newer cache state must survive this response.
+      if (versionListingCacheToken === authorization && versionListingCache.get(url) === cached) {
+        versionListingCache.delete(url);
+        versionListingCache.set(url, cached);
+      }
+      return cached.versions.slice();
+    }
     if (!response.ok) {
       if (response.status === 404) {
+        if (versionListingCacheToken === authorization) versionListingCache.delete(url);
         console.warn(`Package ${wingetId} not found in GitHub API (404)`);
         return [];
       }
@@ -161,6 +190,7 @@ export async function fetchAvailableVersionsLive(
     }
 
     const dirs = await response.json();
+    if (!Array.isArray(dirs)) throw new Error('Invalid upstream version listing');
 
     const versions = dirs
       .filter((d: { type: string }) => d.type === 'dir')
@@ -172,8 +202,20 @@ export async function fetchAvailableVersionsLive(
         b.localeCompare(a, undefined, { numeric: true })
       );
 
+    if (authorization && versionListingCacheToken === authorization) {
+      versionListingCache.delete(url);
+      const etag = response.headers?.get?.('etag');
+      if (typeof etag === 'string' && /^(W\/)?"[0-9A-Za-z]{1,128}"$/.test(etag) &&
+          versions.every(version => typeof version === 'string')) {
+        versionListingCache.set(url, { etag, versions: Object.freeze(versions.slice()), storedAt: Date.now() });
+        if (versionListingCache.size > VERSION_LISTING_CACHE_LIMIT) {
+          const oldest = versionListingCache.keys().next().value;
+          if (oldest !== undefined) versionListingCache.delete(oldest);
+        }
+      }
+    }
     console.log(`Found ${versions.length} versions for ${wingetId} from GitHub`);
-    return versions;
+    return versions.slice();
   } catch (error) {
     console.error(`Failed to fetch versions for ${wingetId}:`, error);
     if (options.strict) {
