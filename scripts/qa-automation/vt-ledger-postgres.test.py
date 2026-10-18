@@ -341,6 +341,9 @@ def contracts():
     sql(migration('20261018044857_qa_vt_terminal_metadata_admission'))
     sql((ROOT/'supabase/tests/qa_vt_terminal_metadata_admission.sql').read_text())
     print('PASS shared terminal admission, fresh preflight and genuine404 quota contract')
+    sql(migration('20261018104456_qa_vt_terminal_newer_index'))
+    sql((ROOT/'supabase/tests/qa_vt_terminal_newer_index.sql').read_text())
+    print('PASS case-insensitive newer-candidate expression index at catalog scale')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
