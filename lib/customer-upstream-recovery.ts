@@ -124,9 +124,10 @@ export async function reopenCustomerUpstreamJobs(client: SupabaseClient<Database
         if (reconciled.item.version !== job.version || reconciled.item.wingetId !== job.winget_id) throw new Error('Selected version changed');
         wake = fallbackDue || fingerprint(reconciled.item) !== previous.upstreamFingerprint;
       } catch {
-        // Retain the old cursor so a transient manifest failure is retried.
-        await defer();
-        continue;
+        // Once the recorded cooldown ends, normal validation owns any removed
+        // manifest or persistent failure. This never admits packaging here.
+        if (fallbackDue) wake = true;
+        else { await defer(); continue; }
       }
     }
     if (wake) retryAt = new Date(now).toISOString();

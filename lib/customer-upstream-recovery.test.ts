@@ -132,6 +132,12 @@ it('can recheck through normal gates after the recorded cooldown even if the fee
   await block(); (job().error_details as Record<string, unknown>).upstreamRetryAt = '2000-01-01T00:00:00Z';
   expect(await reopenCustomerUpstreamJobs(client())).toBe(1); expect(job().status).toBe('awaiting_qa');
 });
+it('returns an expired upstream block to normal QA even if its selected manifest remains unavailable', async () => {
+  await block(); (job().error_details as Record<string, unknown>).upstreamRetryAt = '2000-01-01T00:00:00Z';
+  reconcile.mockRejectedValue(new Error('MANIFEST_UNAVAILABLE'));
+  expect(await reopenCustomerUpstreamJobs(client())).toBe(1);
+  expect(job()).toMatchObject({ status: 'awaiting_qa', version: '1.0', qa_candidate_id: null, github_run_id: null, intune_app_id: null });
+});
 it('does not reopen a concurrently cancelled job', async () => {
   await block(); rows.qa_winget_poll_state[0].head_sha = 'b'.repeat(40);
   reconcile.mockResolvedValue({ item: { ...item, installerUrl: 'https://example.test/fixed.exe' } });
