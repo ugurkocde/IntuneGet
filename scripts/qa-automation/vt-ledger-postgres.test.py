@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import subprocess
 import threading
 import time
@@ -401,6 +402,7 @@ def main():
     assert json.loads(inspect.stdout) in (None, {})
     sql("create role fixture_owner nosuperuser nocreatedb nocreaterole noinherit;create role anon;create role authenticated;create role service_role bypassrls;create database " + DB + " owner fixture_owner", role=None, database="postgres")
     try:
+        runpy.run_path(str(ROOT / 'scripts/ci/catalog-sync-schema-postgres.py'))['contracts'](sql)
         sql("create schema extensions authorization fixture_owner;create extension pgcrypto with schema extensions", role=None)
         contracts()
     finally:
