@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'intuneget-writer-test-'));
+  const root = await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()), 'intuneget-writer-test-'));
   temporary.push(root);
   const input = path.join(root, 'input'), output = path.join(root, 'output');
   await fs.mkdir(path.join(input, 'Files'), { recursive: true });
