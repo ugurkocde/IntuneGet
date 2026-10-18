@@ -45,7 +45,8 @@ function unzip(bytes: Buffer): Map<string, Buffer> {
     expect(flags & 8).toBe(0);
     const compressed = bytes.readUInt32LE(central + 20), size = bytes.readUInt32LE(central + 24);
     const nameLength = bytes.readUInt16LE(central + 28);
-    const name = bytes.subarray(central + 46, central + 46 + nameLength).toString('utf8').replace(/\\/g, '/');
+    const name = bytes.subarray(central + 46, central + 46 + nameLength).toString('utf8');
+    expect(name).not.toContain('\\');
     const local = bytes.readUInt32LE(central + 42);
     expect(bytes.readUInt32LE(local)).toBe(0x04034b50);
     expect(bytes.readUInt16LE(local + 6)).toBe(flags);
@@ -134,6 +135,29 @@ describe('standalone native intunewin format', () => {
     expect(await fs.readdir(output)).toEqual([]);
   });
 
+  it('reports a setup basename collision before writing package artifacts', async () => {
+    const { input, output } = await fixture();
+    await fs.rename(path.join(input, 'Invoke-AppDeployToolkit.exe'), path.join(input, 'IntunePackage.exe'));
+    await expect(writeIntunewinPackage(input, 'IntunePackage.exe', output)).rejects.toThrow('conflicts');
+  });
+
+  it('refuses direct MSI setup instead of claiming to produce MSI metadata', async () => {
+    const { input, output } = await fixture();
+    await expect(writeIntunewinPackage(input, 'setup.msi', output)).rejects.toThrow('EXE wrapper');
+  });
+
+  it('keeps the primary failure when private staging cleanup also fails', async () => {
+    const { input, output } = await fixture();
+    const original = new Error('synthetic primary failure');
+    vi.spyOn(crypto, 'createCipheriv').mockImplementation(() => { throw original; });
+    const readdir = fs.readdir.bind(fs);
+    vi.spyOn(fs, 'readdir').mockImplementation((async (directory: Parameters<typeof fs.readdir>[0], options: unknown) => {
+      if (path.basename(String(directory)).startsWith('.intunewin-')) throw new Error('synthetic cleanup failure');
+      return await readdir(directory, options as never);
+    }) as typeof fs.readdir);
+    await expect(writeIntunewinPackage(input, 'Invoke-AppDeployToolkit.exe', output)).rejects.toBe(original);
+  });
+
   it('refuses a missing setup file and an output directory inside the input', async () => {
     const { input, output } = await fixture();
     await expect(writeIntunewinPackage(input, 'missing.exe', output)).rejects.toThrow('missing');
@@ -184,6 +208,12 @@ describe('standalone native intunewin format', () => {
     await fs.writeFile(path.join(input, 'SAME.txt'), 'first');
     await fs.writeFile(path.join(input, 'same.txt'), 'second');
     await expect(writeIntunewinPackage(input, 'Invoke-AppDeployToolkit.exe', output)).rejects.toThrow('collision');
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects a literal backslash in a POSIX filename', async () => {
+    const { input, output } = await fixture();
+    await fs.writeFile(path.join(input, 'a\\b.txt'), 'literal backslash is not a directory');
+    await expect(writeIntunewinPackage(input, 'Invoke-AppDeployToolkit.exe', output)).rejects.toThrow('backslash');
   });
 });
 

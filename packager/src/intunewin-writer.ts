@@ -109,6 +109,7 @@ async function collectFiles(root: string): Promise<InputFile[]> {
     const entries = await fs.promises.readdir(directory, { withFileTypes: true });
     entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     for (const entry of entries) {
+      if (entry.name.includes('\\')) throw new Error('Package entry name contains a literal backslash');
       const name = validateArchivePath(prefix + entry.name);
       const folded = name.toUpperCase();
       if (seen.has(folded)) throw new Error('Case-insensitive archive path collision');
@@ -175,7 +176,6 @@ class ZipWriter {
         callback(null, chunk);
       },
     });
-    const target = sink(this.handle, start);
     if (Buffer.isBuffer(source) || directory) {
       // XML is small and generated here, never installer content.
       const bytes = Buffer.isBuffer(source) ? source : Buffer.alloc(0);
@@ -183,6 +183,7 @@ class ZipWriter {
       size = bytes.length;
       await this.append(bytes);
     } else {
+      const target = sink(this.handle, start);
       const opened = await fs.promises.open(source.file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
       try {
         const before = await opened.stat();
@@ -259,6 +260,10 @@ export async function writeIntunewinPackage(
   packageDir: string, setupFile: string, outputDir: string,
 ): Promise<NativePackagingResult> {
   if (validateArchivePath(setupFile).includes('/')) throw new Error('Setup file must be at the package root');
+  if (!setupFile.toLowerCase().endsWith('.exe')) throw new Error('Native setup must be an EXE wrapper');
+  if (path.parse(setupFile).name.toUpperCase() === 'INTUNEPACKAGE') {
+    throw new Error('Setup basename conflicts with the encrypted payload name');
+  }
   const root = path.resolve(packageDir);
   const output = path.resolve(outputDir);
   const relative = path.relative(root, output);
@@ -325,9 +330,14 @@ export async function writeIntunewinPackage(
     };
   } catch (error) {
     // This private random directory was created by this invocation only.
-    const artifacts = await fs.promises.readdir(stage);
-    for (const name of artifacts) await fs.promises.unlink(path.join(stage, name));
-    await fs.promises.rmdir(stage);
+    try {
+      const artifacts = await fs.promises.readdir(stage);
+      for (const name of artifacts) await fs.promises.unlink(path.join(stage, name));
+      await fs.promises.rmdir(stage);
+    } catch {
+      // A cleanup failure must not replace the packaging failure. The caller
+      // still owns the job directory and its final cleanup.
+    }
     throw error;
   }
 }
