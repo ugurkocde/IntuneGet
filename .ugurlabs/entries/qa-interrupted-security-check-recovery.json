@@ -1,0 +1,5 @@
+{
+  "title": "Recover interrupted installer security checks",
+  "summary": "Adds an audited recovery path for security checks interrupted before an installer upload, while preserving upload limits and security holds.",
+  "type": "fixed"
+}

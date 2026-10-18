@@ -368,6 +368,27 @@ def contracts():
         denied('select * from qa_vt_claim_lane', 'permission denied for table', role)
         denied("update qa_vt_claim_lane set last_lane='public'", 'permission denied for table', role)
     print('PASS concurrent fair claims serialize and API roles cannot pin cursor')
+    sql(migration('20261018183000_qa_vt_upload_url_recovery'))
+    recovery_contract = (ROOT/'supabase/tests/qa_vt_upload_url_recovery.sql').read_text()
+    sql(recovery_contract)
+    # Reuse the synthetic setup, committed only in this disposable database.
+    setup = recovery_contract.split('-- Recovery assertions')[0].replace('begin;', '', 1)
+    sql(setup)
+    recovery_id = '30000000-0000-4000-8000-000000000001'
+    recovery_hash = 'd'*63+'1'
+    args = "'local-fixture-only',"+literal(recovery_id)+","+literal(recovery_hash)
+    request = json.loads(sql('select reserve_qa_vt_candidate_request('+args+",'hash_lookup')", 'service_role').stdout)
+    reservation_id = str(uuid.UUID(request['reservationId']))
+    sql('select record_qa_vt_submission_analysis('+args+','+literal(reservation_id)+",'not_found')", 'service_role')
+    attempts = parallel(['select reserve_qa_vt_candidate_request('+args+",'upload_url')"]*2)
+    assert sum(r.returncode == 0 for r in attempts) == 1
+    assert all(r.returncode == 0 or 'Public installer URL recovery proof unavailable' in r.stderr for r in attempts)
+    assert value('select count(*) from qa_vt_upload_url_recovery_grants where consumed_at is not null') == 1
+    assert value("select count(*) from qa_vt_requests where sha256="+literal(recovery_hash)+" and operation='upload_url'") == 2
+    assert value("select count(*) from qa_vt_requests where operation='upload'") == 0
+    for role in ('anon', 'authenticated', 'service_role'):
+        denied('select * from qa_vt_upload_url_recovery_grants', 'permission denied for table', role)
+    print('PASS audited URL recovery, concurrent single consumption and unchanged actual-upload guard')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
