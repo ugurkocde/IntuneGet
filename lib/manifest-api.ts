@@ -167,12 +167,12 @@ export async function fetchAvailableVersionsLive(
 
     if (response.status === 304) {
       if (!cached) throw new GitHubUnavailableError(304);
-      // A concurrent request may have rotated credentials or replaced this
-      // entry. Its newer cache state must survive this response.
-      if (versionListingCacheToken === authorization && versionListingCache.get(url) === cached) {
-        versionListingCache.delete(url);
-        versionListingCache.set(url, cached);
+      // Refuse a listing that a concurrent request has invalidated or replaced.
+      if (versionListingCacheToken !== authorization || versionListingCache.get(url) !== cached) {
+        throw new GitHubUnavailableError(304);
       }
+      versionListingCache.delete(url);
+      versionListingCache.set(url, cached);
       return cached.versions.slice();
     }
     if (!response.ok) {

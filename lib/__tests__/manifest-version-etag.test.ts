@@ -111,6 +111,60 @@ describe('live version listing conditional reads', () => {
     expect(sent(2).has('if-none-match')).toBe(false);
   });
 
+  it.each(['removed', 'replaced', 'rotated'])('rejects a delayed 304 after its cached listing is %s', async change => {
+    transport.mockResolvedValueOnce(listing());
+    await read();
+    let release!: (response: Response) => void;
+    transport.mockImplementationOnce(() => new Promise<Response>(resolve => { release = resolve; }));
+    const pending = read();
+    expect(sent(1).get('if-none-match')).toBe('"one"');
+    const rejected = expect(pending).rejects.toMatchObject({ status: 304 });
+    if (change === 'rotated') vi.stubEnv('GITHUB_PAT', 'synthetic-rotated-inflight');
+    transport.mockResolvedValueOnce(change === 'removed'
+      ? new Response(null, { status: 404 }) : listing(['3.0'], '"new"'));
+    expect(await read()).toEqual(change === 'removed' ? [] : ['3.0']);
+    release(notModified());
+    await rejected;
+    expect(transport).toHaveBeenCalledTimes(3);
+    transport.mockResolvedValueOnce(notModified());
+    if (change === 'removed') {
+      await expect(read()).rejects.toMatchObject({ status: 304 });
+      expect(sent(3).has('if-none-match')).toBe(false);
+    } else {
+      expect(await read()).toEqual(['3.0']);
+      expect(sent(3).get('if-none-match')).toBe('"new"');
+    }
+  });
+
+  it('keeps a nonstrict delayed 304 empty after concurrent removal', async () => {
+    transport.mockResolvedValueOnce(listing());
+    await read();
+    let release!: (response: Response) => void;
+    transport.mockImplementationOnce(() => new Promise<Response>(resolve => { release = resolve; }));
+    const pending = fetchAvailableVersionsLive('Example.App');
+    transport.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    expect(await read()).toEqual([]);
+    release(notModified());
+    expect(await pending).toEqual([]);
+    expect(transport).toHaveBeenCalledTimes(3);
+  });
+
+  it('allows overlapping 304 responses for the same unchanged cache entry', async () => {
+    transport.mockResolvedValueOnce(listing());
+    await read();
+    const releases: ((response: Response) => void)[] = [];
+    transport.mockImplementation(() => new Promise<Response>(resolve => { releases.push(resolve); }));
+    const first = read();
+    const second = read();
+    releases[0](notModified());
+    expect(await first).toEqual(['2.0', '1.0']);
+    releases[1](notModified());
+    expect(await second).toEqual(['2.0', '1.0']);
+    transport.mockResolvedValueOnce(notModified());
+    expect(await read()).toEqual(['2.0', '1.0']);
+    expect(sent(3).get('if-none-match')).toBe('"one"');
+  });
+
   it.each([null, '*', '"not a validator"'])('does not cache an unusable ETag %s', async etag => {
     transport.mockResolvedValueOnce(listing(['2.0'], etag)).mockResolvedValueOnce(notModified());
     expect(await read()).toEqual(['2.0']);
