@@ -1,0 +1,5 @@
+{
+  "title": "Improve application verification reliability",
+  "summary": "Completed application checks can continue through background verification more reliably as the catalog grows.",
+  "type": "fixed"
+}
