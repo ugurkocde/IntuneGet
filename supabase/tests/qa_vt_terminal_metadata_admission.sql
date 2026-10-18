@@ -45,6 +45,14 @@ begin
     values('20000000-0000-4000-8000-000000000001','Fixture.App49','2','x64','queued',now(),repeat('f',64),repeat('C',64));
   if public.qa_vt_terminal_public_source(id) then raise exception 'Superseded identity admitted';end if;
   delete from public.qa_candidates where qa_candidates.id='20000000-0000-4000-8000-000000000001';
+  insert into public.qa_candidates(id,winget_id,status) values('20000000-0000-4000-8000-000000000002','Other.App','running');
+  insert into public.qa_vt_submission_intents(sha256,candidate_id,winget_id,version,architecture,
+    manifest_installer_url,execution_installer_url,preflight_cache_key,verified_at)
+    select lower(installer_sha256),'20000000-0000-4000-8000-000000000002','Other.App','1','x64',
+      installer_url,installer_url,'synthetic-active',now() from public.qa_candidates where qa_candidates.id=fixture.id;
+  if public.qa_vt_terminal_public_source(id) then raise exception 'Active same-hash intent taken over';end if;
+  delete from public.qa_vt_submission_intents where preflight_cache_key='synthetic-active';
+  delete from public.qa_candidates where qa_candidates.id='20000000-0000-4000-8000-000000000002';
   update public.qa_vt_metadata_rechecks set state='escalated',attempts=6 where candidate_id<>fixture.id;
   perform public.admit_qa_vt_terminal_metadata_rechecks('local-fixture-only');
   if (select count(*) from public.qa_vt_metadata_rechecks where state='escalated' and attempts=6)<>48 then
