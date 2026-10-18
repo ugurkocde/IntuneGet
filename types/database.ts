@@ -1002,6 +1002,7 @@ export interface Database {
           error_stage: string | null;
           error_category: string | null;
           error_code: string | null;
+          error_details: Json | null;
           error_message: string | null;
           created_at: string;
           updated_at: string;
@@ -1055,6 +1056,7 @@ export interface Database {
           error_stage?: string | null;
           error_category?: string | null;
           error_code?: string | null;
+          error_details?: Json | null;
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1108,6 +1110,7 @@ export interface Database {
           error_stage?: string | null;
           error_category?: string | null;
           error_code?: string | null;
+          error_details?: Json | null;
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;

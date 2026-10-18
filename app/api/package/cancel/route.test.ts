@@ -85,8 +85,8 @@ describe('cancel packaging job', () => {
     expect(state.updates).toHaveLength(0);
   });
 
-  it('cancels a job waiting on QA without a workflow run and locks on its status', async () => {
-    state.job = { id: 'job', user_id: 'user', status: 'awaiting_qa', github_run_id: null };
+  it.each(['awaiting_qa', 'blocked_upstream'])('cancels a %s job without a workflow run and locks on its status', async status => {
+    state.job = { id: 'job', user_id: 'user', status, github_run_id: null };
     const response = await call({ jobId: 'job' });
 
     expect(response.status).toBe(200);
@@ -97,7 +97,7 @@ describe('cancel packaging job', () => {
       status: 'cancelled',
       error_message: 'Job cancelled by user while waiting for QA',
     });
-    expect(state.updates[0].filters).toContainEqual(['eq', 'status', 'awaiting_qa']);
+    expect(state.updates[0].filters).toContainEqual(['eq', 'status', status]);
   });
 
   it('archives a QA failed job on dismiss', async () => {

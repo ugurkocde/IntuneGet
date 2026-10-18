@@ -21,6 +21,7 @@ import { installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { CuratedCatalogError, CuratedEvidenceMismatchError } from '@/lib/curated-catalog/core.mjs';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
+import { holdCustomerUpstreamJob, reopenCustomerUpstreamJobs } from '@/lib/customer-upstream-recovery';
 
 const RESUME_BATCH_SIZE = 25;
 export const maxDuration = 60;
@@ -68,6 +69,11 @@ export async function GET(request: Request) {
       break;
     }
     visited++;
+    try {
+      if (await holdCustomerUpstreamJob(supabase, job)) { held++; continue; }
+    } catch {
+      waitingIds.push(job.id); waiting++; continue;
+    }
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = job.package_config as unknown as Win32CartItem;
     let observed = {
@@ -562,11 +568,16 @@ export async function GET(request: Request) {
   // same guarded path on the next invocation, never a separate dispatch path.
   let reopened = 0;
   let recoveryDeferred = false;
+  let upstreamReopened = 0;
+  if (Date.now() - startedAt < 40_000) {
+    try { upstreamReopened = await reopenCustomerUpstreamJobs(supabase); }
+    catch { recoveryDeferred = true; }
+  }
   try {
     reopened = await reopenSupersededQaFailures(supabase);
   } catch {
     recoveryDeferred = true;
   }
   return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting,
-    held, deferred, budgetExhausted, reopened, recoveryDeferred });
+    held, deferred, budgetExhausted, reopened: reopened + upstreamReopened, recoveryDeferred });
 }

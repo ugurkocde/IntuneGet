@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { cn } from '@/lib/utils';
 import type { CrossTenantJobsTableProps, MspJob, GetMspJobsResponse } from '@/types/msp';
+import { customerUpstreamStatus } from '@/lib/customer-upstream-status';
 
 export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoading, onRefresh }: CrossTenantJobsTableProps) {
   const { getAccessToken } = useMicrosoftAuth();
@@ -79,6 +80,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       case 'packaging':
       case 'uploading':
         return <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />;
+      case 'blocked_upstream':
       case 'awaiting_qa':
         return <Clock className="w-4 h-4 text-accent-violet" />;
       default:
@@ -94,6 +96,8 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
         return 'Failed';
       case 'qa_failed':
         return 'Installation test failed';
+      case 'blocked_upstream':
+        return 'Blocked upstream';
       case 'awaiting_qa':
         return 'Testing app';
       case 'packaging':
@@ -244,12 +248,15 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                         (job.status === 'failed' || job.status === 'qa_failed') && 'text-red-500',
                         (job.status === 'packaging' || job.status === 'uploading') && 'text-accent-cyan',
                         job.status === 'queued' && 'text-text-muted',
-                        job.status === 'awaiting_qa' && 'text-accent-violet'
+                        ['blocked_upstream', 'awaiting_qa'].includes(job.status) && 'text-accent-violet'
                       )}>
                         {getStatusText(job.status)}
                       </span>
                     </div>
-                    {job.error_message && (
+                    {job.status === 'blocked_upstream' && (
+                      <p className="text-xs text-text-muted mt-1 max-w-[200px]">{customerUpstreamStatus(null).message}</p>
+                    )}
+                    {job.status !== 'blocked_upstream' && job.error_message && (
                       <p className="text-xs text-red-400 mt-1 truncate max-w-[200px]">
                         {job.error_message}
                       </p>

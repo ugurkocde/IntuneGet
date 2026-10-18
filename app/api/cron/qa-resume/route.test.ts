@@ -1,3 +1,4 @@
+vi.mock('@/lib/customer-upstream-recovery', () => ({ holdCustomerUpstreamJob: vi.fn(async () => false), reopenCustomerUpstreamJobs: vi.fn(async () => 0) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -61,6 +62,7 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 }));
 
 import { GET } from './route';
+import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { CuratedCatalogError, CuratedEvidenceMismatchError } from '@/lib/curated-catalog/core.mjs';
@@ -151,6 +153,19 @@ describe('GET /api/cron/qa-resume', () => {
       item,
       trustedInstallers: [],
     }));
+  });
+
+  it.each(['held', 'evidence unavailable'])('never reaches packaging or Graph while an upstream job is %s', async outcome => {
+    if (outcome === 'held') vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
+    else vi.mocked(holdCustomerUpstreamJob).mockRejectedValueOnce(new Error('private evidence error'));
+    const waitingJob = { id: 'upstream-job', status: 'awaiting_qa', winget_id: 'Vendor.App', version: '1.0' };
+    createServerClientMock.mockReturnValue({ from: vi.fn(() => chain({ data: [waitingJob], error: null })) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject(outcome === 'held' ? { held: 1, resumed: 0 } : { waiting: 1, resumed: 0 });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(findPendingApprovalBlocksMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('keeps an unverified Passed payload waiting before a claim, local=%s', async (localPackager) => {

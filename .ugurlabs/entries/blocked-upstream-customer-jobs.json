@@ -1,0 +1,5 @@
+{
+  "title": "Explain upstream deployment blocks",
+  "summary": "Deployment jobs now show when installer source checks or upstream metadata block validation. Manifest changes return the selected version to normal validation without switching versions automatically.",
+  "type": "improved"
+}

@@ -5,7 +5,7 @@ import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 const RECOVERY_BATCH_SIZE = 10;
 const RECOVERY_SCAN_SIZE = 100;
 const LIVE_STATUSES = new Set([
-  'awaiting_qa', 'queued', 'packaging', 'uploading', 'completed', 'deployed',
+  'awaiting_qa', 'blocked_upstream', 'queued', 'packaging', 'uploading', 'completed', 'deployed',
   'awaiting_approval', 'awaiting_intune_approval',
 ]);
 const equalHash = (left: string | null, right: string | null) =>
