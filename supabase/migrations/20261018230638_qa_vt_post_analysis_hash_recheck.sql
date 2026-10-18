@@ -19,6 +19,8 @@ returns boolean language sql stable set search_path='' as $function$
         and r.operation='hash_lookup' and r.reserved_at>i.analysis_recorded_at)
       and not exists(select 1 from public.qa_installer_security_holds h
         where h.sha256=i.sha256 and h.released_at is null and h.malicious_verdicts>0)
+      and not exists(select 1 from public.installer_health h
+        where lower(h.expected_sha256)=i.sha256 and h.status='quarantined')
       and not exists(select 1 from public.qa_package_blocks b
         where lower(b.winget_id)=lower(i.winget_id) and b.version=i.version
           and b.architecture=i.architecture and lower(b.installer_sha256)=i.sha256))
@@ -103,7 +105,6 @@ begin
             and public.qa_vt_terminal_public_source(c.id)
             and not exists(select 1 from public.qa_vt_request_budget where id=true and blocked_until>stamp))
           or (q.last_http_status=404 and q.state='pending' and q.attempts<6
-            and public.qa_vt_terminal_public_source(c.id)
             and public.qa_vt_post_analysis_hash_recheck_ready(q.candidate_id,q.sha256,q.run_id,q.profile_sha256,stamp)))
         and (q.last_http_status=404 or not exists(select 1 from public.qa_vt_requests r
           where r.sha256=q.sha256 and r.metadata_candidate_id is not null
@@ -166,4 +167,4 @@ begin
   end loop;
   return coalesce(refusal,jsonb_build_object('stop','no_eligible_work'));
 end;
-$function$
+$function$;
