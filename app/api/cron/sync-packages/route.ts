@@ -10,6 +10,27 @@ import { selectAppsToSync } from './select-apps';
 
 const BATCH_SIZE = 10;
 const SYNC_STATUS_ID = 'sync-manifests-hot';
+// Bump when installer normalization or locale derivation changes.
+const SYNC_DERIVATION_VERSION = 1;
+const FULL_REFRESH_MS = 24 * 60 * 60 * 1000;
+interface SyncValidator { etag: string; version: string; fetchedAt: string; deriv: number }
+
+function previousValidator(metadata: unknown, wingetId: string, version: string | null, now: number): SyncValidator | null {
+  if (!version || !metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const entries = (metadata as Record<string, unknown>).upstream_etags;
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries) || !Object.hasOwn(entries, wingetId)) return null;
+  const value = (entries as Record<string, unknown>)[wingetId];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const entry = value as Record<string, unknown>;
+  if (entry.version !== version || version.length > 128 || /[\x00-\x1f\x7f]/.test(version) ||
+      !/^\d/.test(version) || !(/^\d+[\d._-]*\d*$/.test(version) || version.includes('.')) ||
+      entry.deriv !== SYNC_DERIVATION_VERSION || typeof entry.etag !== 'string' ||
+      !/^(W\/)?"[0-9A-Za-z]{1,128}"$/.test(entry.etag) || typeof entry.fetchedAt !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(entry.fetchedAt)) return null;
+  const fetched = Date.parse(entry.fetchedAt);
+  if (!Number.isFinite(fetched) || fetched > now || now - fetched >= FULL_REFRESH_MS) return null;
+  return { etag: entry.etag, version, fetchedAt: entry.fetchedAt, deriv: SYNC_DERIVATION_VERSION };
+}
 
 interface VersionHistoryRecord {
   winget_id: string;
@@ -57,6 +78,11 @@ export async function GET(request: Request) {
   });
 
   try {
+    const { data: previousStatus, error: previousStatusError } = await supabase
+      .from('curated_sync_status').select('metadata').eq('id', SYNC_STATUS_ID).maybeSingle();
+    if (previousStatusError) throw previousStatusError;
+    const validators = new Map<string, SyncValidator>();
+    let validatorsSent = 0;
     // Mark sync as started
     const { error: startStatusError } = await supabase.from('curated_sync_status').upsert({
       id: SYNC_STATUS_ID,
@@ -113,11 +139,22 @@ export async function GET(request: Request) {
           try {
             const { winget_id, latest_version } = app;
 
+            const previous = process.env.GITHUB_PAT
+              ? previousValidator(previousStatus?.metadata, winget_id, latest_version, Date.now()) : null;
+            if (previous) validatorsSent++;
+            const listing = await manifestClient.fetchVersionsWithValidator(winget_id, previous?.etag ?? null);
+            if (listing.notModified && previous) {
+              validators.set(winget_id, previous);
+              skipped++;
+              return;
+            }
+
             const resolution = await resolveWingetManifest({
               client: manifestClient,
               wingetId: winget_id,
               storedVersion: latest_version,
               preferLive: true,
+              versions: listing.versions,
             });
             if (resolution.status === 'unavailable') {
               unavailable++;
@@ -217,6 +254,13 @@ export async function GET(request: Request) {
               throw new Error(`curated_apps update failed: ${appUpdateError.message}`);
             }
 
+            // Only acknowledge upstream after BOTH derived writes succeeded.
+            // Carried 304 entries keep their original full-refresh timestamp.
+            if (listing.etag) validators.set(winget_id, {
+              etag: listing.etag, version: latestVersion,
+              fetchedAt: new Date().toISOString(), deriv: SYNC_DERIVATION_VERSION,
+            });
+
             // Track new versions
             if (latest_version && latest_version !== latestVersion) {
               newVersions.push({
@@ -264,6 +308,9 @@ export async function GET(request: Request) {
         unavailable_samples: unavailableItems.slice(0, 20),
         failed_samples: failedItems.slice(0, 20),
         new_versions: newVersions.length,
+        cache_hits: skipped,
+        validators_sent: validatorsSent,
+        upstream_etags: Object.fromEntries([...validators].slice(0, 200)),
       },
       updated_at: new Date().toISOString(),
     });

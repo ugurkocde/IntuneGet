@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-17T10:20:47.905Z",
-    "expiresAt": "2026-10-24T10:20:47.905Z",
+    "generatedAt": "2026-10-18T18:24:34.079Z",
+    "expiresAt": "2026-10-25T18:24:34.079Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -6546,10 +6546,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/peazip/fb480bf35fcb69a7cdfe5dc9.json"
           }
         }
+      },
+      {
+        "id": "dbeaver:93b568fa03ca15daff385468",
+        "candidate": {
+          "appId": "dbeaver",
+          "version": "26.2.3",
+          "installerUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.3/dbeaver-ce-26.2.3-windows-x86_64.exe",
+          "vendorSha256": "49d0c6d4ee0ba5acecfb48b9a4d2bd8d5734730154d5b974d8990205edb8e927",
+          "releaseNotesUrl": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.3",
+          "discoveredAt": "2026-10-18T17:41:16.657Z",
+          "id": "93b568fa03ca15daff385468"
+        },
+        "installerSha256": "49d0c6d4ee0ba5acecfb48b9a4d2bd8d5734730154d5b974d8990205edb8e927",
+        "executionProfileSha256": "AE1FB7EBD8955FB621FE578A9AF244621DAE88E2949410098A8BEDE8CCF9B4E9",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-18T18:24:34.079Z",
+        "evidence": {
+          "verifiedAt": "2026-10-18T17:51:18.8233292Z",
+          "installerSha256": "49d0c6d4ee0ba5acecfb48b9a4d2bd8d5734730154d5b974d8990205edb8e927",
+          "installerVersion": "26.2.3",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/93b568fa03ca15daff385468.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "DBeaver Corp"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "d9e297fadcd644ee6797b88b2a6fa5738cf4ae60",
+            "websiteCommit": "cf842741c152c2c56f317c7035940dfd6e78170b",
+            "runId": "39150754566",
+            "runAttempt": 1,
+            "artifactId": "12145705761",
+            "artifactSha256": "a892443d669b9a842b4acf4e6864b15c12ced241d3a40905e2068037d456eab5"
+          },
+          "security": {
+            "status": "clean",
+            "installerSha256": "49d0c6d4ee0ba5acecfb48b9a4d2bd8d5734730154d5b974d8990205edb8e927",
+            "engineVersion": "1.1.26090.9",
+            "signatureVersion": "1.461.91.0",
+            "scannedAt": "2026-10-18T17:47:42.2246519Z",
+            "suspicious": 0,
+            "scanner": "defender",
+            "malicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/93b568fa03ca15daff385468.json"
+          },
+          "qa": {
+            "architecture": "x64",
+            "previousInstallerSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "testLevel": "psadt-package",
+            "candidateId": "93b568fa03ca15daff385468",
+            "upgradeFromVersion": "26.2.2",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "49d0c6d4ee0ba5acecfb48b9a4d2bd8d5734730154d5b974d8990205edb8e927",
+            "executionContext": "LocalSystem",
+            "installerVersion": "26.2.3",
+            "executionProfileSha256": "AE1FB7EBD8955FB621FE578A9AF244621DAE88E2949410098A8BEDE8CCF9B4E9",
+            "testedAt": "2026-10-18T17:51:09.7726195Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/93b568fa03ca15daff385468.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "KzgCw8Mobc1V+LzjgRH2nh5NCimv4Yd0Xqn1Ms0U3DaHSLChpeY+EF5It5DpCJN4sA51DDYN5Kqc4X27n2ZUBQ=="
+  "signature": "4AFJ9aKbzVgQzzkJkbZtNNSMrgMSIPM6W7NCcS/5KnpUBECIx1KMAtMN/w4uwLx7myVPAwCTYYfvrIgVmkFbBQ=="
 }
