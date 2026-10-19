@@ -10,7 +10,14 @@ export function sniffRasterFormat(buffer) {
 
 export async function readLimited(response, maxBytes) {
   const declared = Number.parseInt(response.headers.get('content-length') || '0', 10);
-  if (declared > maxBytes) throw new Error(`Response exceeds ${maxBytes} bytes`);
+  if (declared > maxBytes) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // Cleanup failure must not replace the size-limit rejection.
+    }
+    throw new Error(`Response exceeds ${maxBytes} bytes`);
+  }
   const reader = response.body?.getReader();
   if (!reader) return Buffer.alloc(0);
   const chunks = [];

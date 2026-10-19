@@ -43,6 +43,24 @@ describe('bounded image responses', () => {
     await expect(readImage(new Response(png, { headers: { 'content-type': 'image/png' } }), 4)).rejects.toThrow('exceeds');
     expect(await readLimited(new Response('html'), 10)).toEqual(Buffer.from('html'));
   });
+
+  it('cancels a response rejected by its declared size', async () => {
+    const cancel = vi.fn();
+    const response = new Response(new ReadableStream({ cancel }), {
+      headers: { 'content-type': 'image/png', 'content-length': '2048' },
+    });
+    await expect(readImage(response, 1024)).rejects.toThrow('Response exceeds 1024 bytes');
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the size rejection when cancelling the body fails', async () => {
+    const cancel = vi.fn().mockRejectedValue(new Error('Cancellation failed'));
+    const response = new Response(new ReadableStream({ cancel }), {
+      headers: { 'content-type': 'image/png', 'content-length': '2048' },
+    });
+    await expect(readImage(response, 1024)).rejects.toThrow('Response exceeds 1024 bytes');
+    expect(cancel).toHaveBeenCalledOnce();
+  });
 });
 
 describe('native decoder boundary', () => {
