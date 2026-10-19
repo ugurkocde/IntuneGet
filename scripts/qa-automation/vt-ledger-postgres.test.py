@@ -432,11 +432,11 @@ def contracts():
     sql(migration('20261019105229_qa_dependency_execution_receipts'))
     sql((ROOT/'supabase/tests/qa_dependency_execution_receipts.sql').read_text())
     print('PASS own-run dependency receipt identity, digest, write-once and no-verdict bridge')
-      missing = sql("select admit_qa_vt_dependency_rechecks('local-fixture-only')", check=False)
-      assert missing.returncode != 0 and 'does not exist' in missing.stderr
-      sql(migration('20261019125457_qa_vt_dependency_lookup'))
-      sql((ROOT/'supabase/tests/qa_vt_dependency_lookup.sql').read_text())
-      print('PASS exact installed dependency admission, shared hash lease, finite quota, 404 hold and covered verdict')
+    missing = sql("select admit_qa_vt_dependency_rechecks('local-fixture-only')", check=False)
+    assert missing.returncode != 0 and 'does not exist' in missing.stderr
+    sql(migration('20261019125457_qa_vt_dependency_lookup'))
+    sql((ROOT/'supabase/tests/qa_vt_dependency_lookup.sql').read_text())
+    print('PASS exact installed dependency admission, shared hash lease, finite quota, 404 hold and covered verdict')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 

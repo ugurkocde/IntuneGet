@@ -82,9 +82,30 @@ begin
   select count(*) into before_count from public.qa_vt_requests;
   claim:=public.claim_qa_vt_dependency_recheck('local-fixture-only');
   if claim->>'cached'<>'true' or (select count(*) from public.qa_vt_requests)<>before_count then raise exception 'Fresh cache spent quota';end if;
+  -- A genuinely new run may refresh a stale formerly resolved hash, without
+  -- resetting not_found/escalated or re-admitting an existing tuple.
+  update public.catalog_file_reputation set checked_at=now()-interval '8 days',retry_after=now()-interval '1 day' where sha256=repeat('a',64);
+  update public.qa_vt_dependency_rechecks set first_queued_at=now()-interval '20 days';
+  update public.qa_candidates set status='running',phase=null,finished_at=null,github_run_id='789' where id=cid2;
+  preimage:=replace(preimage,'456','789');
+  r2:=preimage::jsonb||jsonb_build_object('sha256',upper(encode(extensions.digest(preimage,'sha256'),'hex')));
+  if not public.record_qa_dependency_receipt('local-fixture-only',cid2,'789',1,content,r2,'Passed') then raise exception 'New run receipt rejected';end if;
+  update public.qa_dependency_execution_receipts set recorded_at=now()-interval '2 seconds' where candidate_id=cid2 and run_id='789';
+  update public.qa_candidates set status='error',phase='publishing',finished_at=now()-interval '1 second' where id=cid2;
+  before_count:=public.admit_qa_vt_dependency_rechecks('local-fixture-only');
+  if before_count<>1 or
+    (select attempts from public.qa_vt_dependency_rechecks where sha256=repeat('a',64))<>0 then raise exception 'New stale hash cycle not admitted count %, attempts %, entries %',before_count,(select attempts from public.qa_vt_dependency_rechecks where sha256=repeat('a',64)),(select count(*) from public.qa_vt_installed_dependency_entries(cid2));end if;
+  if public.admit_qa_vt_dependency_rechecks('local-fixture-only')<>0 then raise exception 'Same tuple reset cycle';end if;
+  if public.claim_qa_vt_dependency_recheck('local-fixture-only')->>'stop'<>'hash_lookup_paced' then raise exception 'Cross-lane hash pacing ignored';end if;
+  update public.qa_vt_requests set reserved_at=now()-interval '61 minutes',response_recorded_at=now()-interval '60 minutes' where sha256=repeat('a',64);
+  update public.qa_vt_dependency_rechecks set retry_at=now()-interval '1 second';
+  claim:=public.claim_qa_vt_dependency_recheck('local-fixture-only');
+  if claim->>'reservationId' is null then raise exception 'New run stale refresh not reserved';end if;
+  perform public.complete_qa_vt_dependency_recheck('local-fixture-only',(claim->>'lease')::uuid,200,null,0,0,70,now()-interval '1 hour');
   update public.catalog_file_reputation set engine_count_version=1 where sha256=repeat('a',64);
   if public.qa_vt_dependency_coverage(cid) then raise exception 'Legacy verdict covered';end if;
   update public.qa_vt_dependency_rechecks set state='pending',retry_at=now()-interval '1 second';
+  update public.qa_vt_requests set reserved_at=now()-interval '61 minutes',response_recorded_at=now()-interval '60 minutes' where sha256=repeat('a',64);
   claim:=public.claim_qa_vt_dependency_recheck('local-fixture-only');
   perform public.complete_qa_vt_dependency_recheck('local-fixture-only',(claim->>'lease')::uuid,404);
   if (select state from public.qa_vt_dependency_rechecks where sha256=repeat('a',64))<>'not_found' or public.qa_vt_dependency_coverage(cid) then raise exception '404 did not hold';end if;
@@ -92,6 +113,7 @@ begin
   -- Local fixture reactivates only to exercise positive verdicts; production
   -- admission never reactivates a terminal not_found or resolved hash.
   for before_count in 1..2 loop
+    update public.qa_vt_requests set reserved_at=now()-interval '61 minutes',response_recorded_at=now()-interval '60 minutes' where sha256=repeat('a',64);
     update public.qa_vt_dependency_rechecks set state='pending',retry_at=now()-interval '1 second';
     claim:=public.claim_qa_vt_dependency_recheck('local-fixture-only');
     perform public.complete_qa_vt_dependency_recheck('local-fixture-only',(claim->>'lease')::uuid,200,null,before_count,0,70,now());
