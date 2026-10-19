@@ -404,6 +404,14 @@ def contracts():
     assert len(claims) == 2 and sum(bool(c.get('lease')) for c in claims) == 1
     assert value("select count(*) from qa_vt_requests where operation='hash_lookup'") == 1
     print('PASS post-analysis exact-hash completion,404 parking,temporary retries,exclusions and concurrent single lease')
+    priority = (ROOT/'supabase/tests/qa_vt_post_upload_priority.sql').read_text()
+    before = sql("set qa.priority_case='no_customer';"+priority, check=False)
+    assert before.returncode != 0 and 'Post-upload priority selected wrong tuple' in before.stderr
+    print('PASS regression reproduces uploaded tuple behind fresh metadata before migration')
+    sql(migration('20261019024840_qa_vt_post_upload_priority'))
+    for priority_case in ('no_customer', 'customer_ready', 'customer_fresh', 'backoff'):
+        sql("set qa.priority_case='"+priority_case+"';"+priority)
+    print('PASS uploaded priority, customer-first ordering and unchanged analysis backoff')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 

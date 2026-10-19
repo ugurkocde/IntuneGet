@@ -1,0 +1,5 @@
+{
+  "title": "Finish uploaded installer security checks sooner",
+  "summary": "Prioritizes eligible security checks for installers already uploaded, while keeping customer demand first and preserving existing security checks and request limits.",
+  "type": "fixed"
+}
