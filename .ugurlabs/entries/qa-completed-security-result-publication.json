@@ -1,0 +1,5 @@
+{
+  "title": "Publish completed security checks promptly",
+  "summary": "QA results can use a completed security analysis without waiting for another metadata queue turn. Existing security holds and publication checks remain in place.",
+  "type": "fixed"
+}

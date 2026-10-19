@@ -412,6 +412,21 @@ def contracts():
     for priority_case in ('no_customer', 'customer_ready', 'customer_fresh', 'backoff'):
         sql("set qa.priority_case='"+priority_case+"';"+priority)
     print('PASS uploaded priority, customer-first ordering and unchanged analysis backoff')
+    sql(migration('20261018011340_qa_vt_result_record_refresh'))
+    refresh = (ROOT/'supabase/tests/qa_vt_analysis_record_refresh.sql').read_text()
+    before = sql(refresh, check=False)
+    assert before.returncode != 0 and 'Completed analysis publication proof missing' in before.stderr
+    print('PASS regression reproduces completed analysis missing from publication selection')
+    # The failed disposable transaction rolled back when its psql session exited.
+    claim_before = value("select pg_get_functiondef('public.claim_qa_vt_metadata_recheck(text)'::regprocedure)")
+    acl_before = value("select jsonb_build_array(proowner,proacl::text) from pg_proc "
+                       "where oid='public.list_qa_vt_resolved_record_refreshes(text,integer)'::regprocedure")
+    sql(migration('20261019045306_qa_vt_analysis_record_refresh'))
+    sql(refresh)
+    assert claim_before == value("select pg_get_functiondef('public.claim_qa_vt_metadata_recheck(text)'::regprocedure)")
+    assert acl_before == value("select jsonb_build_array(proowner,proacl::text) from pg_proc "
+                              "where oid='public.list_qa_vt_resolved_record_refreshes(text,integer)'::regprocedure")
+    print('PASS exact analysis completion, no-verdict exclusions, proof precedence and unchanged claim/ACL')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
