@@ -22,7 +22,7 @@ function client(): SupabaseClient<Database> {
     const order: string[] = [];
     const q = {
       select: () => q, order: (key: string) => { order.push(key); return q; },
-      ilike: (key: string, value: string) => { filters.push(row => String(row[key]).toLowerCase() === value.toLowerCase()); return q; },
+      ilike: (key: string, value: string) => { const literal = value.replace(/\\([\\%_])/g, '$1'); filters.push(row => String(row[key]).toLowerCase() === literal.toLowerCase()); return q; },
       eq: (key: string, value: unknown) => { filters.push(row => row[key] === value); return q; },
       is: (key: string, value: unknown) => { filters.push(row => (row[key] ?? null) === value); return q; },
       lte: (key: string, value: string) => { filters.push(row => Date.parse(String(row[key])) <= Date.parse(value)); return q; },
@@ -51,7 +51,7 @@ beforeEach(() => {
     packaging_jobs: [{ id: 'job', status: 'awaiting_qa', updated_at: '2026-01-01T00:00:00Z', qa_resume_due_at: '2026-01-01T00:00:00Z', qa_candidate_id: candidateId, winget_id: item.wingetId, version: item.version, architecture: item.architecture, installer_url: item.installerUrl, installer_sha256: digest, package_config: { ...item }, github_run_id: null, intune_app_id: null, archived_at: null, cancelled_at: null }],
     qa_candidates: [{ id: candidateId, winget_id: item.wingetId, version: item.version, architecture: item.architecture, installer_url: item.installerUrl, installer_sha256: digest, status: 'queued', phase: null }],
     qa_source_backoff: [{ source_key: qaSourceKey({ winget_id: item.wingetId, version: item.version, architecture: item.architecture, installer_url: item.installerUrl, installer_sha256: digest }), failure_count: 7, next_retry_at: '2030-01-01T00:00:00Z' }],
-    installer_health: [], qa_package_results: [], qa_winget_poll_state: [{ id: 'microsoft/winget-pkgs', head_sha: 'a'.repeat(40) }],
+    installer_health: [], qa_package_results: [], qa_package_blocks: [], qa_winget_poll_state: [{ id: 'microsoft/winget-pkgs', head_sha: 'a'.repeat(40) }],
   };
 });
 it('persists a source block with an allowlisted code and no QA mutations', async () => {
@@ -77,6 +77,49 @@ it.each(['running', 'dispatched', 'passed'])('does not mask active or passed QA:
 it('keeps publication recovery ahead of an old source block', async () => {
   Object.assign(rows.qa_candidates[0], { status: 'error', phase: 'publishing' });
   expect(await holdCustomerUpstreamJob(client(), job())).toBe(false);
+});
+const lifecycleBlock = () => ({ winget_id: item.wingetId, version: item.version, architecture: item.architecture, installer_sha256: digest, block_code: 'failed_managed_lifecycle' });
+it.each(['source backoff', 'metadata mismatch'])('keeps an exact lifecycle-blocked customer awaiting QA during %s', async kind => {
+  rows.qa_package_blocks = [lifecycleBlock()];
+  if (kind === 'metadata mismatch') {
+    rows.qa_source_backoff = [];
+    rows.installer_health = [{ cache_key: createInstallerHealthKey(item), status: 'error', reason_code: 'MANIFEST_CHANGED', expires_at: '2030-01-01T00:00:00Z' }];
+  }
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(false);
+  expect(job()).toMatchObject({ status: 'awaiting_qa', qa_candidate_id: candidateId });
+  expect(calls).toEqual([]);
+});
+it.each(['winget_id', 'version', 'architecture', 'installer_sha256'])('does not use a lifecycle block for a different %s', async field => {
+  rows.qa_package_blocks = [{ ...lifecycleBlock(), [field]: 'other' }];
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(true);
+  expect(job().status).toBe('blocked_upstream');
+});
+it('preserves the lifecycle guard across stored tuple casing', async () => {
+  rows.qa_package_blocks = [{ ...lifecycleBlock(), winget_id: item.wingetId.toUpperCase(), architecture: 'X64', installer_sha256: digest.toLowerCase() }];
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(false);
+  expect(calls).toEqual([]);
+});
+it('matches an underscore in the lifecycle app identifier literally', async () => {
+  const wingetId = 'Example_App.Other';
+  Object.assign(rows.packaging_jobs[0], { winget_id: wingetId, package_config: { ...item, wingetId } });
+  rows.qa_candidates[0].winget_id = wingetId;
+  rows.qa_source_backoff[0].source_key = qaSourceKey({ winget_id: wingetId, version: item.version, architecture: item.architecture, installer_url: item.installerUrl, installer_sha256: digest });
+  rows.qa_package_blocks = [{ ...lifecycleBlock(), winget_id: 'ExampleXApp.Other' }];
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(true);
+  rows.packaging_jobs[0].status = 'awaiting_qa'; calls = [];
+  rows.qa_package_blocks[0].winget_id = wingetId;
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(false);
+  expect(calls).toEqual([]);
+});
+it('does not release customer guards when lifecycle block evidence is unavailable', async () => {
+  errors.add('qa_package_blocks');
+  await expect(holdCustomerUpstreamJob(client(), job())).rejects.toThrow();
+  expect(job().status).toBe('awaiting_qa');
+  expect(calls).toEqual([]);
+});
+it('keeps other compatibility block codes outside the lifecycle guard', async () => {
+  rows.qa_package_blocks = [{ ...lifecycleBlock(), block_code: 'unsupported_nested_installer' }];
+  expect(await holdCustomerUpstreamJob(client(), job())).toBe(true);
 });
 it('consumes a recorded exact metadata mismatch, never its arbitrary text', async () => {
   rows.qa_source_backoff = [];

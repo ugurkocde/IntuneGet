@@ -46,7 +46,7 @@ export async function holdCustomerUpstreamJob(client: SupabaseClient<Database>, 
       !same(candidate.architecture, job.architecture) || candidate.installer_url !== job.installer_url ||
       !same(candidate.installer_sha256, job.installer_sha256) || candidate.phase === 'publishing' ||
       !['queued', 'error'].includes(candidate.status)) return false;
-  const [backoff, health, holds, security] = await Promise.all([
+  const [backoff, health, holds, security, lifecycle] = await Promise.all([
     client.from('qa_source_backoff').select('failure_count,next_retry_at').eq('source_key', qaSourceKey(candidate)).maybeSingle(),
     client.from('installer_health').select('status,reason_code,expires_at')
       .eq('cache_key', createInstallerHealthKey({ wingetId: job.winget_id, version: job.version,
@@ -57,8 +57,17 @@ export async function holdCustomerUpstreamJob(client: SupabaseClient<Database>, 
       .eq('tested_version', job.version).eq('architecture', candidate.architecture)
       .ilike('installer_sha256', job.installer_sha256)
       .or('virustotal_malicious.gt.0,virustotal_suspicious.gt.0').limit(1),
+    client.from('qa_package_blocks').select('block_code')
+      .ilike('winget_id', candidate.winget_id.replace(/[\\%_]/g, '\\$&'))
+      .eq('version', job.version)
+      .ilike('architecture', candidate.architecture.replace(/[\\%_]/g, '\\$&'))
+      .ilike('installer_sha256', job.installer_sha256)
+      .eq('block_code', 'failed_managed_lifecycle').limit(1).maybeSingle(),
   ]);
-  if (backoff.error || health.error || security.error) throw new Error('Upstream validation evidence is unavailable');
+  if (backoff.error || health.error || security.error || lifecycle.error) throw new Error('Upstream validation evidence is unavailable');
+  // Retain awaiting_qa while a lifecycle block needs QA's diagnostic ownership
+  // guards. An upstream hold must not make that tuple appear customer-free.
+  if (lifecycle.data) return false;
   if (holds.size || security.data?.length || health.data?.status === 'quarantined') return false;
   const now = Date.now();
   let reason: CustomerUpstreamReason | null = null;
