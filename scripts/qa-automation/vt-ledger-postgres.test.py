@@ -427,6 +427,11 @@ def contracts():
     assert acl_before == value("select jsonb_build_array(proowner,proacl::text) from pg_proc "
                               "where oid='public.list_qa_vt_resolved_record_refreshes(text,integer)'::regprocedure")
     print('PASS exact analysis completion, no-verdict exclusions, proof precedence and unchanged claim/ACL')
+    missing = sql("select record_qa_dependency_receipt('local-fixture-only',gen_random_uuid(),'123',1,repeat('C',64),'{}','Passed')", check=False)
+    assert missing.returncode != 0 and 'does not exist' in missing.stderr
+    sql(migration('20261019105229_qa_dependency_execution_receipts'))
+    sql((ROOT/'supabase/tests/qa_dependency_execution_receipts.sql').read_text())
+    print('PASS own-run dependency receipt identity, digest, write-once and no-verdict bridge')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
