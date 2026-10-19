@@ -437,6 +437,18 @@ def contracts():
     sql(migration('20261019125457_qa_vt_dependency_lookup'))
     sql((ROOT/'supabase/tests/qa_vt_dependency_lookup.sql').read_text())
     print('PASS exact installed dependency admission, shared hash lease, finite quota, 404 hold and covered verdict')
+    bound = (ROOT/'supabase/tests/qa_vt_dependency_admission_bound.sql').read_text()
+    denied(bound, 'ADMISSION_UNBOUNDED', role='fixture_owner')
+    print('PASS old admission rejects unreceipted validator calls regression')
+    admit_acl = value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.admit_qa_vt_dependency_rechecks(text)'::regprocedure")
+    untouched = value("select jsonb_agg(pg_get_functiondef(oid) order by proname) from pg_proc where oid in ('public.claim_qa_vt_dependency_recheck(text)'::regprocedure,'public.complete_qa_vt_dependency_recheck(text,uuid,integer,timestamp with time zone,integer,integer,integer,timestamp with time zone)'::regprocedure)")
+    sql(migration('20261019141403_qa_vt_dependency_admission_bound'))
+    sql(bound)
+    sql((ROOT/'supabase/tests/qa_vt_dependency_lookup.sql').read_text())
+    assert admit_acl == value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.admit_qa_vt_dependency_rechecks(text)'::regprocedure")
+    assert untouched == value("select jsonb_agg(pg_get_functiondef(oid) order by proname) from pg_proc where oid in ('public.claim_qa_vt_dependency_recheck(text)'::regprocedure,'public.complete_qa_vt_dependency_recheck(text,uuid,integer,timestamp with time zone,integer,integer,integer,timestamp with time zone)'::regprocedure)")
+    print('PASS receipt-bound admission, zero unreceipted calls, latest attempt, full lookup contracts and unchanged ACL/claim/complete')
+
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 

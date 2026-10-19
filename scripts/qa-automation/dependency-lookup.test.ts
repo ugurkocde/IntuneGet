@@ -21,6 +21,12 @@ it('admits only installed own-run dependency hashes and preserves cache, quota, 
     }
     expect((await f.pg.query<{allowed:boolean}>("select has_function_privilege('authenticated','admit_qa_vt_dependency_rechecks(text)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
     await f.pg.exec(f.read('../../supabase/tests/qa_vt_dependency_lookup.sql'));
+    const bound=f.read('../../supabase/tests/qa_vt_dependency_admission_bound.sql');
+    await expect(f.pg.exec(bound)).rejects.toThrow(/ADMISSION_UNBOUNDED/);
+    await f.pg.exec('rollback');
+    await f.pg.exec(f.read('../../supabase/migrations/20261019141403_qa_vt_dependency_admission_bound.sql'));
+    await f.pg.exec(bound);
+    await f.pg.exec(f.read('../../supabase/tests/qa_vt_dependency_lookup.sql'));
     expect((await f.pg.query<{definition:string}>("select pg_get_functiondef('reserve_qa_vt_candidate_request(text,uuid,text,text,uuid)'::regprocedure) definition")).rows[0].definition).toBe(prior);
   }finally{await f.pg.close();}
 },30000);
