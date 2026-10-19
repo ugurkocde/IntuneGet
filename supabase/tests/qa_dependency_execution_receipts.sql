@@ -1,13 +1,12 @@
 -- Disposable fixture only. Never execute against production.
 begin;
-delete from public.packaging_jobs;
-delete from public.qa_candidates;
 do $$
-declare cid uuid := '11111111-1111-4111-8111-111111111111';
+declare cid uuid := '79900000-0000-4000-8000-000000000001';
   canonical text := '{"app":{"wingetId":"Fixture.App","version":"1.0","architecture":"x64"},"toolchain":{"packagerCommit":"dddddddddddddddddddddddddddddddddddddddd"},"installer":{"sha256":"EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE","packageDependencies":[{"order":1,"packageIdentifier":"Microsoft.VCRedist.2015+.x64","version":"14.51.36247.0","architecture":"x64","sha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}]}}';
   profile text; content text:=repeat('C',64); r jsonb; bad jsonb; preimage text;
   accepted boolean; before_rows integer; field text;
 begin
+  if exists(select 1 from public.qa_candidates where id=cid) then raise exception 'Fixture identity unavailable';end if;
   profile := upper(encode(extensions.digest(canonical,'sha256'),'hex'));
   insert into public.qa_candidates(id,winget_id,version,architecture,status,test_level,github_run_id,
     installer_sha256,package_profile_sha256,test_config,dispatched_at,enqueued_at)
@@ -15,7 +14,7 @@ begin
     jsonb_build_object('packageProfileCanonicalJson',canonical),now()-interval '1 hour',now()-interval '2 hours');
   insert into public.packaging_jobs(id,qa_candidate_id,status) values(gen_random_uuid(),cid,'awaiting_qa');
   -- A literal compact preimage independently specifies the wire format.
-  preimage := '{"schemaVersion":1,"status":"recorded","candidateId":"11111111-1111-4111-8111-111111111111","executionContext":"LocalSystem","testId":"github-123-1","runId":"123","runAttempt":1,"sourceCommit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packageProfileSha256":"'||profile||'","packageContentSha256":"'||content||'","packagerCommit":"dddddddddddddddddddddddddddddddddddddddd","entries":[{"order":1,"packageIdentifier":"Microsoft.VCRedist.2015+.x64","version":"14.51.36247.0","architecture":"x64","sha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","exitCode":0,"classification":"installed"}]}';
+  preimage := '{"schemaVersion":1,"status":"recorded","candidateId":"79900000-0000-4000-8000-000000000001","executionContext":"LocalSystem","testId":"github-123-1","runId":"123","runAttempt":1,"sourceCommit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packageProfileSha256":"'||profile||'","packageContentSha256":"'||content||'","packagerCommit":"dddddddddddddddddddddddddddddddddddddddd","entries":[{"order":1,"packageIdentifier":"Microsoft.VCRedist.2015+.x64","version":"14.51.36247.0","architecture":"x64","sha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","exitCode":0,"classification":"installed"}]}';
   r := preimage::jsonb || jsonb_build_object('sha256',upper(encode(extensions.digest(preimage,'sha256'),'hex')));
   select count(*) into before_rows from public.catalog_file_reputation;
   if public.record_qa_dependency_receipt('local-fixture-only',cid,'124',1,content,r,'Passed') then raise exception 'Another run accepted';end if;

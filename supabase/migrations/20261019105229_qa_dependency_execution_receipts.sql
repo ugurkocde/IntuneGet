@@ -121,4 +121,3 @@ end;
 $$;
 revoke all on function public.record_qa_dependency_receipt(text,uuid,text,integer,text,jsonb,text) from public,anon,authenticated;
 grant execute on function public.record_qa_dependency_receipt(text,uuid,text,integer,text,jsonb,text) to anon,service_role;
-
