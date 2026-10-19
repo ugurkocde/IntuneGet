@@ -44,7 +44,8 @@ select '50000000-0000-4000-8000-000000000001',
  else '40000000-0000-4000-8000-000000000002'::uuid end,'awaiting_qa'
 where current_setting('qa.priority_case') in ('customer_ready','customer_fresh');
 -- An unelapsed analysis backoff must never receive the priority or a lease.
-update public.qa_vt_requests set reserved_at=now()-interval '5 minutes'
+update public.qa_vt_requests set reserved_at=now()-interval '5 minutes',
+ response_recorded_at=now()-interval '5 minutes'
 where operation='analysis_lookup' and current_setting('qa.priority_case')='backoff';
 do $$
 declare claim jsonb; expected text;
