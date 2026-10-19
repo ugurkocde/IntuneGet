@@ -47,6 +47,9 @@ import {
   QaGateNotPassedError,
   QaSecurityGateError,
   describeQaGateError,
+  isCoveredCleanReputation,
+  exactPayloadReputationQuery,
+  exactPayloadMaliciousQuery,
 } from './gate';
 
 const installerSha256 = 'A'.repeat(64);
@@ -934,4 +937,30 @@ describe('enforceQaGate', () => {
       })
     ).rejects.toBeInstanceOf(QaGateNotPassedError);
   });
+  it.each([
+    [null, false], [0, false], [1.5, false], [-1, false], [72, true],
+  ])('shares covered-clean engine coverage with demand: %j', async (engines, covered) => {
+    const row = { ...failedRow, outcome: 'Passed', virustotal_total_engines: engines };
+    expect(isCoveredCleanReputation(row)).toBe(covered);
+    getPackageResultMock.mockResolvedValue({ data: row, error: null });
+    const result = enforceQaGate({ wingetId: row.winget_id, version: row.tested_version,
+      architecture: row.architecture, installerSha256, requirePassed: true });
+    if (covered) await expect(result).resolves.toBeUndefined();
+    else await expect(result).rejects.toMatchObject({ details: { reason: 'reputation' } });
+  });
+  it('uses the exact same newest-row ordering without an outcome filter', async () => {
+    const builder: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'gte', 'order', 'limit']) builder[method] = vi.fn(() => builder);
+    builder.maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+    const client = { from: vi.fn(() => builder) };
+    const key = { wingetId: 'Example.App', version: '1.2.3', architecture: 'x64', installerSha256 };
+    await exactPayloadReputationQuery(client as never, key);
+    expect(builder.order).toHaveBeenNthCalledWith(1, 'tested_at_utc', { ascending: false });
+    expect(builder.order).toHaveBeenNthCalledWith(2, 'virustotal_scanned_at_utc', { ascending: false, nullsFirst: false });
+    expect(builder.eq).not.toHaveBeenCalledWith('outcome', expect.anything());
+    expect(builder.eq).toHaveBeenCalledWith('installer_sha256', installerSha256);
+    await exactPayloadMaliciousQuery(client as never, key);
+    expect(builder.gte).toHaveBeenCalledWith('virustotal_malicious', 1);
+  });
+
 });

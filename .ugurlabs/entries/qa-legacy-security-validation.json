@@ -1,0 +1,5 @@
+{
+  "title": "Resume validation when historical results lack security coverage",
+  "summary": "Waiting customer packages can request normal validation when historical installation results lack security coverage, while covered results and existing tests continue to be reused.",
+  "type": "fixed"
+}

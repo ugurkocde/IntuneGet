@@ -1,3 +1,5 @@
+import { exactPayloadMaliciousQuery, exactPayloadReputationQuery, isCoveredCleanReputation } from '@/lib/qa/gate';
+import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
@@ -193,8 +195,25 @@ export async function ensureQaDemand(
     .limit(1)
     .maybeSingle();
   if (resultError) throw new Error(`Could not read app-version QA result: ${resultError.message}`);
+  let refreshingLegacyPass = false;
   if (passedResult) {
-    return { identity, candidateId: null, state: 'passed' };
+    const key = { wingetId: input.wingetId, version: input.version, architecture, installerSha256 };
+    const { data: newest, error: reputationError } = await exactPayloadReputationQuery(supabase, key);
+    if (reputationError) throw new Error(`Could not read exact payload reputation: ${reputationError.message}`);
+    if (isCoveredCleanReputation(newest)) return { identity, candidateId: null, state: 'passed' };
+    const { data: malicious, error: maliciousError } = await exactPayloadMaliciousQuery(supabase, key);
+    if (maliciousError) throw new Error(`Could not read exact payload security: ${maliciousError.message}`);
+    // Uncovered historical evidence can request one normal run; adverse or
+    // unknown verdicts retain the existing gate decision and never queue work.
+    if (!newest || (malicious?.virustotal_malicious ?? 0) >= 1 ||
+        ![null, 'not_found', 'error', 'skipped', 'clean'].includes(newest.virustotal_status ?? null) ||
+        (newest.virustotal_malicious != null && newest.virustotal_malicious !== 0) ||
+        (newest.virustotal_suspicious != null && newest.virustotal_suspicious !== 0)) {
+      return { identity, candidateId: null, state: 'passed' };
+    }
+    const holds = await loadInstallerSecurityHolds(supabase, [installerSha256]);
+    if (holds.has(installerSha256.toLowerCase())) return { identity, candidateId: null, state: 'passed' };
+    refreshingLegacyPass = true;
   }
 
   // If the same payload is already queued or running, attach this upload to
@@ -229,26 +248,28 @@ export async function ensureQaDemand(
     return { identity, candidateId: activeCandidate.id, state: 'waiting' };
   }
 
-  const { data: failedResult, error: failedError } = await supabase
-    .from('qa_package_results')
-    .select('package_profile_sha256')
-    .eq('winget_id', input.wingetId)
-    .eq('tested_version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .eq('package_profile_sha256', profileSha256)
-    .eq('outcome', 'Failed')
-    .order('tested_at_utc', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (failedError) throw new Error(`Could not read failed app-version QA: ${failedError.message}`);
-  if (failedResult) {
-    return {
-      identity,
-      candidateId: null,
-      state: 'failed',
-      failureSummary: 'This app did not pass the isolated installation test.',
-    };
+  if (!refreshingLegacyPass) {
+    const { data: failedResult, error: failedError } = await supabase
+      .from('qa_package_results')
+      .select('package_profile_sha256')
+      .eq('winget_id', input.wingetId)
+      .eq('tested_version', input.version)
+      .eq('architecture', architecture)
+      .eq('installer_sha256', installerSha256)
+      .eq('package_profile_sha256', profileSha256)
+      .eq('outcome', 'Failed')
+      .order('tested_at_utc', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (failedError) throw new Error(`Could not read failed app-version QA: ${failedError.message}`);
+    if (failedResult) {
+      return {
+        identity,
+        candidateId: null,
+        state: 'failed',
+        failureSummary: 'This app did not pass the isolated installation test.',
+      };
+    }
   }
   const now = new Date().toISOString();
   const testConfig = buildQaDeploymentTestConfig(normalizedPackage, packageDependencies);
@@ -283,6 +304,13 @@ export async function ensureQaDemand(
   // The RPC resolves the winner using the same expressions as the unique index.
   if (outcome === 'active_conflict') {
     return { identity, candidateId: existing.id, state: 'waiting' };
+  }
+
+  // A historical pass never authorizes resetting a terminal candidate to
+  // obtain coverage. Preserve its existing hold and avoid repeated VM runs.
+  if (refreshingLegacyPass && !['queued', 'dispatched', 'running'].includes(existing.status) &&
+      !(existing.status === 'error' && existing.phase === 'publishing' && existing.github_run_id)) {
+    return { identity, candidateId: null, state: 'passed' };
   }
 
   if (existing.status === 'failed') {

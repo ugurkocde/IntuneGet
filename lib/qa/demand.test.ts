@@ -48,7 +48,7 @@ type QueryResult = {
 
 function query(result: QueryResult) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'in', 'contains', 'order', 'limit', 'update']) {
+  for (const method of ['select', 'eq', 'gte', 'is', 'in', 'contains', 'order', 'limit', 'update']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -1439,7 +1439,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
         if (table === 'qa_package_results') {
           return {
             select: vi.fn(() => query({
-              data: { package_profile_sha256: 'B'.repeat(64) },
+              data: { package_profile_sha256: 'B'.repeat(64), virustotal_status: 'clean', virustotal_malicious: 0, virustotal_suspicious: 0, virustotal_total_engines: 72 },
               error: null,
             })),
           };
@@ -1452,7 +1452,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
 
     expect(result.state).toBe('passed');
     expect(result.candidateId).toBeNull();
-    expect(client.from).toHaveBeenCalledTimes(1);
+    expect(client.from).toHaveBeenCalledTimes(2);
   });
 
   it('attaches another upload configuration to an active app-version test', async () => {
@@ -1593,4 +1593,121 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       onConflict: 'winget_id,version,architecture,installer_sha256',
     });
   });
+  describe('legacy covered-clean refresh', () => {
+    const clean = { virustotal_status: 'clean', virustotal_malicious: 0,
+      virustotal_suspicious: 0, virustotal_total_engines: 72 };
+    function fixture(newest: Record<string, unknown>, options: {
+      active?: Record<string, unknown>; existing?: Record<string, unknown>;
+      historicalMalicious?: boolean; hold?: boolean; oldFailed?: boolean; readError?: boolean;
+    } = {}) {
+      const updates: unknown[] = [];
+      const reads: { table: string; filters: Record<string, unknown> }[] = [];
+      const client = {
+        from: vi.fn((table: string) => {
+          const filters: Record<string, unknown> = {};
+          const builder: Record<string, unknown> = {};
+          reads.push({ table, filters });
+          for (const method of ['select', 'eq', 'gte', 'in', 'is', 'order', 'limit', 'update']) {
+            builder[method] = vi.fn((...args: unknown[]) => {
+              if (method === 'eq') filters[String(args[0])] = args[1];
+              if (method === 'gte') filters['gte:' + String(args[0])] = args[1];
+              if (method === 'update') updates.push(args[0]);
+              return builder;
+            });
+          }
+          const result = (): QueryResult => {
+            if (table === 'qa_candidates') return { data: options.active ?? null, error: null };
+            if (table === 'qa_installer_security_holds') return { data: options.hold ? [{
+              sha256: 'a'.repeat(64), next_check_at: '2099-01-01T00:00:00Z', malicious_verdicts: 1,
+            }] : [], error: null };
+            if (table !== 'qa_package_results') throw new Error('Unexpected table');
+            if (filters.outcome === 'Passed') return { data: { package_profile_sha256: 'B'.repeat(64) }, error: null };
+            if (filters.outcome === 'Failed') return { data: options.oldFailed ? { package_profile_sha256: 'B'.repeat(64) } : null, error: null };
+            if (filters['gte:virustotal_malicious'] === 1) return {
+              data: options.historicalMalicious ? { virustotal_malicious: 1, virustotal_total_engines: 71 } : null, error: null,
+            };
+            return options.readError ? { data: null, error: { message: 'unavailable' } } : { data: newest, error: null };
+          };
+          builder.maybeSingle = vi.fn(async () => result());
+          builder.then = (ok?: (r: QueryResult) => unknown, bad?: (e: unknown) => unknown) => Promise.resolve(result()).then(ok, bad);
+          return builder;
+        }),
+        rpc: vi.fn(async () => ({ data: { outcome: options.existing ? 'exact_conflict' : 'inserted',
+          candidate: options.existing ?? { id: 'fresh-candidate', status: 'queued' } }, error: null })),
+      };
+      return { client, updates, reads };
+    }
+    it.each([
+      { virustotal_status: null, virustotal_malicious: null, virustotal_suspicious: null, virustotal_total_engines: null },
+      { ...clean, virustotal_total_engines: null },
+    ])('queues one ordinary candidate for uncovered historical pass %j', async verdict => {
+      const { client, updates } = fixture(verdict);
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'waiting', candidateId: 'fresh-candidate' });
+      expect(client.rpc).toHaveBeenCalledWith('insert_qa_candidate_if_absent', { p_candidate: expect.objectContaining({ priority: 1000, demand_source: 'customer' }) });
+      expect(updates).toEqual([]);
+    });
+    it('reuses covered clean evidence without another lifecycle', async () => {
+      const { client } = fixture(clean);
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'passed', candidateId: null });
+      expect(client.rpc).not.toHaveBeenCalled();
+      expect(client.from.mock.calls.some(([table]) => table === 'qa_candidates')).toBe(false);
+    });
+    it.each([
+      [{ ...clean, virustotal_malicious: 1 }, {}],
+      [{ ...clean, virustotal_suspicious: 1 }, {}],
+      [{ ...clean, virustotal_status: 'flagged' }, {}],
+      [{ ...clean, virustotal_total_engines: null }, { historicalMalicious: true }],
+      [{ ...clean, virustotal_total_engines: null }, { hold: true }],
+    ])('preserves the security gate without queueing: %j', async (verdict, options) => {
+      const { client } = fixture(verdict, options);
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'passed', candidateId: null });
+      expect(client.rpc).not.toHaveBeenCalled();
+    });
+    it.each(['queued', 'dispatched', 'running'])('reuses an existing %s candidate', async status => {
+      const { client, updates } = fixture({ ...clean, virustotal_total_engines: null }, { active: { id: 'active', status, priority: 2000 } });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'waiting', candidateId: 'active' });
+      expect(client.rpc).not.toHaveBeenCalled(); expect(updates).toEqual([]);
+    });
+    it.each(['passed', 'failed', 'error', 'superseded'])('does not reset or attach a terminal %s collision', async status => {
+      const { client, updates } = fixture({ ...clean, virustotal_total_engines: null }, { existing: { id: 'terminal', status, priority: 2000 } });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'passed', candidateId: null });
+      expect(client.rpc).toHaveBeenCalledTimes(1); expect(updates).toEqual([]); expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    });
+    it('reuses a real completed run awaiting publication without reactivation', async () => {
+      const { client, updates } = fixture({ ...clean, virustotal_total_engines: null }, { existing: { id: 'publishing', status: 'error', phase: 'publishing', github_run_id: '12345', priority: 2000 } });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'waiting', candidateId: 'publishing' });
+      expect(updates).toEqual([]);
+    });
+    it('does not turn an older failed profile into a fresh customer failure', async () => {
+      const { client, reads } = fixture({ ...clean, virustotal_total_engines: null }, { oldFailed: true });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'waiting', candidateId: 'fresh-candidate' });
+      expect(reads.some(r => r.filters.outcome === 'Failed')).toBe(false);
+    });
+
+    it.each(['Awaiting diagnostic retest grant', 'Installer source quarantined before QA: MANIFEST_CHANGED.'])('keeps a terminal refusal inert: %s', async failure_summary => {
+      const { client, updates } = fixture({ ...clean, virustotal_total_engines: null }, { existing: { id: 'held', status: 'superseded', failure_summary, priority: 2000 } });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'passed', candidateId: null });
+      expect(updates).toEqual([]); expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    });
+    it('repeated demand attaches to the single newly queued validation', async () => {
+      const options: { active?: Record<string, unknown> } = {};
+      const { client } = fixture({ ...clean, virustotal_total_engines: null }, options);
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ candidateId: 'fresh-candidate', state: 'waiting' });
+      options.active = { id: 'fresh-candidate', status: 'queued', priority: 1000 };
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ candidateId: 'fresh-candidate', state: 'waiting' });
+      expect(client.rpc).toHaveBeenCalledTimes(1);
+    });
+    it('retains customer priority when attaching uncovered legacy demand', async () => {
+      const { client, updates } = fixture({ ...clean, virustotal_total_engines: null }, { active: { id: 'queued', status: 'queued', priority: 10 } });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ candidateId: 'queued', state: 'waiting' });
+      expect(updates).toEqual([expect.objectContaining({ priority: 1000, demand_source: 'customer' })]);
+      expect(client.rpc).not.toHaveBeenCalled();
+    });
+    it('fails closed on an unavailable newest reputation read', async () => {
+      const { client } = fixture(clean, { readError: true });
+      await expect(ensureQaDemand(client as never, demandInput())).rejects.toThrow('unavailable');
+      expect(client.rpc).not.toHaveBeenCalled();
+    });
+  });
+
 });

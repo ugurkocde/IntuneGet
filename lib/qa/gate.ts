@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getCatalogSource } from '@/lib/catalog';
 import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
@@ -8,6 +9,42 @@ import {
   type PackageCompatibilityBlockCode,
 } from '@/lib/package-eligibility';
 import type { QaClassification } from '@/types/qa';
+
+export interface ExactQaPayloadKey {
+  wingetId: string;
+  version: string;
+  architecture: string;
+  installerSha256: string;
+}
+
+export function isCoveredCleanReputation(row: {
+  virustotal_status?: unknown;
+  virustotal_malicious?: unknown;
+  virustotal_suspicious?: unknown;
+  virustotal_total_engines?: unknown;
+} | null | undefined): boolean {
+  return row?.virustotal_status === 'clean' && row.virustotal_malicious === 0 &&
+    row.virustotal_suspicious === 0 && typeof row.virustotal_total_engines === 'number' &&
+    Number.isInteger(row.virustotal_total_engines) && row.virustotal_total_engines > 0;
+}
+
+export function exactPayloadReputationQuery(client: SupabaseClient, key: ExactQaPayloadKey) {
+  return client.from('qa_package_results')
+    .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
+    .eq('winget_id', key.wingetId).eq('tested_version', key.version)
+    .eq('architecture', key.architecture).eq('installer_sha256', key.installerSha256)
+    .order('tested_at_utc', { ascending: false })
+    .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
+    .limit(1).maybeSingle();
+}
+
+export function exactPayloadMaliciousQuery(client: SupabaseClient, key: ExactQaPayloadKey) {
+  return client.from('qa_package_results').select('virustotal_malicious, virustotal_total_engines')
+    .eq('winget_id', key.wingetId).eq('tested_version', key.version)
+    .eq('architecture', key.architecture).eq('installer_sha256', key.installerSha256)
+    .gte('virustotal_malicious', 1).order('tested_at_utc', { ascending: false })
+    .limit(1).maybeSingle();
+}
 
 export class QaGateError extends Error {
   readonly code = 'QA_FAILED_CURRENT_VERSION' as const;
@@ -196,17 +233,9 @@ export async function enforceQaGate(input: {
   if (installerSha256) {
     let securityResult;
     try {
-      securityResult = await createServerClient()
-        .from('qa_package_results')
-        .select('virustotal_malicious, virustotal_total_engines')
-        .eq('winget_id', input.wingetId)
-        .eq('tested_version', input.version)
-        .eq('architecture', architecture)
-        .eq('installer_sha256', installerSha256)
-        .gte('virustotal_malicious', 1)
-        .order('tested_at_utc', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      securityResult = await exactPayloadMaliciousQuery(createServerClient(), {
+        wingetId: input.wingetId, version: input.version, architecture, installerSha256,
+      });
     } catch (error) {
       throw reputationHold(error);
     }
@@ -229,32 +258,15 @@ export async function enforceQaGate(input: {
   // packaging. QA owns public-installer submission and verdict refreshes.
   let reputationResult;
   try {
-    reputationResult = await createServerClient()
-      .from('qa_package_results')
-      .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
-      .eq('winget_id', input.wingetId)
-      .eq('tested_version', input.version)
-      .eq('architecture', architecture)
-      .eq('installer_sha256', installerSha256)
-      .order('tested_at_utc', { ascending: false })
-      .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
+    reputationResult = await exactPayloadReputationQuery(createServerClient(), {
+      wingetId: input.wingetId, version: input.version, architecture, installerSha256,
+    });
   } catch (error) {
     throw reputationHold(error);
   }
   const { data: reputationRow, error: reputationError } = reputationResult;
   if (reputationError) throw reputationHold(reputationError);
-  if (
-    reputationRow?.virustotal_status !== 'clean' ||
-    reputationRow.virustotal_malicious !== 0 ||
-    reputationRow.virustotal_suspicious !== 0 ||
-    typeof reputationRow.virustotal_total_engines !== 'number' ||
-    !Number.isInteger(reputationRow.virustotal_total_engines) ||
-    reputationRow.virustotal_total_engines <= 0
-  ) {
-    throw reputationHold();
-  }
+  if (!isCoveredCleanReputation(reputationRow)) throw reputationHold();
 
   if (!input.requirePassed && input.qaOverride) return;
 
