@@ -24,7 +24,7 @@ export async function prepareCuratedPublication({ gh, repo, branch, title, detai
   if (matches.some(match => match.base?.ref !== 'main')) throw new Error('Publication PR has an unexpected base.');
   if (matches.length > 1) throw new Error('Multiple publication PRs match the branch.');
   let pr = matches[0];
-  if (pr) await disarm(pr);
+  const priorHead = pr ? (await disarm(pr)).head?.sha : null;
   await push();
   const body = `${details}\n\nHead: \`${headSha}\`. Merge requires independent review of this exact revision and passing required checks.`;
   if (pr) await gh(['api', '-X', 'PATCH', `repos/${repo}/pulls/${pr.number}`, '--input', '-'], { input: JSON.stringify({ title, body }) });
@@ -32,11 +32,15 @@ export async function prepareCuratedPublication({ gh, repo, branch, title, detai
   pr = await disarm(pr);
   // GitHub may briefly report the previous head after a push. Retry only that
   // readback; closed PRs and armed or missing merge state still fail at once.
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // GitHub may still report the previous PR head after a successful push.
+  // Wait only for that known revision; an unrelated head is never accepted.
+  const readbackDelays = [2000, 4000, 8000, 15000, 15000, 15000, 15000, 15000, 15000, 15000];
+  for (let attempt = 0; attempt <= readbackDelays.length; attempt++) {
     if (pr.state !== 'open' || pr.auto_merge !== null) throw new Error('Publication auto merge state is unverified.');
     if (pr.head?.sha === headSha) return { number: pr.number, url: pr.html_url, headSha };
-    if (attempt === 4) break;
-    await wait(2000);
+    if (!priorHead || pr.head?.sha !== priorHead) throw new Error('Publication PR head moved to an unexpected revision.');
+    if (attempt === readbackDelays.length) break;
+    await wait(readbackDelays[attempt]);
     pr = await read(pr.number);
   }
   throw new Error('Publication PR head does not match the prepared revision.');

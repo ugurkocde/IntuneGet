@@ -81,20 +81,46 @@ describe('curated publication review handoff', () => {
   it('rejects a changed head after publication', async () => {
     const h = harness();
     h.push.mockImplementation(async () => { h.set({ ...pr, head: { sha: 'b'.repeat(40) } }); });
-    await expect(h.run()).rejects.toThrow('does not match');
+    await expect(h.run()).rejects.toThrow('unexpected revision');
     expect(h.spawn).not.toHaveBeenCalled();
-    expect(h.wait).toHaveBeenCalledTimes(4);
+    expect(h.wait).not.toHaveBeenCalled();
   });
   it('accepts the expected head after bounded GitHub propagation delay', async () => {
     const h = harness();
-    h.push.mockImplementation(async () => { h.set({ ...pr, head: { sha: 'b'.repeat(40) } }); });
+    h.set({ ...pr, head: { sha: 'c'.repeat(40) } });
     h.wait.mockImplementation(async () => { h.set({ ...pr }); });
     expect(await h.run()).toEqual({ number: 42, url: pr.html_url, headSha });
     expect(h.wait).toHaveBeenCalledExactlyOnceWith(2000);
   });
+  it('waits for the prior head beyond the initial propagation window without replaying writes', async () => {
+    const h = harness(true, true);
+    h.set({ ...pr, auto_merge: { merge_method: 'squash' }, head: { sha: 'c'.repeat(40) } });
+    h.wait.mockImplementation(async () => {
+      if (h.wait.mock.calls.length === 8) h.set({ ...pr });
+    });
+    expect(await h.run()).toEqual({ number: 42, url: pr.html_url, headSha });
+    expect(h.wait).toHaveBeenCalledTimes(8);
+    expect(h.push).toHaveBeenCalledTimes(1);
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+    expect(h.gh.mock.calls.filter(([args]) => args.includes('PATCH'))).toHaveLength(1);
+  });
+  it('fails closed after the bounded wait when the prior head never catches up', async () => {
+    const h = harness();
+    h.set({ ...pr, head: { sha: 'c'.repeat(40) } });
+    await expect(h.run()).rejects.toThrow('does not match');
+    expect(h.wait.mock.calls.map(([ms]) => ms)).toEqual([2000, 4000, 8000, 15000, 15000, 15000, 15000, 15000, 15000, 15000]);
+    expect(h.push).toHaveBeenCalledTimes(1);
+  });
+  it('stops immediately if the head changes to a third revision while waiting', async () => {
+    const h = harness();
+    h.set({ ...pr, head: { sha: 'c'.repeat(40) } });
+    h.wait.mockImplementation(async () => { h.set({ ...pr, head: { sha: 'b'.repeat(40) } }); });
+    await expect(h.run()).rejects.toThrow('unexpected revision');
+    expect(h.wait).toHaveBeenCalledTimes(1);
+  });
   it.each(['armed', 'omitted', 'closed'])('stops head readback immediately when merge state becomes %s', async state => {
     const h = harness();
-    h.push.mockImplementation(async () => { h.set({ ...pr, head: { sha: 'b'.repeat(40) } }); });
+    h.set({ ...pr, head: { sha: 'c'.repeat(40) } });
     h.wait.mockImplementation(async () => {
       h.set({ ...pr, state: state === 'closed' ? 'closed' : 'open', auto_merge: state === 'armed' ? {} : state === 'omitted' ? undefined : null } as never);
     });
