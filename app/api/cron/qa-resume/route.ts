@@ -560,6 +560,27 @@ export async function GET(request: Request) {
       resumed++;
     } catch (error) {
       const licenceRequired = error instanceof CuratedLicenceError;
+      // This typed failure is raised before dispatch. Ambiguous dispatch
+      // failures must retain the terminal path below rather than be replayed.
+      if (error instanceof InstallerPreflightError && error.retryable) {
+        const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
+          .from('packaging_jobs')
+          .update({
+            status: 'awaiting_qa',
+            status_message: 'Installer verification is temporarily unavailable. Packaging remains on hold.',
+            qa_completed_at: job.qa_completed_at ?? null,
+            packaging_started_at: null,
+            qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(),
+          })
+          .eq('id', job.id)
+          .eq('status', 'packaging')
+          .is('github_run_id', null))
+          .select('id')
+          .maybeSingle();
+        if (holdError) throw holdError;
+        if (heldJob) held++;
+        continue;
+      }
       const { data: failedJob } = await supabase
         .from('packaging_jobs')
         .update({

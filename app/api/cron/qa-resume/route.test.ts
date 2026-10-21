@@ -1221,6 +1221,118 @@ describe('GET /api/cron/qa-resume', () => {
     expect(client.from).not.toHaveBeenCalledWith('qa_package_results');
   });
 
+  describe('dispatch preflight retry', () => {
+    function setup() {
+      getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+      const store = jobStore({
+        id: 'retry-job', tenant_id: 'tenant-test', status: 'awaiting_qa',
+        winget_id: 'Example.App', display_name: 'Example App', version: '1.0',
+        installer_type: 'exe', install_command: 'installer.exe /silent',
+        installer_url: 'https://example.test/installer.exe',
+        qa_candidate_id: 'passed-candidate', execution_profile_sha256: 'B'.repeat(64),
+        installer_sha256: 'A'.repeat(64), architecture: 'x64', github_run_id: null,
+        qa_completed_at: '2026-10-01T00:00:00Z', packaging_started_at: null,
+        package_config: { installerSha256: 'A'.repeat(64), architecture: 'x64' },
+      });
+      let reading = true;
+      createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          if (reading) { reading = false; return chain({ data: [structuredClone(store.row)], error: null }); }
+          return store.updateQuery();
+        }
+        if (table === 'qa_candidates') return chain({ data: {
+          id: 'passed-candidate', status: 'passed', package_profile_sha256: 'B'.repeat(64),
+        }, error: null });
+        if (table === 'qa_package_results') return chain({ data: { outcome: 'Passed' }, error: null });
+        throw new Error('Unexpected table');
+      }) });
+      const run = async () => {
+        reading = true;
+        return GET(new Request('https://example.test/api/cron/qa-resume', {
+          headers: { authorization: 'Bearer secret' },
+        }));
+      };
+      return { store, run };
+    }
+
+    it.each([null, '2026-10-01T00:00:00Z'])('holds a retryable preflight failure and restores QA completion %s', async priorCompletion => {
+      const { store, run } = setup();
+      store.row.qa_completed_at = priorCompletion;
+      triggerPackagingWorkflowMock.mockRejectedValue(new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true));
+      const started = Date.now();
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0, resumed: 0 });
+      expect(store.row).toMatchObject({ status: 'awaiting_qa', qa_completed_at: priorCompletion, packaging_started_at: null, github_run_id: null });
+      expect(Date.parse(store.row.qa_resume_due_at as string)).toBeGreaterThanOrEqual(started + 60_000);
+      expect(Date.parse(store.row.qa_resume_due_at as string)).toBeLessThanOrEqual(Date.now() + 60_000);
+      for (const key of ['completed_at', 'error_code', 'error_message']) expect(store.row).not.toHaveProperty(key);
+      expect(JSON.stringify(store.row)).not.toContain('socket hang up');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
+    });
+
+    it.each(['status', 'github_run_id', 'qa_candidate_id', 'installer_sha256', 'architecture', 'config hash', 'config architecture'])('does not roll back concurrent %s changes', async field => {
+      const { store, run } = setup();
+      let concurrent: Record<string, unknown>;
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        if (field === 'config hash') (store.row.package_config as Record<string, unknown>).installerSha256 = 'C'.repeat(64);
+        else if (field === 'config architecture') (store.row.package_config as Record<string, unknown>).architecture = 'arm64';
+        else store.row[field] = field === 'status' ? 'cancelled' : field === 'github_run_id' ? '123' : 'changed';
+        concurrent = structuredClone(store.row);
+        throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true);
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0, resumed: 0 });
+      expect(store.row).toEqual(concurrent!);
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a rollback database error without terminalizing the job', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        vi.spyOn(store, 'updateQuery').mockReturnValueOnce(chain({ data: null, error: new Error('synthetic rollback failure') }));
+        throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true);
+      });
+      await expect(run()).rejects.toThrow('synthetic rollback failure');
+      expect(store.row.status).toBe('packaging');
+      expect(store.row).not.toHaveProperty('completed_at');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      new InstallerPreflightError('MANIFEST_CHANGED', 'manifest changed'),
+      new InstallerPreflightError('INSTALLER_QUARANTINED', 'quarantined'),
+      new Error('socket hang up'),
+    ])('keeps nonretryable or ambiguous dispatch errors terminal: %s', async error => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValue(error);
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 1 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'QA_RESUME_DISPATCH_FAILED', error_message: error.message });
+      expect(store.row.completed_at).toEqual(expect.any(String));
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith('retry-job', 'failed', error.message);
+    });
+
+    it('rechecks upstream, QA and approval gates before another preflight attempt', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValue(new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true));
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+      enforceQaGateMock.mockRejectedValueOnce(new Error('synthetic temporary QA evidence outage'));
+      expect(await (await run()).json()).toMatchObject({ waiting: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+      findPendingApprovalBlocksMock.mockResolvedValueOnce([{ reason: 'release_check_failed', message: 'Approval pending' }]);
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(2);
+      expect(holdCustomerUpstreamJob).toHaveBeenCalledTimes(5);
+      expect(enforceQaGateMock).toHaveBeenCalledTimes(4);
+      expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(3);
+      expect(store.row.status).toBe('awaiting_qa');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('finalizes auto-update tracking when packaging dispatch fails after QA passes', async () => {
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     triggerPackagingWorkflowMock.mockRejectedValue(new Error('GitHub dispatch unavailable'));
