@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "39357939085",
+    "websiteCommit": "e641821586f828047efab40c2d146a6dfb98a042",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runAttempt": "1",
+    "workflowCommit": "c0277cc018cf6aede9be5f4160f2587c0b142a36"
+  },
+  "candidate": {
+    "appId": "go",
+    "version": "1.27.3",
+    "installerUrl": "https://dl.google.com/go/go1.27.3.windows-amd64.msi",
+    "vendorSha256": "89ec8325f667c674fe1b94a5a88e26932aa12323589881927ff54da99d4b7faa",
+    "releaseNotesUrl": "https://go.dev/doc/devel/release",
+    "discoveredAt": "2026-10-20T01:52:37.477Z",
+    "id": "221c80d1c9d99baa58c813dc"
+  },
+  "previous": {
+    "appId": "go",
+    "version": "1.27.2",
+    "installerUrl": "https://dl.google.com/go/go1.27.2.windows-amd64.msi",
+    "vendorSha256": "dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9",
+    "releaseNotesUrl": "https://go.dev/doc/devel/release",
+    "discoveredAt": "2026-10-08T15:48:40.421Z",
+    "id": "32d084ecf2a089e3ea4a10f9"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "221c80d1c9d99baa58c813dc",
+      "installerSha256": "89ec8325f667c674fe1b94a5a88e26932aa12323589881927ff54da99d4b7faa",
+      "sourceUrl": "https://dl.google.com/go/go1.27.3.windows-amd64.msi",
+      "finalOrigin": "https://dl.google.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Google LLC"
+      },
+      "security": {
+        "suspicious": 0,
+        "scannedAt": "2026-10-20T02:22:13.6845339Z",
+        "signatureVersion": "1.461.112.0",
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "89ec8325f667c674fe1b94a5a88e26932aa12323589881927ff54da99d4b7faa",
+        "engineVersion": "1.1.26090.9",
+        "malicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "32d084ecf2a089e3ea4a10f9",
+      "installerSha256": "dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9",
+      "sourceUrl": "https://dl.google.com/go/go1.27.2.windows-amd64.msi",
+      "finalOrigin": "https://dl.google.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Google LLC"
+      },
+      "security": {
+        "suspicious": 0,
+        "scannedAt": "2026-10-20T02:22:21.3547738Z",
+        "signatureVersion": "1.461.112.0",
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9",
+        "engineVersion": "1.1.26090.9",
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "221c80d1c9d99baa58c813dc",
+    "packageId": "IntuneGet.Curated.Go",
+    "installerUrl": "https://dl.google.com/go/go1.27.3.windows-amd64.msi",
+    "installerSha256": "89ec8325f667c674fe1b94a5a88e26932aa12323589881927ff54da99d4b7faa",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Go",
+      "displayName": "Go",
+      "publisher": "Google LLC",
+      "version": "1.27.3",
+      "architecture": "x64",
+      "installerSha256": "89ec8325f667c674fe1b94a5a88e26932aa12323589881927ff54da99d4b7faa",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Go",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Go\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.27.3\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Go\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.27.3\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "42E9C6E24797C3F5AC1CB5EBD7A16DC065E0DAE2C17D1033468DAA591548FE2C",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Go\",\"publisher\":\"IntuneGet QA\",\"version\":\"1.27.3\",\"wingetId\":\"IntuneGet.Curated.Go\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.27.3\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Go\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"4368B5CAE7B87D30756AEC367C9B8D8FBA14D3D8C9AC44629CD32BF94CA48D0F\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"89EC8325F667C674FE1B94A5A88E26932AA12323589881927FF54DA99D4B7FAA\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Go\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.27.3\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Go\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"33ECA87002FC886287B044B7E94CBA32056A0F0DD01997BA2C228F944EAB62D4\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "33eca87002fc886287b044b7e94cba32056a0f0dd01997ba2c228f944eab62d4",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testedAt": "2026-10-20T02:30:55.2735434Z",
+    "candidateId": "221c80d1c9d99baa58c813dc",
+    "previousInstallerSha256": "dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9",
+    "architecture": "x64",
+    "upgradeFromVersion": "1.27.2",
+    "installerSha256": "89ec8325f667c674fe1b94a5a88e26932aa12323589881927ff54da99d4b7faa",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "executionProfileSha256": "42E9C6E24797C3F5AC1CB5EBD7A16DC065E0DAE2C17D1033468DAA591548FE2C",
+    "installerVersion": "1.27.3"
+  },
+  "verifiedAt": "2026-10-20T02:31:03.1623592Z",
+  "authenticatedArtifact": {
+    "id": 12236099906,
+    "sha256": "2871939fae6579666897a5365e71f242e2828646844ffd21710e57fb2dc90189"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-22T20:23:26.791Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
