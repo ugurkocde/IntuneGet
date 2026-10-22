@@ -308,9 +308,11 @@ describe('SnapshotCatalogSource', () => {
     '%s does not throw for corrupt SQLite JSON text', async (method) => {
       const writable = new Database(dbPath);
       try {
-        writable.prepare('UPDATE version_history SET installers = ? WHERE winget_id = ?')
-          .run('{invalid', 'Example.Malformed');
-        expect(await source[method]('Example.Malformed', '1.0')).toBeNull();
+        for (const value of ['{invalid', '', ' ']) {
+          writable.prepare('UPDATE version_history SET installers = ? WHERE winget_id = ?')
+            .run(value, 'Example.Malformed');
+          expect(await source[method]('Example.Malformed', '1.0')).toBeNull();
+        }
       } finally {
         writable.prepare('UPDATE version_history SET installers = ? WHERE winget_id = ?')
           .run(JSON.stringify('{invalid'), 'Example.Malformed');

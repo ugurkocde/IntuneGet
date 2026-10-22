@@ -52,7 +52,7 @@ type DB = BetterSqlite3.Database;
 function readSnapshotInstallers(value: string | null): { installers: unknown[] | null } | null {
   try {
     // SQLite encodes every JSONB value once, including legacy JSONB strings.
-    return { installers: normalizeStoredInstallers(value ? JSON.parse(value) : null) };
+    return { installers: normalizeStoredInstallers(value !== null ? JSON.parse(value) : null) };
   } catch {
     return null;
   }
