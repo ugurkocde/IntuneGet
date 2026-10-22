@@ -1,4 +1,5 @@
 import { enrichRelease, type ReleaseMetadata, type FileReputation } from './release-enrichment';
+import { normalizeStoredInstallers } from './stored-installers';
 import type { CatalogRelease, ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * SQLite-snapshot-backed CatalogSource (self-hosted / Supabase-less mode).
@@ -47,6 +48,15 @@ import type {
 } from './types';
 
 type DB = BetterSqlite3.Database;
+
+function readSnapshotInstallers(value: string | null): { installers: unknown[] | null } | null {
+  try {
+    // SQLite encodes every JSONB value once, including legacy JSONB strings.
+    return { installers: normalizeStoredInstallers(value ? JSON.parse(value) : null) };
+  } catch {
+    return null;
+  }
+}
 
 const qaTableAvailability = new WeakMap<object, boolean>();
 const REQUIRED_QA_COLUMNS = [
@@ -565,13 +575,15 @@ export class SnapshotCatalogSource implements CatalogSource {
           | undefined;
 
         if (!row) return null;
+        const metadata = readSnapshotInstallers(row.installers);
+        if (!metadata) return null;
         return {
           installer_url: row.installer_url,
           installer_sha256: row.installer_sha256,
           installer_type: row.installer_type,
           installer_scope: row.installer_scope,
           silent_args: row.silent_args,
-          installers: row.installers ? JSON.parse(row.installers) : null,
+          installers: metadata.installers,
         };
       },
       () => null
@@ -604,13 +616,15 @@ export class SnapshotCatalogSource implements CatalogSource {
           | undefined;
 
         if (!row) return null;
+        const metadata = readSnapshotInstallers(row.installers);
+        if (!metadata) return null;
         return {
           installer_url: row.installer_url,
           installer_sha256: row.installer_sha256,
           installer_type: row.installer_type,
           installer_scope: row.installer_scope,
           silent_args: row.silent_args,
-          installers: row.installers ? JSON.parse(row.installers) : null,
+          installers: metadata.installers,
         };
       },
       () => null

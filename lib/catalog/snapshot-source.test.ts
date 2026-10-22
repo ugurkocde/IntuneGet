@@ -89,6 +89,16 @@ const curatedApps = [
 
 const versionHistory = [
   {
+    winget_id: 'Example.Legacy',
+    version: '1.0',
+    installers: JSON.stringify([{ Architecture: 'x64', Scope: 'machine', InstallerSha256: 'A'.repeat(64) }]),
+  },
+  {
+    winget_id: 'Example.Malformed',
+    version: '1.0',
+    installers: '{invalid',
+  },
+  {
     winget_id: 'Google.Chrome',
     version: '120.0',
     installer_url: 'https://x/chrome.msi',
@@ -280,6 +290,34 @@ describe('SnapshotCatalogSource', () => {
     const info = await source.getLatestVersionInstallerInfo('Google.Chrome', '119.0');
     expect(info?.installer_url).toBe('https://x/chrome119.msi');
   });
+
+  it.each(['getVersionInstallerInfo', 'getLatestVersionInstallerInfo'] as const)(
+    '%s restores a legacy string through the real snapshot builder', async (method) => {
+      const info = await source[method]('Example.Legacy', '1.0');
+      expect(info?.installers).toEqual([{ Architecture: 'x64', Scope: 'machine', InstallerSha256: 'A'.repeat(64) }]);
+    }
+  );
+
+  it.each(['getVersionInstallerInfo', 'getLatestVersionInstallerInfo'] as const)(
+    '%s leaves malformed metadata unavailable', async (method) => {
+      expect((await source[method]('Example.Malformed', '1.0'))?.installers).toBeNull();
+    }
+  );
+
+  it.each(['getVersionInstallerInfo', 'getLatestVersionInstallerInfo'] as const)(
+    '%s does not throw for corrupt SQLite JSON text', async (method) => {
+      const writable = new Database(dbPath);
+      try {
+        writable.prepare('UPDATE version_history SET installers = ? WHERE winget_id = ?')
+          .run('{invalid', 'Example.Malformed');
+        expect(await source[method]('Example.Malformed', '1.0')).toBeNull();
+      } finally {
+        writable.prepare('UPDATE version_history SET installers = ? WHERE winget_id = ?')
+          .run(JSON.stringify('{invalid'), 'Example.Malformed');
+        writable.close();
+      }
+    }
+  );
 
   it('getInstallationChangelog returns null (not shipped in snapshot)', async () => {
     expect(await source.getInstallationChangelog('Google.Chrome')).toBeNull();

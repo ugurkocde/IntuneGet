@@ -1,4 +1,5 @@
 import { loadReleaseMetadata, releasePairKey } from './release-metadata';
+import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
@@ -461,7 +462,8 @@ export class SupabaseCatalogSource implements CatalogSource {
       return null;
     }
 
-    return data as unknown as VersionInstallerInfo;
+    const info = data as unknown as VersionInstallerInfo;
+    return { ...info, installers: normalizeStoredInstallers(info.installers) };
   }
 
   async getLatestVersionInstallerInfo(
@@ -483,7 +485,8 @@ export class SupabaseCatalogSource implements CatalogSource {
       return null;
     }
 
-    return data as unknown as VersionInstallerInfo;
+    const info = data as unknown as VersionInstallerInfo;
+    return { ...info, installers: normalizeStoredInstallers(info.installers) };
   }
 
   async getInstallationChangelog(
