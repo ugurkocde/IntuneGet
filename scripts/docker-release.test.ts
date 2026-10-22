@@ -139,7 +139,7 @@ describe('release gates', () => {
   it('keeps release package versions and maintained release notes consistent', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
     const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'))
-    expect(pkg.version).toBe('0.8.2')
+    expect(pkg.version).toBe('0.8.3')
     expect(lock.version).toBe(pkg.version)
     expect(lock.packages[''].version).toBe(pkg.version)
     expect(readFileSync(`release-notes/v${pkg.version}.md`, 'utf8')).toContain('Windows Docker Desktop confirmation')
