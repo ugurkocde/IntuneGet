@@ -1,0 +1,5 @@
+{
+  "title": "Application framework security update",
+  "summary": "Updated the application framework to address published security vulnerabilities affecting the web service.",
+  "type": "maintenance"
+}
