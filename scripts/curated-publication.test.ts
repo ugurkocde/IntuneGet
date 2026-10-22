@@ -1,5 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
-import { prepareCuratedPublication } from './curated-publication.mjs';
+import { createCuratedGitRunner, prepareCuratedPublication } from './curated-publication.mjs';
+
+describe('curated Git authentication', () => {
+  const token = 'synthetic-test-credential';
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  it('authenticates a push through child environment only', () => {
+    const spawn = vi.fn((_command: string, _args: string[], _options: { encoding: string; env: Record<string, string> }) => ({ status: 0, stdout: ' pushed\n' }));
+    const environment = { GH_TOKEN: token, PATH: 'kept', GIT_TRACE: '1', GIT_TRACE_CURL: '1', GIT_TRACE2_EVENT: 'trace-file', GIT_CURL_VERBOSE: '1', GIT_CONFIG_COUNT: '8' };
+    const git = createCuratedGitRunner({ environment, spawn });
+    const args = ['push', '--force', 'https://github.com/ugurkocde/IntuneGet.git', 'HEAD:refs/heads/automation/curated-catalog'];
+    expect(git(...args)).toBe('pushed');
+    const [command, actualArgs, options] = spawn.mock.calls[0];
+    expect(command).toBe('git');
+    expect(actualArgs).toEqual(args);
+    expect(JSON.stringify(actualArgs)).not.toContain(token);
+    expect(JSON.stringify(actualArgs)).not.toContain(basic);
+    expect(options.env).toMatchObject({ PATH: 'kept', GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader', GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`, GIT_CONFIG_KEY_1: 'credential.helper', GIT_CONFIG_VALUE_1: '', GIT_TERMINAL_PROMPT: '0' });
+    for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_TRACE2_EVENT', 'GIT_CURL_VERBOSE']) expect(options.env).not.toHaveProperty(key);
+    expect(environment.GH_TOKEN).toBe(token);
+    expect(environment.GIT_TRACE).toBe('1');
+  });
+  it.each([undefined, '', 'bad\nheader', 'bad token'])('refuses unavailable or malformed credentials before Git runs', (credential) => {
+    const spawn = vi.fn();
+    expect(() => createCuratedGitRunner({ environment: { GH_TOKEN: credential }, spawn })).toThrow('authentication is unavailable');
+    expect(spawn).not.toHaveBeenCalled();
+  });
+  it.each([1, null])('does not echo failed process diagnostics for status %s', (status) => {
+    const spawn = vi.fn(() => ({ status, stdout: token, stderr: basic }));
+    const git = createCuratedGitRunner({ environment: { GH_TOKEN: token }, spawn });
+    expect(() => git('push')).toThrow(/^Git command failed\.$/);
+  });
+});
 
 const headSha = 'a'.repeat(40);
 const pr = { number: 42, html_url: 'https://github.com/ugurkocde/IntuneGet/pull/42', state: 'open', auto_merge: null, head: { sha: headSha }, base: { ref: 'main' } };
