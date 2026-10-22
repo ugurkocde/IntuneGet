@@ -449,6 +449,11 @@ def contracts():
     assert untouched == value("select jsonb_agg(pg_get_functiondef(oid) order by proname) from pg_proc where oid in ('public.claim_qa_vt_dependency_recheck(text)'::regprocedure,'public.complete_qa_vt_dependency_recheck(text,uuid,integer,timestamp with time zone,integer,integer,integer,timestamp with time zone)'::regprocedure)")
     print('PASS receipt-bound admission, zero unreceipted calls, latest attempt, full lookup contracts and unchanged ACL/claim/complete')
 
+    cadence = (ROOT/'supabase/tests/qa_installer_recheck_customer_cadence.sql').read_text()
+    denied(cadence, 'No-demand hash rechecked before seven days', role='fixture_owner')
+    sql(migration('20261022132553_qa_installer_recheck_customer_cadence'))
+    sql(cadence)
+    print('PASS weekly no-demand cadence and next-pass daily customer restoration')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
