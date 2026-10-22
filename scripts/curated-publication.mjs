@@ -1,6 +1,30 @@
 import { spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
+// Keep Git authentication out of process arguments and persistent Git config.
+export function createCuratedGitRunner({ environment = process.env, spawn = spawnSync } = {}) {
+  const token = environment.GH_TOKEN;
+  if (typeof token !== 'string' || !token || /\s/.test(token)) throw new Error('Git authentication is unavailable.');
+  const env = {
+    ...environment,
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+    GIT_CONFIG_KEY_1: 'credential.helper',
+    GIT_CONFIG_VALUE_1: '',
+    GIT_TERMINAL_PROMPT: '0',
+  };
+  for (const key of Object.keys(env)) {
+    if (/^GIT_TRACE/i.test(key) || key.toUpperCase() === 'GIT_CURL_VERBOSE' || ['GH_TOKEN', 'GITHUB_TOKEN'].includes(key.toUpperCase())) delete env[key];
+  }
+  return (...args) => {
+    const result = spawn('git', args, { encoding: 'utf8', env });
+    // Git diagnostics can contain authentication material; do not echo them.
+    if (result.status !== 0) throw new Error('Git command failed.');
+    return result.stdout.trim();
+  };
+}
+
 // Disarm the old head before replacing it. Never leave GitHub responsible for
 // merging a later head that has not received its own final patch review.
 export async function prepareCuratedPublication({ gh, repo, branch, title, details, headSha, push, spawn = spawnSync, wait = delay }) {
