@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-23T22:21:52.921Z",
-    "expiresAt": "2026-10-30T22:21:52.921Z",
+    "generatedAt": "2026-10-23T23:20:45.442Z",
+    "expiresAt": "2026-10-30T23:20:45.442Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -8037,10 +8037,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mongodb-compass/063af8fdeca774e9d9d75e7c.json"
           }
         }
+      },
+      {
+        "id": "obs-studio:3a2aab71bd06369f1e3593d3",
+        "candidate": {
+          "appId": "obs-studio",
+          "version": "33.0.0",
+          "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/33.0.0/OBS-Studio-33.0.0-Windows-x64-Installer.exe",
+          "vendorSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+          "releaseNotesUrl": "https://github.com/obsproject/obs-studio/releases/tag/33.0.0",
+          "discoveredAt": "2026-10-23T22:20:47.796Z",
+          "id": "3a2aab71bd06369f1e3593d3"
+        },
+        "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+        "executionProfileSha256": "9C482D549B5E054B923BAE0318555A95A312123AB550BA0DA8CF45B6CD1832B0",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-23T23:20:45.442Z",
+        "evidence": {
+          "verifiedAt": "2026-10-23T22:53:14.2842770Z",
+          "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+          "installerVersion": "33.0.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "OBS Project, LLC"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "0eeb55021d75b17c1e7715d5dfc73bc47a35b22f",
+            "websiteCommit": "80bd2dac2df1e701c5700aa29a560620079492f1",
+            "runId": "40034820353",
+            "runAttempt": 1,
+            "artifactId": "12537610343",
+            "artifactSha256": "104af0358c081b184a537a0e984ccad522db51ab25760481f72edfba48d23968"
+          },
+          "security": {
+            "scannedAt": "2026-10-23T22:49:18.6066868Z",
+            "suspicious": 0,
+            "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+            "engineVersion": "1.1.26090.9",
+            "malicious": 0,
+            "status": "clean",
+            "scanner": "defender",
+            "signatureVersion": "1.461.171.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json"
+          },
+          "qa": {
+            "executionProfileSha256": "9C482D549B5E054B923BAE0318555A95A312123AB550BA0DA8CF45B6CD1832B0",
+            "upgradeFromVersion": "32.2.2",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "candidateId": "3a2aab71bd06369f1e3593d3",
+            "architecture": "x64",
+            "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+            "executionContext": "LocalSystem",
+            "testedAt": "2026-10-23T22:53:05.8793899Z",
+            "testLevel": "psadt-package",
+            "installerVersion": "33.0.0",
+            "previousInstallerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "K+YDTdg+4w36I9FXMaNlLZMI+rt6LFfMvuHS9DOzw7uBTib3pj6Y+l40MKK9+B+VLcVkqtda+j3vV7Cw8FVWBw=="
+  "signature": "MY8m5WGXEA1orhlVWJTuXqf7Rmp2o5Hb4sIVLZ24Kz9XBBwbJyhSR//p6XyPLUtrsgQDanxgG7Lfbn8d9sIBCw=="
 }
