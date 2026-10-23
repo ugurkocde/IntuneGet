@@ -474,6 +474,9 @@ def contracts():
     sql(migration('20261023022120_qa_vt_active_candidate_completion'))
     assert completion_acl == value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.complete_qa_vt_metadata_recheck(text,uuid,integer,timestamptz,integer,integer,integer,timestamptz)'::regprocedure")
     sql(active)
+    sql((ROOT/'supabase/tests/qa_vt_analysis_record_refresh.sql').read_text())
+    sql((ROOT/'supabase/tests/qa_vt_terminal_metadata_admission.sql').read_text())
+    print('PASS post-migration terminal and metadata completion regression fixtures')
     print('PASS active exact lookup, replay/binding refusals, monotonic evidence, publication trigger, holds and unchanged ACL')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 

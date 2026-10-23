@@ -65,6 +65,8 @@ begin
   perform public.complete_qa_vt_metadata_recheck('local-fixture-only',rid,200,null,0,0,61,analysis);
   if not exists(select 1 from public.catalog_file_reputation where sha256=h and total_engines=70)
     then raise exception 'Newer evidence overwritten';end if;
+  if not exists(select 1 from public.qa_vt_requests where id=rid and response_recorded_at is not null)
+    then raise exception 'Newer qualified response was not consumed';end if;
   update public.qa_vt_requests set response_recorded_at=null where id=rid;
   update public.catalog_file_reputation set engine_count_version=1,total_engines=null where sha256=h;
   rejected:=false;
