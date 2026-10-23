@@ -454,6 +454,27 @@ def contracts():
     sql(migration('20261022132553_qa_installer_recheck_customer_cadence'))
     sql(cadence)
     print('PASS weekly no-demand cadence and next-pass daily customer restoration')
+    active = (ROOT/'supabase/tests/qa_vt_active_candidate_completion.sql').read_text()
+    legacy = migration('20260910224600_correct_virustotal_engine_counts')
+    legacy = 'CREATE OR REPLACE FUNCTION public.cache_qa_file_reputation' + legacy.split('CREATE OR REPLACE FUNCTION public.cache_qa_file_reputation', 1)[1].split('REVOKE ALL ON FUNCTION public.cache_qa_file_reputation', 1)[0]
+    prefix = """begin;
+      alter table public.catalog_file_reputation add column if not exists queued_at timestamptz, add column if not exists priority integer,
+        add column if not exists lease_token uuid, add column if not exists lease_expires_at timestamptz, add column if not exists attempts integer;
+      create temporary table qa_result_publication_fixture(installer_sha256 text,virustotal_status text,
+        virustotal_malicious integer,virustotal_suspicious integer,virustotal_scanned_at_utc timestamptz,tested_at_utc timestamptz);
+      """ + legacy + """
+      create trigger cache_fixture after insert on qa_result_publication_fixture
+        for each row execute function public.cache_qa_file_reputation();
+      """
+    active = active.replace('begin;', prefix, 1)
+    before = sql(active, check=False)
+    assert before.returncode != 0 and 'QA terminal response identity rejected' in before.stderr
+    print('PASS old source rejects active same-lookup persistence regression')
+    completion_acl = value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.complete_qa_vt_metadata_recheck(text,uuid,integer,timestamptz,integer,integer,integer,timestamptz)'::regprocedure")
+    sql(migration('20261023022120_qa_vt_active_candidate_completion'))
+    assert completion_acl == value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.complete_qa_vt_metadata_recheck(text,uuid,integer,timestamptz,integer,integer,integer,timestamptz)'::regprocedure")
+    sql(active)
+    print('PASS active exact lookup, replay/binding refusals, monotonic evidence, publication trigger, holds and unchanged ACL')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
