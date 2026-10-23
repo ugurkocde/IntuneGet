@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-22T20:23:26.791Z",
-    "expiresAt": "2026-10-29T20:23:26.791Z",
+    "generatedAt": "2026-10-22T22:20:56.315Z",
+    "expiresAt": "2026-10-29T22:20:56.315Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -7509,10 +7509,186 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/qbittorrent/d08bacfb12cc14e995439659.json"
           }
         }
+      },
+      {
+        "id": "git:acf8d896f3704134c5deb887",
+        "candidate": {
+          "appId": "git",
+          "version": "2.56.0.3",
+          "installerUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.3/Git-2.56.0.3-64-bit.exe",
+          "vendorSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+          "releaseNotesUrl": "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3",
+          "discoveredAt": "2026-10-22T19:18:34.841Z",
+          "id": "acf8d896f3704134c5deb887"
+        },
+        "installerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+        "executionProfileSha256": "BAEEF7F4209EAC17BF3C0300B3AEC8D78B63896A80EC1B67189EC693601B7EE5",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-22T22:20:56.315Z",
+        "evidence": {
+          "verifiedAt": "2026-10-22T21:47:56.7399677Z",
+          "installerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+          "installerVersion": "2.56.0.3",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/acf8d896f3704134c5deb887.json",
+          "signature": {
+            "publisher": "Johannes Schindelin",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "c64309ccc8cd80574617548c3d0c812ad10abe3f",
+            "websiteCommit": "9b662524287c262a7ae56c2d3e94854a030c8538",
+            "runId": "39858905883",
+            "runAttempt": 1,
+            "artifactId": "12460678320",
+            "artifactSha256": "602702f5db6a07bfd78d75d9c32821d634a93453785c68c67b46527dc7601c79"
+          },
+          "security": {
+            "scannedAt": "2026-10-22T21:44:12.1646846Z",
+            "malicious": 0,
+            "signatureVersion": "1.461.155.0",
+            "suspicious": 0,
+            "installerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+            "status": "clean",
+            "scanner": "defender",
+            "engineVersion": "1.1.26090.9",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/acf8d896f3704134c5deb887.json"
+          },
+          "qa": {
+            "executionProfileSha256": "BAEEF7F4209EAC17BF3C0300B3AEC8D78B63896A80EC1B67189EC693601B7EE5",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+            "executionContext": "LocalSystem",
+            "testLevel": "psadt-package",
+            "upgradeFromVersion": "2.56.0.2",
+            "testedAt": "2026-10-22T21:47:46.7427677Z",
+            "installerVersion": "2.56.0.3",
+            "architecture": "x64",
+            "previousInstallerSha256": "52188f917b378f00c70ec136bcf090005f30d44fbc4eba0bce759cc6592d60f6",
+            "candidateId": "acf8d896f3704134c5deb887",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/acf8d896f3704134c5deb887.json"
+          }
+        }
+      },
+      {
+        "id": "aws-cli:45a9bc3e6822edfeeeacdfbb",
+        "candidate": {
+          "appId": "aws-cli",
+          "version": "2.38.5",
+          "installerUrl": "https://awscli.amazonaws.com/AWSCLIV2-2.38.5.msi",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://aws.amazon.com/cli/",
+          "discoveredAt": "2026-10-22T19:18:37.788Z",
+          "id": "45a9bc3e6822edfeeeacdfbb"
+        },
+        "installerSha256": "857667a2830b45616bfa8762d5c029a1865d9a1ceeac1b6e72141f16969672b0",
+        "executionProfileSha256": "77B43945DD136537871A7BFBF3DF279C82F7C5478641F4A56192AC79D21A0B13",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-22T22:20:56.315Z",
+        "evidence": {
+          "verifiedAt": "2026-10-22T22:02:22.4153249Z",
+          "installerSha256": "857667a2830b45616bfa8762d5c029a1865d9a1ceeac1b6e72141f16969672b0",
+          "installerVersion": "2.38.5",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/aws-cli/45a9bc3e6822edfeeeacdfbb.json",
+          "signature": {
+            "publisher": "Amazon Web Services, Inc.",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "c64309ccc8cd80574617548c3d0c812ad10abe3f",
+            "websiteCommit": "9b662524287c262a7ae56c2d3e94854a030c8538",
+            "runId": "39860207160",
+            "runAttempt": 1,
+            "artifactId": "12461543526",
+            "artifactSha256": "d4b8b337718891ce8ace36bfd137fe723c755a60f0695b46d5c5d0207b9cb0e9"
+          },
+          "security": {
+            "status": "clean",
+            "malicious": 0,
+            "engineVersion": "1.1.26090.9",
+            "suspicious": 0,
+            "signatureVersion": "1.461.155.0",
+            "scannedAt": "2026-10-22T21:56:04.0283091Z",
+            "installerSha256": "857667a2830b45616bfa8762d5c029a1865d9a1ceeac1b6e72141f16969672b0",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/aws-cli/45a9bc3e6822edfeeeacdfbb.json"
+          },
+          "qa": {
+            "testedAt": "2026-10-22T22:02:16.3673545Z",
+            "testLevel": "psadt-package",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "857667a2830b45616bfa8762d5c029a1865d9a1ceeac1b6e72141f16969672b0",
+            "previousInstallerSha256": "ad07f9acd855f48ad016e63b2f0b4f87783c1b6524b86e966f4a6d21d01f524a",
+            "upgradeFromVersion": "2.38.1",
+            "executionContext": "LocalSystem",
+            "architecture": "x64",
+            "executionProfileSha256": "77B43945DD136537871A7BFBF3DF279C82F7C5478641F4A56192AC79D21A0B13",
+            "candidateId": "45a9bc3e6822edfeeeacdfbb",
+            "installerVersion": "2.38.5",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/aws-cli/45a9bc3e6822edfeeeacdfbb.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "S5MSJ/1gpeh3eHeES0gYhO3AdCcN5Xh5GlwDOeIPna0FROxT4Sgr4hZnia8CO7kaQPxaFZme/T/hK+0Wmh5LDg=="
+  "signature": "jylE6YqqBHA5b5Qx4byWaPLIy60RqHjcWkNheZlxR2MLYwyvH5Vm4gMQuuAXSCK61PXQIbhDJfc+8QGCI1F7BQ=="
 }
