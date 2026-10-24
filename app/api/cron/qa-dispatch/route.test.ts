@@ -893,9 +893,13 @@ describe('GET /api/cron/qa-dispatch', () => {
     expect(rollbackIds).toEqual([row.id]);
   });
 
-  it('defers a retryable installer preflight and dispatches the next candidate', async () => {
+  it.each([0, 8].flatMap(earlierAttempts => [
+    'PREFLIGHT_UNAVAILABLE', 'PREFLIGHT_STATE_UNAVAILABLE',
+    'PREFLIGHT_IN_PROGRESS', 'UPSTREAM_UNAVAILABLE',
+  ].map(code => ({ earlierAttempts, code }))))('keeps $code honest after $earlierAttempts earlier attempts and dispatches the next candidate', async ({ earlierAttempts, code }) => {
     const unavailable = candidate('catalog-default');
     unavailable.id = testUuid(50);
+    unavailable.attempts = earlierAttempts;
     const valid = candidate('catalog-default');
     valid.id = testUuid(51);
     const { client, claimedIds, rollbackIds, rollbackPayloads } = createSupabaseStub([
@@ -905,7 +909,7 @@ describe('GET /api/cron/qa-dispatch', () => {
     createServerClientMock.mockReturnValue(client);
     dispatchQaCandidateMock
       .mockRejectedValueOnce(new InstallerPreflightError(
-        'PREFLIGHT_UNAVAILABLE',
+        code,
         'Installer download returned HTTP 403',
         true,
       ))
@@ -920,7 +924,9 @@ describe('GET /api/cron/qa-dispatch', () => {
     expect(rollbackIds).toEqual([unavailable.id]);
     expect(rollbackPayloads).toContainEqual(expect.objectContaining({
       status: 'queued',
-      attempts: 1,
+      attempts: earlierAttempts + 1,
+      failure_summary: 'Installer verification is blocked. The app was not tested. Automatic source rechecks remain scheduled.',
+      next_retry_at: '2026-09-24T12:30:00.000Z',
       enqueued_at: expect.any(String),
     }));
   });

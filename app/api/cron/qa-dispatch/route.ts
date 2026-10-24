@@ -430,7 +430,7 @@ export async function GET(request: Request) {
                   phase_started_at: null,
                   phase_updated_at: null,
                   failure_summary:
-                    'The installer source is temporarily unavailable; another check is scheduled.',
+                    'Installer verification is blocked. The app was not tested. Automatic source rechecks remain scheduled.',
                   updated_at: deferredAt,
                 })
             .eq('id', claimed.id)
