@@ -481,6 +481,18 @@ def contracts():
     sql(admission.replace(needle, 'truncate public.qa_vt_upload_url_recovery_grants,public.qa_vt_requests,', 1))
     print('PASS post-migration terminal and metadata completion regression fixtures')
     print('PASS active exact lookup, replay/binding refusals, monotonic evidence, publication trigger, holds and unchanged ACL')
+    capability = (ROOT/'supabase/tests/qa_vt_metadata_public_capability.sql').read_text()
+    before = sql(capability, check=False)
+    assert before.returncode != 0 and 'does not exist' in before.stderr
+    original_claim = value("select jsonb_build_array(prosrc,proacl::text) from pg_proc where oid='public.claim_qa_vt_metadata_recheck(text)'::regprocedure")
+    sql(migration('20261024002955_qa_vt_metadata_public_capability'))
+    assert original_claim == value("select jsonb_build_array(prosrc,proacl::text) from pg_proc where oid='public.claim_qa_vt_metadata_recheck(text)'::regprocedure")
+    sql(capability)
+    for role in ('anon','authenticated','service_role'):
+        assert value("select has_function_privilege('"+role+"','public.claim_qa_vt_metadata_recheck(text)','EXECUTE') = has_function_privilege('"+role+"','public.claim_qa_vt_metadata_recheck(text,boolean)','EXECUTE')")
+    denied("select claim_qa_vt_metadata_recheck('wrong-fixture',false)", 'authentication|secret|Unauthorized|unauthorized|invalid|Invalid')
+    denied("select claim_qa_vt_metadata_recheck('local-fixture-only',null)", 'QA VT capability required')
+    print('PASS unsupported public work consumes no attempt/lease/reservation and cannot block hash work; legacy body/ACL retained')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
