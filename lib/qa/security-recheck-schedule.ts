@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 
+const SCHEDULE_RPC_BATCH_SIZE = 1000;
+
 interface Schedule { demand: boolean; eligibleAt: string; malicious: number }
 
 // This projection is deliberately separate from the dispatch/security loaders.
@@ -9,14 +11,19 @@ export async function loadSecurityRecheckSchedule(client: SupabaseClient<Databas
   const schedules = new Map<string, Schedule>();
   if (!normalized.length) return schedules;
   if (normalized.length > 1010 || normalized.some(hash => !/^[a-f0-9]{64}$/.test(hash))) throw new Error('Installer security schedule is invalid');
-  const result = await client.rpc('qa_installer_security_recheck_schedule', { p_sha256: normalized });
-  if (result.error || !Array.isArray(result.data)) throw new Error('Installer security schedule is unavailable');
-  for (const row of result.data) {
-    if (!normalized.includes(row.sha256) || schedules.has(row.sha256) || typeof row.demand !== 'boolean' ||
-        !Number.isFinite(Date.parse(row.eligible_at)) || !Number.isInteger(row.malicious) || row.malicious < 0 || row.malicious > 9999) {
-      throw new Error('Installer security schedule is invalid');
+  // PostgREST caps a set-returning RPC at 1000 rows. Keep every supported hash
+  // covered with at most two bounded reads, validating each response's binding.
+  for (let offset = 0; offset < normalized.length; offset += SCHEDULE_RPC_BATCH_SIZE) {
+    const batch = normalized.slice(offset, offset + SCHEDULE_RPC_BATCH_SIZE);
+    const result = await client.rpc('qa_installer_security_recheck_schedule', { p_sha256: batch });
+    if (result.error || !Array.isArray(result.data)) throw new Error('Installer security schedule is unavailable');
+    for (const row of result.data) {
+      if (!batch.includes(row.sha256) || schedules.has(row.sha256) || typeof row.demand !== 'boolean' ||
+          !Number.isFinite(Date.parse(row.eligible_at)) || !Number.isInteger(row.malicious) || row.malicious < 0 || row.malicious > 9999) {
+        throw new Error('Installer security schedule is invalid');
+      }
+      schedules.set(row.sha256, { demand: row.demand, eligibleAt: row.eligible_at, malicious: row.malicious });
     }
-    schedules.set(row.sha256, { demand: row.demand, eligibleAt: row.eligible_at, malicious: row.malicious });
   }
   if (schedules.size !== normalized.length) throw new Error('Installer security schedule is unavailable');
   return schedules;
