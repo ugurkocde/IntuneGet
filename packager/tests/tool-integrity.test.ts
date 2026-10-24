@@ -13,7 +13,10 @@ async function fixture() {
   const tools = await mkdtemp(join(tmpdir(), 'intuneget-tool-test-')); dirs.push(tools);
   const fetch = vi.fn(async () => new Response('synthetic untrusted tool'));
   const config = {packagerId:'fixture',mode:'api',api:{url:'http://127.0.0.1:1',key:'synthetic-key'},supabase:{url:'',serviceRoleKey:''},azure:{clientId:'00000000-0000-0000-0000-000000000001',clientSecret:'synthetic-secret',useManagedIdentity:false},polling:{interval:5000,staleJobTimeout:300000},paths:{work:tools,tools},proxy:{fetch}} as unknown as PackagerConfig;
-  return {tools,fetch,processor:new JobProcessor(config,null)};
+  const processor = new JobProcessor(config,null);
+  // These regressions exercise the Windows executable/verifier path on every CI host.
+  Reflect.set(processor,'hostPlatform',() => 'win32');
+  return {tools,fetch,processor};
 }
 describe('local packaging tool integrity', () => {
   it('refuses a modified cached executable even when the toolkit layout exists', async () => {

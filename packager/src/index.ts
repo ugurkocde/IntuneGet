@@ -32,7 +32,7 @@ async function main() {
 
   program
     .name('intuneget-packager')
-    .description('IntuneGet local packaging service for Windows')
+    .description('IntuneGet local packaging service for Windows and supported Linux installers')
     .version(packageJson.version)
     .option('-v, --verbose', 'Enable verbose logging')
     .option('-d, --debug', 'Enable debug logging')
@@ -48,7 +48,7 @@ async function main() {
       console.log(`
 ================================================================================
   IntuneGet Packager v${packageJson.version}
-  Local Windows packaging service for true self-hosting
+  Local packaging service for true self-hosting
 ================================================================================
 `);
 
@@ -91,14 +91,11 @@ async function main() {
   // Add subcommand for downloading tools
   program
     .command('setup')
-    .description('Download required tools (IntuneWinAppUtil, PSAppDeployToolkit)')
+    .description('Verify required tools (Windows utility and toolkit, or Linux toolkit archive)')
     .action(async () => {
       try {
         const config = loadConfig();
         logger.info('Setting up packager tools...');
-
-        // Create tools directory
-        await fs.promises.mkdir(config.paths.tools, { recursive: true });
 
         // Download tools using the JobProcessor's ensureToolsAvailable method
         const processor = new (await import('./job-processor.js')).JobProcessor(
@@ -124,9 +121,9 @@ async function main() {
 }
 
 async function run(options: { dryRun?: boolean }) {
-  // Check if running on Windows
-  if (process.platform !== 'win32') {
-    logger.error('This packager must run on Windows (IntuneWinAppUtil.exe requires Windows)');
+  // Each processor entry point also enforces the supported host boundary.
+  if (process.platform !== 'win32' && process.platform !== 'linux') {
+    logger.error('This packager requires Windows or Linux; nested and archive installers require Windows');
     process.exit(1);
   }
 
