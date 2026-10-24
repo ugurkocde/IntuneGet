@@ -29,12 +29,14 @@ function fixture() {
   const errors = new Set<string>();
   const securityHolds: Array<Record<string, unknown>> = [];
   const heldErrors: Array<Record<string, unknown>> = [];
+  const securitySchedule: Array<Record<string, unknown>> = [];
   const blocks: Array<Record<string, unknown>> = [{ winget_id: held.winget_id, version: held.version, architecture: held.architecture, installer_sha256: held.installer_sha256, block_code: 'failed_managed_lifecycle', detail: 'reviewed tuple' }];
   const retries = [{ source_key: qaSourceKey(source), next_retry_at: '2099-01-02T00:00:00Z' }];
   const client = {
     rpc: vi.fn(async (name: string, args: { p_id?: string; p_candidate_id?: string }) => {
       if (name === 'qa_retest_grant_eligible') return { data: grants.has(args.p_candidate_id!), error: errors.has(name) ? { message: 'grant unavailable' } : null };
       if (name === 'refresh_qa_installer_security_holds') return { data: 0, error: null };
+      if (name === 'qa_installer_security_recheck_schedule') return { data: securitySchedule.length ? securitySchedule : securityHolds.map(h => ({ sha256: h.sha256, demand: true, malicious: h.malicious_verdicts, eligible_at: h.next_check_at })), error: errors.has(name) ? { message: 'schedule unavailable' } : null };
       if (name === 'qa_installer_security_waiting_errors') return { data: heldErrors, error: null };
       if (name !== 'claim_qa_work') throw new Error('Unexpected RPC');
       claimed.push(args.p_id!); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null };
@@ -64,7 +66,7 @@ function fixture() {
       return builder;
     },
   };
-  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, heldErrors, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
+  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, heldErrors, securitySchedule, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
 it('shows an unknown coverage error in waiting without breaking the live snapshot or dispatching it', async () => {
   const f=fixture(); const pending={...f.first,status:'error'};
@@ -74,7 +76,7 @@ it('shows an unknown coverage error in waiting without breaking the live snapsho
   mocks.client.mockReturnValue(f.client);mocks.dispatch.mockResolvedValue(undefined);process.env.CRON_SECRET='test-secret';
   const live=await getQaLiveSnapshot();
   expect(live.queue.next).toEqual([]);
-  expect(live.queue.waiting).toEqual([expect.objectContaining({wingetId:f.first.winget_id,reason:'VirusTotal: awaiting engine coverage, rechecking daily',next_check_at:'2099-01-01T00:00:00Z'})]);
+  expect(live.queue.waiting).toEqual([expect.objectContaining({wingetId:f.first.winget_id,reason:expect.stringContaining('Rechecks are daily'),next_check_at:'2099-01-01T00:00:00Z'})]);
   await GET(new Request('https://example.com/api/cron/qa-dispatch',{headers:{authorization:'Bearer test-secret'}}));
   expect(f.claimed).toEqual([]);expect(mocks.dispatch).not.toHaveBeenCalled();
 });
@@ -86,7 +88,7 @@ it.each([1, 2])('shows %s malicious verdicts in waiting and never dispatches twi
   mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
   const live = await getQaLiveSnapshot();
   expect(live.queue.next).toEqual([]);
-  expect(live.queue.waiting[0].reason).toBe(malicious === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.');
+  expect(live.queue.waiting[0].reason).toContain('Rechecks are daily');
   expect(live.queue.waiting[0].next_check_at).toBe('2099-01-01T00:00:00Z');
   for (let retry = 0; retry < 2; retry++) await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
   expect(f.claimed).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
@@ -175,4 +177,29 @@ it('fails closed when the compatibility superset might be truncated', async () =
   const f = fixture(); f.rows.splice(0, f.rows.length, f.first); f.blocks.splice(0, f.blocks.length, ...Array.from({ length: COMPATIBILITY_BATCH_LIMIT }, () => ({ winget_id: f.first.winget_id, version: f.first.version, architecture: f.first.architecture, installer_sha256: f.first.installer_sha256 })));
   mocks.client.mockReturnValue(f.client); const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   expect((await getQaLiveSnapshot()).queue.next).toEqual([]); warn.mockRestore();
+});
+
+it.each(['queued', 'error'])('projects the weekly provider eligibility for a held %s without exposing private schedule inputs', async (status) => {
+  const f = fixture(); const row = { ...f.first, status }; f.rows.splice(0, f.rows.length, row);
+  f.securityHolds.push({ sha256: 'a'.repeat(64), malicious_verdicts: 1, next_check_at: '2000-01-01T00:00:00Z', released_at: null });
+  if (status === 'error') f.heldErrors.push({ candidate: row, malicious: 1, nextCheckAt: '2000-01-01T00:00:00Z' });
+  f.securitySchedule.push({ sha256: 'a'.repeat(64), malicious: 1, demand: false, eligible_at: '2099-01-29T17:42:13Z' });
+  mocks.client.mockReturnValue(f.client); const live = await getQaLiveSnapshot();
+  expect(live.queue.next).toEqual([]);
+  expect(live.queue.waiting[0]).toEqual(expect.objectContaining({ next_check_at: '2099-01-29T17:42:13Z', reason: expect.stringContaining('weekly') }));
+  expect(JSON.stringify(live.queue)).not.toMatch(/sha256|demand|[aA]{64}/);
+});
+it('marks a customer daily recheck that is already eligible as due without a past scheduled date', async () => {
+  const f = fixture(); f.rows.splice(0, f.rows.length, f.first);
+  f.securityHolds.push({ sha256: 'a'.repeat(64), malicious_verdicts: 1, next_check_at: '2000-01-01T00:00:00Z', released_at: null });
+  f.securitySchedule.push({ sha256: 'a'.repeat(64), malicious: 1, demand: true, eligible_at: '2000-01-01T00:00:00Z' });
+  mocks.client.mockReturnValue(f.client); const live = await getQaLiveSnapshot();
+  expect(live.queue.waiting[0]).toEqual(expect.objectContaining({ next_check_at: null, reason: expect.stringMatching(/daily.*due/) }));
+  expect(live.queue.next).toEqual([]);
+});
+it('fails closed when held display scheduling is unavailable', async () => {
+  const f = fixture(); f.rows.splice(0, f.rows.length, f.first);
+  f.securityHolds.push({ sha256: 'a'.repeat(64), malicious_verdicts: 1, next_check_at: '2099-01-01T00:00:00Z', released_at: null });
+  f.errors.add('qa_installer_security_recheck_schedule'); mocks.client.mockReturnValue(f.client);
+  await expect(getQaLiveSnapshot()).rejects.toThrow('Installer security schedule is unavailable');
 });

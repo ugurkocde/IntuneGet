@@ -2648,6 +2648,7 @@ export interface Database {
     Functions: {
       next_qa_curated_security_eligible: { Args: Record<string, never>; Returns: Json };
       qa_installer_security_waiting_errors: { Args: Record<string, never>; Returns: Json };
+      qa_installer_security_recheck_schedule: { Args: { p_sha256: string[] }; Returns: Array<{ sha256: string; demand: boolean; eligible_at: string; malicious: number }> };
       qa_curated_installer_security_held: { Args: { p_inputs: Json }; Returns: boolean };
       refresh_qa_installer_security_holds: { Args: Record<string, never>; Returns: number };
       record_qa_installer_security_refusal: { Args: { p_candidate_id: string; p_run_id: string; p_sha256: string; p_malicious: number; p_observed_at: string }; Returns: undefined };

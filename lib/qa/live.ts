@@ -1,7 +1,8 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
 import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
-import { loadInstallerSecurityHolds, installerSecurityReason } from './installer-security-holds';
+import { loadInstallerSecurityHolds } from './installer-security-holds';
+import { loadSecurityRecheckSchedule, publicSecurityRecheck } from './security-recheck-schedule';
 import { getPackageCompatibilityBlocks, packageCompatibilityKey } from '@/lib/package-eligibility';
 import { qaSourceKey, qaSourceRetryAtMany } from './source-backoff';
 
@@ -506,9 +507,11 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
   const heldErrors = await supabase.rpc('qa_installer_security_waiting_errors', {});
   if (heldErrors.error || !Array.isArray(heldErrors.data)) throw new Error('Installer security waiting queue is unavailable');
-  for (const held of heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string; malicious: number }>) {
+  const errorHolds = heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string; malicious: number }>;
+  const schedules = await loadSecurityRecheckSchedule(supabase, [...securityHolds.keys(), ...errorHolds.map(held => held.candidate.installer_sha256)]);
+  for (const held of errorHolds) {
     if (!Number.isInteger(held.malicious) || held.malicious < 0 || held.malicious > 9999) throw new Error('Installer security waiting queue is invalid');
-    waiting.push({ ...held, sourceRetry: false, securityHold: true, securityReason: installerSecurityReason(held.malicious) });
+    waiting.push({ ...held, ...publicSecurityRecheck(schedules.get(held.candidate.installer_sha256.toLowerCase())!, now), sourceRetry: false, securityHold: true });
   }
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
   let cursor = 0, rounds = 0, lookupsClosed = false;
@@ -519,8 +522,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       if (candidate.status !== 'queued' && !securityHolds.has(candidate.installer_sha256.toLowerCase())) continue;
       const reason = qaQueueCandidateReason(candidate, now, securityHolds);
       if (reason === 'installer-security-hold' && waiting.length < 10) {
-        const hold = securityHolds.get(candidate.installer_sha256.toLowerCase())!;
-        waiting.push({ candidate, nextCheckAt: hold.nextCheckAt, sourceRetry: false, securityHold: true, securityReason: hold.reason });
+        waiting.push({ candidate, ...publicSecurityRecheck(schedules.get(candidate.installer_sha256.toLowerCase())!, now), sourceRetry: false, securityHold: true });
       }
       else if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
       else if (!reason && !lookupsClosed && queued.length < 10) chunk.push(candidate);
