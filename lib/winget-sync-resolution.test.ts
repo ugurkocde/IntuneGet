@@ -15,6 +15,38 @@ const installerManifest = {
 };
 
 describe('resolveWingetManifest', () => {
+  it('resolves a live version with its original v prefix', async () => {
+    const version = 'v0.2026.10.14.08.27.stable_01';
+    const yaml = [
+      'PackageIdentifier: Example.App',
+      `PackageVersion: ${version}`,
+      'Installers:',
+      '- Architecture: x64',
+      '  InstallerUrl: https://example.test/app.exe',
+    ].join('\n');
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ type: 'dir', name: version }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        encoding: 'base64', content: Buffer.from(yaml).toString('base64'),
+      })));
+    const client = createWingetManifestClient({ fetchImpl, token: 'fixture-token', maxRetries: 0 });
+
+    await expect(resolveWingetManifest({ client, wingetId: 'Example.App', preferLive: true }))
+      .resolves.toMatchObject({ status: 'resolved', version, source: 'live' });
+    expect(fetchImpl.mock.calls[1][0]).toContain(`/${version}/Example.App.installer.yaml`);
+  });
+
+  it('orders mixed numeric and v-prefixed versions by their numeric version', async () => {
+    const names = ['v1.9.0', '2.0.0', 'v1.10.0', 'V1.8.0', 'vnotes', 'V2', 'Preview', 'README.md'];
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(
+      names.map((name) => ({ type: name === 'README.md' ? 'file' : 'dir', name }))
+    )));
+    const client = createWingetManifestClient({ fetchImpl, maxRetries: 0 });
+
+    await expect(client.fetchVersions('Example.App'))
+      .resolves.toEqual(['2.0.0', 'v1.10.0', 'v1.9.0', 'V1.8.0']);
+  });
+
   it('uses a valid stored version without enumerating GitHub versions', async () => {
     const client = {
       fetchInstallerManifest: vi.fn().mockResolvedValue(installerManifest),
