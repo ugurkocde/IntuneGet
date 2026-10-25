@@ -252,6 +252,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // SPlayer 3.1.1 uses Electron Builder 26.8.1 assisted NSIS, whose silent
+    // default is per-user. Select its supported all-users mode so the declared
+    // machine scope does not register a remover below LocalSystem's profile.
+    // https://github.com/SPlayer-Dev/SPlayer/blob/v3.1.1/electron-builder.config.ts
+    wingetId: 'imsyy.SPlayer',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
+  },
+  {
     // zyfun 3.4.7 uses Electron Builder's assisted NSIS mode and a custom
     // installer hook that installs the machine-wide VC++ runtime when missing.
     // Its default current-user silent path can therefore wait indefinitely on

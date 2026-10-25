@@ -602,6 +602,17 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
   });
 
+  it('selects SPlayer assisted NSIS all-users for its machine installation', () => {
+    expect(resolveApplicationInstallScope('imsyy.SPlayer', undefined)).toBe('machine');
+    expect(resolveApplicationInstallScope('imsyy.SPlayer', 'user')).toBe('machine');
+    expect(
+      applyApplicationPackagingAdapter('imsyy.SPlayer', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({ reviewedInstallArguments: ['/allusers'] });
+    expect(
+      applyApplicationPackagingAdapter(' imsyy.splayer ', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({ reviewedInstallArguments: ['/allusers'] });
+  });
+
   it('runs zyfun assisted NSIS all-users so its VC++ prerequisite can complete', () => {
     expect(resolveApplicationInstallScope('HiramWong.zyfun', 'user')).toBe(
       'machine'
