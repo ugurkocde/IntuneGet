@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-23T22:21:52.921Z",
-    "expiresAt": "2026-10-30T22:21:52.921Z",
+    "generatedAt": "2026-10-25T18:25:33.626Z",
+    "expiresAt": "2026-11-01T18:25:33.626Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -8037,10 +8037,186 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mongodb-compass/063af8fdeca774e9d9d75e7c.json"
           }
         }
+      },
+      {
+        "id": "powershell-lts:2ad7b784e3980a628c7f6953",
+        "candidate": {
+          "appId": "powershell-lts",
+          "version": "7.6.9",
+          "installerUrl": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/PowerShell-7.6.9-win-x64.msi",
+          "vendorSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+          "releaseNotesUrl": "https://github.com/PowerShell/PowerShell/releases/tag/v7.6.9",
+          "discoveredAt": "2026-10-25T17:42:00.172Z",
+          "id": "2ad7b784e3980a628c7f6953"
+        },
+        "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+        "executionProfileSha256": "5BEBBFAFCCE73AFE446511E016263505007073C29ED9552A23AF17B36BE37AFE",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-25T18:25:33.626Z",
+        "evidence": {
+          "verifiedAt": "2026-10-25T18:00:08.7583171Z",
+          "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+          "installerVersion": "7.6.9",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/powershell-lts/2ad7b784e3980a628c7f6953.json",
+          "signature": {
+            "publisher": "Microsoft Corporation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "c1a4fdfee8d4712ac72748794b747ec3b628e4f5",
+            "websiteCommit": "a7e46629df5fe15c99af7604d62b5906fd82979e",
+            "runId": "40218035676",
+            "runAttempt": 1,
+            "artifactId": "12608595859",
+            "artifactSha256": "407eee681eaf5c5e94d26995a6dccf582ce0d6829eb941b2913c4d4d80f1cc19"
+          },
+          "security": {
+            "signatureVersion": "1.461.201.0",
+            "status": "clean",
+            "scannedAt": "2026-10-25T17:56:12.2568477Z",
+            "scanner": "defender",
+            "malicious": 0,
+            "engineVersion": "1.1.26090.9",
+            "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/powershell-lts/2ad7b784e3980a628c7f6953.json"
+          },
+          "qa": {
+            "candidateId": "2ad7b784e3980a628c7f6953",
+            "testedAt": "2026-10-25T18:00:01.7583522Z",
+            "upgradeFromVersion": "7.6.8",
+            "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+            "executionContext": "LocalSystem",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "installerVersion": "7.6.9",
+            "executionProfileSha256": "5BEBBFAFCCE73AFE446511E016263505007073C29ED9552A23AF17B36BE37AFE",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "testLevel": "psadt-package",
+            "previousInstallerSha256": "079e7cecedd1e87fa7b4676e5c33ddfbe66859a44a97fbcd1db797245cbb93d2",
+            "architecture": "x64",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/powershell-lts/2ad7b784e3980a628c7f6953.json"
+          }
+        }
+      },
+      {
+        "id": "obs-studio:3a2aab71bd06369f1e3593d3",
+        "candidate": {
+          "appId": "obs-studio",
+          "version": "33.0.0",
+          "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/33.0.0/OBS-Studio-33.0.0-Windows-x64-Installer.exe",
+          "vendorSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+          "releaseNotesUrl": "https://github.com/obsproject/obs-studio/releases/tag/33.0.0",
+          "discoveredAt": "2026-10-23T22:20:47.796Z",
+          "id": "3a2aab71bd06369f1e3593d3"
+        },
+        "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+        "executionProfileSha256": "9C482D549B5E054B923BAE0318555A95A312123AB550BA0DA8CF45B6CD1832B0",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-25T18:25:33.626Z",
+        "evidence": {
+          "verifiedAt": "2026-10-23T22:53:14.2842770Z",
+          "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+          "installerVersion": "33.0.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "OBS Project, LLC"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "0eeb55021d75b17c1e7715d5dfc73bc47a35b22f",
+            "websiteCommit": "80bd2dac2df1e701c5700aa29a560620079492f1",
+            "runId": "40034820353",
+            "runAttempt": 1,
+            "artifactId": "12537610343",
+            "artifactSha256": "104af0358c081b184a537a0e984ccad522db51ab25760481f72edfba48d23968"
+          },
+          "security": {
+            "scannedAt": "2026-10-23T22:49:18.6066868Z",
+            "suspicious": 0,
+            "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+            "engineVersion": "1.1.26090.9",
+            "malicious": 0,
+            "status": "clean",
+            "scanner": "defender",
+            "signatureVersion": "1.461.171.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json"
+          },
+          "qa": {
+            "executionProfileSha256": "9C482D549B5E054B923BAE0318555A95A312123AB550BA0DA8CF45B6CD1832B0",
+            "upgradeFromVersion": "32.2.2",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "candidateId": "3a2aab71bd06369f1e3593d3",
+            "architecture": "x64",
+            "installerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+            "executionContext": "LocalSystem",
+            "testedAt": "2026-10-23T22:53:05.8793899Z",
+            "testLevel": "psadt-package",
+            "installerVersion": "33.0.0",
+            "previousInstallerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "K+YDTdg+4w36I9FXMaNlLZMI+rt6LFfMvuHS9DOzw7uBTib3pj6Y+l40MKK9+B+VLcVkqtda+j3vV7Cw8FVWBw=="
+  "signature": "hHU0dljf8Kl/LKoGniEhv0YJvoMma91sJsLiw1B9Y2uj5uCLlBYzBeOrozN/Id/Xv9DNeqZLlrfU5HWpRTu7Bw=="
 }
