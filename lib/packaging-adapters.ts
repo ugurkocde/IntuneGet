@@ -260,6 +260,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['/allusers'],
   },
   {
+    // OneKey 6.6.3 uses Electron Builder 26.4.0 assisted NSIS, which defaults
+    // to per-user installation. Select its supported all-users mode explicitly
+    // so the machine profile installs and captures the same vendor identity.
+    // https://github.com/OneKeyHQ/app-monorepo/blob/v6.6.3/apps/desktop/electron-builder-win.config.js
+    wingetId: 'OneKey.OneKey',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
+  },
+  {
     // SPlayer 3.1.1 uses Electron Builder 26.8.1 assisted NSIS, whose silent
     // default is per-user. Select its supported all-users mode so the declared
     // machine scope does not register a remover below LocalSystem's profile.

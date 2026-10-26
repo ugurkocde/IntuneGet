@@ -626,6 +626,16 @@ describe('application packaging adapters', () => {
     }
   });
 
+  it('keeps OneKey assisted NSIS installations in the declared machine scope', () => {
+    for (const id of ['OneKey.OneKey', ' ONEKEY.ONEKEY ']) {
+      expect(resolveApplicationInstallScope(id, undefined)).toBe('machine');
+      expect(resolveApplicationInstallScope(id, 'user')).toBe('machine');
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedInstallArguments).toEqual(['/allusers']);
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+    }
+  });
+
   it('selects SPlayer assisted NSIS all-users for its machine installation', () => {
     expect(resolveApplicationInstallScope('imsyy.SPlayer', undefined)).toBe('machine');
     expect(resolveApplicationInstallScope('imsyy.SPlayer', 'user')).toBe('machine');
