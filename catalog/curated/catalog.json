@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-26T08:38:44.707Z",
-    "expiresAt": "2026-11-02T08:38:44.707Z",
+    "generatedAt": "2026-10-26T10:49:29.000Z",
+    "expiresAt": "2026-11-02T10:49:29.000Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -8389,10 +8389,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/541cb36a2ba1003d95a39515.json"
           }
         }
+      },
+      {
+        "id": "vscodium:5206ea88a51dbb0326518bd2",
+        "candidate": {
+          "appId": "vscodium",
+          "version": "1.143.17183",
+          "installerUrl": "https://github.com/VSCodium/vscodium/releases/download/1.143.17183/VSCodiumSetup-x64-1.143.17183.exe",
+          "vendorSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+          "releaseNotesUrl": "https://github.com/VSCodium/vscodium/releases/tag/1.143.17183",
+          "discoveredAt": "2026-10-26T10:26:43.311Z",
+          "id": "5206ea88a51dbb0326518bd2"
+        },
+        "installerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+        "executionProfileSha256": "CE6291FCFB99CC6636CE76E0346E466C0F806C45BE24B4E66003BE64839A5C8B",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-26T10:49:29.000Z",
+        "evidence": {
+          "verifiedAt": "2026-10-26T10:40:45.7722282Z",
+          "installerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+          "installerVersion": "1.143.17183",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscodium/5206ea88a51dbb0326518bd2.json",
+          "signature": {
+            "publisher": "SignPath Foundation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "dada419b1d3f6e7d1a10f1fba473fe305df1967b",
+            "websiteCommit": "d1c24bdbc0e2d7fd73c92d936b348a066228d758",
+            "runId": "40307827240",
+            "runAttempt": 1,
+            "artifactId": "12643339745",
+            "artifactSha256": "2ad646aa01c9bfe523af5de8d742b6c041545d8884f06c654a5aa27510258b72"
+          },
+          "security": {
+            "scannedAt": "2026-10-26T10:37:51.0314327Z",
+            "engineVersion": "1.1.26090.9",
+            "installerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+            "scanner": "defender",
+            "status": "clean",
+            "suspicious": 0,
+            "malicious": 0,
+            "signatureVersion": "1.461.211.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscodium/5206ea88a51dbb0326518bd2.json"
+          },
+          "qa": {
+            "upgradeFromVersion": "1.140.06880",
+            "candidateId": "5206ea88a51dbb0326518bd2",
+            "testedAt": "2026-10-26T10:40:37.2306472Z",
+            "installerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+            "executionContext": "LocalSystem",
+            "executionProfileSha256": "CE6291FCFB99CC6636CE76E0346E466C0F806C45BE24B4E66003BE64839A5C8B",
+            "previousInstallerSha256": "38cde2ca894767d797f00fa50806c0a1eb0a674e9784de1301e78ab3c6f520de",
+            "installerVersion": "1.143.17183",
+            "testLevel": "psadt-package",
+            "architecture": "x64",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscodium/5206ea88a51dbb0326518bd2.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "hAU6jZY4GoOGZrAEtGMQBAfX6w94b0MyGwtDGTMAA4YJuin5Y3sxXoDqGlpAevR8EgKieTAPHD85Ray9ZnMIAA=="
+  "signature": "rGuzaT9Z0clUGnTo+fOQCoZwCyfusJqcIwHs6H/jYWc39RjzlsNmmmV8m2O3rmCr0Xd3jaFQ/EdtAdAtbWZuAA=="
 }
