@@ -252,6 +252,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Numara's assisted NSIS installer defaults to per-user mode. Select its
+    // supported all-users mode explicitly for the machine installation profile.
+    // https://github.com/bornova/numara-calculator/blob/v7.6.3/electron-builder.yml
+    wingetId: 'bornova.numara',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
+  },
+  {
     // SPlayer 3.1.1 uses Electron Builder 26.8.1 assisted NSIS, whose silent
     // default is per-user. Select its supported all-users mode so the declared
     // machine scope does not register a remover below LocalSystem's profile.

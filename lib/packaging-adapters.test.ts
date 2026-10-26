@@ -614,6 +614,18 @@ describe('application packaging adapters', () => {
     }
   });
 
+  it('keeps Numara assisted NSIS installations machine-wide', () => {
+    for (const id of ['bornova.numara', ' BORNOVA.NUMARA ']) {
+      expect(resolveApplicationInstallScope(id, undefined)).toBe('machine');
+      expect(resolveApplicationInstallScope(id, 'user')).toBe('machine');
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedInstallArguments).toEqual(['/allusers']);
+      expect(
+        applyApplicationPackagingAdapter(id, adapted).reviewedInstallArguments
+      ).toEqual(['/allusers']);
+    }
+  });
+
   it('selects SPlayer assisted NSIS all-users for its machine installation', () => {
     expect(resolveApplicationInstallScope('imsyy.SPlayer', undefined)).toBe('machine');
     expect(resolveApplicationInstallScope('imsyy.SPlayer', 'user')).toBe('machine');
