@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-26T10:49:29.000Z",
-    "expiresAt": "2026-11-02T10:49:29.000Z",
+    "generatedAt": "2026-10-26T16:51:03.680Z",
+    "expiresAt": "2026-11-02T16:51:03.680Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -8477,10 +8477,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscodium/5206ea88a51dbb0326518bd2.json"
           }
         }
+      },
+      {
+        "id": "musescore:fdd92185319fdda2cfdd9894",
+        "candidate": {
+          "appId": "musescore",
+          "version": "4.7.6",
+          "installerUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.6/MuseScore-Studio-4.7.6.261022093-x86_64.msi",
+          "vendorSha256": "41c9ca34fbf0b720f229ed3b0c4ff923b5d41a8c24ad9262e1fce390cd5c34e5",
+          "releaseNotesUrl": "https://github.com/musescore/MuseScore/releases/tag/v4.7.6",
+          "discoveredAt": "2026-10-26T15:09:16.298Z",
+          "id": "fdd92185319fdda2cfdd9894"
+        },
+        "installerSha256": "41c9ca34fbf0b720f229ed3b0c4ff923b5d41a8c24ad9262e1fce390cd5c34e5",
+        "executionProfileSha256": "A13EBD96F7B9E1CEE39C7AD32F0F7CEF842EBA21E2A4814C11B2225D6EAE1D4B",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-26T16:51:03.680Z",
+        "evidence": {
+          "verifiedAt": "2026-10-26T16:35:17.4439715Z",
+          "installerSha256": "41c9ca34fbf0b720f229ed3b0c4ff923b5d41a8c24ad9262e1fce390cd5c34e5",
+          "installerVersion": "4.7.6",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/musescore/fdd92185319fdda2cfdd9894.json",
+          "signature": {
+            "publisher": "MUSECY SM LTD",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "0fd96b493ce4e4aad94ba86ac694086c5ec9768e",
+            "websiteCommit": "5149af986122f6e53b09345620d9f69f766f583f",
+            "runId": "40358827907",
+            "runAttempt": 1,
+            "artifactId": "12666638935",
+            "artifactSha256": "7ebcf2b9936d4275aec076d4f64f5d68563df3c2c0c7ecf5092c89e533e06cd9"
+          },
+          "security": {
+            "signatureVersion": "1.461.211.0",
+            "malicious": 0,
+            "scanner": "defender",
+            "scannedAt": "2026-10-26T16:31:48.3439686Z",
+            "status": "clean",
+            "installerSha256": "41c9ca34fbf0b720f229ed3b0c4ff923b5d41a8c24ad9262e1fce390cd5c34e5",
+            "engineVersion": "1.1.26090.9",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/musescore/fdd92185319fdda2cfdd9894.json"
+          },
+          "qa": {
+            "testedAt": "2026-10-26T16:35:08.9185129Z",
+            "architecture": "x64",
+            "executionProfileSha256": "A13EBD96F7B9E1CEE39C7AD32F0F7CEF842EBA21E2A4814C11B2225D6EAE1D4B",
+            "installerVersion": "4.7.6",
+            "testLevel": "psadt-package",
+            "upgradeFromVersion": "4.7.5",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionContext": "LocalSystem",
+            "installerSha256": "41c9ca34fbf0b720f229ed3b0c4ff923b5d41a8c24ad9262e1fce390cd5c34e5",
+            "candidateId": "fdd92185319fdda2cfdd9894",
+            "previousInstallerSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/musescore/fdd92185319fdda2cfdd9894.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "rGuzaT9Z0clUGnTo+fOQCoZwCyfusJqcIwHs6H/jYWc39RjzlsNmmmV8m2O3rmCr0Xd3jaFQ/EdtAdAtbWZuAA=="
+  "signature": "crTDLgeMEOvByoji3kPgpCEoy2lRuXCEmmvEJ14Abx69bvNHajhphIK9Uk62i9qaMkKESbdkeSQLj4NNLE03Dw=="
 }
