@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-25T18:25:33.626Z",
-    "expiresAt": "2026-11-01T18:25:33.626Z",
+    "generatedAt": "2026-10-26T05:27:10.680Z",
+    "expiresAt": "2026-11-02T05:27:10.680Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -8213,10 +8213,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/3a2aab71bd06369f1e3593d3.json"
           }
         }
+      },
+      {
+        "id": "python-314:74ee59af4428665ef7adb232",
+        "candidate": {
+          "appId": "python-314",
+          "version": "3.14.10",
+          "installerUrl": "https://www.python.org/ftp/python/3.14.10/python-3.14.10-amd64.exe",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://www.python.org/downloads/release/python-31410/",
+          "discoveredAt": "2026-10-26T04:53:21.552Z",
+          "id": "74ee59af4428665ef7adb232"
+        },
+        "installerSha256": "92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965",
+        "executionProfileSha256": "0111ACD956F599C922CA8EADDF9B39A432C9C0DD2F4DEC90DF9CC5DD7E2C552F",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-26T05:27:10.680Z",
+        "evidence": {
+          "verifiedAt": "2026-10-26T05:05:19.7820705Z",
+          "installerSha256": "92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965",
+          "installerVersion": "3.14.10",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/python-314/74ee59af4428665ef7adb232.json",
+          "signature": {
+            "publisher": "Python Software Foundation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "ffb3c9e26ec634a7b1ceeadb5aecac89878807a4",
+            "websiteCommit": "c55f49a5c9834833a27f42f6cf6a21efcd14a1cd",
+            "runId": "40271453646",
+            "runAttempt": 1,
+            "artifactId": "12627879087",
+            "artifactSha256": "8a98cd36b9434ba2f3b0b5c7575b12f70e14266b347368a7fbbcf8d6d0fc560a"
+          },
+          "security": {
+            "scanner": "defender",
+            "signatureVersion": "1.461.208.0",
+            "engineVersion": "1.1.26090.9",
+            "installerSha256": "92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965",
+            "suspicious": 0,
+            "scannedAt": "2026-10-26T05:00:55.0240724Z",
+            "malicious": 0,
+            "status": "clean",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/python-314/74ee59af4428665ef7adb232.json"
+          },
+          "qa": {
+            "candidateId": "74ee59af4428665ef7adb232",
+            "architecture": "x64",
+            "installerVersion": "3.14.10",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionContext": "LocalSystem",
+            "previousInstallerSha256": "a247a0b612244a803f507b39fb7121e3602e4160d59c3b99d98e735289c53394",
+            "testedAt": "2026-10-26T05:05:13.6036691Z",
+            "testLevel": "psadt-package",
+            "upgradeFromVersion": "3.14.9",
+            "executionProfileSha256": "0111ACD956F599C922CA8EADDF9B39A432C9C0DD2F4DEC90DF9CC5DD7E2C552F",
+            "installerSha256": "92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/python-314/74ee59af4428665ef7adb232.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "hHU0dljf8Kl/LKoGniEhv0YJvoMma91sJsLiw1B9Y2uj5uCLlBYzBeOrozN/Id/Xv9DNeqZLlrfU5HWpRTu7Bw=="
+  "signature": "aVX5ri7FUhlK+W+6WTDiAnC9mNoAf2bUrYSKQC+mzr4PyQ8CBIA+uNk2O13OfESMQw8m0s3z0pdnaEsvndH0CQ=="
 }
