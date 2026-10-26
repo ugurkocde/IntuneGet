@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "40288072430",
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "67f8ae4dae779e7c7865409a391aec79f41cbe8c",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "websiteCommit": "c5c1eb05174a810491305045ddbf8918e429c11e"
+  },
+  "candidate": {
+    "appId": "git",
+    "version": "2.56.0.4",
+    "installerUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/Git-2.56.0.4-64-bit.exe",
+    "vendorSha256": "4961a4a8cc778d8b6e00a5819e5fe4d078b754555aff7aedc2d77a5d74c2de80",
+    "releaseNotesUrl": "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.4",
+    "discoveredAt": "2026-10-26T07:39:51.787Z",
+    "id": "541cb36a2ba1003d95a39515"
+  },
+  "previous": {
+    "appId": "git",
+    "version": "2.56.0.3",
+    "installerUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.3/Git-2.56.0.3-64-bit.exe",
+    "vendorSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+    "releaseNotesUrl": "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3",
+    "discoveredAt": "2026-10-22T19:18:34.841Z",
+    "id": "acf8d896f3704134c5deb887"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "541cb36a2ba1003d95a39515",
+      "installerSha256": "4961a4a8cc778d8b6e00a5819e5fe4d078b754555aff7aedc2d77a5d74c2de80",
+      "sourceUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/Git-2.56.0.4-64-bit.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Johannes Schindelin"
+      },
+      "security": {
+        "scannedAt": "2026-10-26T07:58:02.6492515Z",
+        "installerSha256": "4961a4a8cc778d8b6e00a5819e5fe4d078b754555aff7aedc2d77a5d74c2de80",
+        "engineVersion": "1.1.26090.9",
+        "status": "clean",
+        "malicious": 0,
+        "suspicious": 0,
+        "signatureVersion": "1.461.209.0",
+        "scanner": "defender"
+      }
+    },
+    "previous": {
+      "candidateId": "acf8d896f3704134c5deb887",
+      "installerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+      "sourceUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.3/Git-2.56.0.3-64-bit.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Johannes Schindelin"
+      },
+      "security": {
+        "scannedAt": "2026-10-26T07:58:17.2975327Z",
+        "installerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+        "engineVersion": "1.1.26090.9",
+        "status": "clean",
+        "malicious": 0,
+        "suspicious": 0,
+        "signatureVersion": "1.461.209.0",
+        "scanner": "defender"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "541cb36a2ba1003d95a39515",
+    "packageId": "IntuneGet.Curated.Git",
+    "installerUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/Git-2.56.0.4-64-bit.exe",
+    "installerSha256": "4961a4a8cc778d8b6e00a5819e5fe4d078b754555aff7aedc2d77a5d74c2de80",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Git",
+      "displayName": "Git for Windows",
+      "publisher": "The Git Development Community",
+      "version": "2.56.0.4",
+      "architecture": "x64",
+      "installerSha256": "4961a4a8cc778d8b6e00a5819e5fe4d078b754555aff7aedc2d77a5d74c2de80",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:Git_is1:Git",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Git\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.56.0.4\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Git\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.56.0.4\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "E97AB017440B6C11A84F48C686C40131E463143AE53CC4234519CC19EF88E24A",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Git\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.56.0.4\",\"wingetId\":\"IntuneGet.Curated.Git\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.56.0.4\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Git\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"0581BE82ED8FEB46CAF6BD161A2D7188E6D29942DEFFF84C66FE6D2443A97F6A\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"4961A4A8CC778D8B6E00A5819E5FE4D078B754555AFF7AEDC2D77A5D74C2DE80\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:Git_is1:Git\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.56.0.4\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Git\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"D17EF26F15951F77A23BE4C12C499E29013B2F2266A4255240977D6F80CB0B21\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "d17ef26f15951f77a23be4c12c499e29013b2f2266a4255240977d6f80cb0b21",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionContext": "LocalSystem",
+    "installerVersion": "2.56.0.4",
+    "testedAt": "2026-10-26T08:01:26.0001928Z",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "candidateId": "541cb36a2ba1003d95a39515",
+    "installerSha256": "4961a4a8cc778d8b6e00a5819e5fe4d078b754555aff7aedc2d77a5d74c2de80",
+    "testLevel": "psadt-package",
+    "executionProfileSha256": "E97AB017440B6C11A84F48C686C40131E463143AE53CC4234519CC19EF88E24A",
+    "previousInstallerSha256": "dc6d3db061999136e139f31376c5582a9ed6f36a4ea12f15e54ad7fa2bfc0bf2",
+    "upgradeFromVersion": "2.56.0.3"
+  },
+  "verifiedAt": "2026-10-26T08:01:33.0305729Z",
+  "authenticatedArtifact": {
+    "id": 12635860119,
+    "sha256": "a01415829d2b9ce155f0b2d6713ed09405dd93a5d021b607a27ff938bc1e53a6"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-26T08:38:44.707Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
