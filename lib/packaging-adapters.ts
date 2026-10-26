@@ -424,6 +424,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Equibop's assisted NSIS hook seeds both scopes with LocalAppData.
+    // Select the signed-in user and explicit current-user mode together so
+    // the seeded HKLM value cannot force a silent machine installation.
+    // https://github.com/Equicord/Equibop/blob/v3.3.2/build/installer.nsh
+    wingetId: 'Equicord.Equibop',
+    requiredInstallScope: 'user',
+    reviewedInstallArguments: ['/currentuser'],
+  },
+  {
     // SeaMeet Snap Recorder's Nullsoft installer writes its application and
     // exact uninstall registration below the invoking account's LocalAppData,
     // while its WinGet manifest omits Scope. Under LocalSystem, QA run

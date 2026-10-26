@@ -602,6 +602,18 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
   });
 
+  it('keeps Equibop assisted NSIS in the signed-in user context', () => {
+    for (const id of ['Equicord.Equibop', ' equicord.equibop ']) {
+      expect(resolveApplicationInstallScope(id, undefined)).toBe('user');
+      expect(resolveApplicationInstallScope(id, 'machine')).toBe('user');
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedInstallArguments).toEqual(['/currentuser']);
+      expect(adapted.reviewedInstallArguments).not.toContain('/allusers');
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+      expect(resolveApplicationInstallerSelectionScope(id, 'user')).toBe('user');
+    }
+  });
+
   it('selects SPlayer assisted NSIS all-users for its machine installation', () => {
     expect(resolveApplicationInstallScope('imsyy.SPlayer', undefined)).toBe('machine');
     expect(resolveApplicationInstallScope('imsyy.SPlayer', 'user')).toBe('machine');
