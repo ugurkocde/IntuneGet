@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { buildQaCatalogTestConfig } from './test-config';
 
 describe('buildQaCatalogTestConfig', () => {
+  it('keeps OneKey machine mode while using its exact bare NSIS registry identity', () => {
+    const config = buildQaCatalogTestConfig({
+      app: { wingetId: 'OneKey.OneKey', name: 'OneKey Wallet', publisher: 'OneKey', version: '6.6.3' },
+      manifest: { InstallerType: 'nullsoft', Scope: 'machine' },
+      installer: {
+        Architecture: 'x64', InstallerType: 'nullsoft', Scope: 'machine',
+        ProductCode: '{C63242F1-2B62-5725-B853-31B79889CCF8}',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:c63242f1-2b62-5725-b853-31b79889ccf8:OneKey'
+    );
+    expect(config.scope).toBe('machine');
+    expect(config.silentArgs).toBe('/S');
+    expect(config.psadtConfig.reviewedInstallArguments).toEqual(['/allusers']);
+    expect(config.detectionRules[0]).toMatchObject({
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\OneKey_OneKey',
+      detectionValue: '6.6.3',
+    });
+  });
+
   it('normalizes the WireSock CLI manifest through the shared SDK adapter', () => {
     const config = buildQaCatalogTestConfig({
       app: { wingetId: 'NTKERNEL.WireSockVPNClientCLI', name: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL', version: '3.6.1' },

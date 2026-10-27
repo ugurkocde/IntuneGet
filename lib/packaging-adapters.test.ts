@@ -9,6 +9,32 @@ import {
   resolveApplicationUninstallCommand,
 } from './packaging-adapters';
 
+describe('OneKey exact registry identity', () => {
+  const expected = 'REGISTRY_UNINSTALL_KEY:c63242f1-2b62-5725-b853-31b79889ccf8:OneKey';
+
+  it('maps only the generated OneKey identities to the vendor NSIS key', () => {
+    for (const command of [
+      'REGISTRY_UNINSTALL:OneKey Wallet',
+      'REGISTRY_UNINSTALL_PRODUCT:{C63242F1-2B62-5725-B853-31B79889CCF8}:OneKey Wallet',
+      expected,
+    ]) {
+      expect(resolveApplicationUninstallCommand(' OneKey.OneKey ', command)).toBe(expected);
+    }
+  });
+
+  it('preserves custom identities and other applications', () => {
+    for (const command of [
+      'custom.exe /remove',
+      'REGISTRY_UNINSTALL_PRODUCT:{00000000-0000-0000-0000-000000000000}:OneKey Wallet',
+      'REGISTRY_UNINSTALL_KEY:other:OneKey Wallet',
+    ]) {
+      expect(resolveApplicationUninstallCommand('OneKey.OneKey', command)).toBe(command);
+    }
+    expect(resolveApplicationUninstallCommand('OneKey.Other', 'REGISTRY_UNINSTALL:OneKey Wallet'))
+      .toBe('REGISTRY_UNINSTALL:OneKey Wallet');
+  });
+});
+
 describe('application packaging adapters', () => {
   it('binds ZDisk to its observed exact NSIS key without changing custom identities', () => {
     const exact = 'REGISTRY_UNINSTALL_KEY:ZDiskCleanerPro:ZDiskCleanerPro';

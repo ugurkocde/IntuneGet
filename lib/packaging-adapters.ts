@@ -1950,6 +1950,16 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // OneKey's electron-builder installer registers the bare NSIS key, while
+  // WinGet publishes a braced ProductCode and the catalog title OneKey Wallet.
+  // Bind capture and removal to the vendor key so unrelated Edge servicing
+  // cannot become the selected uninstall identity.
+  'onekey.onekey': {
+    generatedDisplayName: 'OneKey Wallet',
+    manifestRegistryKey: '{C63242F1-2B62-5725-B853-31B79889CCF8}',
+    registeredDisplayName: 'OneKey',
+    registeredRegistryKey: 'c63242f1-2b62-5725-b853-31b79889ccf8',
+  },
   // WinGet 3.14.0 and isolated run 35536993050 identify this bare NSIS key.
   // The generated braced product code does not match it; Edge servicing must
   // never become the uninstall target when the catalog title also differs.
