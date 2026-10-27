@@ -165,17 +165,29 @@ describe('enforceQaGate', () => {
       }
     });
 
-    it.each([false, true])('holds an otherwise Passed payload when a dependency is uncovered, override=%s', async qaOverride => {
+    it.each([{ qaOverride: false, requirePassed: true }, { qaOverride: true, requirePassed: false }])('holds an otherwise Passed payload when a dependency is uncovered: %j', async mode => {
       getPackageResultMock.mockResolvedValue({ data: clean, error: null });
       getQaResultMock.mockResolvedValue(clean);
       resolveDependenciesMock.mockResolvedValue([{ installerSha256: 'C'.repeat(64) }]);
       dependencyCoverageMock.mockResolvedValue(false);
-      await expect(enforceQaGate({ ...request, qaOverride, requirePassed: true }))
+      await expect(enforceQaGate({ ...request, ...mode }))
         .rejects.toMatchObject({ details: { reason: 'reputation' } });
       expect(resolveDependenciesMock).toHaveBeenCalledWith({
         wingetId: request.wingetId, version: request.version,
         architecture: request.architecture, installerSha256,
       });
+    });
+
+    it('checks the exact resolved bundle being sent rather than a second manifest resolution', async () => {
+      getPackageResultMock.mockResolvedValue({ data: clean, error: null });
+      getQaResultMock.mockResolvedValue(clean);
+      const dispatched = [{ installerSha256: 'C'.repeat(64) }];
+      resolveDependenciesMock.mockResolvedValue([{ installerSha256: 'D'.repeat(64) }]);
+      dependencyCoverageMock.mockImplementation(async (_client, dependencies) => dependencies[0].installerSha256 !== 'C'.repeat(64));
+      await expect(enforceQaGate({ ...request, qaOverride: true, requirePassed: false,
+        resolvedPackageDependencies: dispatched })).rejects.toMatchObject({ details: { reason: 'reputation' } });
+      expect(resolveDependenciesMock).not.toHaveBeenCalled();
+      expect(dependencyCoverageMock).toHaveBeenCalledWith(expect.anything(), dispatched);
     });
 
     it('allows the exact payload only with a clean covered verdict', async () => {

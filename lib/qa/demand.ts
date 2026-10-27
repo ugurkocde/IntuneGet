@@ -206,13 +206,20 @@ export async function ensureQaDemand(
       // previously recorded receipt may then enter the existing bounded
       // dependency refresh lane; this never reactivates its lifecycle.
       const { data: dependencyCandidate, error: dependencyCandidateError } = await supabase
-        .from('qa_candidates').select('id')
+        .from('qa_candidates').select('id,status,phase,github_run_id')
         .eq('winget_id', input.wingetId).eq('version', input.version)
         .eq('architecture', architecture).eq('installer_sha256', installerSha256)
         .eq('package_profile_sha256', profileSha256).limit(1).maybeSingle();
       if (dependencyCandidateError) throw new Error('Dependency verification is unavailable');
+      // qa-resume treats failed and non-publishing error candidates as a
+      // terminal customer failure, not a reputation wait. Never attach them.
+      const attach = dependencyCandidate && (
+        ['queued', 'dispatched', 'running', 'passed'].includes(dependencyCandidate.status) ||
+        (dependencyCandidate.status === 'error' && dependencyCandidate.phase === 'publishing' &&
+          Boolean(dependencyCandidate.github_run_id))
+      );
       return {
-        identity, candidateId: dependencyCandidate?.id ?? null, state: 'waiting',
+        identity, candidateId: attach ? dependencyCandidate.id : null, state: 'waiting',
         failureSummary: 'Installer reputation is awaiting verification.',
       };
     }

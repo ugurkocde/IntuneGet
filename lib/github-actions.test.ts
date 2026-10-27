@@ -905,6 +905,7 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     }));
     expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({
       packageProfileSha256: expect.stringMatching(/^[A-F0-9]{64}$/),
+      resolvedPackageDependencies: [dependency],
     }));
   });
 

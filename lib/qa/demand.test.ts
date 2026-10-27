@@ -1686,6 +1686,33 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       expect(updates).toEqual([]);
     });
 
+    it.each([
+      [{ status: 'failed' }, false],
+      [{ status: 'superseded' }, false],
+      [{ status: 'error', phase: 'installing', github_run_id: '123' }, false],
+      [{ status: 'error', phase: 'publishing', github_run_id: null }, false],
+      [{ status: 'error', phase: null }, false],
+      [{ status: 'queued' }, true],
+      [{ status: 'dispatched' }, true],
+      [{ status: 'running' }, true],
+      [{ status: 'passed' }, true],
+      [{ status: 'error', phase: 'publishing', github_run_id: '123' }, true],
+    ])('keeps dependency demand waiting without attaching an unsafe candidate: %j', async (candidate, attach) => {
+      resolveWingetPackageDependenciesMock.mockResolvedValue([{
+        packageIdentifier: 'Microsoft.VCRedist.2015+.x64', version: '14.50.0.0', architecture: 'x64',
+        installerUrl: 'https://example.test/vc.exe', installerSha256: 'C'.repeat(64),
+        installerType: 'exe', silentArgs: '/quiet /norestart', successCodes: [0],
+        rebootCodes: [3010], fileName: 'vc.exe', order: 1, depth: 1,
+      }]);
+      dependencyCoverageMock.mockResolvedValue(false);
+      const { client, updates } = fixture(clean, { active: { id: 'exact-candidate', ...candidate } });
+      await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({
+        state: 'waiting', candidateId: attach ? 'exact-candidate' : null,
+      });
+      expect(client.rpc).not.toHaveBeenCalled();
+      expect(updates).toEqual([]);
+    });
+
     it('reuses covered clean evidence without another lifecycle', async () => {
       const { client } = fixture(clean);
       await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'passed', candidateId: null });

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
+import { resolveWingetPackageDependencies, type PackagedWingetDependency } from '@/lib/winget-dependencies';
 import { arePackageDependenciesCovered } from '@/lib/qa/dependency-reputation';
 import { getCatalogSource } from '@/lib/catalog';
 import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
@@ -177,6 +177,8 @@ export async function enforceQaGate(input: {
   architecture?: string;
   installerSha256?: string;
   packageProfileSha256?: string;
+  /** The trusted resolver's bundle, when the caller already prepares dispatch. */
+  resolvedPackageDependencies?: readonly Pick<PackagedWingetDependency, 'installerSha256'>[];
   requirePassed?: boolean;
   qaOverride?: boolean;
   sourceType?: 'winget' | 'custom' | 'curated';
@@ -270,12 +272,11 @@ export async function enforceQaGate(input: {
   if (reputationError) throw reputationHold(reputationError);
   if (!isCoveredCleanReputation(reputationRow)) throw reputationHold();
 
-  // Re-resolve the trusted payload's current bundle at the final admission
-  // boundary. A primary-installer pass never covers a different or stale
-  // dependency, including when installability is overridden.
+  // Check the bundle being dispatched. Callers that only have a payload tuple
+  // must resolve it first; a primary pass never covers stale prerequisites.
   let dependenciesCovered: boolean;
   try {
-    const dependencies = await resolveWingetPackageDependencies({
+    const dependencies = input.resolvedPackageDependencies ?? await resolveWingetPackageDependencies({
       wingetId: input.wingetId, version: input.version, architecture, installerSha256,
     });
     dependenciesCovered = await arePackageDependenciesCovered(createServerClient(), dependencies);
