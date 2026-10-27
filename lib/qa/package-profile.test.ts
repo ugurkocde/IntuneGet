@@ -1068,6 +1068,38 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Orca out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'StablyAI.Orca',
+      displayName: 'Orca',
+      publisher: 'StablyAI',
+      version: '1.4.242',
+      architecture: 'x64',
+      installerSha256: '9D3E8639CAACB61C3AF2510A39069016E1A744D7425A146186A050E5978224EF',
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{2B325EC9-0ED1-575F-AD70-E08307AEE879}:Orca',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string; uninstallCommand: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(profile.installer.silentArgs).toBe('/S');
+    expect(profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{2B325EC9-0ED1-575F-AD70-E08307AEE879}:Orca'
+    );
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\StablyAI_Orca',
+      }),
+    ]);
+  });
+
   it('keeps Android Apps Manager out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'SIMSDEV.AndroidAppsManager',
