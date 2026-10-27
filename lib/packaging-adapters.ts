@@ -252,6 +252,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // UniClipboard's NSIS installer supports only HKCU/current-user scope.
+    // https://github.com/UniClipboard/UniClipboard/blob/v1.5.0/apps/gui-go/windows/installer.nsi
+    // Run 40449849261 captured SYSTEM registration; its missing-file cause is unconfirmed.
+    wingetId: 'UniClipboard.UniClipboard',
+    requiredInstallScope: 'user',
+  },
+  {
     // Orca 1.4.242 uses Electron Builder 26.15.3's default one-click NSIS
     // target without perMachine. Run 40473461347 registered an unavailable
     // systemprofile uninstaller; keep QA and customer packages in user scope.

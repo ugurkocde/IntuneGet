@@ -1040,6 +1040,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps UniClipboard out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'UniClipboard.UniClipboard',
+      displayName: 'UniClipboard',
+      publisher: 'UniClipboard',
+      version: '1.5.0',
+      architecture: 'x64',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:UniClipboard',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\UniClipboard_UniClipboard',
+      }),
+    ]);
+  });
+
   it('keeps Orca out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'StablyAI.Orca',
