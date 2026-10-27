@@ -1174,6 +1174,58 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
+  it('uses UniClipboard user scope consistently for customer PSADT packaging and QA', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: 'https://example.com/uniclipboard-setup.exe',
+      sha256: 'A'.repeat(64),
+      type: 'nullsoft',
+      silentArgs: '/S',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'UniClipboard.UniClipboard',
+          displayName: 'UniClipboard',
+          version: '1.5.0',
+          installerType: 'nullsoft',
+          installScope: 'machine',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'UniClipboard.UniClipboard',
+        installScope: 'user',
+      }),
+      expect.any(Array)
+    );
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ installScope: 'user' })
+    );
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ install_scope: 'user' })
+    );
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'UniClipboard.UniClipboard',
+        installScope: 'user',
+      }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
   it('uses zyfun all-users mode consistently for customer PSADT packaging and QA', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',

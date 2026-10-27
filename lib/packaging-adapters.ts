@@ -252,6 +252,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // UniClipboard's NSIS installer supports only HKCU/current-user scope.
+    // https://github.com/UniClipboard/UniClipboard/blob/v1.5.0/apps/gui-go/windows/installer.nsi
+    // Run 40449849261 captured SYSTEM registration; its missing-file cause is unconfirmed.
+    wingetId: 'UniClipboard.UniClipboard',
+    requiredInstallScope: 'user',
+  },
+  {
     // Numara's assisted NSIS installer defaults to per-user mode. Select its
     // supported all-users mode explicitly for the machine installation profile.
     // https://github.com/bornova/numara-calculator/blob/v7.6.3/electron-builder.yml
