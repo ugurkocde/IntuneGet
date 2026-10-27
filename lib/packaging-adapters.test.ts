@@ -2225,3 +2225,18 @@ describe('application packaging adapters', () => {
     });
   });
 });
+
+
+describe('UniClipboard vendor user scope', () => {
+  it.each(['UniClipboard.UniClipboard', ' UNICLIPBOARD.UNICLIPBOARD '])(
+    'keeps %s in user scope without changing the installer identity', wingetId => {
+      const scope = resolveApplicationInstallScope(wingetId, 'machine');
+      expect(scope).toBe('user');
+      expect(resolveApplicationInstallerSelectionScope(wingetId, scope)).toBe('user');
+      expect(resolveApplicationUninstallCommand(wingetId, 'custom.exe /remove')).toBe('custom.exe /remove');
+    }
+  );
+  it('preserves other application scope', () => {
+    expect(resolveApplicationInstallScope('UniClipboard.Other', 'machine')).toBe('machine');
+  });
+});
