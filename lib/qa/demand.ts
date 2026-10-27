@@ -1,5 +1,6 @@
 import { exactPayloadMaliciousQuery, exactPayloadReputationQuery, isCoveredCleanReputation } from '@/lib/qa/gate';
 import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
+import { arePackageDependenciesCovered } from '@/lib/qa/dependency-reputation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
@@ -197,6 +198,24 @@ export async function ensureQaDemand(
   if (resultError) throw new Error(`Could not read app-version QA result: ${resultError.message}`);
   let refreshingLegacyPass = false;
   if (passedResult) {
+    // Keep this real demand waiting rather than treating the primary pass as
+    // permission for uncovered prerequisite bytes. Do not reset a terminal
+    // lifecycle or create a scan/grant as a side effect of checking coverage.
+    if (!await arePackageDependenciesCovered(supabase, packageDependencies)) {
+      // Attach real waiting demand only to this exact current profile. A
+      // previously recorded receipt may then enter the existing bounded
+      // dependency refresh lane; this never reactivates its lifecycle.
+      const { data: dependencyCandidate, error: dependencyCandidateError } = await supabase
+        .from('qa_candidates').select('id')
+        .eq('winget_id', input.wingetId).eq('version', input.version)
+        .eq('architecture', architecture).eq('installer_sha256', installerSha256)
+        .eq('package_profile_sha256', profileSha256).limit(1).maybeSingle();
+      if (dependencyCandidateError) throw new Error('Dependency verification is unavailable');
+      return {
+        identity, candidateId: dependencyCandidate?.id ?? null, state: 'waiting',
+        failureSummary: 'Installer reputation is awaiting verification.',
+      };
+    }
     const key = { wingetId: input.wingetId, version: input.version, architecture, installerSha256 };
     const { data: newest, error: reputationError } = await exactPayloadReputationQuery(supabase, key);
     if (reputationError) throw new Error(`Could not read exact payload reputation: ${reputationError.message}`);

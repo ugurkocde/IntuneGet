@@ -9,12 +9,16 @@ const {
   getPackageCompatibilityBlockMock,
   getPackageEligibilityBlocksMock,
   enforceInstallerPreflightMock,
+  dependencyCoverageMock,
 } = vi.hoisted(() => ({
   resolveWingetPackageDependenciesMock: vi.fn(),
   getPackageCompatibilityBlockMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
   enforceInstallerPreflightMock: vi.fn(),
+  dependencyCoverageMock: vi.fn(),
 }));
+
+vi.mock('@/lib/qa/dependency-reputation', () => ({ arePackageDependenciesCovered: dependencyCoverageMock }));
 
 vi.mock('@/lib/installer-preflight', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/installer-preflight')>();
@@ -141,6 +145,8 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(updates).toEqual([]);
   });
   beforeEach(() => {
+    dependencyCoverageMock.mockReset();
+    dependencyCoverageMock.mockResolvedValue(true);
     enforceInstallerPreflightMock.mockReset();
     resolveWingetPackageDependenciesMock.mockReset();
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);
@@ -1646,6 +1652,40 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       expect(client.rpc).toHaveBeenCalledWith('insert_qa_candidate_if_absent', { p_candidate: expect.objectContaining({ priority: 1000, demand_source: 'customer' }) });
       expect(updates).toEqual([]);
     });
+    it('keeps an exact Passed payload waiting when its resolved dependency is uncovered', async () => {
+      resolveWingetPackageDependenciesMock.mockResolvedValue([{
+        packageIdentifier: 'Microsoft.VCRedist.2015+.x64', version: '14.50.0.0', architecture: 'x64',
+        installerUrl: 'https://example.test/vc.exe', installerSha256: 'C'.repeat(64),
+        installerType: 'exe', silentArgs: '/quiet /norestart', successCodes: [0],
+        rebootCodes: [3010], fileName: 'vc.exe', order: 1, depth: 1,
+      }]);
+      dependencyCoverageMock.mockResolvedValue(false);
+      const { client, updates } = fixture(clean);
+      await expect(ensureQaDemand(client as never, demandInput()))
+        .resolves.toMatchObject({ state: 'waiting', candidateId: null });
+      expect(client.rpc).not.toHaveBeenCalled();
+      expect(updates).toEqual([]);
+    });
+
+    it('attaches dependency refresh demand only to the exact current profile without restarting it', async () => {
+      resolveWingetPackageDependenciesMock.mockResolvedValue([{
+        packageIdentifier: 'Microsoft.VCRedist.2015+.x64', version: '14.50.0.0', architecture: 'x64',
+        installerUrl: 'https://example.test/vc.exe', installerSha256: 'C'.repeat(64),
+        installerType: 'exe', silentArgs: '/quiet /norestart', successCodes: [0],
+        rebootCodes: [3010], fileName: 'vc.exe', order: 1, depth: 1,
+      }]);
+      dependencyCoverageMock.mockResolvedValue(false);
+      const { client, updates, reads } = fixture(clean, { active: { id: 'recorded-run', status: 'passed' } });
+      const result = await ensureQaDemand(client as never, demandInput());
+      expect(result).toMatchObject({ state: 'waiting', candidateId: 'recorded-run' });
+      expect(reads.find(read => read.table === 'qa_candidates')?.filters).toMatchObject({
+        winget_id: 'Example.App', version: '1.2.3', architecture: 'x64',
+        installer_sha256: 'A'.repeat(64), package_profile_sha256: result.identity.executionProfileSha256,
+      });
+      expect(client.rpc).not.toHaveBeenCalled();
+      expect(updates).toEqual([]);
+    });
+
     it('reuses covered clean evidence without another lifecycle', async () => {
       const { client } = fixture(clean);
       await expect(ensureQaDemand(client as never, demandInput())).resolves.toMatchObject({ state: 'passed', candidateId: null });

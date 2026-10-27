@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
+import { arePackageDependenciesCovered } from '@/lib/qa/dependency-reputation';
 import { getCatalogSource } from '@/lib/catalog';
 import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
@@ -267,6 +269,20 @@ export async function enforceQaGate(input: {
   const { data: reputationRow, error: reputationError } = reputationResult;
   if (reputationError) throw reputationHold(reputationError);
   if (!isCoveredCleanReputation(reputationRow)) throw reputationHold();
+
+  // Re-resolve the trusted payload's current bundle at the final admission
+  // boundary. A primary-installer pass never covers a different or stale
+  // dependency, including when installability is overridden.
+  let dependenciesCovered: boolean;
+  try {
+    const dependencies = await resolveWingetPackageDependencies({
+      wingetId: input.wingetId, version: input.version, architecture, installerSha256,
+    });
+    dependenciesCovered = await arePackageDependenciesCovered(createServerClient(), dependencies);
+  } catch (error) {
+    throw reputationHold(error);
+  }
+  if (!dependenciesCovered) throw reputationHold();
 
   if (!input.requirePassed && input.qaOverride) return;
 

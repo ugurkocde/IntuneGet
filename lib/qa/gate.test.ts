@@ -6,11 +6,20 @@ const {
   getPackageCompatibilityBlockMock,
   getPackageResultMock,
   packageEqMock,
+  dependencyCoverageMock,
+  resolveDependenciesMock,
 } = vi.hoisted(() => ({
   getQaResultMock: vi.fn(),
   getPackageCompatibilityBlockMock: vi.fn(),
   getPackageResultMock: vi.fn(),
   packageEqMock: vi.fn(),
+  dependencyCoverageMock: vi.fn(),
+  resolveDependenciesMock: vi.fn(),
+}));
+vi.mock('@/lib/qa/dependency-reputation', () => ({ arePackageDependenciesCovered: dependencyCoverageMock }));
+vi.mock('@/lib/winget-dependencies', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/winget-dependencies')>(),
+  resolveWingetPackageDependencies: resolveDependenciesMock,
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({ getQaResult: getQaResultMock }),
@@ -97,6 +106,10 @@ const failedRow = {
 
 describe('enforceQaGate', () => {
   beforeEach(() => {
+    dependencyCoverageMock.mockReset();
+    dependencyCoverageMock.mockResolvedValue(true);
+    resolveDependenciesMock.mockReset();
+    resolveDependenciesMock.mockResolvedValue([]);
     getQaResultMock.mockReset();
     getPackageCompatibilityBlockMock.mockReset();
     getPackageCompatibilityBlockMock.mockResolvedValue(null);
@@ -150,6 +163,19 @@ describe('enforceQaGate', () => {
         await expect(enforceQaGate({ ...request, installerSha256: undefined, qaOverride }))
           .rejects.toMatchObject({ details: { reason: 'reputation' } });
       }
+    });
+
+    it.each([false, true])('holds an otherwise Passed payload when a dependency is uncovered, override=%s', async qaOverride => {
+      getPackageResultMock.mockResolvedValue({ data: clean, error: null });
+      getQaResultMock.mockResolvedValue(clean);
+      resolveDependenciesMock.mockResolvedValue([{ installerSha256: 'C'.repeat(64) }]);
+      dependencyCoverageMock.mockResolvedValue(false);
+      await expect(enforceQaGate({ ...request, qaOverride, requirePassed: true }))
+        .rejects.toMatchObject({ details: { reason: 'reputation' } });
+      expect(resolveDependenciesMock).toHaveBeenCalledWith({
+        wingetId: request.wingetId, version: request.version,
+        architecture: request.architecture, installerSha256,
+      });
     });
 
     it('allows the exact payload only with a clean covered verdict', async () => {
