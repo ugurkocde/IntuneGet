@@ -2225,3 +2225,19 @@ describe('application packaging adapters', () => {
     });
   });
 });
+
+describe('Orca vendor user scope', () => {
+  it.each(['StablyAI.Orca', ' STABLYAI.ORCA '])(
+    'keeps %s in user scope without changing the installer identity', wingetId => {
+      const scope = resolveApplicationInstallScope(wingetId, 'machine');
+      expect(scope).toBe('user');
+      expect(resolveApplicationInstallerSelectionScope(wingetId, scope)).toBe('user');
+      expect(resolveApplicationInstallScope(wingetId, undefined)).toBe('user');
+      expect(applyApplicationPackagingAdapter(wingetId, { ...DEFAULT_PSADT_CONFIG }).reviewedInstallArguments || []).toEqual([]);
+      expect(resolveApplicationUninstallCommand(wingetId, 'custom.exe /remove')).toBe('custom.exe /remove');
+    }
+  );
+  it('preserves other application scope', () => {
+    expect(resolveApplicationInstallScope('StablyAI.Other', 'machine')).toBe('machine');
+  });
+});

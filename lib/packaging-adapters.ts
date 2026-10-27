@@ -252,6 +252,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Orca 1.4.242 uses Electron Builder 26.15.3's default one-click NSIS
+    // target without perMachine. Run 40473461347 registered an unavailable
+    // systemprofile uninstaller; keep QA and customer packages in user scope.
+    // The physical missing-file mechanism remains unconfirmed.
+    // https://github.com/stablyai/orca/blob/v1.4.242/config/electron-builder.config.cjs
+    wingetId: 'StablyAI.Orca',
+    requiredInstallScope: 'user',
+  },
+  {
     // Numara's assisted NSIS installer defaults to per-user mode. Select its
     // supported all-users mode explicitly for the machine installation profile.
     // https://github.com/bornova/numara-calculator/blob/v7.6.3/electron-builder.yml
