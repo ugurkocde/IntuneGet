@@ -3,6 +3,20 @@ import { describeDeploymentFailure } from '../deployment-failure-message';
 
 const apps = [{ wingetId: 'Example.One', displayName: 'Example One' }, { wingetId: 'Example.Two', displayName: 'Example Two' }];
 describe('safe deployment failure messages', () => {
+  it('explains the fixed silent installer contract refusal for a requested app', () => {
+    const error = 'A plain EXE package requires explicit silent installer switches or a reviewed application adapter.';
+    expect(describeDeploymentFailure({ errors: [{ wingetId: 'Example.One', error }] }, apps))
+      .toBe(`Example One: ${error}`);
+  });
+
+  it.each([
+    'A plain EXE package requires explicit silent installer switches or a reviewed application adapter. private-secret',
+    'A plain EXE package requires explicit silent installer switches or a reviewed application adapter.\nprivate-secret',
+  ])('keeps diagnostics appended to a contract refusal private: %s', error => {
+    expect(describeDeploymentFailure({ errors: [{ wingetId: 'Example.One', error }] }, apps))
+      .toBe('Example One: Could not be started');
+  });
+
   it('names each requested app and its fixed application reason in response order', () => {
     expect(describeDeploymentFailure({ errors: [
       { wingetId: 'Example.Two', error: 'Failed to create job record' },
