@@ -64,5 +64,19 @@ export function extractSilentSwitches(
     return cleaned;
   }
 
+  // Some EXE contracts put one action verb before their explicit switches.
+  // Accept only a bounded literal form: no extra operands, shell syntax,
+  // paths, URLs or PowerShell deployment-wrapper arguments. Existing switch-
+  // first contracts above retain their own positional-operand behavior.
+  const literalSwitch = String.raw`(?:--?|/)[A-Za-z][A-Za-z0-9-]*(?:=[A-Za-z0-9][A-Za-z0-9_.-]*)?`;
+  const verbAndSwitches = new RegExp(`^[A-Za-z][A-Za-z0-9-]{0,31}(?: +${literalSwitch})+$`);
+  if (
+    effectiveType === 'exe' && cleaned.length <= 1024 &&
+    !/(?:^| )[/-]{1,2}DeploymentType(?:=| |$)/i.test(cleaned) &&
+    verbAndSwitches.test(cleaned)
+  ) {
+    return cleaned;
+  }
+
   return defaultSwitches[effectiveType] ?? '';
 }

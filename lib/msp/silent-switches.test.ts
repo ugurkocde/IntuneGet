@@ -78,4 +78,33 @@ describe('extractSilentSwitches', () => {
       'portable'
     )).toBe('');
   });
+
+  it('keeps a bounded EXE verb followed by explicit silent switches', () => {
+    expect(extractSilentSwitches('"sample-setup.exe" install --quiet --accept-license', 'exe'))
+      .toBe('install --quiet --accept-license');
+    expect(extractSilentSwitches('sample.exe deploy /quiet --mode=unattended', 'exe'))
+      .toBe('deploy /quiet --mode=unattended');
+    expect(extractSilentSwitches('sample.exe install --quiet', 'zip', 'exe'))
+      .toBe('install --quiet');
+  });
+
+  it.each([
+    'install', 'install extra --quiet', 'install --quiet && other',
+    'install --quiet;other', 'install --quiet|other', 'install --quiet > output',
+    'install --quiet $(other)', 'install --quiet `other`',
+    'install --path=C:\\temp', 'install --url=https://example.invalid',
+    'C:\\setup install --quiet', 'https://example.invalid --quiet',
+    'install ./payload --quiet', 'install --quiet\n--accept-license',
+    'install -DeploymentType', 'install --quiet --output=../payload',
+    `${'a'.repeat(33)} --quiet`, `install --${'a'.repeat(1024)}`,
+  ])('rejects unsupported or unsafe bare-verb tail %s', (tail) => {
+    expect(extractSilentSwitches(`"sample.exe" ${tail}`, 'exe')).toBe('');
+  });
+
+  it('keeps framework defaults and wrapper exclusions for bare verbs', () => {
+    expect(extractSilentSwitches('sample.exe install --quiet', 'inno'))
+      .toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
+    expect(extractSilentSwitches('sample.exe -DeploymentType', 'exe')).toBe('');
+  });
+
 });
