@@ -7,6 +7,7 @@ const SAFE_REASONS = new Set([
   'Packaging pipeline not configured',
   'GitHub Actions packaging service not configured',
   'Failed to create job record',
+  'A plain EXE package requires explicit silent installer switches or a reviewed application adapter.',
 ]);
 const MAX_LINES = 5;
 
