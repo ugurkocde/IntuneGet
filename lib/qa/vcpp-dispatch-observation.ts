@@ -7,6 +7,7 @@ export interface VcppDispatchClaim {
   expiresAt: string;
   repositoryId: number;
   repository: string;
+  expectedActorId: number;
 }
 
 export interface VcppObservedRun {
@@ -56,7 +57,9 @@ function utcTime(value: unknown): number {
  * without actor, branch, event, status or source filters that hide duplicate
  * nonce runs. A supplied boolean cannot establish completeness or provenance.
  * expectedSourceSha equality detects drift; source review remains a separate
- * activation gate. The result must still pass the transactional DB binder and
+ * activation gate. expectedActorId must come from reviewed runtime actor
+ * configuration, not a new lookup of whoever currently holds a login. The
+ * result must still pass the transactional DB binder and
  * a pre-execution gate before any installer may run. This module has no caller
  * wired into dispatch, VM execution, authorization transitions or publication.
  */
@@ -80,7 +83,7 @@ export function observeVcppDispatch(
     !/^[\x20-\x7e]+$/.test(claim.label) || !claim.label.endsWith(` [vcpp:${claim.nonce}]`) ||
     !/^[a-f0-9]{40}$/.test(claim.expectedSourceSha) ||
     !/^[1-9][0-9]{0,19}$/.test(claim.originalRunId) ||
-    !positiveId(claim.repositoryId) || claim.repository !== REPOSITORY) {
+    !positiveId(claim.repositoryId) || !positiveId(claim.expectedActorId) || claim.repository !== REPOSITORY) {
     return { kind: 'refused', reason: 'invalid_claim' };
   }
   if (current > expiresAt) return { kind: 'refused', reason: 'expired' };
@@ -106,7 +109,7 @@ export function observeVcppDispatch(
     ids.add(run.id);
     // Count before filtering provenance: a copied label on a different ref or
     // actor is ambiguity, never a reason to select the convenient first match.
-    if (run.display_title === TITLE_PREFIX + claim.label) candidates.push(run);
+    if (run.display_title.includes(`[vcpp:${claim.nonce}]`)) candidates.push(run);
   }
   if (total !== rows.length) return { kind: 'waiting', reason: 'inventory_incomplete' };
   if (candidates.length > 1) return { kind: 'refused', reason: 'ambiguous_nonce' };
@@ -116,9 +119,10 @@ export function observeVcppDispatch(
   const headRepository = object(run.head_repository);
   const actor = object(run.actor);
   const createdAt = utcTime(run.created_at);
-  if (run.run_attempt !== 1 || run.head_sha !== claim.expectedSourceSha ||
+  if (run.display_title !== TITLE_PREFIX + claim.label ||
+    run.run_attempt !== 1 || run.head_sha !== claim.expectedSourceSha ||
     run.head_branch !== 'main' || run.event !== 'workflow_dispatch' || run.path !== WORKFLOW ||
-    actor?.login !== 'ugurkocde' || actor.type !== 'User' || !positiveId(actor.id) ||
+    actor?.login !== 'ugurkocde' || actor.type !== 'User' || actor.id !== claim.expectedActorId ||
     repository?.id !== claim.repositoryId || repository.full_name !== REPOSITORY ||
     headRepository?.id !== claim.repositoryId || headRepository.full_name !== REPOSITORY ||
     BigInt(run.id as number) <= BigInt(claim.originalRunId) ||
