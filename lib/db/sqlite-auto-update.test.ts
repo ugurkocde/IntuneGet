@@ -45,7 +45,7 @@ describe('SQLite auto-update completion', () => {
     raw.close();
     expect((await db.autoUpdateHistory.list('user', { limit: 10, offset: 0 }))[0].status).toBe('failed');
     closeSqliteDb();
-    expect((await db.updatePolicies.getById(policy.id, 'user'))?.consecutive_failures).toBe(1);
+    expect((await db.updatePolicies.getById(policy.id, 'user'))?.consecutive_failures).toBe(3);
   });
   it.each([false, true])('repairs old failures without overwriting a newer attempt: %s', async newerAttempt => {
     const { policy, job } = await seed();

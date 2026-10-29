@@ -71,7 +71,7 @@ function getDb(): Database.Database {
         JOIN auto_update_history h ON h.packaging_job_id = j.id
         WHERE j.status IN ('deployed', 'duplicate_skipped', 'failed', 'cancelled')
         AND h.status IN ('pending', 'packaging', 'deploying') ORDER BY j.updated_at, j.id`).all() as { id: string }[];
-      for (const job of jobs) syncSqliteAutoUpdate(database, job.id, true);
+      for (const job of jobs) syncSqliteAutoUpdate(database, job.id);
     })();
 
   } catch (error) {

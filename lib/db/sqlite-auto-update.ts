@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { DEFAULT_SAFETY_CONFIG } from '@/types/update-policies';
 
 /** Run inside the job write transaction so history and policy cannot lag behind it. */
-export function syncSqliteAutoUpdate(database: Database.Database, jobId: string, repair = false): void {
+export function syncSqliteAutoUpdate(database: Database.Database, jobId: string): void {
   const row = database.prepare(`
     SELECT h.id, h.policy_id, j.status, j.error_message, j.completed_at, j.updated_at
     FROM packaging_jobs j
@@ -26,8 +26,8 @@ export function syncSqliteAutoUpdate(database: Database.Database, jobId: string,
     database.prepare('UPDATE app_update_policies SET consecutive_failures = 0, updated_at = ? WHERE id = ?').run(now, row.policy_id);
   } else {
     database.prepare(`UPDATE app_update_policies SET last_auto_update_version = NULL,
-      consecutive_failures = CASE WHEN ? THEN 1 ELSE consecutive_failures + 1 END,
-      is_enabled = CASE WHEN (CASE WHEN ? THEN 1 ELSE consecutive_failures + 1 END) >= ? THEN 0 ELSE is_enabled END,
-      updated_at = ? WHERE id = ?`).run(repair ? 1 : 0, repair ? 1 : 0, DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures, now, row.policy_id);
+      consecutive_failures = consecutive_failures + 1,
+      is_enabled = CASE WHEN consecutive_failures + 1 >= ? THEN 0 ELSE is_enabled END,
+      updated_at = ? WHERE id = ?`).run(DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures, now, row.policy_id);
   }
 }
