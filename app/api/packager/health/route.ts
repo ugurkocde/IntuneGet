@@ -50,7 +50,7 @@ export async function GET() {
     const jobStats = await db.jobs.getStats();
 
     const stats: PackagerStats = {
-      activePackagers: 0, // Will be calculated below
+      activePackagers: jobStats.activePackagers ?? 0,
       queuedJobs: jobStats.queued,
       processingJobs: jobStats.packaging + jobStats.uploading,
       recentCompletedJobs: jobStats.deployed,

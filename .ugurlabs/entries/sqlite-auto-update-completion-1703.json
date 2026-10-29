@@ -1,0 +1,5 @@
+{
+  "title": "Local auto-update history follows deployment results",
+  "summary": "SQLite self-hosted installations now mark automatic updates completed when deployment finishes and update failure tracking on failed or cancelled jobs. Existing stuck history is repaired at startup. Packager health now counts workers observed through recent job heartbeats.",
+  "type": "fixed"
+}
