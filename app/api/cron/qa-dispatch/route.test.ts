@@ -119,6 +119,8 @@ function createSupabaseStub(
     claimErrorById?: Record<string, { message: string; code?: string }>;
     supersedeError?: { message: string; code?: string };
     activeCandidates?: Array<Record<string, unknown>>;
+    timeoutRequeueError?: { message: string; code?: string };
+    terminalRecoveryError?: { message: string; code?: string };
   } = {}
 ) {
   const supersededIds: string[] = [];
@@ -230,9 +232,9 @@ function createSupabaseStub(
 
           if (values.status === 'queued') {
             rollbackPayloads.push(values);
-            const builder = query({ data: null, error: null }) as Record<string, unknown>;
+            const builder = query({ data: null, error: options.timeoutRequeueError || null }) as Record<string, unknown>;
             builder.eq = vi.fn((column: string, value: string) => {
-              if (column === 'id') {
+              if (column === 'id' && !options.timeoutRequeueError) {
                 rollbackIds.push(value);
                 activeCandidates = activeCandidates.filter((candidate) => candidate.id !== value);
               }
@@ -243,9 +245,9 @@ function createSupabaseStub(
 
           if (values.status === 'error') {
             terminalErrorPayloads.push(values);
-            const builder = query({ data: null, error: null }) as Record<string, unknown>;
+            const builder = query({ data: null, error: options.terminalRecoveryError || null }) as Record<string, unknown>;
             builder.eq = vi.fn((column: string, value: string) => {
-              if (column === 'id') {
+              if (column === 'id' && !options.terminalRecoveryError) {
                 terminalErrorIds.push(value);
                 activeCandidates = activeCandidates.filter((candidate) => candidate.id !== value);
               }
@@ -300,6 +302,56 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-dispatch', () => {
+  const vcppRequeueError = { code: 'P0001', message: 'Active VC++ authorization cannot be requeued' };
+
+  it.each(['dispatched', 'running'])('retains a guarded %s VC++ run and dispatches the next fair queued app', async status => {
+    const active = { ...candidate('catalog-default'), id: testUuid(50), status,
+      attempts: 1, dispatched_at: '2026-09-24T17:57:36Z',
+      started_at: status === 'running' ? '2026-09-24T17:57:41Z' : null,
+      github_run_id: '36037902554', github_run_url: 'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/36037902554' };
+    const next = candidate('deployment-config');
+    const stub = createSupabaseStub([next], [], { activeCandidates: [active], timeoutRequeueError: vcppRequeueError });
+    createServerClientMock.mockReturnValue(stub.client);
+    isQaWorkflowRunCompletedMock.mockResolvedValue(true);
+
+    const response = await GET(cronRequest());
+    expect(await response.json()).toMatchObject({ dispatched: true, candidateId: next.id, reconciled: 1 });
+    expect(stub.rollbackIds).toEqual([]);
+    expect(stub.terminalErrorIds).toEqual([active.id]);
+    expect(stub.terminalErrorPayloads[0]).toMatchObject({ status: 'error',
+      github_run_id: active.github_run_id, github_run_url: active.github_run_url,
+      dispatched_at: active.dispatched_at, started_at: active.started_at,
+      failure_summary: 'Single-attempt VC++ dispatch ended without a terminal report; automatic retry is forbidden.' });
+    expect(stub.terminalErrorPayloads[0]).not.toHaveProperty('attempts');
+    expect(stub.claimedIds).toEqual([next.id]);
+    expect(dispatchQaCandidateMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { code: 'P0001', message: 'An unrelated guard refused the update' },
+    { code: '42501', message: 'Active VC++ authorization cannot be requeued' },
+  ])('does not suppress an unrelated timeout write error: $code $message', async error => {
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 1,
+      dispatched_at: '2026-09-24T17:57:36Z', started_at: null, github_run_id: null };
+    const stub = createSupabaseStub([], [], { activeCandidates: [active], timeoutRequeueError: error });
+    createServerClientMock.mockReturnValue(stub.client);
+    await expect(GET(cronRequest())).rejects.toEqual(error);
+    expect(stub.terminalErrorIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('stops rather than dispatching another app when guarded terminal recovery fails', async () => {
+    const error = { code: '42501', message: 'Terminal recovery denied' };
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 1,
+      dispatched_at: '2026-09-24T17:57:36Z', started_at: null, github_run_id: null };
+    const stub = createSupabaseStub([candidate('deployment-config')], [], {
+      activeCandidates: [active], timeoutRequeueError: vcppRequeueError, terminalRecoveryError: error });
+    createServerClientMock.mockReturnValue(stub.client);
+    await expect(GET(cronRequest())).rejects.toEqual(error);
+    expect(stub.claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
   const liveInventory = (status: string, id = 456) => ({
     state: 'complete', inventory: { total_count: 1,
       workflow_runs: [{ id, status, path: '.github/workflows/intune-qa.yml' }] },

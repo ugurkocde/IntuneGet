@@ -23,6 +23,23 @@ begin
 end;
 $$;
 
+-- Positive active-state writes use the real API role. Roll the subtransaction
+-- back after success so the fixture's original-candidate invariant is preserved.
+create function pg_temp.fixture_assert_vcpp_active_writes(p_id uuid) returns void language plpgsql as $$
+begin
+  begin
+    set local role service_role;
+    if current_user<>'service_role' then raise exception 'Fixture role not applied';end if;
+    update public.qa_candidates set github_run_id=github_run_id where id=p_id;
+    update public.qa_candidates set status='running',github_run_id='456' where id=p_id;
+    update public.qa_candidates set status='passed',github_run_id=github_run_id where id=p_id;
+    update public.qa_candidates set status='failed' where id=p_id;
+    update public.qa_candidates set status='error' where id=p_id;
+    raise exception using errcode='ZX001',message='Rollback successful positive fixture writes';
+  exception when sqlstate 'ZX001' then null;end;
+end;
+$$;
+
 do $$
 declare cid uuid:='79910000-0000-4000-8000-000000000001';
   newer uuid:='79910000-0000-4000-8000-000000000002';
@@ -281,6 +298,7 @@ begin
   if not denied then raise exception 'Future claim time accepted';end if;
   perform pg_temp.fixture_claim_vcpp(cid);
   perform pg_temp.fixture_assert_vcpp_requeue_denied(cid);
+  perform pg_temp.fixture_assert_vcpp_active_writes(cid);
   -- Mutate during an otherwise permitted transition, so state ordering alone
   -- cannot make these tests pass when provenance immutability is broken.
   foreach field in array array['expected_actor_id','repository_id','expected_source_sha',
@@ -327,8 +345,10 @@ begin
   if not denied then raise exception 'Run predating dispatch window bound';end if;
   update public.qa_vcpp_retest_authorizations set state='dispatch_unknown' where candidate_id=cid;
   perform pg_temp.fixture_assert_vcpp_requeue_denied(cid);
+  perform pg_temp.fixture_assert_vcpp_active_writes(cid);
   update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at where candidate_id=cid;
   perform pg_temp.fixture_assert_vcpp_requeue_denied(cid);
+  perform pg_temp.fixture_assert_vcpp_active_writes(cid);
   foreach field in array array['999',null] loop
     denied:=false;
     begin
