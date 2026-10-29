@@ -54,9 +54,13 @@ begin
     or (old.state='bound' and new.state in ('passed','failed','superseded'))) then
     raise exception 'Invalid VC++ authorization state transition';
   end if;
+  if new.state='dispatch_pending' and clock_timestamp()>old.expires_at then
+    raise exception 'Expired VC++ reservation cannot claim a dispatch';
+  end if;
   if (new.run_id,new.run_attempt,new.bound_at) is distinct from (old.run_id,old.run_attempt,old.bound_at) then
     if old.run_id is not null or old.state not in ('dispatch_pending','dispatch_unknown')
       or new.state<>'bound' or new.run_id is null or new.run_attempt is distinct from 1
+      or new.run_id::numeric<=old.original_run_id::numeric
       or new.bound_at is null or clock_timestamp()>old.expires_at
       or new.bound_at>clock_timestamp() or new.bound_at<clock_timestamp()-interval '1 minute' then
       raise exception 'VC++ run binding is write once, current and attempt one';

@@ -3,6 +3,7 @@ begin;
 do $$
 declare cid uuid:='79910000-0000-4000-8000-000000000001';
   newer uuid:='79910000-0000-4000-8000-000000000002';
+  expired uuid:='79910000-0000-4000-8000-000000000003';
   canonical text:='{"app":{"wingetId":"Fixture.Vcpp","version":"1.0","architecture":"x64"},"toolchain":{"packagerCommit":"dddddddddddddddddddddddddddddddddddddddd"},"installer":{"sha256":"EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE","packageDependencies":[{"order":1,"packageIdentifier":"Microsoft.VCRedist.2015+.x64","version":"14.51.36247.0","architecture":"x64","sha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}]}}';
   profile text; prior jsonb; field text; denied boolean; modified jsonb; text_bytes text; accepted uuid; violated text;
 begin
@@ -180,6 +181,8 @@ begin
     and (state<>'reserved' or run_id is not null or run_attempt is not null or bound_at is not null))
     then raise exception 'Reservation became execution authority';end if;
   -- Lifetime uniqueness includes terminal reservations; no delete/reissue path.
+  -- Catching unique_violation rolls back each attempted state change, so both
+  -- iterations start from reserved without a forbidden backwards transition.
   foreach field in array array['expired','failed'] loop
     denied:=false;
     begin
@@ -220,6 +223,13 @@ begin
     update public.qa_vcpp_retest_authorizations set state='reserved' where candidate_id=cid;
   exception when raise_exception then denied:=true;end;
   if not denied then raise exception 'Dispatch claim reset for replay';end if;
+  foreach field in array array['123','122'] loop
+    denied:=false;
+    begin
+      update public.qa_vcpp_retest_authorizations set state='bound',run_id=field,run_attempt=1,bound_at=clock_timestamp() where candidate_id=cid;
+    exception when raise_exception then denied:=true;end;
+    if not denied then raise exception 'Original or older run accepted: %',field;end if;
+  end loop;
   denied:=false;
   begin
     update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=2,bound_at=clock_timestamp() where candidate_id=cid;
@@ -267,6 +277,19 @@ begin
   update public.qa_vcpp_retest_authorizations set state='passed' where candidate_id=newer;
   if not exists(select 1 from public.qa_vcpp_retest_authorizations where candidate_id=newer and state='passed')
     then raise exception 'Reservation expiry invalidated a bound run';end if;
+  -- Model time passing without sleeping: only the disposable owner inserts history.
+  insert into public.qa_candidates select (jsonb_populate_record(null::public.qa_candidates,prior||jsonb_build_object('id',expired))).*;
+  insert into public.qa_vcpp_retest_authorizations
+    select (jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,to_jsonb(a)||jsonb_build_object(
+      'candidate_id',expired,'winget_id','fixture.expired-reserved','state','reserved','run_id',null,
+      'run_attempt',null,'bound_at',null,'created_at',clock_timestamp()-interval '3 hours',
+      'expires_at',clock_timestamp()-interval '1 hour'))).*
+    from public.qa_vcpp_retest_authorizations a where candidate_id=cid;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='dispatch_pending' where candidate_id=expired;
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Expired reservation claimed for dispatch';end if;
 end;
 $$;
 rollback;
