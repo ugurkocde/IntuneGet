@@ -174,7 +174,20 @@ export async function GET(request: Request) {
       .update(recovery)
       .eq('id', candidate.id)
       .eq('status', candidate.status);
-    if (error) throw error;
+    if (error) {
+      if (recovery.status !== 'queued' || error.code !== 'P0001' ||
+        error.message !== 'Active VC++ authorization cannot be requeued') throw error;
+      // The database rejected the retry before changing the row. Preserve the
+      // single attempt and run identity, rather than aborting every cron tick.
+      // Authorization finalization and result admission remain separate gates.
+      const { error: terminalError } = await supabase
+        .from('qa_candidates')
+        .update(qaTimeoutRecoveryUpdate(candidate, now.toISOString(), 0,
+          'Single-attempt VC++ dispatch ended without a terminal report; automatic retry is forbidden.'))
+        .eq('id', candidate.id)
+        .eq('status', candidate.status);
+      if (terminalError) throw terminalError;
+    }
     reconciled++;
   }
 
