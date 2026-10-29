@@ -61,17 +61,24 @@ function getDb(): Database.Database {
   db.pragma('foreign_keys = ON');
 
   // Apply versioned migrations (baseline, then additive changes)
-  runSqliteMigrations(db);
+  try {
+    runSqliteMigrations(db);
 
-  // Repair history left pending by older local packagers, once per connection.
-  const database = db;
-  database.transaction(() => {
-    const jobs = database.prepare(`SELECT DISTINCT j.id FROM packaging_jobs j
-      JOIN auto_update_history h ON h.packaging_job_id = j.id
-      WHERE j.status IN ('deployed', 'duplicate_skipped', 'failed', 'cancelled')
-      AND h.status IN ('pending', 'packaging', 'deploying') ORDER BY j.updated_at, j.id`).all() as { id: string }[];
-    for (const job of jobs) syncSqliteAutoUpdate(database, job.id);
-  })();
+    // Repair history left pending by older local packagers, once per connection.
+    const database = db;
+    database.transaction(() => {
+      const jobs = database.prepare(`SELECT DISTINCT j.id FROM packaging_jobs j
+        JOIN auto_update_history h ON h.packaging_job_id = j.id
+        WHERE j.status IN ('deployed', 'duplicate_skipped', 'failed', 'cancelled')
+        AND h.status IN ('pending', 'packaging', 'deploying') ORDER BY j.updated_at, j.id`).all() as { id: string }[];
+      for (const job of jobs) syncSqliteAutoUpdate(database, job.id, true);
+    })();
+
+  } catch (error) {
+    db.close();
+    db = null;
+    throw error;
+  }
 
   return db;
 }
