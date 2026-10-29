@@ -805,6 +805,16 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
   });
 
+  it('runs GameMaker elevated while selecting the published user-scope installer', () => {
+    expect(resolveApplicationInstallScope('YoYoGames.GameMaker.Studio.2', 'user')).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope(
+      'YoYoGames.GameMaker.Studio.2',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope('Example.App', 'machine')).toBe('machine');
+  });
+
   it('runs NVM for Windows elevated from a deterministic machine directory', () => {
     expect(resolveApplicationInstallScope('CoreyButler.NVMforWindows', 'user')).toBe(
       'machine'
