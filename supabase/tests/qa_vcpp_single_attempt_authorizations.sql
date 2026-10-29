@@ -11,6 +11,18 @@ begin
 end;
 $$;
 
+-- Exercise the candidate UPDATE boundary used by timeout, reporter and operator
+-- paths. No authorization state change or dispatch is performed here.
+create function pg_temp.fixture_assert_vcpp_requeue_denied(p_id uuid) returns void language plpgsql as $$
+declare denied boolean:=false;
+begin
+  begin
+    update public.qa_candidates set status='queued' where id=p_id;
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Active VC++ authorization requeued';end if;
+end;
+$$;
+
 do $$
 declare cid uuid:='79910000-0000-4000-8000-000000000001';
   newer uuid:='79910000-0000-4000-8000-000000000002';
@@ -22,6 +34,10 @@ begin
     or has_function_privilege('authenticated','public.reserve_qa_vcpp_retest(uuid,integer,text,text,text,text,timestamptz)','execute')
     or not has_function_privilege('service_role','public.reserve_qa_vcpp_retest(uuid,integer,text,text,text,text,timestamptz)','execute')
     then raise exception 'Authorization creator ACL is wrong';end if;
+  if has_function_privilege('anon','public.guard_qa_vcpp_candidate_update()','execute')
+    or has_function_privilege('authenticated','public.guard_qa_vcpp_candidate_update()','execute')
+    or has_function_privilege('service_role','public.guard_qa_vcpp_candidate_update()','execute')
+    then raise exception 'Candidate guard exposed as callable API';end if;
   foreach field in array array['INSERT','UPDATE','DELETE','TRUNCATE'] loop
     if has_table_privilege('anon','public.qa_vcpp_retest_authorizations',field)
       or has_table_privilege('authenticated','public.qa_vcpp_retest_authorizations',field)
@@ -238,7 +254,33 @@ begin
     update public.qa_vcpp_retest_authorizations set state='dispatch_pending',dispatch_nonce=gen_random_uuid() where candidate_id=cid;
   exception when raise_exception or check_violation then denied:=true;end;
   if not denied then raise exception 'Partial dispatch provenance accepted';end if;
+  -- Reserved metadata is not a dispatch claim; the ordinary update path still
+  -- works and is restored before exercising the future active states.
+  update public.qa_candidates set status='queued' where id=cid;
+  update public.qa_candidates set status=prior->>'status' where id=cid;
+  -- Full metadata must be initialized only by the dispatch claim transition.
+  foreach field in array array['superseded','expired','voided_customer'] loop
+    denied:=false;
+    begin
+      update public.qa_vcpp_retest_authorizations set state=field,
+        dispatch_nonce='79910000-0000-4000-8000-000000000006',
+        dispatch_label=winget_id||' '||version||' '||architecture||' [vcpp:79910000-0000-4000-8000-000000000006]',
+        expected_source_sha=repeat('c',40),expected_actor_id=456,repository_id=123,
+        dispatch_claimed_at=clock_timestamp() where candidate_id=cid;
+    exception when raise_exception then denied:=true;end;
+    if not denied then raise exception 'Provenance initialized outside claim: %',field;end if;
+  end loop;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='dispatch_pending',
+      dispatch_nonce='79910000-0000-4000-8000-000000000006',
+      dispatch_label=winget_id||' '||version||' '||architecture||' [vcpp:79910000-0000-4000-8000-000000000006]',
+      expected_source_sha=repeat('c',40),expected_actor_id=456,repository_id=123,
+      dispatch_claimed_at=clock_timestamp()+interval '2 minutes' where candidate_id=cid;
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Future claim time accepted';end if;
   perform pg_temp.fixture_claim_vcpp(cid);
+  perform pg_temp.fixture_assert_vcpp_requeue_denied(cid);
   -- Mutate during an otherwise permitted transition, so state ordering alone
   -- cannot make these tests pass when provenance immutability is broken.
   foreach field in array array['expected_actor_id','repository_id','expected_source_sha',
@@ -284,7 +326,16 @@ begin
   exception when raise_exception then denied:=true;end;
   if not denied then raise exception 'Run predating dispatch window bound';end if;
   update public.qa_vcpp_retest_authorizations set state='dispatch_unknown' where candidate_id=cid;
+  perform pg_temp.fixture_assert_vcpp_requeue_denied(cid);
   update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at where candidate_id=cid;
+  perform pg_temp.fixture_assert_vcpp_requeue_denied(cid);
+  foreach field in array array['999',null] loop
+    denied:=false;
+    begin
+      update public.qa_candidates set github_run_id=field where id=cid;
+    exception when raise_exception then denied:=true;end;
+    if not denied then raise exception 'Bound VC++ candidate run replaced';end if;
+  end loop;
   denied:=false;
   begin
     insert into public.qa_candidates select (jsonb_populate_record(null::public.qa_candidates,prior||jsonb_build_object('id',newer))).*;
@@ -364,6 +415,28 @@ begin
     perform pg_temp.fixture_claim_vcpp(expired);
   exception when raise_exception then denied:=true;end;
   if not denied then raise exception 'Expired reservation claimed for dispatch';end if;
+  -- Age an unexpired reservation without sleeping. Its stale claim remains
+  -- inside the reservation window, so only the one-minute trigger rejects it.
+  insert into public.qa_candidates select (jsonb_populate_record(null::public.qa_candidates,
+    prior||jsonb_build_object('id','79910000-0000-4000-8000-000000000004'))).*;
+  insert into public.qa_vcpp_retest_authorizations
+    select (jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,to_jsonb(a)||jsonb_build_object(
+      'candidate_id','79910000-0000-4000-8000-000000000004','winget_id','fixture.stale-reserved',
+      'state','reserved','run_id',null,'run_attempt',null,'bound_at',null,'run_created_at',null,
+      'dispatch_nonce',null,'dispatch_label',null,'expected_source_sha',null,
+      'expected_actor_id',null,'repository_id',null,'dispatch_claimed_at',null,
+      'created_at',clock_timestamp()-interval '3 minutes','expires_at',clock_timestamp()+interval '1 hour'))).*
+    from public.qa_vcpp_retest_authorizations a where candidate_id=cid;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='dispatch_pending',
+      dispatch_nonce='79910000-0000-4000-8000-000000000006',
+      dispatch_label=winget_id||' '||version||' '||architecture||' [vcpp:79910000-0000-4000-8000-000000000006]',
+      expected_source_sha=repeat('c',40),expected_actor_id=456,repository_id=123,
+      dispatch_claimed_at=clock_timestamp()-interval '2 minutes'
+      where candidate_id='79910000-0000-4000-8000-000000000004';
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Stale claim time accepted';end if;
 end;
 $$;
 rollback;

@@ -109,6 +109,33 @@ revoke all on function public.guard_qa_vcpp_retest_authorization() from public,a
 create trigger qa_vcpp_retest_history_guard before update or delete on public.qa_vcpp_retest_authorizations
   for each row execute function public.guard_qa_vcpp_retest_authorization();
 
+-- Defense in depth for the future single-attempt runtime. Existing timeout,
+-- reporter retry and operator updates all reach this candidate boundary.
+-- This does not claim or bind an authorization, or authorize VM execution.
+create function public.guard_qa_vcpp_candidate_update() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare auth_row public.qa_vcpp_retest_authorizations%rowtype;
+begin
+  select * into auth_row from public.qa_vcpp_retest_authorizations
+    where candidate_id=old.id;
+  if found then
+    if auth_row.state in ('dispatch_pending','dispatch_unknown','bound')
+      and new.status='queued' then
+      raise exception 'Active VC++ authorization cannot be requeued';
+    end if;
+    if auth_row.state='bound'
+      and new.github_run_id is distinct from old.github_run_id
+      and new.github_run_id is distinct from auth_row.run_id then
+      raise exception 'Bound VC++ candidate run cannot be replaced';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.guard_qa_vcpp_candidate_update() from public,anon,authenticated,service_role;
+create trigger qa_vcpp_candidate_update_guard before update of status,github_run_id on public.qa_candidates
+  for each row execute function public.guard_qa_vcpp_candidate_update();
+
 -- Same existing QA-owner service_role administrative path as repair adoption.
 -- The host synchronization secret receives no authorization-creation capability.
 create function public.reserve_qa_vcpp_retest(p_candidate_id uuid,p_original_pr integer,
