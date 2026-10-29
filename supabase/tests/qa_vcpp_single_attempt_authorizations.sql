@@ -1,5 +1,16 @@
 -- Disposable fixture only. No production operation or dispatch is performed.
 begin;
+-- Only the disposable owner models a future privileged claim.
+create function pg_temp.fixture_claim_vcpp(p_id uuid) returns void language plpgsql as $$
+declare nonce uuid:=gen_random_uuid();
+begin
+  update public.qa_vcpp_retest_authorizations set state='dispatch_pending',dispatch_nonce=nonce,
+    dispatch_label=winget_id||' '||version||' '||architecture||' [vcpp:'||nonce::text||']',
+    expected_source_sha=repeat('c',40),expected_actor_id=456,repository_id=123,
+    dispatch_claimed_at=clock_timestamp() where candidate_id=p_id;
+end;
+$$;
+
 do $$
 declare cid uuid:='79910000-0000-4000-8000-000000000001';
   newer uuid:='79910000-0000-4000-8000-000000000002';
@@ -187,7 +198,7 @@ begin
     denied:=false;
     begin
       if field='failed' then
-        update public.qa_vcpp_retest_authorizations set state='dispatch_pending' where candidate_id=cid;
+        perform pg_temp.fixture_claim_vcpp(cid);
       end if;
       update public.qa_vcpp_retest_authorizations set state=field where candidate_id=cid;
       perform public.reserve_qa_vcpp_retest(cid,123,repeat('b',40),repeat('c',40),repeat('e',40),repeat('f',64),now()+interval '1 hour');
@@ -214,10 +225,41 @@ begin
   if not denied then raise exception 'Expiry extension accepted';end if;
   denied:=false;
   begin
-    update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,bound_at=clock_timestamp() where candidate_id=cid;
+    update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at where candidate_id=cid;
   exception when raise_exception then denied:=true;end;
   if not denied then raise exception 'Reservation bound without dispatch claim';end if;
-  update public.qa_vcpp_retest_authorizations set state='dispatch_pending' where candidate_id=cid;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='dispatch_pending' where candidate_id=cid;
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Dispatch claimed without provenance';end if;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='dispatch_pending',dispatch_nonce=gen_random_uuid() where candidate_id=cid;
+  exception when raise_exception or check_violation then denied:=true;end;
+  if not denied then raise exception 'Partial dispatch provenance accepted';end if;
+  perform pg_temp.fixture_claim_vcpp(cid);
+  -- Mutate during an otherwise permitted transition, so state ordering alone
+  -- cannot make these tests pass when provenance immutability is broken.
+  foreach field in array array['expected_actor_id','repository_id','expected_source_sha',
+    'dispatch_claimed_at','dispatch_nonce','dispatch_label'] loop
+    modified:=case field
+      when 'expected_actor_id' then jsonb_build_object(field,457)
+      when 'repository_id' then jsonb_build_object(field,124)
+      when 'expected_source_sha' then jsonb_build_object(field,repeat('d',40))
+      when 'dispatch_claimed_at' then jsonb_build_object(field,clock_timestamp())
+      when 'dispatch_nonce' then jsonb_build_object(field,gen_random_uuid())
+      else jsonb_build_object(field,'changed label') end;
+    denied:=false;
+    begin
+      update public.qa_vcpp_retest_authorizations a set
+        (state,dispatch_nonce,dispatch_label,expected_source_sha,expected_actor_id,repository_id,dispatch_claimed_at)=
+        (select 'dispatch_unknown',x.dispatch_nonce,x.dispatch_label,x.expected_source_sha,x.expected_actor_id,x.repository_id,x.dispatch_claimed_at
+         from jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,to_jsonb(a)||modified) x)
+        where candidate_id=cid;
+    exception when raise_exception then denied:=true;end;
+    if not denied then raise exception 'Dispatch provenance mutated: %',field;end if;
+  end loop;
   denied:=false;
   begin
     update public.qa_vcpp_retest_authorizations set state='reserved' where candidate_id=cid;
@@ -226,23 +268,45 @@ begin
   foreach field in array array['123','122'] loop
     denied:=false;
     begin
-      update public.qa_vcpp_retest_authorizations set state='bound',run_id=field,run_attempt=1,bound_at=clock_timestamp() where candidate_id=cid;
+      update public.qa_vcpp_retest_authorizations set state='bound',run_id=field,run_attempt=1,bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at where candidate_id=cid;
     exception when raise_exception then denied:=true;end;
     if not denied then raise exception 'Original or older run accepted: %',field;end if;
   end loop;
   denied:=false;
   begin
-    update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=2,bound_at=clock_timestamp() where candidate_id=cid;
+    update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=2,bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at where candidate_id=cid;
   exception when raise_exception or check_violation then denied:=true;end;
   if not denied then raise exception 'Attempt two binding accepted';end if;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,
+      bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at-interval '6 seconds' where candidate_id=cid;
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Run predating dispatch window bound';end if;
   update public.qa_vcpp_retest_authorizations set state='dispatch_unknown' where candidate_id=cid;
-  update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,bound_at=clock_timestamp() where candidate_id=cid;
+  update public.qa_vcpp_retest_authorizations set state='bound',run_id='456',run_attempt=1,bound_at=clock_timestamp(),run_created_at=dispatch_claimed_at where candidate_id=cid;
+  denied:=false;
+  begin
+    insert into public.qa_candidates select (jsonb_populate_record(null::public.qa_candidates,prior||jsonb_build_object('id',newer))).*;
+    insert into public.qa_vcpp_retest_authorizations
+      select (jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,to_jsonb(a)||jsonb_build_object(
+        'candidate_id',newer,'winget_id','fixture.duplicate-nonce','run_id','999',
+        'dispatch_label','fixture.duplicate-nonce 1.0 x64 [vcpp:'||a.dispatch_nonce::text||']'))).*
+      from public.qa_vcpp_retest_authorizations a where candidate_id=cid;
+  exception when unique_violation then
+    get stacked diagnostics violated=constraint_name;
+    if violated<>'qa_vcpp_retest_authorizations_dispatch_nonce_key' then raise;end if;
+    denied:=true;
+  end;
+  if not denied then raise exception 'One nonce claimed two authorizations';end if;
   denied:=false;
   begin
     insert into public.qa_candidates select (jsonb_populate_record(null::public.qa_candidates,prior||jsonb_build_object('id',newer))).*;
     insert into public.qa_vcpp_retest_authorizations
       select (jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,
-        to_jsonb(a)||jsonb_build_object('candidate_id',newer,'winget_id','fixture.another'))).*
+        to_jsonb(a)||jsonb_build_object('candidate_id',newer,'winget_id','fixture.another',
+        'dispatch_nonce','79910000-0000-4000-8000-000000000004',
+        'dispatch_label','fixture.another 1.0 x64 [vcpp:79910000-0000-4000-8000-000000000004]'))).*
       from public.qa_vcpp_retest_authorizations a where candidate_id=cid;
   exception when unique_violation then
     get stacked diagnostics violated=constraint_name;
@@ -255,6 +319,11 @@ begin
     update public.qa_vcpp_retest_authorizations set run_id='457' where candidate_id=cid;
   exception when raise_exception then denied:=true;end;
   if not denied then raise exception 'Bound run rewritten';end if;
+  denied:=false;
+  begin
+    update public.qa_vcpp_retest_authorizations set state='passed',run_created_at=run_created_at+interval '1 second' where candidate_id=cid;
+  exception when raise_exception then denied:=true;end;
+  if not denied then raise exception 'Observed creation time rewritten';end if;
   update public.qa_vcpp_retest_authorizations set state='passed' where candidate_id=cid;
   denied:=false;
   begin
@@ -272,7 +341,10 @@ begin
     select (jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,to_jsonb(a)||jsonb_build_object(
       'candidate_id',newer,'winget_id','fixture.expired-bound','state','bound','run_id','789',
       'created_at',clock_timestamp()-interval '3 hours','expires_at',clock_timestamp()-interval '1 hour',
-      'bound_at',clock_timestamp()-interval '2 hours'))).*
+      'bound_at',now()-interval '2 hours','run_created_at',now()-interval '2 hours',
+      'dispatch_claimed_at',now()-interval '2 hours 1 second',
+      'dispatch_nonce','79910000-0000-4000-8000-000000000005',
+      'dispatch_label','fixture.expired-bound 1.0 x64 [vcpp:79910000-0000-4000-8000-000000000005]'))).*
     from public.qa_vcpp_retest_authorizations a where candidate_id=cid;
   update public.qa_vcpp_retest_authorizations set state='passed' where candidate_id=newer;
   if not exists(select 1 from public.qa_vcpp_retest_authorizations where candidate_id=newer and state='passed')
@@ -282,12 +354,14 @@ begin
   insert into public.qa_vcpp_retest_authorizations
     select (jsonb_populate_record(null::public.qa_vcpp_retest_authorizations,to_jsonb(a)||jsonb_build_object(
       'candidate_id',expired,'winget_id','fixture.expired-reserved','state','reserved','run_id',null,
-      'run_attempt',null,'bound_at',null,'created_at',clock_timestamp()-interval '3 hours',
+      'run_attempt',null,'bound_at',null,'run_created_at',null,'dispatch_nonce',null,
+      'dispatch_label',null,'expected_source_sha',null,'expected_actor_id',null,'repository_id',null,
+      'dispatch_claimed_at',null,'created_at',clock_timestamp()-interval '3 hours',
       'expires_at',clock_timestamp()-interval '1 hour'))).*
     from public.qa_vcpp_retest_authorizations a where candidate_id=cid;
   denied:=false;
   begin
-    update public.qa_vcpp_retest_authorizations set state='dispatch_pending' where candidate_id=expired;
+    perform pg_temp.fixture_claim_vcpp(expired);
   exception when raise_exception then denied:=true;end;
   if not denied then raise exception 'Expired reservation claimed for dispatch';end if;
 end;

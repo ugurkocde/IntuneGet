@@ -22,12 +22,28 @@ create table public.qa_vcpp_retest_authorizations (
   expires_at timestamptz not null,
   state text not null default 'reserved' check (state in
     ('reserved','dispatch_pending','dispatch_unknown','bound','passed','failed','superseded','voided_customer','expired')),
+  dispatch_nonce uuid unique,
+  dispatch_label text,
+  expected_source_sha text check (expected_source_sha ~ '^[a-f0-9]{40}$'),
+  expected_actor_id bigint check (expected_actor_id>0),
+  repository_id bigint check (repository_id>0),
+  dispatch_claimed_at timestamptz,
   run_id text check (run_id ~ '^[1-9][0-9]*$'),
   run_attempt integer check (run_attempt=1),
   bound_at timestamptz,
+  run_created_at timestamptz,
+  check (num_nonnulls(dispatch_nonce,dispatch_label,expected_source_sha,
+    expected_actor_id,repository_id,dispatch_claimed_at) in (0,6)),
+  check (dispatch_nonce is null or (dispatch_label=winget_id||' '||version||' '||architecture||
+    ' [vcpp:'||dispatch_nonce::text||']' and octet_length(dispatch_label)<=243
+    and dispatch_label !~ '[^ -~]' and dispatch_claimed_at>=created_at and dispatch_claimed_at<=expires_at)),
+  check (state<>'reserved' or dispatch_nonce is null),
+  check (state not in ('dispatch_pending','dispatch_unknown','bound','passed') or dispatch_nonce is not null),
   check (expires_at>created_at and expires_at<=created_at+interval '24 hours'),
-  check ((run_id is null and run_attempt is null and bound_at is null)
-    or (run_id is not null and run_attempt=1 and bound_at is not null and bound_at>=created_at and bound_at<=expires_at)),
+  check ((run_id is null and run_attempt is null and bound_at is null and run_created_at is null)
+    or (run_id is not null and run_attempt=1 and bound_at is not null and bound_at>=created_at and bound_at<=expires_at
+      and dispatch_claimed_at is not null and run_created_at is not null
+      and run_created_at>=dispatch_claimed_at-interval '5 seconds' and run_created_at<=bound_at)),
   check (state not in ('bound','passed') or run_id is not null),
   unique(winget_id,version,architecture,installer_sha256,profile_sha256,packager_commit,dependency_sha256)
 );
@@ -44,8 +60,10 @@ language plpgsql security invoker set search_path='' as $$
 begin
   if tg_op='DELETE' then raise exception 'VC++ authorization history cannot be deleted';end if;
   if to_jsonb(new)=to_jsonb(old) then return new;end if;
-  if (to_jsonb(new)-array['state','run_id','run_attempt','bound_at'])
-    is distinct from (to_jsonb(old)-array['state','run_id','run_attempt','bound_at']) then
+  if (to_jsonb(new)-array['state','run_id','run_attempt','bound_at','run_created_at',
+    'dispatch_nonce','dispatch_label','expected_source_sha','expected_actor_id','repository_id','dispatch_claimed_at'])
+    is distinct from (to_jsonb(old)-array['state','run_id','run_attempt','bound_at','run_created_at',
+    'dispatch_nonce','dispatch_label','expected_source_sha','expected_actor_id','repository_id','dispatch_claimed_at']) then
     raise exception 'VC++ authorization identity and provenance are immutable';
   end if;
   if not ((old.state='reserved' and new.state in ('dispatch_pending','superseded','voided_customer','expired'))
@@ -57,10 +75,28 @@ begin
   if new.state='dispatch_pending' and clock_timestamp()>old.expires_at then
     raise exception 'Expired VC++ reservation cannot claim a dispatch';
   end if;
-  if (new.run_id,new.run_attempt,new.bound_at) is distinct from (old.run_id,old.run_attempt,old.bound_at) then
+  -- Only a future privileged fair-queue claim may initialize all provenance in
+  -- one transition. Equality to this source is not source review authority.
+  if (new.dispatch_nonce,new.dispatch_label,new.expected_source_sha,new.expected_actor_id,new.repository_id,new.dispatch_claimed_at)
+    is distinct from (old.dispatch_nonce,old.dispatch_label,old.expected_source_sha,old.expected_actor_id,old.repository_id,old.dispatch_claimed_at) then
+    if old.state<>'reserved' or new.state<>'dispatch_pending' or old.dispatch_nonce is not null
+      or num_nonnulls(new.dispatch_nonce,new.dispatch_label,new.expected_source_sha,
+        new.expected_actor_id,new.repository_id,new.dispatch_claimed_at)<>6
+      or new.dispatch_claimed_at>clock_timestamp()
+      or new.dispatch_claimed_at<clock_timestamp()-interval '1 minute' then
+      raise exception 'VC++ dispatch provenance is complete, current and write once';
+    end if;
+  end if;
+  if new.state in ('dispatch_pending','dispatch_unknown','bound','passed') and new.dispatch_nonce is null then
+    raise exception 'VC++ dispatch provenance is required';
+  end if;
+  if (new.run_id,new.run_attempt,new.bound_at,new.run_created_at)
+    is distinct from (old.run_id,old.run_attempt,old.bound_at,old.run_created_at) then
     if old.run_id is not null or old.state not in ('dispatch_pending','dispatch_unknown')
       or new.state<>'bound' or new.run_id is null or new.run_attempt is distinct from 1
       or new.run_id::numeric<=old.original_run_id::numeric
+      or new.run_created_at is null or new.run_created_at<new.dispatch_claimed_at-interval '5 seconds'
+      or new.run_created_at>new.bound_at
       or new.bound_at is null or clock_timestamp()>old.expires_at
       or new.bound_at>clock_timestamp() or new.bound_at<clock_timestamp()-interval '1 minute' then
       raise exception 'VC++ run binding is write once, current and attempt one';
