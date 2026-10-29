@@ -1851,6 +1851,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'user',
   },
   {
+    // GameMaker documents administrator privileges for silent installation.
+    // Its published Nullsoft installer is user-scoped; retain that exact
+    // installer selection while running the managed lifecycle as LocalSystem.
+    // https://gamemaker.io/en/help/articles/gamemaker-silent-installation
+    wingetId: 'YoYoGames.GameMaker.Studio.2',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+  },
+  {
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
