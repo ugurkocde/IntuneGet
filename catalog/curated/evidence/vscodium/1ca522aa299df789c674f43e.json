@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "websiteCommit": "c5101eec0a0046e699ede07b5da992d904f0c540",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "40674643554",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "7cb9126742600bc77426db7828e067e87b467147"
+  },
+  "candidate": {
+    "appId": "vscodium",
+    "version": "1.143.17232",
+    "installerUrl": "https://github.com/VSCodium/vscodium/releases/download/1.143.17232/VSCodiumSetup-x64-1.143.17232.exe",
+    "vendorSha256": "012125ae30f70d1c2f6366ec8c47aa0e293f0e799b704c0eb3721089f69bbdca",
+    "releaseNotesUrl": "https://github.com/VSCodium/vscodium/releases/tag/1.143.17232",
+    "discoveredAt": "2026-10-28T10:17:57.888Z",
+    "id": "1ca522aa299df789c674f43e"
+  },
+  "previous": {
+    "appId": "vscodium",
+    "version": "1.143.17183",
+    "installerUrl": "https://github.com/VSCodium/vscodium/releases/download/1.143.17183/VSCodiumSetup-x64-1.143.17183.exe",
+    "vendorSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+    "releaseNotesUrl": "https://github.com/VSCodium/vscodium/releases/tag/1.143.17183",
+    "discoveredAt": "2026-10-26T10:26:43.311Z",
+    "id": "5206ea88a51dbb0326518bd2"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "1ca522aa299df789c674f43e",
+      "installerSha256": "012125ae30f70d1c2f6366ec8c47aa0e293f0e799b704c0eb3721089f69bbdca",
+      "sourceUrl": "https://github.com/VSCodium/vscodium/releases/download/1.143.17232/VSCodiumSetup-x64-1.143.17232.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "SignPath Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "scannedAt": "2026-10-28T10:59:14.7676534Z",
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "012125ae30f70d1c2f6366ec8c47aa0e293f0e799b704c0eb3721089f69bbdca",
+        "malicious": 0,
+        "scanner": "defender",
+        "signatureVersion": "1.463.8.0",
+        "status": "clean",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "5206ea88a51dbb0326518bd2",
+      "installerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+      "sourceUrl": "https://github.com/VSCodium/vscodium/releases/download/1.143.17183/VSCodiumSetup-x64-1.143.17183.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "SignPath Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "scannedAt": "2026-10-28T11:01:00.1505151Z",
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+        "malicious": 0,
+        "scanner": "defender",
+        "signatureVersion": "1.463.8.0",
+        "status": "clean",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "1ca522aa299df789c674f43e",
+    "packageId": "IntuneGet.Curated.VSCodium",
+    "installerUrl": "https://github.com/VSCodium/vscodium/releases/download/1.143.17232/VSCodiumSetup-x64-1.143.17232.exe",
+    "installerSha256": "012125ae30f70d1c2f6366ec8c47aa0e293f0e799b704c0eb3721089f69bbdca",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.VSCodium",
+      "displayName": "VSCodium",
+      "publisher": "VSCodium",
+      "version": "1.143.17232",
+      "architecture": "x64",
+      "installerSha256": "012125ae30f70d1c2f6366ec8c47aa0e293f0e799b704c0eb3721089f69bbdca",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:{88DA3577-054F-4CA1-8122-7D820494CFFB}_is1:VSCodium",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VSCodium\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.143.17232\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VSCodium\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.143.17232\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "871569BF2911D70D752F7BA6098C69F2E1CD52B314089F469E57BDA57F299076",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.VSCodium\",\"publisher\":\"IntuneGet QA\",\"version\":\"1.143.17232\",\"wingetId\":\"IntuneGet.Curated.VSCodium\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.143.17232\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VSCodium\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"90378AD2A294D6872BA3C1BA5099DFC18AA169530DEF4FE04FD764AB367B9039\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"012125AE30F70D1C2F6366EC8C47AA0E293F0E799B704C0EB3721089F69BBDCA\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:{88DA3577-054F-4CA1-8122-7D820494CFFB}_is1:VSCodium\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.143.17232\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VSCodium\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"653DDC55DD7187D0E7982606D9E70E44E942D818076EEDE0C9F8A7F7A32696A6\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "653ddc55dd7187d0e7982606d9e70e44e942d818076eede0c9f8a7f7a32696a6",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "candidateId": "1ca522aa299df789c674f43e",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionProfileSha256": "871569BF2911D70D752F7BA6098C69F2E1CD52B314089F469E57BDA57F299076",
+    "testLevel": "psadt-package",
+    "architecture": "x64",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "installerVersion": "1.143.17232",
+    "upgradeFromVersion": "1.143.17183",
+    "testedAt": "2026-10-28T11:14:35.8437047Z",
+    "executionContext": "LocalSystem",
+    "previousInstallerSha256": "f00b04b86431411c0dbd9d9d8eff6999f4bc63b5bcff5a16bdff39b35c40f41f",
+    "installerSha256": "012125ae30f70d1c2f6366ec8c47aa0e293f0e799b704c0eb3721089f69bbdca"
+  },
+  "verifiedAt": "2026-10-28T11:14:46.4199953Z",
+  "authenticatedArtifact": {
+    "id": 12810119946,
+    "sha256": "cdec7c61f57b5c3f24057ddc05744fad409aafad6c7f2ec742745e8623e0d18c"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-29T13:20:00.051Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
