@@ -493,6 +493,14 @@ def contracts():
     denied("select claim_qa_vt_metadata_recheck('wrong-fixture',false)", 'authentication|secret|Unauthorized|unauthorized|invalid|Invalid')
     denied("select claim_qa_vt_metadata_recheck('local-fixture-only',null)", 'QA VT capability required')
     print('PASS unsupported public work consumes no attempt/lease/reservation and cannot block hash work; legacy body/ACL retained')
+    reservation = (ROOT/'supabase/tests/qa_vcpp_single_attempt_authorizations.sql').read_text()
+    # The disposable postgres session can SET ROLE to exercise the real caller
+    # ACLs; fixture_owner intentionally has no membership in the API roles.
+    before = sql(reservation, role=None, check=False)
+    assert before.returncode != 0 and 'does not exist' in before.stderr
+    sql(migration('20261029000852_qa_vcpp_single_attempt_authorizations'))
+    sql(reservation, role=None)
+    print('PASS VC++ reservation ACL, lifetime uniqueness, full-profile identity, customer/sibling/pin guards and unchanged original lifecycle')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
