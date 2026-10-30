@@ -7,6 +7,7 @@ export function sha256(value: string): string;
 export function isCuratedPackageId(value: unknown): boolean;
 export function assertHttpsUrl(value: string): URL;
 export function assertInstallerSource(app: CuratedAppDefinition, value: string): URL;
+export function archiveInstallerUrl(app: CuratedAppDefinition, version: string): string;
 export function validateDefinitions(apps: unknown): CuratedAppDefinition[];
 export function checksumSourceUrl(app: CuratedAppDefinition, version: string): string;
 export function createCandidate(app: CuratedAppDefinition, input: { version: string; installerUrl: string; vendorSha256?: string | null; releaseNotesUrl?: string }, now?: Date): CuratedCandidate;
