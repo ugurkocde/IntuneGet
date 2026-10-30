@@ -286,7 +286,8 @@ async function plan() {
     // Prefer the last approved release for the upgrade test. Chrome's mutable
     // URL cannot serve an older build, so it falls through to the exemption.
     let previous;
-    try { previous = upgradeBaselineFromApproved(app, latest, candidate, now); }
+    // Discovery stamps candidates after the plan's initial clock.
+    try { previous = upgradeBaselineFromApproved(app, latest, candidate, new Date()); }
     catch {
       row.state = 'Approved upgrade baseline is invalid';
       alerts.push(`${app.name} ${candidate.version}: the approved upgrade baseline could not be bound to its verified installer hash.`);
