@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
-import { discoverCandidate, discoverPreviousCandidate } from '../lib/curated-catalog/discovery.mjs';
+import { discoverCandidate, discoverPreviousCandidate, upgradeBaselineFromApproved } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
 import { createCuratedGitHubClient } from './curated-github.mjs';
 import { createCuratedGitRunner, prepareCuratedPublication } from './curated-publication.mjs';
@@ -285,7 +285,13 @@ async function plan() {
 
     // Prefer the last approved release for the upgrade test. Chrome's mutable
     // URL cannot serve an older build, so it falls through to the exemption.
-    let previous = latest && latest.candidate.installerUrl !== candidate.installerUrl ? latest.candidate : null;
+    let previous;
+    try { previous = upgradeBaselineFromApproved(app, latest, candidate, now); }
+    catch {
+      row.state = 'Approved upgrade baseline is invalid';
+      alerts.push(`${app.name} ${candidate.version}: the approved upgrade baseline could not be bound to its verified installer hash.`);
+      continue;
+    }
     if (!previous && !latest) {
       try { previous = await discoverPreviousCandidate(app, candidate); } catch { previous = null; }
     }
