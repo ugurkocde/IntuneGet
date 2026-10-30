@@ -203,6 +203,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Vendor NSIS uses the one-click per-user defaults; WinGet omits Scope.
+    // Run 41131197837 captured an already-missing SYSTEM-profile uninstaller.
+    // The physical missing-file mechanism remains unconfirmed.
+    // https://github.com/OWASP/threat-dragon/blob/v2.6.2/td.vue/vue.config.js
+    wingetId: 'OWASP.ThreatDragon',
+    requiredInstallScope: 'user',
+  },
+  {
     // The vendor NSIS source requests user execution, installs in LocalAppData
     // and registers removal in HKCU. WinGet explicitly labels these bytes as
     // machine scope; retain that selection while correcting execution context.
