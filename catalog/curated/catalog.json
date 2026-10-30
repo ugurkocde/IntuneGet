@@ -1,9 +1,9 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-29T22:41:23.326Z",
-    "expiresAt": "2026-11-05T22:41:23.326Z",
-    "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
+    "generatedAt": "2026-10-30T11:02:00.951Z",
+    "expiresAt": "2026-11-06T11:02:00.951Z",
+    "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
         "id": "chrome:54d5c369f7bbf090a0e6e170",
@@ -9873,10 +9873,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/6bdbbe5cbf1bfc7700379297.json"
           }
         }
+      },
+      {
+        "id": "pdfsam:9bc347aa084bcd54ba5ec4d5",
+        "candidate": {
+          "appId": "pdfsam",
+          "version": "6.0.9",
+          "installerUrl": "https://github.com/torakiki/pdfsam/releases/download/v6.0.9/pdfsam-basic-6.0.9-windows-x64.msi",
+          "vendorSha256": "9c3434bbc538345ce6f569d9d518c0187f35042b5bbb667bccf780829e86e1b7",
+          "releaseNotesUrl": "https://github.com/torakiki/pdfsam/releases/tag/v6.0.9",
+          "discoveredAt": "2026-10-30T09:41:17.172Z",
+          "id": "9bc347aa084bcd54ba5ec4d5"
+        },
+        "installerSha256": "9c3434bbc538345ce6f569d9d518c0187f35042b5bbb667bccf780829e86e1b7",
+        "executionProfileSha256": "01B8DE3C4F5D45BCAC535D86B927D08C3C057E3BC4005CB26BBAAD78DE3E0129",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-30T11:02:00.951Z",
+        "evidence": {
+          "verifiedAt": "2026-10-30T10:26:21.9943781Z",
+          "installerSha256": "9c3434bbc538345ce6f569d9d518c0187f35042b5bbb667bccf780829e86e1b7",
+          "installerVersion": "6.0.9",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/pdfsam/9bc347aa084bcd54ba5ec4d5.json",
+          "signature": {
+            "publisher": "Sober Lemur S.r.l.",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "a01cf6783fcaf145a4d7b81657d1a55bfeea5cfe",
+            "websiteCommit": "a2a1d047bbd666246c89f51ee56b63ffb92d18e7",
+            "runId": "41038048560",
+            "runAttempt": 1,
+            "artifactId": "12969718645",
+            "artifactSha256": "26ab03aa9f8b1dac06e6d1afeaf8804dd3a31a7407162b00f1fc0e982b83c4a9"
+          },
+          "security": {
+            "status": "clean",
+            "scanner": "defender",
+            "malicious": 0,
+            "installerSha256": "9c3434bbc538345ce6f569d9d518c0187f35042b5bbb667bccf780829e86e1b7",
+            "scannedAt": "2026-10-30T10:16:57.5747648Z",
+            "suspicious": 0,
+            "engineVersion": "1.1.26100.4",
+            "signatureVersion": "1.463.36.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/pdfsam/9bc347aa084bcd54ba5ec4d5.json"
+          },
+          "qa": {
+            "candidateId": "9bc347aa084bcd54ba5ec4d5",
+            "testLevel": "psadt-package",
+            "executionContext": "LocalSystem",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "9c3434bbc538345ce6f569d9d518c0187f35042b5bbb667bccf780829e86e1b7",
+            "previousInstallerSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+            "executionProfileSha256": "01B8DE3C4F5D45BCAC535D86B927D08C3C057E3BC4005CB26BBAAD78DE3E0129",
+            "testedAt": "2026-10-30T10:26:16.0162264Z",
+            "upgradeFromVersion": "6.0.6",
+            "installerVersion": "6.0.9",
+            "architecture": "x64",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/pdfsam/9bc347aa084bcd54ba5ec4d5.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "PoVZuZb90Rv4wxY6+x62+p8E+qLO57cTom7HqdhCtmvWkGP+t5/3taas81OVb3n21IhAJFE8opz4NNtJFoteAg=="
+  "signature": "BzSWG9+pmtqhwlJ73U2HXK2vvVXbv8fJgSxz75wpVFvtlfSc+MoKSjYuVcGyHqvUozxlXZS5c9qeaW8ClpvIBw=="
 }
