@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-30T11:02:00.951Z",
-    "expiresAt": "2026-11-06T11:02:00.951Z",
+    "generatedAt": "2026-10-30T13:18:27.897Z",
+    "expiresAt": "2026-11-06T13:18:27.897Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -9961,10 +9961,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/pdfsam/9bc347aa084bcd54ba5ec4d5.json"
           }
         }
+      },
+      {
+        "id": "calibre:276100d5e7f64d60baf08262",
+        "candidate": {
+          "appId": "calibre",
+          "version": "9.17.0",
+          "installerUrl": "https://github.com/kovidgoyal/calibre/releases/download/v9.17.0/calibre-64bit-9.17.0.msi",
+          "vendorSha256": "a91ea9b26af6cd057d8b193b86edb66d1535f7c5cb0a106965fa74f8168a6bd5",
+          "releaseNotesUrl": "https://github.com/kovidgoyal/calibre/releases/tag/v9.17.0",
+          "discoveredAt": "2026-10-30T12:25:16.38Z",
+          "id": "276100d5e7f64d60baf08262"
+        },
+        "installerSha256": "a91ea9b26af6cd057d8b193b86edb66d1535f7c5cb0a106965fa74f8168a6bd5",
+        "executionProfileSha256": "F204740206269A8721D2C348F5DE9EF5370175AECD25DCF1CF13F4CADC054B1C",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-30T13:18:27.897Z",
+        "evidence": {
+          "verifiedAt": "2026-10-30T12:46:13.8070097Z",
+          "installerSha256": "a91ea9b26af6cd057d8b193b86edb66d1535f7c5cb0a106965fa74f8168a6bd5",
+          "installerVersion": "9.17.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/calibre/276100d5e7f64d60baf08262.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "Kovid Goyal"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "7df5450daa71e77185b637c588d5e57f60d75865",
+            "websiteCommit": "d00035b4b45e12d2e22c127781a2bf46399fea86",
+            "runId": "41056124570",
+            "runAttempt": 1,
+            "artifactId": "12978205739",
+            "artifactSha256": "c8e5b0fbc0d19bd9fc873ec9796e7213105d5829a372c2b34878fec40436b4db"
+          },
+          "security": {
+            "status": "clean",
+            "signatureVersion": "1.463.36.0",
+            "suspicious": 0,
+            "installerSha256": "a91ea9b26af6cd057d8b193b86edb66d1535f7c5cb0a106965fa74f8168a6bd5",
+            "scannedAt": "2026-10-30T12:42:27.4850673Z",
+            "malicious": 0,
+            "engineVersion": "1.1.26100.4",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/calibre/276100d5e7f64d60baf08262.json"
+          },
+          "qa": {
+            "executionContext": "LocalSystem",
+            "candidateId": "276100d5e7f64d60baf08262",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "executionProfileSha256": "F204740206269A8721D2C348F5DE9EF5370175AECD25DCF1CF13F4CADC054B1C",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerVersion": "9.17.0",
+            "architecture": "x64",
+            "installerSha256": "a91ea9b26af6cd057d8b193b86edb66d1535f7c5cb0a106965fa74f8168a6bd5",
+            "testLevel": "psadt-package",
+            "upgradeFromVersion": "9.16.0",
+            "testedAt": "2026-10-30T12:46:09.4051008Z",
+            "previousInstallerSha256": "99ba538ca701c7c3b234d19b2236349c3aff3b55244ab9016072f74e6294e40a",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/calibre/276100d5e7f64d60baf08262.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "BzSWG9+pmtqhwlJ73U2HXK2vvVXbv8fJgSxz75wpVFvtlfSc+MoKSjYuVcGyHqvUozxlXZS5c9qeaW8ClpvIBw=="
+  "signature": "SsOgy80sb47n8hw9HOhpRxO0tVThwxLhEwPyvTmU+90Fb5hpNpSwt+/GkCl/hMt8frh4wjbvj6/5dZbiIJU8Bg=="
 }
