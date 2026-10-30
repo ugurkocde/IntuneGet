@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-29T19:16:38.517Z",
-    "expiresAt": "2026-11-05T19:16:38.517Z",
+    "generatedAt": "2026-10-29T22:41:23.326Z",
+    "expiresAt": "2026-11-05T22:41:23.326Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -9703,10 +9703,180 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/aws-cli/748b2549e73358514cc3b298.json"
           }
         }
+      },
+      {
+        "id": "chrome:9c0bb894e8711a6de121f5db",
+        "candidate": {
+          "appId": "chrome",
+          "version": "156.0.8078.80",
+          "installerUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://chromeenterprise.google/browser/",
+          "discoveredAt": "2026-10-29T21:40:19.459Z",
+          "id": "9c0bb894e8711a6de121f5db"
+        },
+        "installerSha256": "ecf1b28bf4e8e8b3434a844eb915118935e6525768efe3dbe622c2a20cba9ec9",
+        "executionProfileSha256": "1B6B19001CF07FA1DE8DF584D43BE278BF6CE21E072685B61D8CB1E24446C3EF",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-29T22:41:23.326Z",
+        "evidence": {
+          "verifiedAt": "2026-10-29T22:07:51.9217834Z",
+          "installerSha256": "ecf1b28bf4e8e8b3434a844eb915118935e6525768efe3dbe622c2a20cba9ec9",
+          "installerVersion": "156.0.8078.80",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/9c0bb894e8711a6de121f5db.json",
+          "signature": {
+            "publisher": "Google LLC",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "78cab2a39405f63b926608a4164c820dab36b951",
+            "websiteCommit": "25814ba7e74565c86f51bfca5bbef7563566ef96",
+            "runId": "40962060818",
+            "runAttempt": 1,
+            "artifactId": "12935709957",
+            "artifactSha256": "4d4552ec7e07a1f1d75109efcf5fd7ff488ff969b69bf7d62eed3abb92494f2e"
+          },
+          "security": {
+            "malicious": 0,
+            "scannedAt": "2026-10-29T22:06:29.8366483Z",
+            "installerSha256": "ecf1b28bf4e8e8b3434a844eb915118935e6525768efe3dbe622c2a20cba9ec9",
+            "signatureVersion": "1.463.30.0",
+            "engineVersion": "1.1.26100.4",
+            "suspicious": 0,
+            "scanner": "defender",
+            "status": "clean",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/9c0bb894e8711a6de121f5db.json"
+          },
+          "qa": {
+            "candidateId": "9c0bb894e8711a6de121f5db",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "architecture": "x64",
+            "testedAt": "2026-10-29T22:07:46.0897794Z",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "testLevel": "psadt-package",
+            "executionContext": "LocalSystem",
+            "executionProfileSha256": "1B6B19001CF07FA1DE8DF584D43BE278BF6CE21E072685B61D8CB1E24446C3EF",
+            "installerVersion": "156.0.8078.80",
+            "installerSha256": "ecf1b28bf4e8e8b3434a844eb915118935e6525768efe3dbe622c2a20cba9ec9",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: Google Chrome is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/9c0bb894e8711a6de121f5db.json"
+          }
+        }
+      },
+      {
+        "id": "obs-studio:6bdbbe5cbf1bfc7700379297",
+        "candidate": {
+          "appId": "obs-studio",
+          "version": "33.0.1",
+          "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/33.0.1/OBS-Studio-33.0.1-Windows-x64-Installer.exe",
+          "vendorSha256": "37ecde4d9a28e8aeeb07623c8469b5d558eb264e02ccf435bb859891c401758b",
+          "releaseNotesUrl": "https://github.com/obsproject/obs-studio/releases/tag/33.0.1",
+          "discoveredAt": "2026-10-29T22:16:35.898Z",
+          "id": "6bdbbe5cbf1bfc7700379297"
+        },
+        "installerSha256": "37ecde4d9a28e8aeeb07623c8469b5d558eb264e02ccf435bb859891c401758b",
+        "executionProfileSha256": "E2DCFC4AE174C867F615B30A5B30BD50877FC2D707455C4F841CA28E5B25CC1C",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-29T22:41:23.326Z",
+        "evidence": {
+          "verifiedAt": "2026-10-29T22:34:15.2129411Z",
+          "installerSha256": "37ecde4d9a28e8aeeb07623c8469b5d558eb264e02ccf435bb859891c401758b",
+          "installerVersion": "33.0.1",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/6bdbbe5cbf1bfc7700379297.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "OBS Project, LLC"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "78cab2a39405f63b926608a4164c820dab36b951",
+            "websiteCommit": "25814ba7e74565c86f51bfca5bbef7563566ef96",
+            "runId": "40964992178",
+            "runAttempt": 1,
+            "artifactId": "12937612470",
+            "artifactSha256": "13a3d163f0c7cf629b5f71c3f9a16efdf75116b61a06941928376f86166464be"
+          },
+          "security": {
+            "malicious": 0,
+            "installerSha256": "37ecde4d9a28e8aeeb07623c8469b5d558eb264e02ccf435bb859891c401758b",
+            "scanner": "defender",
+            "scannedAt": "2026-10-29T22:28:53.5287004Z",
+            "status": "clean",
+            "engineVersion": "1.1.26100.4",
+            "signatureVersion": "1.463.31.0",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/6bdbbe5cbf1bfc7700379297.json"
+          },
+          "qa": {
+            "executionProfileSha256": "E2DCFC4AE174C867F615B30A5B30BD50877FC2D707455C4F841CA28E5B25CC1C",
+            "installerVersion": "33.0.1",
+            "upgradeFromVersion": "33.0.0",
+            "testedAt": "2026-10-29T22:34:06.1959425Z",
+            "candidateId": "6bdbbe5cbf1bfc7700379297",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "previousInstallerSha256": "3bf55dae6d9db651505828090de74540296c742ed2a94a28cf055cb6ddc6bed3",
+            "testLevel": "psadt-package",
+            "architecture": "x64",
+            "installerSha256": "37ecde4d9a28e8aeeb07623c8469b5d558eb264e02ccf435bb859891c401758b",
+            "executionContext": "LocalSystem",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/obs-studio/6bdbbe5cbf1bfc7700379297.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "EcMxGe5AyEsjpP++G+W2+hqug6s3FRdwgXLhoagl13C14MnQk6K2yCY1F+sC/uLNK655mZ+sTkPgnteDECzQBw=="
+  "signature": "PoVZuZb90Rv4wxY6+x62+p8E+qLO57cTom7HqdhCtmvWkGP+t5/3taas81OVb3n21IhAJFE8opz4NNtJFoteAg=="
 }
