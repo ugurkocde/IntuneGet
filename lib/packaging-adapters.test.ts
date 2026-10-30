@@ -628,6 +628,23 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
   });
 
+  it('keeps Threat Dragon one-click NSIS out of the SYSTEM profile', () => {
+    const uninstall = 'REGISTRY_UNINSTALL_PRODUCT:{970B2D4F-CDCC-5118-BC8B-330D878CA743}:Threat-Dragon-ng';
+    for (const id of ['OWASP.ThreatDragon', ' owasp.threatdragon ']) {
+      expect(resolveApplicationInstallScope(id, 'machine')).toBe('user');
+      expect(resolveApplicationInstallScope(id, undefined)).toBe('user');
+      expect(resolveApplicationInstallerSelectionScope(id, 'user')).toBe('user');
+      expect(resolveApplicationUninstallCommand(id, uninstall)).toBe(uninstall);
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedInstallArguments).toEqual([]);
+      expect(adapted.reviewedUninstallArguments).toEqual([]);
+      expect(adapted.reviewedExactUninstall).toBeUndefined();
+      expect(adapted.reviewedRecoverCapturedUninstallByExactIdentity).toBeUndefined();
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+    }
+    expect(resolveApplicationInstallScope('OWASP.Other', 'machine')).toBe('machine');
+  });
+
   it('keeps Equibop assisted NSIS in the signed-in user context', () => {
     for (const id of ['Equicord.Equibop', ' equicord.equibop ']) {
       expect(resolveApplicationInstallScope(id, undefined)).toBe('user');
