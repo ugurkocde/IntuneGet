@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-30T13:18:27.897Z",
-    "expiresAt": "2026-11-06T13:18:27.897Z",
+    "generatedAt": "2026-10-30T17:15:43.083Z",
+    "expiresAt": "2026-11-06T17:15:43.083Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -10049,10 +10049,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/calibre/276100d5e7f64d60baf08262.json"
           }
         }
+      },
+      {
+        "id": "azure-storage-explorer:9f21c1b740b7d8a017fdb9c9",
+        "candidate": {
+          "appId": "azure-storage-explorer",
+          "version": "1.47.0",
+          "installerUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.47.0/StorageExplorer-windows-x64.exe",
+          "vendorSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+          "releaseNotesUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/tag/v1.47.0",
+          "discoveredAt": "2026-10-30T16:18:14.773Z",
+          "id": "9f21c1b740b7d8a017fdb9c9"
+        },
+        "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+        "executionProfileSha256": "E51F2E635CCB93200B1B63A6DE03C921EF9D243371E8FDF22AE53B5B3AABA6E7",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-30T17:15:43.083Z",
+        "evidence": {
+          "verifiedAt": "2026-10-30T16:47:16.1055239Z",
+          "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+          "installerVersion": "1.47.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-storage-explorer/9f21c1b740b7d8a017fdb9c9.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "Microsoft Corporation"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "0e4ab166fbc4c37ccd501b8f3e024cbc20e5b266",
+            "websiteCommit": "3a90a7d4fc12b7b4a1cd3ed090f8572ebfc2877e",
+            "runId": "41090990935",
+            "runAttempt": 1,
+            "artifactId": "12995475061",
+            "artifactSha256": "5968277fdf3f9675a73517e247bff48c0176847eb7a13efa851346cd2ba18612"
+          },
+          "security": {
+            "engineVersion": "1.1.26100.4",
+            "scanner": "defender",
+            "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+            "signatureVersion": "1.463.41.0",
+            "scannedAt": "2026-10-30T16:43:14.8065168Z",
+            "status": "clean",
+            "malicious": 0,
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-storage-explorer/9f21c1b740b7d8a017fdb9c9.json"
+          },
+          "qa": {
+            "candidateId": "9f21c1b740b7d8a017fdb9c9",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "previousInstallerSha256": "2aec3da3f7fff243279a86ab2fbece419e3867ff5ac97d45296edbd150d62349",
+            "testedAt": "2026-10-30T16:47:07.1672006Z",
+            "architecture": "x64",
+            "installerVersion": "1.47.0",
+            "testLevel": "psadt-package",
+            "executionProfileSha256": "E51F2E635CCB93200B1B63A6DE03C921EF9D243371E8FDF22AE53B5B3AABA6E7",
+            "executionContext": "LocalSystem",
+            "upgradeFromVersion": "1.46.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-storage-explorer/9f21c1b740b7d8a017fdb9c9.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "SsOgy80sb47n8hw9HOhpRxO0tVThwxLhEwPyvTmU+90Fb5hpNpSwt+/GkCl/hMt8frh4wjbvj6/5dZbiIJU8Bg=="
+  "signature": "+gxYP0ZkaYJZDR5r0Of5V/9RGUO88Y4O670Ft8kozwZr8vnSpv3Xqg0xlyculnN9mi7IQjSpGQTifi2cz6aDDQ=="
 }
