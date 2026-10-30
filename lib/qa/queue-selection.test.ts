@@ -25,6 +25,12 @@ function fixture() {
   arm.architecture = 'arm64'; missing.next_retry_at = null;
   const rows = [second, missing, arm, held, source, deferred, first], claimed: string[] = [];
   const grants = new Set<string>(), recentRows: Array<Record<string, unknown>> = [];
+  const catalogRows: Array<Record<string, unknown>> = [];
+  const customerJobs: Array<Record<string, unknown>> = [];
+  const repairRows: Array<Record<string, unknown>> = [];
+  const grantRows: Array<Record<string, unknown>> = [];
+  const superseded: string[] = [];
+  const control: { beforeUpdate?: () => void; claimReason?: string } = {};
   let compatibilityReads = 0, sourceReads = 0;
   const errors = new Set<string>();
   const securityHolds: Array<Record<string, unknown>> = [];
@@ -39,16 +45,26 @@ function fixture() {
       if (name === 'qa_installer_security_recheck_schedule') return { data: securitySchedule.length ? securitySchedule : securityHolds.map(h => ({ sha256: h.sha256, demand: true, malicious: h.malicious_verdicts, eligible_at: h.next_check_at })), error: errors.has(name) ? { message: 'schedule unavailable' } : null };
       if (name === 'qa_installer_security_waiting_errors') return { data: heldErrors, error: null };
       if (name !== 'claim_qa_work') throw new Error('Unexpected RPC');
+      if (control.claimReason) return { data: { reason: control.claimReason, queue: 'ordinary' }, error: null };
       claimed.push(args.p_id!); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null };
     }),
     from(table: string) {
       if (table === 'qa_package_blocks') compatibilityReads++;
       if (table === 'qa_source_backoff') sourceReads++;
-      let count = false, cap = Infinity;
+      let count = false, cap = Infinity, patch: Record<string, unknown> | null = null;
+      let updated = false;
       const filters: Array<(r: Record<string, unknown>) => boolean> = [], sort: Array<[string, boolean]> = [];
       const result = () => {
-        let data: Array<Record<string, unknown>> = table === 'qa_installer_security_holds' ? securityHolds : table === 'qa_candidates' ? rows : table === 'qa_package_results' ? recentRows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
+        if (patch && !updated) control.beforeUpdate?.();
+        let data: Array<Record<string, unknown>> = table === 'curated_apps' ? catalogRows : table === 'packaging_jobs' ? customerJobs : table === 'qa_repair_requests' ? repairRows : table === 'qa_retest_grants' ? grantRows : table === 'qa_installer_security_holds' ? securityHolds : table === 'qa_candidates' ? rows : table === 'qa_package_results' ? recentRows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
         data = data.filter(r => filters.every(f => f(r)));
+        if (patch && !updated) {
+          for (const row of data) {
+            Object.assign(row, patch);
+            if (table === 'qa_candidates' && patch.status === 'superseded') superseded.push(String(row.id));
+          }
+          updated = true;
+        }
         data.sort((a, b) => { for (const [key, ascending] of sort) { const x = a[key] as string | number, y = b[key] as string | number, cmp = x < y ? -1 : x > y ? 1 : 0; if (cmp) return ascending ? cmp : -cmp; } return 0; });
         return { data: data.slice(0, cap), count: count ? data.length : undefined, error: errors.has(table) ? { message: 'lookup unavailable' } : null };
       };
@@ -59,15 +75,80 @@ function fixture() {
         in(key: string, values: unknown[]) { filters.push(r => values.includes(r[key])); return builder; },
         lte(key: string, value: string) { filters.push(r => r[key] === '-infinity' || (typeof r[key] === 'string' && Date.parse(r[key] as string) <= Date.parse(value))); return builder; },
         order(key: string, options: { ascending: boolean }) { sort.push([key, options.ascending]); return builder; },
-        limit(value: number) { cap = value; return builder; }, update() { return builder; }, delete() { return builder; }, or() { return builder; },
+        limit(value: number) { cap = value; return builder; },
+        contains(key: string, value: Record<string, unknown>) { filters.push(r => Object.entries(value).every(([k,v]) => (r[key] as Record<string, unknown>)?.[k] === v)); return builder; },
+        update(value: Record<string, unknown>) { patch = value; return builder; }, delete() { return builder; }, or() { return builder; },
         maybeSingle: async () => ({ ...result(), data: result().data[0] || null }),
         then(resolve: (value: ReturnType<typeof result>) => unknown) { return Promise.resolve(result()).then(resolve); },
       };
       return builder;
     },
   };
-  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, heldErrors, securitySchedule, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
+  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, heldErrors, securitySchedule, catalogRows, customerJobs, repairRows, grantRows, superseded, control, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
+
+function staleBackground(f: ReturnType<typeof fixture>) {
+  const stale = { ...candidate(88, 2000), demand_source: 'managed', catalog_version_at_enqueue: '1.0.0' };
+  f.rows.unshift(stale);
+  f.catalogRows.push({ winget_id: stale.winget_id, latest_version: '2.0.0' });
+  return stale;
+}
+
+it('does not advertise a released stale background candidate ahead of the actual next dispatch', async () => {
+  const f = fixture(); staleBackground(f); mocks.client.mockReturnValue(f.client);
+  expect((await getQaLiveSnapshot()).queue.next[0].wingetId).toBe(f.first.winget_id);
+});
+
+it('supersedes the stale background head and dispatches the next eligible row in the same tick', async () => {
+  const f = fixture(), stale = staleBackground(f);
+  mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
+  const response = await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
+  expect((await response.json()).dispatched).toBe(true);
+  expect(f.superseded).toContain(stale.id);
+  expect(stale).toMatchObject({ status: 'superseded', attempts: 0, failure_summary: 'Superseded before dispatch: catalog-version-changed.' });
+  expect(f.claimed).toEqual([f.first.id]); expect(mocks.dispatch).toHaveBeenCalledOnce();
+});
+
+it.each(['customer', 'auto_update', 'operator', 'grant', 'repair', 'linked-job', 'payload-job'])('keeps %s demand visible and dispatchable', async exemption => {
+  const f = fixture(), stale = staleBackground(f);
+  if (['customer', 'auto_update', 'operator'].includes(exemption)) stale.demand_source = exemption;
+  if (exemption === 'grant') f.grantRows.push({ candidate_id: stale.id, closed_at: '2000-01-01' });
+  if (exemption === 'repair') f.repairRows.push({ candidate_id: stale.id });
+  if (exemption === 'linked-job') f.customerJobs.push({ qa_candidate_id: stale.id, status: 'awaiting_qa', version: 'other' });
+  if (exemption === 'payload-job') f.customerJobs.push({ winget_id: stale.winget_id.toLowerCase(), version: stale.version, architecture: stale.architecture, installer_sha256: stale.installer_sha256.toLowerCase(), status: 'queued' });
+  mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
+  expect((await getQaLiveSnapshot()).queue.next[0].wingetId).toBe(stale.winget_id);
+  await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
+  expect(f.claimed).toEqual([stale.id]); expect(f.superseded).not.toContain(stale.id);
+});
+
+it('does not overwrite a concurrent customer priority bump or bypass the locked fair head', async () => {
+  const f = fixture(), stale = staleBackground(f);
+  f.control.beforeUpdate = () => { stale.demand_source = 'customer'; stale.priority = 2500; };
+  f.control.claimReason = 'higher_priority_work';
+  mocks.client.mockReturnValue(f.client); process.env.CRON_SECRET = 'test-secret';
+  const response = await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
+  expect(await response.json()).toMatchObject({ dispatched: false, reason: 'higher_priority_work' });
+  expect(stale).toMatchObject({ status: 'queued', attempts: 0, demand_source: 'customer' });
+  expect(f.superseded).not.toContain(stale.id); expect(f.claimed).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
+});
+
+it('preserves the SQL claim decision when curated work owns the next fair head', async () => {
+  const f = fixture(), stale = staleBackground(f); f.control.claimReason = 'higher_priority_work';
+  mocks.client.mockReturnValue(f.client); process.env.CRON_SECRET = 'test-secret';
+  const response = await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
+  expect(await response.json()).toMatchObject({ dispatched: false, reason: 'higher_priority_work' });
+  expect(f.superseded).toContain(stale.id); expect(f.claimed).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
+});
+
+it('throws on a stale lookup failure and advertises no unverified prefix', async () => {
+  const f = fixture(), stale = staleBackground(f); f.errors.add('qa_retest_grants');
+  mocks.client.mockReturnValue(f.client); process.env.CRON_SECRET = 'test-secret';
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  expect((await getQaLiveSnapshot()).queue.next).toEqual([]); warn.mockRestore();
+  await expect(GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }))).rejects.toThrow('supersession evidence is unavailable');
+  expect(f.superseded).not.toContain(stale.id); expect(f.claimed).toEqual([]);
+});
 it('shows an unknown coverage error in waiting without breaking the live snapshot or dispatching it', async () => {
   const f=fixture(); const pending={...f.first,status:'error'};
   f.rows.splice(0,f.rows.length,pending);

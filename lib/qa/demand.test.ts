@@ -1309,6 +1309,19 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     failure_summary: failureSummary,
   });
 
+  it('keeps exact customer demand waiting after a catalog-version supersede without a quarantine failure', async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const input = { ...demandInput(), installScope: 'user' as const };
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(
+        'Superseded before dispatch: catalog-version-changed.',
+      ), updates), input,
+    );
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-quarantined' });
+    expect(updates).toEqual([expect.objectContaining({ status: 'queued', demand_source: 'customer', failure_summary: null })]);
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+  });
+
   it('does not reactivate an installer source quarantined by dispatch preflight', async () => {
     const input = { ...demandInput(), installScope: 'user' as const };
     const quarantineSummary =
