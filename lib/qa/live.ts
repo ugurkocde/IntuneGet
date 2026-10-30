@@ -1,6 +1,6 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
-import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
+import { loadStaleQaCatalogCandidateIds, orderQaQueue, qaQueueCandidateReason } from './queue-selection';
 import { loadInstallerSecurityHolds } from './installer-security-holds';
 import { loadSecurityRecheckSchedule, publicSecurityRecheck } from './security-recheck-schedule';
 import { getPackageCompatibilityBlocks, packageCompatibilityKey } from '@/lib/package-eligibility';
@@ -41,6 +41,9 @@ interface CandidateRow {
   installer_sha256: string;
   package_profile_sha256: string | null;
   next_retry_at: string | null;
+  test_level?: string;
+  demand_source?: string;
+  catalog_version_at_enqueue?: string | null;
 }
 
 interface FrameRow {
@@ -458,7 +461,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   }
   const supabase = createServerClient();
   const candidateColumns =
-    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config, installer_url, installer_sha256, package_profile_sha256, next_retry_at';
+    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config, installer_url, installer_sha256, package_profile_sha256, next_retry_at, test_level, demand_source, catalog_version_at_enqueue';
 
   const [activeResult, queueResult, countResult, pollResult, recentResult, control, curated] = await Promise.all([
     supabase
@@ -529,9 +532,10 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     }
     if (!chunk.length) continue;
     try {
-      const [blocks, retries] = await Promise.all([
+      const [blocks, retries, staleIds] = await Promise.all([
         getPackageCompatibilityBlocks(supabase, chunk.map(input)),
         qaSourceRetryAtMany(supabase, chunk.map(qaSourceKey)),
+        loadStaleQaCatalogCandidateIds(supabase, chunk),
       ]);
       for (const candidate of chunk) {
         if (blocks.has(packageCompatibilityKey(input(candidate)))) {
@@ -540,6 +544,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
           if (grant.error) throw grant.error;
           if (grant.data !== true) continue;
         }
+        if (staleIds.has(candidate.id)) continue;
         const retryAt = retries.get(qaSourceKey(candidate));
         if (retryAt) { if (waiting.length < 10) waiting.push({ candidate, nextCheckAt: retryAt, sourceRetry: true }); }
         else if (queued.length < 10) queued.push(candidate);

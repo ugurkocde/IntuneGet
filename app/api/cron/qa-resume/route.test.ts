@@ -862,7 +862,7 @@ describe('GET /api/cron/qa-resume', () => {
     );
   });
 
-  it.each([true, false])('rebuilds a superseded exact QA profile when relink matches=%s', async (matches) => {
+  it.each([true, false])('rebuilds a catalog-version-superseded exact QA profile when relink matches=%s', async (matches) => {
     const job = {
       tenant_id: 'tenant-1', id: 'job-superseded',
       qa_candidate_id: 'candidate-old',
@@ -905,7 +905,7 @@ describe('GET /api/cron/qa-resume', () => {
             data: {
               id: 'candidate-old',
               status: 'superseded',
-              failure_summary: null,
+              failure_summary: 'Superseded before dispatch: catalog-version-changed.',
               package_profile_sha256: 'A'.repeat(64),
             },
             error: null,
