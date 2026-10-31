@@ -6,6 +6,7 @@ import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-
 import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { classifyQaFailure } from '@/lib/qa/classify';
 import { createServerClient } from '@/lib/supabase';
+import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
 import {
   getPackageCompatibilityBlock,
   type PackageCompatibilityBlockCode,
@@ -158,6 +159,9 @@ export function describeQaGateError(error: AnyQaGateError): string {
   }
   if (error instanceof QaGateNotPassedError) {
     if (error.details.reason === 'reputation') {
+      if (isCuratedPackageId(error.details.wingetId)) {
+        return `${error.message}. Packaging remains paused until current installer security eligibility can be verified.`;
+      }
       return `${error.message}. Packaging will resume after a clean VirusTotal verdict with engine coverage is available.`;
     }
     return `${error.message}. Automatic deployment will resume after the installation test passes.`;
@@ -193,6 +197,23 @@ export async function enforceQaGate(input: {
     if (input.sourceType === 'custom' || input.qaOverride || (input.architecture || app.architecture) !== app.architecture ||
         (input.installerSha256 && input.installerSha256.toLowerCase() !== release.installerSha256.toLowerCase())) {
       throw new CuratedEvidenceMismatchError();
+    }
+    // Signed approval establishes the reviewed release, not its current
+    // security eligibility. Explicitly released holds stay released; historic
+    // QA verdict rows must not reinstate them or exclude Defender approvals.
+    const hash = release.installerSha256.toLowerCase();
+    const securityHold = (cause?: unknown) => Object.assign(new QaGateNotPassedError({
+      wingetId: app.packageId, version: release.candidate.version,
+      architecture: app.architecture, installerSha256: hash.toUpperCase(),
+      packageProfileSha256: input.packageProfileSha256 || '', reason: 'reputation',
+    }), cause === undefined ? {} : { cause });
+    if (hash.length !== 64 || !/^[a-f0-9]{64}$/.test(hash) || hash === '0'.repeat(64)) throw securityHold();
+    try {
+      const holds = await loadInstallerSecurityHolds(createServerClient(), [hash]);
+      if (holds.has(hash)) throw securityHold();
+    } catch (error) {
+      if (error instanceof QaGateNotPassedError) throw error;
+      throw securityHold(error);
     }
     return;
   }
