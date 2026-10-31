@@ -766,6 +766,12 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedRegistryUninstallDisplayName: 'Poly Studio',
   },
   {
+    // The catalog title differs from the vendor's exact registration. Bind only
+    // UDS Client so its bundled runtimes cannot become uninstall candidates.
+    wingetId: 'VirtualCable.UDSClient',
+    reviewedRegistryUninstallDisplayName: 'UDS Client',
+  },
+  {
     // The 2.7.18 NSIS installer registers its primary product as `jamovi`,
     // despite the WinGet manifest declaring `Jamovi Desktop`. QA run
     // 32913050396 observed that exact ARP identity alongside Visual C++ runtime

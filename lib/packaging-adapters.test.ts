@@ -215,6 +215,19 @@ describe('application packaging adapters', () => {
     ).toBeUndefined();
   });
 
+  it('binds UDS Enterprise Client only to its exact UDS Client registration', () => {
+    const config = applyApplicationPackagingAdapter('VirtualCable.UDSClient', {
+      ...DEFAULT_PSADT_CONFIG,
+      reviewedRegistryUninstallDisplayName: 'customer override',
+    });
+    expect(config.reviewedRegistryUninstallDisplayName).toBe('UDS Client');
+    expect(config.detectionRules).toEqual(DEFAULT_PSADT_CONFIG.detectionRules);
+    expect(
+      applyApplicationPackagingAdapter('VirtualCable.Other', config)
+        .reviewedRegistryUninstallDisplayName
+    ).toBeUndefined();
+  });
+
   it('binds Jamovi Desktop to its actual lowercase jamovi ARP identity', () => {
     expect(
       applyApplicationPackagingAdapter('Jamovi.Desktop.Current', {

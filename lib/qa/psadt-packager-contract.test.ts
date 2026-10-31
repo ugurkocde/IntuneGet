@@ -50,6 +50,42 @@ if (@($selectedApplications).Count -ne 2) { throw 'Duplicate identity was collap
       expect(control).toBe('REGISTRY_UNINSTALL:ZDiskCleaner Pro');
     }, 30_000);
   }
+  for (const shell of ['pwsh', 'powershell']) {
+    it.runIf(process.platform === 'win32')(`selects the exact UDS Client registration among bundled runtimes in ${shell}`, () => {
+      const config = applyApplicationPackagingAdapter('VirtualCable.UDSClient', DEFAULT_PSADT_CONFIG);
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft', 'UDS Enterprise Client', [], config, [],
+        'VirtualCable.UDSClient', 'UDS Enterprise Client', '3.6.0.18670',
+        'REGISTRY_UNINSTALL:UDS Enterprise Client', '/S'
+      );
+      const identity = generated.split('\n').find(line => line.trimStart().startsWith('$configuredUninstallDisplayName ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.DisplayName -eq $configuredUninstallDisplayName })'));
+      expect(identity).toBeDefined();
+      expect(selection).toBeDefined();
+      const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', `
+${identity}
+$uds = [pscustomobject]@{ PSChildName = 'UDS Client'; DisplayName = 'UDS Client'; Publisher = 'Virtual Cable S.L.U.'; DisplayVersion = '3.6.0.18670'; WindowsInstaller = $false; SystemComponent = $false }
+$edge = [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; DisplayName = 'Microsoft Edge WebView2 Runtime'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $false; SystemComponent = $true }
+$vcAdditional = [pscustomobject]@{ PSChildName = 'vc-additional'; DisplayName = 'Microsoft Visual C++ 2019 X86 Additional Runtime - 14.28.29325'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $true; SystemComponent = $true }
+$vcBundle = [pscustomobject]@{ PSChildName = 'vc-bundle'; DisplayName = 'Microsoft Visual C++ 2015-2019 Redistributable (x86) - 14.28.29325'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $false; SystemComponent = $false }
+$vcMinimum = [pscustomobject]@{ PSChildName = 'vc-minimum'; DisplayName = 'Microsoft Visual C++ 2019 X86 Minimum Runtime - 14.28.29325'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $true; SystemComponent = $true }
+$changedApplications = @($edge, $vcAdditional, $uds, $vcBundle, $vcMinimum)
+${selection}
+$selected = @($selectedApplications | ForEach-Object { $_.PSChildName })
+$changedApplications = @($edge, $vcAdditional, $vcBundle, $vcMinimum)
+${selection}
+$withoutProduct = @($selectedApplications).Count
+$changedApplications = @($uds, $edge, $uds)
+${selection}
+[pscustomobject]@{ selected = $selected; withoutProduct = $withoutProduct; duplicateCount = @($selectedApplications).Count } | ConvertTo-Json -Compress
+`], { encoding: 'utf8', timeout: 30_000 });
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({ selected: ['UDS Client'], withoutProduct: 0, duplicateCount: 2 });
+      expect(generated).toContain("$configuredUninstallDisplayName = 'UDS Client'");
+      expect(generated).toContain('$_.PSChildName -eq $capturedUninstallKey');
+    }, 30_000);
+  }
+
   it('keeps the diagnostic calls and fail-closed guard on the shared generated route', () => {
     expect(packager).toContain('Write-IntuneGetRegistrationEvidence -Application $selectedApplications[0] -Stage install');
     expect(packager.match(/Write-IntuneGetRegistrationEvidence -Application \$registeredApplication -Stage uninstall/g)).toHaveLength(2);
