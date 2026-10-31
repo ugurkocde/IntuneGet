@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-30T19:41:40.157Z",
-    "expiresAt": "2026-11-06T19:41:40.157Z",
+    "generatedAt": "2026-10-31T13:13:57.233Z",
+    "expiresAt": "2026-11-07T13:13:57.233Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -10225,10 +10225,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/aws-cli/16f992218ff7ab7d5309040f.json"
           }
         }
+      },
+      {
+        "id": "zoom:e6e4f527fb33dc4e2a42f4bb",
+        "candidate": {
+          "appId": "zoom",
+          "version": "7.2.51704",
+          "installerUrl": "https://cdn.zoom.us/prod/7.2.5.51704/x64/ZoomInstallerFull.msi",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://www.zoom.com/",
+          "discoveredAt": "2026-10-31T12:18:24.423Z",
+          "id": "e6e4f527fb33dc4e2a42f4bb"
+        },
+        "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+        "executionProfileSha256": "93ED62E1D3D2B7745D06F8E6CB5B52B1EFAB8E3E20028A70E72694A177D2C931",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-31T13:13:57.233Z",
+        "evidence": {
+          "verifiedAt": "2026-10-31T12:40:49.4353347Z",
+          "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+          "installerVersion": "7.2.51704",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/zoom/e6e4f527fb33dc4e2a42f4bb.json",
+          "signature": {
+            "publisher": "Zoom Communications, Inc.",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "fcbaad16d61f88b5ef9269ac5d5ec0599f0ab4d3",
+            "websiteCommit": "bad7729654e6a8e774af1758db458e5df3c109d4",
+            "runId": "41201225119",
+            "runAttempt": 1,
+            "artifactId": "13043057533",
+            "artifactSha256": "5f2372089ccc786aa8d7e9aefae5bdacf0f69c1cd2f7f44112c9bf24ee2a03a4"
+          },
+          "security": {
+            "status": "clean",
+            "engineVersion": "1.1.26100.4",
+            "scannedAt": "2026-10-31T12:37:55.5219097Z",
+            "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+            "scanner": "defender",
+            "malicious": 0,
+            "signatureVersion": "1.463.56.0",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/zoom/e6e4f527fb33dc4e2a42f4bb.json"
+          },
+          "qa": {
+            "previousInstallerSha256": "b0dac9fa5237d2e18144ca723644460e7cc26675e5d3db0f89fdfe47ad8c429b",
+            "upgradeFromVersion": "7.2.48556",
+            "testLevel": "psadt-package",
+            "architecture": "x64",
+            "executionContext": "LocalSystem",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "candidateId": "e6e4f527fb33dc4e2a42f4bb",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+            "executionProfileSha256": "93ED62E1D3D2B7745D06F8E6CB5B52B1EFAB8E3E20028A70E72694A177D2C931",
+            "installerVersion": "7.2.51704",
+            "testedAt": "2026-10-31T12:40:41.1870086Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/zoom/e6e4f527fb33dc4e2a42f4bb.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "ytAV3tR+z17/ZRfMQwWcKwMvTePj6Yx4pZXuWQbjoEnuxTpdqcVGCvjyffBQKIpwPhsCOBjvwzNsb4DP/RunBg=="
+  "signature": "QsPb9+zFbPkM94I/t8JrZfxTPtKG8u2QOAnIAhCZ06g9yUAhw/zJPab8xxeqyExGxmutMm9UjluczqH7qojXCg=="
 }

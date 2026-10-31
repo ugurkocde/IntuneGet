@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "41201225119",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runAttempt": "1",
+    "workflowCommit": "fcbaad16d61f88b5ef9269ac5d5ec0599f0ab4d3",
+    "websiteCommit": "bad7729654e6a8e774af1758db458e5df3c109d4"
+  },
+  "candidate": {
+    "appId": "zoom",
+    "version": "7.2.51704",
+    "installerUrl": "https://cdn.zoom.us/prod/7.2.5.51704/x64/ZoomInstallerFull.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.zoom.com/",
+    "discoveredAt": "2026-10-31T12:18:24.423Z",
+    "id": "e6e4f527fb33dc4e2a42f4bb"
+  },
+  "previous": {
+    "appId": "zoom",
+    "version": "7.2.48556",
+    "installerUrl": "https://cdn.zoom.us/prod/7.2.1.48556/x64/ZoomInstallerFull.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.zoom.com/",
+    "discoveredAt": "2026-10-06T17:45:18.407Z",
+    "id": "67a1fa3aa01dbb8bd8b3fdf9"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "e6e4f527fb33dc4e2a42f4bb",
+      "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+      "sourceUrl": "https://cdn.zoom.us/prod/7.2.5.51704/x64/ZoomInstallerFull.msi",
+      "finalOrigin": "https://cdn.zoom.us",
+      "signature": {
+        "publisher": "Zoom Communications, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "engineVersion": "1.1.26100.4",
+        "scannedAt": "2026-10-31T12:37:55.5219097Z",
+        "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+        "scanner": "defender",
+        "malicious": 0,
+        "signatureVersion": "1.463.56.0",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "67a1fa3aa01dbb8bd8b3fdf9",
+      "installerSha256": "b0dac9fa5237d2e18144ca723644460e7cc26675e5d3db0f89fdfe47ad8c429b",
+      "sourceUrl": "https://cdn.zoom.us/prod/7.2.1.48556/x64/ZoomInstallerFull.msi",
+      "finalOrigin": "https://cdn.zoom.us",
+      "signature": {
+        "publisher": "Zoom Communications, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "engineVersion": "1.1.26100.4",
+        "scannedAt": "2026-10-31T12:38:27.3582259Z",
+        "installerSha256": "b0dac9fa5237d2e18144ca723644460e7cc26675e5d3db0f89fdfe47ad8c429b",
+        "scanner": "defender",
+        "malicious": 0,
+        "signatureVersion": "1.463.56.0",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "e6e4f527fb33dc4e2a42f4bb",
+    "packageId": "IntuneGet.Curated.Zoom",
+    "installerUrl": "https://cdn.zoom.us/prod/7.2.5.51704/x64/ZoomInstallerFull.msi",
+    "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Zoom",
+      "displayName": "Zoom Workplace",
+      "publisher": "Zoom Communications, Inc.",
+      "version": "7.2.51704",
+      "architecture": "x64",
+      "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Zoom Workplace",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Zoom\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"7.2.51704\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Zoom\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"7.2.51704\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "93ED62E1D3D2B7745D06F8E6CB5B52B1EFAB8E3E20028A70E72694A177D2C931",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Zoom\",\"publisher\":\"IntuneGet QA\",\"version\":\"7.2.51704\",\"wingetId\":\"IntuneGet.Curated.Zoom\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"7.2.51704\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Zoom\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"2D8D30026D16C740F5A8AA22573D5ECDB226000DE792F6E759CDEF1B89F30C28\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"8E81E0D7DC401880C4CDFD14DB8BED51308608B7AA67FA1E2CA31CCAA71CAD93\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Zoom Workplace\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"7.2.51704\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Zoom\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"A3D18A8CF4A41DFA23AE660F1248C41AAD90D073EE5A25E3DAC9496DDC7833A0\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "a3d18a8cf4a41dfa23ae660f1248c41aad90d073ee5a25e3dac9496ddc7833a0",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "previousInstallerSha256": "b0dac9fa5237d2e18144ca723644460e7cc26675e5d3db0f89fdfe47ad8c429b",
+    "upgradeFromVersion": "7.2.48556",
+    "testLevel": "psadt-package",
+    "architecture": "x64",
+    "executionContext": "LocalSystem",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "candidateId": "e6e4f527fb33dc4e2a42f4bb",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerSha256": "8e81e0d7dc401880c4cdfd14db8bed51308608b7aa67fa1e2ca31ccaa71cad93",
+    "executionProfileSha256": "93ED62E1D3D2B7745D06F8E6CB5B52B1EFAB8E3E20028A70E72694A177D2C931",
+    "installerVersion": "7.2.51704",
+    "testedAt": "2026-10-31T12:40:41.1870086Z"
+  },
+  "verifiedAt": "2026-10-31T12:40:49.4353347Z",
+  "authenticatedArtifact": {
+    "id": 13043057533,
+    "sha256": "5f2372089ccc786aa8d7e9aefae5bdacf0f69c1cd2f7f44112c9bf24ee2a03a4"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-31T13:13:57.233Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
