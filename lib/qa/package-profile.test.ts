@@ -35,6 +35,24 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('gives the UDS capture repair a new profile while preserving detection and installer identity', () => {
+    const uds = {
+      ...input, wingetId: 'VirtualCable.UDSClient', displayName: 'UDS Enterprise Client',
+      publisher: 'VirtualCable', version: '3.6.0.18670', architecture: 'x86',
+      sourceInstallerType: 'nullsoft', silentArgs: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:UDS Enterprise Client',
+    };
+    const previous = buildQaPackageIdentity(uds);
+    const repaired = buildQaPackageIdentity({
+      ...uds, psadtConfig: applyApplicationPackagingAdapter(uds.wingetId, uds.psadtConfig),
+    });
+    expect(repaired.profile.psadtConfig.reviewedRegistryUninstallDisplayName).toBe('UDS Client');
+    expect(repaired.psadtConfigSha256).not.toBe(previous.psadtConfigSha256);
+    expect(repaired.packageProfileSha256).not.toBe(previous.packageProfileSha256);
+    expect(repaired.detectionRulesSha256).toBe(previous.detectionRulesSha256);
+    expect(repaired.profile.installer).toEqual(previous.profile.installer);
+  });
+
   it('preserves the exact failed Wacom driver identity for the shared registered-command adapter', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Wacom.WacomTabletDriver', displayName: 'Wacom Tablet', publisher: 'Wacom',
