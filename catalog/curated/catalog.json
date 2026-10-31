@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-31T13:13:57.233Z",
-    "expiresAt": "2026-11-07T13:13:57.233Z",
+    "generatedAt": "2026-10-31T22:05:36.203Z",
+    "expiresAt": "2026-11-07T22:05:36.203Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -10315,8 +10315,10 @@
         }
       }
     ],
-    "withdrawnReleaseIds": []
+    "withdrawnReleaseIds": [
+      "libreoffice:a40289a0667c839d1900cab3"
+    ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "QsPb9+zFbPkM94I/t8JrZfxTPtKG8u2QOAnIAhCZ06g9yUAhw/zJPab8xxeqyExGxmutMm9UjluczqH7qojXCg=="
+  "signature": "8h+V1CFyFu7U39896iH3SVMvo9nFJTj0OgzaxQGzLzlswlOxBPkT4xdWLMYiPA4EgMeKc6cmXz6tz6OvmOouDQ=="
 }
