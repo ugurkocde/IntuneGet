@@ -1,0 +1,5 @@
+{
+  "title": "Current security eligibility for curated deployments",
+  "summary": "Hosted deployments and website mediated local packager claims check current installer security holds. Approved default and custom settings use the same exact installer check. Deployments wait when eligibility cannot be verified, while explicitly released holds and valid Defender approved releases remain eligible.",
+  "type": "fixed"
+}

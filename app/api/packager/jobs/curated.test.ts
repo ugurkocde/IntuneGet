@@ -4,18 +4,27 @@ import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 
-const state = vi.hoisted(() => ({ envelope: {} as Record<string, unknown>, claim: vi.fn(), update: vi.fn(), acceptances: new Set<string>() }));
+const state = vi.hoisted(() => ({ envelope: {} as Record<string, unknown>, claim: vi.fn(), update: vi.fn(), securityRead: vi.fn(), acceptances: new Set<string>() }));
 vi.mock('@/catalog/curated/catalog.json', () => ({ default: state.envelope }));
 vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { claim: state.claim, update: state.update },
   curatedLicenceAttestations: { get: async (tenantId: string, id: string, version: string) => state.acceptances.has(`${tenantId}|${id}|${version}`)
     ? { tenant_id: tenantId, attestation_id: id, attestation_version: version, accepted_at: '2026-10-04T00:00:00.000Z', accepted_by_user_id: 'admin', accepted_by_email: null } : null } }),
   verifyPackagerApiKey: () => true }));
 vi.mock('@/lib/features', () => ({ getFeatureFlags: () => ({ localPackager: true }) }));
+vi.mock('@/lib/supabase', () => ({
+  isSupabaseServerConfigured: () => false,
+  getServerClientOrNull: () => null,
+  createServerClient: () => ({ from: (table: string) => {
+    if (table !== 'qa_installer_security_holds') throw new Error('Unexpected fixture table');
+    return { select: () => ({ in: () => ({ is: state.securityRead }) }) };
+  } }),
+}));
 import { POST } from './route';
 const request = () => new NextRequest('http://localhost/api/packager/jobs', {
   method: 'POST', headers: { Authorization: 'Bearer test-key', 'Content-Type': 'application/json' },
   body: JSON.stringify({ jobId: 'job', packagerId: 'worker' }),
 });
+beforeEach(() => { state.securityRead.mockReset().mockResolvedValue({ data: [], error: null }); });
 describe('curated local-worker handoff', () => {
   beforeEach(() => {
     state.claim.mockReset(); state.update.mockReset(); state.acceptances.clear();
@@ -35,6 +44,15 @@ describe('curated local-worker handoff', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).claimed).toBe(true);
     expect(state.update).not.toHaveBeenCalled();
+    expect(state.securityRead).toHaveBeenCalledWith('released_at', null);
+  });
+  it('keeps an approved job awaiting QA when its security read is unavailable', async () => {
+    state.securityRead.mockResolvedValue({ data: null, error: { message: 'Synthetic unavailable reader' } });
+    state.update.mockResolvedValue(true);
+    const response = await POST(request());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ claimed: false });
+    expect(state.update).toHaveBeenCalledWith('job', expect.objectContaining({ status: 'awaiting_qa', packager_id: null }), expect.anything());
   });
   it('fails a queued curated job when its catalog is no longer trusted', async () => {
     vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', '{}');
