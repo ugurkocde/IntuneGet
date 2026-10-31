@@ -1386,6 +1386,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // Apply the existing profile-preserving Opera launcher contract to Air.
+    // Completion still requires removal of the captured exact registry identity.
+    wingetId: 'Opera.OperaAir',
+    requiredProcessesToClose: [
+      { name: 'opera', description: 'Opera Air browser' },
+    ],
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles%\\Opera Air\\opera.exe',
+      arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // The Office Deployment Tool is a self-extracting payload, not an
     // installed application. It intentionally creates no ARP registration.
     // WinGet extracts it to this machine-wide directory, so verify that exact

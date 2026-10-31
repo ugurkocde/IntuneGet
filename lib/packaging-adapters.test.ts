@@ -36,6 +36,25 @@ describe('OneKey exact registry identity', () => {
 });
 
 describe('application packaging adapters', () => {
+  it('uses the profile-preserving Opera launcher only for the Opera Air identity', () => {
+    for (const id of ['Opera.OperaAir', ' opera.operaair ']) {
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedExactUninstall).toEqual({
+        executablePath: '%ProgramFiles%\\Opera Air\\opera.exe',
+        arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+        completionTimeoutMinutes: 5,
+      });
+      expect(adapted.processesToClose).toContainEqual({ name: 'opera', description: 'Opera Air browser' });
+      expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+    }
+    for (const id of ['Opera.OperaAir.Beta', 'Other.OperaAir']) {
+      expect(applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG).reviewedExactUninstall).toBeUndefined();
+    }
+    expect(applyApplicationPackagingAdapter('Opera.OperaGX', DEFAULT_PSADT_CONFIG).reviewedExactUninstall?.executablePath)
+      .toBe('%ProgramFiles%\\Opera GX\\opera.exe');
+  });
+
   it('binds ZDisk to its observed exact NSIS key without changing custom identities', () => {
     const exact = 'REGISTRY_UNINSTALL_KEY:ZDiskCleanerPro:ZDiskCleanerPro';
     expect(resolveApplicationUninstallCommand(' YushengBeep.ZDiskCleanerPro ', 'REGISTRY_UNINSTALL:ZDiskCleaner Pro')).toBe(exact);
