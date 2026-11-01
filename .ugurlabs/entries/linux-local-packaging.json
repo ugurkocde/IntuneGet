@@ -1,0 +1,5 @@
+{
+  "title": "Package supported apps on Linux",
+  "summary": "The local packager can create Intune packages on Linux for supported direct installers. Archive and nested installers clearly require a Windows packager, while packaging tools remain verified against their pinned hashes.",
+  "type": "new"
+}
