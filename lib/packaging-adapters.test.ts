@@ -699,6 +699,26 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('OWASP.Other', 'machine')).toBe('machine');
   });
 
+  it('keeps T3 Code one-click NSIS in the user context without changing removal behavior', () => {
+    const uninstall = 'REGISTRY_UNINSTALL_PRODUCT:{E9197887-EFB3-55E0-985E-D6D3B5DD594A}:T3 Code';
+    for (const id of ['T3Tools.T3Code', ' t3tools.t3code ']) {
+      for (const scope of [undefined, 'machine', 'user'] as const) {
+        expect(resolveApplicationInstallScope(id, scope)).toBe('user');
+      }
+      expect(resolveApplicationInstallerSelectionScope(id, 'user')).toBe('user');
+      expect(resolveApplicationUninstallCommand(id, uninstall)).toBe(uninstall);
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedInstallArguments).toEqual([]);
+      expect(adapted.reviewedUninstallArguments).toEqual([]);
+      expect(adapted.reviewedExactUninstall).toBeUndefined();
+      expect(adapted.reviewedRecoverCapturedUninstallByExactIdentity).toBeUndefined();
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+    }
+    for (const id of ['T3Tools.Other', 'T3Tools.T3CodeX', 'Example.App']) {
+      expect(resolveApplicationInstallScope(id, 'machine')).toBe('machine');
+    }
+  });
+
   it('keeps Equibop assisted NSIS in the signed-in user context', () => {
     for (const id of ['Equicord.Equibop', ' equicord.equibop ']) {
       expect(resolveApplicationInstallScope(id, undefined)).toBe('user');
