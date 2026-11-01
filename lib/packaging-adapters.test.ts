@@ -36,6 +36,28 @@ describe('OneKey exact registry identity', () => {
 });
 
 describe('application packaging adapters', () => {
+  it.each(['FunRoutine.WorkFlowy', 'GarboMuffin.TurboWarp'])(
+    'keeps %s per-user registration out of the SYSTEM profile',
+    (wingetId) => {
+      const uninstall = 'REGISTRY_UNINSTALL:Vendor Application';
+      for (const id of [wingetId, ` ${wingetId.toLowerCase()} `]) {
+        for (const scope of [undefined, 'machine', 'user'] as const) {
+          expect(resolveApplicationInstallScope(id, scope)).toBe('user');
+        }
+        expect(resolveApplicationInstallerSelectionScope(id, 'machine')).toBe('machine');
+        expect(resolveApplicationInstallerSelectionScope(id, 'user')).toBe('user');
+        expect(resolveApplicationUninstallCommand(id, uninstall)).toBe(uninstall);
+        const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+        expect(adapted.reviewedInstallArguments).toEqual([]);
+        expect(adapted.reviewedUninstallArguments).toEqual([]);
+        expect(adapted.reviewedExactUninstall).toBeUndefined();
+        expect(adapted.reviewedRecoverCapturedUninstallByExactIdentity).toBeUndefined();
+        expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+      }
+      expect(resolveApplicationInstallScope(`${wingetId}.Other`, 'machine')).toBe('machine');
+    }
+  );
+
   it('uses the profile-preserving Opera launcher only for the Opera Air identity', () => {
     for (const id of ['Opera.OperaAir', ' opera.operaair ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
