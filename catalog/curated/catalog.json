@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-01T22:14:09.560Z",
-    "expiresAt": "2026-11-08T22:14:09.560Z",
+    "generatedAt": "2026-11-02T23:41:50.192Z",
+    "expiresAt": "2026-11-09T23:41:50.192Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -10401,6 +10401,94 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/d06d8d622037e9c56c0906bf.json"
           }
         }
+      },
+      {
+        "id": "mattermost:0d0083c98c134a68e1d64d6b",
+        "candidate": {
+          "appId": "mattermost",
+          "version": "6.3.2",
+          "installerUrl": "https://github.com/mattermost/desktop/releases/download/v6.3.2/mattermost-desktop-6.3.2-win-x64.msi",
+          "vendorSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+          "releaseNotesUrl": "https://github.com/mattermost/desktop/releases/tag/v6.3.2",
+          "discoveredAt": "2026-11-02T08:41:07.771Z",
+          "id": "0d0083c98c134a68e1d64d6b"
+        },
+        "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+        "executionProfileSha256": "7F2B6071B5BE872108B271B4F1BE728D9307A8438E06309BF20483D4F9DE719B",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-02T23:41:50.192Z",
+        "evidence": {
+          "verifiedAt": "2026-11-02T23:37:00.2939453Z",
+          "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+          "installerVersion": "6.3.2",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mattermost/0d0083c98c134a68e1d64d6b.json",
+          "signature": {
+            "publisher": "Mattermost, Inc.",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "555d7524f6af3008248fa3d8a66ab16dd81a9cb2",
+            "websiteCommit": "b223b34c8c3e8dbfde596c2dcac9f76c0fae0f9a",
+            "runId": "41545709700",
+            "runAttempt": 1,
+            "artifactId": "13187738628",
+            "artifactSha256": "a0b0a48891d63f705c2955713fa27f4e168056c3745186057eaad3748ed281a2"
+          },
+          "security": {
+            "suspicious": 0,
+            "scannedAt": "2026-11-02T23:34:47.0968907Z",
+            "engineVersion": "1.1.26100.4",
+            "scanner": "defender",
+            "malicious": 0,
+            "status": "clean",
+            "signatureVersion": "1.463.97.0",
+            "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mattermost/0d0083c98c134a68e1d64d6b.json"
+          },
+          "qa": {
+            "executionProfileSha256": "7F2B6071B5BE872108B271B4F1BE728D9307A8438E06309BF20483D4F9DE719B",
+            "installerVersion": "6.3.2",
+            "testedAt": "2026-11-02T23:36:52.9058559Z",
+            "testLevel": "psadt-package",
+            "candidateId": "0d0083c98c134a68e1d64d6b",
+            "executionContext": "LocalSystem",
+            "architecture": "x64",
+            "upgradeFromVersion": "6.3.1",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "previousInstallerSha256": "5f47b75874680f944539f4c33be60de83a4572180fe0a40848669932db88d2b8",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/mattermost/0d0083c98c134a68e1d64d6b.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": [
@@ -10408,5 +10496,5 @@
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "sZnlnu6lj8YP/KNdK53vA8az9KoV3lEZPMf1zBZrW8hIah/ye+x6Pc6e6q7zXF6KnPHpJgI53Ipu4J/kAJalCA=="
+  "signature": "+g1HIAXAPLoqEu3balTftyI92aLbnNxSa6IaJtVOZa5f9K08XMjnjblBvfaXF0GlbyKAhUNjQNVaqDz6fDaLBw=="
 }

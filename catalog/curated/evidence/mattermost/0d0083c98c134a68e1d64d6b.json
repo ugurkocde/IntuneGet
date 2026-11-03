@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "555d7524f6af3008248fa3d8a66ab16dd81a9cb2",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "41545709700",
+    "websiteCommit": "b223b34c8c3e8dbfde596c2dcac9f76c0fae0f9a"
+  },
+  "candidate": {
+    "appId": "mattermost",
+    "version": "6.3.2",
+    "installerUrl": "https://github.com/mattermost/desktop/releases/download/v6.3.2/mattermost-desktop-6.3.2-win-x64.msi",
+    "vendorSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+    "releaseNotesUrl": "https://github.com/mattermost/desktop/releases/tag/v6.3.2",
+    "discoveredAt": "2026-11-02T08:41:07.771Z",
+    "id": "0d0083c98c134a68e1d64d6b"
+  },
+  "previous": {
+    "appId": "mattermost",
+    "version": "6.3.1",
+    "installerUrl": "https://github.com/mattermost/desktop/releases/download/v6.3.1/mattermost-desktop-6.3.1-win-x64.msi",
+    "vendorSha256": "5f47b75874680f944539f4c33be60de83a4572180fe0a40848669932db88d2b8",
+    "releaseNotesUrl": "https://github.com/mattermost/desktop/releases/tag/v6.3.1",
+    "discoveredAt": "2026-10-15T07:00:33.577Z",
+    "id": "eebca57cd5241702709f2b85"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "0d0083c98c134a68e1d64d6b",
+      "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+      "sourceUrl": "https://github.com/mattermost/desktop/releases/download/v6.3.2/mattermost-desktop-6.3.2-win-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Mattermost, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "suspicious": 0,
+        "scannedAt": "2026-11-02T23:34:47.0968907Z",
+        "engineVersion": "1.1.26100.4",
+        "scanner": "defender",
+        "malicious": 0,
+        "status": "clean",
+        "signatureVersion": "1.463.97.0",
+        "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8"
+      }
+    },
+    "previous": {
+      "candidateId": "eebca57cd5241702709f2b85",
+      "installerSha256": "5f47b75874680f944539f4c33be60de83a4572180fe0a40848669932db88d2b8",
+      "sourceUrl": "https://github.com/mattermost/desktop/releases/download/v6.3.1/mattermost-desktop-6.3.1-win-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Mattermost, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "suspicious": 0,
+        "scannedAt": "2026-11-02T23:35:05.5800613Z",
+        "engineVersion": "1.1.26100.4",
+        "scanner": "defender",
+        "malicious": 0,
+        "status": "clean",
+        "signatureVersion": "1.463.97.0",
+        "installerSha256": "5f47b75874680f944539f4c33be60de83a4572180fe0a40848669932db88d2b8"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "0d0083c98c134a68e1d64d6b",
+    "packageId": "IntuneGet.Curated.Mattermost",
+    "installerUrl": "https://github.com/mattermost/desktop/releases/download/v6.3.2/mattermost-desktop-6.3.2-win-x64.msi",
+    "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Mattermost",
+      "displayName": "Mattermost Desktop",
+      "publisher": "Mattermost, Inc.",
+      "version": "6.3.2",
+      "architecture": "x64",
+      "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Mattermost Desktop",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Mattermost\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.3.2\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Mattermost\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.3.2\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "7F2B6071B5BE872108B271B4F1BE728D9307A8438E06309BF20483D4F9DE719B",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Mattermost\",\"publisher\":\"IntuneGet QA\",\"version\":\"6.3.2\",\"wingetId\":\"IntuneGet.Curated.Mattermost\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.3.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Mattermost\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"CB4B2CCE967B8CD50FE0B44AF72717650126ED07AD5B4E1DD9F5FDE4D7D23EDC\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"F468E53A41204DEE816025772934B83416DEE80077B3581DAA81476D55EFDAD8\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Mattermost Desktop\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.3.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Mattermost\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"F74ED01067EC79EE1885D3BBA0C1634D5B6B0C4D35BFB35BB9EE0C018C905F6E\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "f74ed01067ec79ee1885d3bba0c1634d5b6b0c4d35bfb35bb9ee0c018c905f6e",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionProfileSha256": "7F2B6071B5BE872108B271B4F1BE728D9307A8438E06309BF20483D4F9DE719B",
+    "installerVersion": "6.3.2",
+    "testedAt": "2026-11-02T23:36:52.9058559Z",
+    "testLevel": "psadt-package",
+    "candidateId": "0d0083c98c134a68e1d64d6b",
+    "executionContext": "LocalSystem",
+    "architecture": "x64",
+    "upgradeFromVersion": "6.3.1",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerSha256": "f468e53a41204dee816025772934b83416dee80077b3581daa81476d55efdad8",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "previousInstallerSha256": "5f47b75874680f944539f4c33be60de83a4572180fe0a40848669932db88d2b8"
+  },
+  "verifiedAt": "2026-11-02T23:37:00.2939453Z",
+  "authenticatedArtifact": {
+    "id": 13187738628,
+    "sha256": "a0b0a48891d63f705c2955713fa27f4e168056c3745186057eaad3748ed281a2"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-02T23:41:50.192Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
