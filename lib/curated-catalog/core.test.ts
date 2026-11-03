@@ -3,7 +3,7 @@ import committed from '@/catalog/curated/catalog.json';
 import committedKeys from '@/catalog/curated/trusted-keys.json';
 import { CURATED_APPS } from './definitions';
 import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVersions,
-  createCandidate, signCatalog, validateDefinitions, validateRelease, verifyCatalog, verifyCatalogReleases, verifyCatalogSignature } from './core.mjs';
+  createCandidate, releaseAlreadySigned, signCatalog, validateDefinitions, validateRelease, verifyCatalog, verifyCatalogReleases, verifyCatalogSignature } from './core.mjs';
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
@@ -260,5 +260,32 @@ describe('curated catalog serving across definition changes', () => {
     for (const registeredUninstall of [{ displayName: 'Microsoft Visual Studio Code', key: 'bad"key' }, { displayName: 'Something Else', key: 'Code_is1' }, { displayName: 'Microsoft Visual Studio Code' }]) {
       expect(() => validateDefinitions([{ ...vscode, registeredUninstall } as typeof vscode])).toThrow(/registered uninstall/);
     }
+  });
+});
+
+describe('republishing a withdrawn version', () => {
+  it('publishes a re-uploaded installer of a withdrawn version but never duplicates a live one', () => {
+    const live = releaseFixture(CURATED_APPS[0], '120.0.0.0');
+    const reuploaded = { ...live, id: `${live.candidate.appId}:${'b'.repeat(24)}`, candidate: { ...live.candidate, id: 'b'.repeat(24) } };
+    expect(releaseAlreadySigned([live], [], live)).toBe(true);
+    expect(releaseAlreadySigned([live], [], reuploaded)).toBe(true);
+    expect(releaseAlreadySigned([live], [live.id], reuploaded)).toBe(false);
+    expect(releaseAlreadySigned([live], [live.id], live)).toBe(true);
+    expect(releaseAlreadySigned([live], [], releaseFixture(CURATED_APPS[0], '121.0.0.0'))).toBe(false);
+  });
+
+  it('signs, carries over and serves the replacement next to the withdrawn record', () => {
+    const withdrawn = releaseFixture(CURATED_APPS[0], '120.0.0.0');
+    const replacement = releaseFixture(CURATED_APPS[0], '120.0.0.0', 'reuploaded');
+    expect(replacement.id).not.toBe(withdrawn.id);
+    for (const order of [[withdrawn, replacement], [replacement, withdrawn]]) {
+      const { envelope, keys } = signedFixture(order, [withdrawn.id]);
+      const payload = verifyCatalog(envelope, CURATED_APPS, keys);
+      expect(catalogEntries(CURATED_APPS, payload)[0].release?.id).toBe(replacement.id);
+      const carried = verifyCatalogReleases(envelope, CURATED_APPS, keys);
+      expect(carried.payload.releases.map(release => release.id).sort()).toEqual([withdrawn.id, replacement.id].sort());
+      expect(carried.payload.withdrawnReleaseIds).toEqual([withdrawn.id]);
+    }
+    expect(() => signedFixture([withdrawn, replacement])).toThrow(/only one immutable release record/);
   });
 });
