@@ -1,7 +1,7 @@
 -- A security hold blocks only the installer it names. A held upgrade baseline
 -- must not hold a newer curated release: the baseline still runs only inside
 -- the disposable VM, and approval still requires a clean in-VM scan of both
--- installers (lib/curated-catalog/verification-evidence.mjs).
+-- installers (lib/curated-catalog/verification-evidence.ts).
 create or replace function public.qa_curated_installer_security_held(p_inputs jsonb) returns boolean
 language plpgsql security invoker set search_path = '' as $$
 declare payload jsonb; hash text;
