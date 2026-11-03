@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-03T10:07:19.815Z",
-    "expiresAt": "2026-11-10T10:07:19.815Z",
+    "generatedAt": "2026-11-03T11:26:09.967Z",
+    "expiresAt": "2026-11-10T11:26:09.967Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -10841,6 +10841,182 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscode/d23178f075c7731a50e68b6c.json"
           }
         }
+      },
+      {
+        "id": "libreoffice:5698b044a7ae0e873dbef815",
+        "candidate": {
+          "appId": "libreoffice",
+          "version": "26.8.2",
+          "installerUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.2/win/x86_64/LibreOffice_26.8.2_Win_x86-64.msi",
+          "vendorSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
+          "releaseNotesUrl": "https://www.libreoffice.org/download/release-notes/",
+          "discoveredAt": "2026-10-29T12:25:03.571Z",
+          "id": "5698b044a7ae0e873dbef815"
+        },
+        "installerSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
+        "executionProfileSha256": "B99CBC7CB2F8CD7F7B5A732B4383EEEA428B12CE1EAF764EB10F17463378004E",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-03T11:26:09.967Z",
+        "evidence": {
+          "verifiedAt": "2026-11-03T11:05:08.4721227Z",
+          "installerSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
+          "installerVersion": "26.8.2",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/libreoffice/5698b044a7ae0e873dbef815.json",
+          "signature": {
+            "publisher": "The Document Foundation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "e7077b9ea48ce7cf3c7bfd29455d2ed847e7c52e",
+            "websiteCommit": "8e729e6cc29b501619e0f070d29ce7a69139a948",
+            "runId": "41621508279",
+            "runAttempt": 1,
+            "artifactId": "13224423534",
+            "artifactSha256": "abe47eaad9f96aaeecae580c5cd20efb0193382217016c6619801bc2c78f3e5c"
+          },
+          "security": {
+            "malicious": 0,
+            "installerSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
+            "signatureVersion": "1.463.104.0",
+            "status": "clean",
+            "engineVersion": "1.1.26100.4",
+            "suspicious": 0,
+            "scannedAt": "2026-11-03T10:52:28.8708468Z",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/libreoffice/5698b044a7ae0e873dbef815.json"
+          },
+          "qa": {
+            "upgradeFromVersion": "26.8.1",
+            "architecture": "x64",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionContext": "LocalSystem",
+            "testLevel": "psadt-package",
+            "executionProfileSha256": "B99CBC7CB2F8CD7F7B5A732B4383EEEA428B12CE1EAF764EB10F17463378004E",
+            "testedAt": "2026-11-03T11:04:56.7851921Z",
+            "installerSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
+            "installerVersion": "26.8.2",
+            "previousInstallerSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+            "candidateId": "5698b044a7ae0e873dbef815",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/libreoffice/5698b044a7ae0e873dbef815.json"
+          }
+        }
+      },
+      {
+        "id": "azure-storage-explorer:41ecc3544325c4875b8b8354",
+        "candidate": {
+          "appId": "azure-storage-explorer",
+          "version": "1.47.0",
+          "installerUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.47.0/StorageExplorer-windows-x64.exe",
+          "vendorSha256": "6b2aa7962a40b3b8e9997d09899ead89b300434369652f7316acdccab4a63423",
+          "releaseNotesUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/tag/v1.47.0",
+          "discoveredAt": "2026-11-03T10:15:16.557Z",
+          "id": "41ecc3544325c4875b8b8354"
+        },
+        "installerSha256": "6b2aa7962a40b3b8e9997d09899ead89b300434369652f7316acdccab4a63423",
+        "executionProfileSha256": "A320CD64CA289314E366962B3A8FD069FF26A557747B4FC1A4C61B836A0291F6",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-03T11:26:09.967Z",
+        "evidence": {
+          "verifiedAt": "2026-11-03T10:26:27.9091251Z",
+          "installerSha256": "6b2aa7962a40b3b8e9997d09899ead89b300434369652f7316acdccab4a63423",
+          "installerVersion": "1.47.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-storage-explorer/41ecc3544325c4875b8b8354.json",
+          "signature": {
+            "publisher": "Microsoft Corporation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "e7077b9ea48ce7cf3c7bfd29455d2ed847e7c52e",
+            "websiteCommit": "8e729e6cc29b501619e0f070d29ce7a69139a948",
+            "runId": "41617757983",
+            "runAttempt": 1,
+            "artifactId": "13223226221",
+            "artifactSha256": "60fd7720b77a9ad24c92863872fc118fc9a09c2203cf34cbf5aaa9c7a467164b"
+          },
+          "security": {
+            "scannedAt": "2026-11-03T10:23:02.158917Z",
+            "signatureVersion": "1.463.104.0",
+            "scanner": "defender",
+            "malicious": 0,
+            "engineVersion": "1.1.26100.4",
+            "installerSha256": "6b2aa7962a40b3b8e9997d09899ead89b300434369652f7316acdccab4a63423",
+            "status": "clean",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-storage-explorer/41ecc3544325c4875b8b8354.json"
+          },
+          "qa": {
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionContext": "LocalSystem",
+            "testLevel": "psadt-package",
+            "testedAt": "2026-11-03T10:26:21.8587569Z",
+            "previousInstallerSha256": "2aec3da3f7fff243279a86ab2fbece419e3867ff5ac97d45296edbd150d62349",
+            "installerVersion": "1.47.0",
+            "architecture": "x64",
+            "candidateId": "41ecc3544325c4875b8b8354",
+            "upgradeFromVersion": "1.46.0",
+            "installerSha256": "6b2aa7962a40b3b8e9997d09899ead89b300434369652f7316acdccab4a63423",
+            "executionProfileSha256": "A320CD64CA289314E366962B3A8FD069FF26A557747B4FC1A4C61B836A0291F6",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/azure-storage-explorer/41ecc3544325c4875b8b8354.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": [
@@ -10849,5 +11025,5 @@
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "zDouu+ZgyKlrIyQ7UrtT9Svqv3c18XsZJpfF3B75vxrVJisp9gI/vOvr0X81BGZNKbgRvuEAsMe3bdrsb4zeCw=="
+  "signature": "BG0GM+V4n6LycoZPU46G+idbFLKlPcwrYS6tUr3R3aXg2t+Z5MOSif82PHhsWMzXACdGABTQr0s+PIxAdGMDBA=="
 }
