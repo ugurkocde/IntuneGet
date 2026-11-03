@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-03T04:42:10.955Z",
-    "expiresAt": "2026-11-10T04:42:10.955Z",
+    "generatedAt": "2026-11-03T10:07:19.815Z",
+    "expiresAt": "2026-11-10T10:07:19.815Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -10844,9 +10844,10 @@
       }
     ],
     "withdrawnReleaseIds": [
-      "libreoffice:a40289a0667c839d1900cab3"
+      "libreoffice:a40289a0667c839d1900cab3",
+      "azure-storage-explorer:9f21c1b740b7d8a017fdb9c9"
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "t9HhPh6NwfUxIcpsoYAKeVh5vn2lEdFcRpT0z8RFEi8SlWuVZY2CWKPPDmWC8U2Lo6pFiPUZJ1wP9KSHWL5iCw=="
+  "signature": "zDouu+ZgyKlrIyQ7UrtT9Svqv3c18XsZJpfF3B75vxrVJisp9gI/vOvr0X81BGZNKbgRvuEAsMe3bdrsb4zeCw=="
 }
