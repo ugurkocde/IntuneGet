@@ -14,7 +14,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
+import { catalogEntries, compareReleaseVersions, releaseAlreadySigned, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
 import { discoverCandidate, discoverPreviousCandidate, upgradeBaselineFromApproved } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
 import { createCuratedGitHubClient } from './curated-github.mjs';
@@ -362,7 +362,7 @@ async function publish() {
   const evidenceFiles = [];
   for (const runId of JSON.parse(process.env.CURATED_APPROVALS || '[]')) {
     const { app, release, evidence } = await approvedRelease(runId, approvedAt);
-    if (releases.some(item => item.id === release.id || (item.candidate.appId === app.id && compareReleaseVersions(item.candidate.version, release.candidate.version) === 0))) continue;
+    if (releaseAlreadySigned(releases, withdrawnReleaseIds, release)) continue;
     releases.push(release);
     evidenceFiles.push([`catalog/curated/evidence/${app.id}/${release.candidate.id}.json`, evidence]);
   }

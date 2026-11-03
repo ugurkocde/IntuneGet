@@ -16,6 +16,7 @@ export function validateRelease(app: CuratedAppDefinition, release: CuratedRelea
 export function compareReleaseVersions(left: string, right: string): number;
 export function verifyCatalog(envelope: unknown, apps: CuratedAppDefinition[], trustedKeys: Record<string, string>, now?: Date): CuratedCatalogEnvelope['payload'];
 export function signCatalog(payload: CuratedCatalogEnvelope['payload'], apps: CuratedAppDefinition[], keyId: string, privateKey: string): CuratedCatalogEnvelope;
+export function releaseAlreadySigned(releases: CuratedRelease[], withdrawnReleaseIds: string[], release: CuratedRelease): boolean;
 export function catalogEntries(apps: CuratedAppDefinition[], payload: CuratedCatalogEnvelope['payload']): CuratedCatalogEntry[];
 export function verifyCatalogSignature(envelope: unknown, trustedKeys: Record<string, string>): CuratedCatalogEnvelope['payload'];
 export function verifyCatalogReleases(envelope: unknown, apps: CuratedAppDefinition[], trustedKeys: Record<string, string>, now?: Date): { payload: CuratedCatalogEnvelope['payload']; current: boolean };
