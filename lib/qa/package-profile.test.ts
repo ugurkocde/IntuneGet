@@ -1814,6 +1814,27 @@ describe('PSADT QA package identity', () => {
     });
   });
 
+  it('normalizes T3 Code to one user profile while preserving installer and removal identity', () => {
+    const installerSha256 = '8CFF5C90FDC976C0BDEF86074A8CDE9C3784AF8DE2091759514CD9F8F1457405';
+    const uninstallCommand = 'REGISTRY_UNINSTALL_PRODUCT:{E9197887-EFB3-55E0-985E-D6D3B5DD594A}:T3 Code';
+    const input = {
+      wingetId: 'T3Tools.T3Code', displayName: 'T3 Code', publisher: 'T3Tools',
+      version: '0.1.6', architecture: 'x64', installerSha256,
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    };
+    const machine = normalizeQaWorkflowPackageInput({ ...input, installScope: 'machine' });
+    const user = normalizeQaWorkflowPackageInput({ ...input, installScope: 'user' });
+    expect(machine.identity.profile.installer).toMatchObject({
+      installScope: 'user', sourceType: 'nullsoft', silentArgs: '/S',
+      uninstallCommand, sha256: installerSha256,
+    });
+    expect(machine.identity.executionProfileSha256).toBe(user.identity.executionProfileSha256);
+    expect(normalizeQaWorkflowPackageInput({
+      ...input, wingetId: 'T3Tools.Other', installScope: 'machine',
+    }).identity.profile.installer.installScope).toBe('machine');
+  });
+
   it('uses Negative Encoder user context while preserving the machine-labelled installer bytes and removal identity', () => {
     const installerSha256 = '7F4F03C46C657352A96694C4220AE834000F0F80E0A6D6F013C5EC865BD33413';
     const uninstallCommand = 'REGISTRY_UNINSTALL:消极压制';

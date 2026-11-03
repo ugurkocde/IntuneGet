@@ -211,6 +211,25 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // WinGet omits Scope; silent installation registers removal in HKCU.
+    // Use the signed-in user instead of LocalSystem's disposable profile.
+    wingetId: 'FunRoutine.WorkFlowy',
+    requiredInstallScope: 'user',
+  },
+  {
+    // T3 Code uses Electron Builder 26.16.1 one-click NSIS with the default
+    // per-user mode. WinGet omits Scope; do not install in SYSTEM's profile.
+    // https://github.com/pingdotgg/t3code/blob/v0.1.6/scripts/build-desktop-artifact.ts
+    wingetId: 'T3Tools.T3Code',
+    requiredInstallScope: 'user',
+  },
+  {
+    // The vendor's assisted NSIS build retains the per-user default.
+    // WinGet omits Scope, so do not run it below SYSTEM's user profile.
+    wingetId: 'GarboMuffin.TurboWarp',
+    requiredInstallScope: 'user',
+  },
+  {
     // The vendor NSIS source requests user execution, installs in LocalAppData
     // and registers removal in HKCU. WinGet explicitly labels these bytes as
     // machine scope; retain that selection while correcting execution context.

@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { createClient } = require('@supabase/supabase-js');
+const { createHash } = require('node:crypto');
 
 const OPENAI_API_URL = process.env.OPENAI_API_URL || 'https://api.openai.com/v1/responses';
 const MODEL = process.env.OPENAI_MODEL || 'gpt-5-nano';
@@ -173,7 +173,50 @@ function buildSchema(expectedSize) {
   };
 }
 
+function validateClassifications(batch, items) {
+  const expectedIds = new Set(batch.map((app) => app.winget_id));
+  const returnedIds = new Set(items.map((item) => item?.winget_id).filter(Boolean));
+  const missing = [...expectedIds].filter((id) => !returnedIds.has(id));
+  const unexpected = [...returnedIds].filter((id) => !expectedIds.has(id));
+  const counts = new Map();
+  for (const item of items) {
+    if (typeof item?.winget_id === 'string') {
+      counts.set(item.winget_id, (counts.get(item.winget_id) || 0) + 1);
+    }
+  }
+  const duplicates = [...counts].filter(([, count]) => count > 1).map(([id]) => id);
+  // Model output and package metadata are untrusted. Fingerprints allow repeated
+  // failures to be correlated without echoing their text into logs or Markdown.
+  const fingerprints = (ids) => ids.filter((id) => typeof id === 'string').slice(0, 10)
+    .map((id) => createHash('sha256').update(id).digest('hex'));
+  return {
+    valid: items.length === batch.length && returnedIds.size === expectedIds.size && missing.length === 0,
+    diagnostics: {
+      expectedCount: batch.length,
+      returnedCount: items.length,
+      missingCount: missing.length,
+      unexpectedCount: unexpected.length,
+      duplicateCount: duplicates.length,
+      invalidIdCount: items.filter((item) => typeof item?.winget_id !== 'string' || !item.winget_id).length,
+      missingIdHashes: fingerprints(missing),
+      unexpectedIdHashes: fingerprints(unexpected),
+      duplicateIdHashes: fingerprints(duplicates),
+    },
+  };
+}
+
+function writeFailureSummary(failedBatches, summaryPath = process.env.GITHUB_STEP_SUMMARY) {
+  if (!summaryPath || failedBatches.length === 0) return;
+  const diagnostics = failedBatches.slice(0, 20).map((batch) => ({
+    batch: batch.batch,
+    attempts: batch.classificationDiagnostics || [],
+  }));
+  fs.appendFileSync(summaryPath, `\n### Categorization rejection diagnostics\n\nFirst 20 failed batches, with at most 10 ID fingerprints per list. No raw model output.\n\n\`\`\`json\n${JSON.stringify(diagnostics)}\n\`\`\`\n`);
+}
+
 async function callOpenAI(batch) {
+  const classificationDiagnostics = [];
+  const failure = (message) => Object.assign(new Error(message), { classificationDiagnostics });
   const payload = {
     model: MODEL,
     input: [
@@ -226,7 +269,7 @@ async function callOpenAI(batch) {
       });
     } catch (error) {
       if (await retryContent(`request failed: ${error.message}`)) continue;
-      throw new Error(`OpenAI request failed: ${error.message}`);
+      throw failure(`OpenAI request failed: ${error.message}`);
     }
 
     if (!response.ok) {
@@ -236,7 +279,7 @@ async function callOpenAI(batch) {
         await sleep(RETRY_DELAY_MS * attempt);
         continue;
       }
-      throw new Error(`OpenAI request failed (${response.status}): ${body.slice(0, 600)}`);
+      throw failure(`OpenAI request failed (${response.status}): ${body.slice(0, 600)}`);
     }
 
     let parsed;
@@ -244,17 +287,17 @@ async function callOpenAI(batch) {
       parsed = await response.json();
     } catch (error) {
       if (await retryContent(`unparseable response body: ${error.message}`)) continue;
-      throw new Error(`OpenAI response body was not valid JSON: ${error.message}`);
+      throw failure(`OpenAI response body was not valid JSON: ${error.message}`);
     }
     if (!parsed || typeof parsed !== 'object') {
       if (await retryContent('response body was not an object')) continue;
-      throw new Error('OpenAI response body was not an object');
+      throw failure('OpenAI response body was not an object');
     }
 
     const text = extractTextResponse(parsed);
     if (!text) {
       if (await retryContent('missing output_text')) continue;
-      throw new Error('OpenAI response did not include output_text');
+      throw failure('OpenAI response did not include output_text');
     }
 
     let decoded;
@@ -262,19 +305,23 @@ async function callOpenAI(batch) {
       decoded = JSON.parse(text);
     } catch (error) {
       if (await retryContent(`invalid JSON: ${error.message}`)) continue;
-      throw new Error(`Invalid JSON in OpenAI output: ${error.message}`);
+      throw failure(`Invalid JSON in OpenAI output: ${error.message}`);
     }
 
     const items = Array.isArray(decoded?.classifications) ? decoded.classifications : [];
-    const expectedIds = new Set(batch.map((app) => app.winget_id));
-    const returnedIds = new Set(items.map((item) => item?.winget_id).filter(Boolean));
-    if (
-      items.length !== batch.length ||
-      returnedIds.size !== expectedIds.size ||
-      [...expectedIds].some((id) => !returnedIds.has(id))
-    ) {
+    const validation = validateClassifications(batch, items);
+    if (!validation.valid) {
+      const diagnostic = {
+        attempt,
+        ...validation.diagnostics,
+        responseStatus: ['completed', 'failed', 'in_progress', 'cancelled', 'queued', 'incomplete'].includes(parsed.status) ? parsed.status : null,
+        incompleteReason: ['max_output_tokens', 'content_filter'].includes(parsed.incomplete_details?.reason) ? parsed.incomplete_details.reason : null,
+        responseId: typeof parsed.id === 'string' && /^resp_[A-Za-z0-9]{1,128}$/.test(parsed.id) ? parsed.id : null,
+      };
+      classificationDiagnostics.push(diagnostic);
+      console.warn(`Classification rejection: ${JSON.stringify(diagnostic)}`);
       if (await retryContent('incomplete classification set')) continue;
-      throw new Error('OpenAI response did not contain exactly one classification for every requested winget_id');
+      throw failure('OpenAI response did not contain exactly one classification for every requested winget_id');
     }
     return {
       classifications: items,
@@ -283,7 +330,7 @@ async function callOpenAI(batch) {
     };
   }
 
-  throw new Error('OpenAI retry limit reached');
+  throw failure('OpenAI retry limit reached');
 }
 
 async function fetchApps(supabase) {
@@ -359,6 +406,7 @@ function summarizeCategoryCounts(assignments) {
 }
 
 async function main() {
+  const { createClient } = require('@supabase/supabase-js');
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Missing Supabase credentials');
   }
@@ -394,6 +442,7 @@ async function main() {
         batch: i + 1,
         winget_ids: batch.map((app) => app.winget_id),
         error: error.message,
+        classificationDiagnostics: error.classificationDiagnostics || [],
       });
       continue;
     }
@@ -469,6 +518,7 @@ async function main() {
   fs.writeFileSync('./categorize-stats.json', JSON.stringify(stats, null, 2));
 
   if (failedBatches.length > 0) {
+    writeFailureSummary(failedBatches);
     throw new Error(`${failedBatches.length} categorization batch(es) failed; no fallback categories were persisted`);
   }
 
@@ -496,7 +546,11 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+module.exports = { validateClassifications, callOpenAI, writeFailureSummary };
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}
