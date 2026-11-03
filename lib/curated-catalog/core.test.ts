@@ -273,4 +273,19 @@ describe('republishing a withdrawn version', () => {
     expect(releaseAlreadySigned([live], [live.id], live)).toBe(true);
     expect(releaseAlreadySigned([live], [], releaseFixture(CURATED_APPS[0], '121.0.0.0'))).toBe(false);
   });
+
+  it('signs, carries over and serves the replacement next to the withdrawn record', () => {
+    const withdrawn = releaseFixture(CURATED_APPS[0], '120.0.0.0');
+    const replacement = releaseFixture(CURATED_APPS[0], '120.0.0.0', 'reuploaded');
+    expect(replacement.id).not.toBe(withdrawn.id);
+    for (const order of [[withdrawn, replacement], [replacement, withdrawn]]) {
+      const { envelope, keys } = signedFixture(order, [withdrawn.id]);
+      const payload = verifyCatalog(envelope, CURATED_APPS, keys);
+      expect(catalogEntries(CURATED_APPS, payload)[0].release?.id).toBe(replacement.id);
+      const carried = verifyCatalogReleases(envelope, CURATED_APPS, keys);
+      expect(carried.payload.releases.map(release => release.id).sort()).toEqual([withdrawn.id, replacement.id].sort());
+      expect(carried.payload.withdrawnReleaseIds).toEqual([withdrawn.id]);
+    }
+    expect(() => signedFixture([withdrawn, replacement])).toThrow(/only one immutable release record/);
+  });
 });
