@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import type { DetectionRule } from '@/types/intune';
+import { DEFAULT_REGISTRY_MARKER_PATH } from '@/lib/registry-marker';
 
 const getAppsByWingetIdsMock = vi.hoisted(() => vi.fn());
 const getLatestInstallerInfoMock = vi.hoisted(() => vi.fn());
@@ -106,6 +110,56 @@ async function seedDeployment(db: Awaited<ReturnType<typeof load>>['db'], withPr
 }
 
 describe('sqlite auto-update check', () => {
+  const versionRules = (version: string): DetectionRule[] => [{
+    type: 'registry', keyPath: `HKEY_LOCAL_MACHINE\\${DEFAULT_REGISTRY_MARKER_PATH}\\Vendor_App`,
+    valueName: 'Version', check32BitOn64System: false,
+    detectionType: 'version', operator: 'greaterThanOrEqual', detectionValue: version,
+  }];
+
+  it('queues current version rules through the update check without rewriting the saved policy', async () => {
+    const { db, runSqliteUpdateCheck } = await load();
+    const original = await seedDeployment(db);
+    const config = { ...deploymentConfig, detectionRules: versionRules('1.0.0'),
+      psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: versionRules('1.0.0') } };
+    await db.updatePolicies.upsert({ ...original, deployment_config: config });
+    getAppsByWingetIdsMock.mockResolvedValue([{ winget_id: 'Vendor.App', latest_version: '1.1.0' }]);
+    getLatestInstallerInfoMock.mockResolvedValue({ ...installerResolution(),
+      info: { ...installerResolution().info, detectionRules: versionRules('1.1.0') } });
+    expect((await runSqliteUpdateCheck(db)).triggered).toBe(1);
+    const [job] = await db.jobs.getByTenantId('t1');
+    expect(job.version).toBe('1.1.0');
+    expect(job.detection_rules).toEqual(versionRules('1.1.0'));
+    expect(job.package_config).toMatchObject({ psadtConfig: { detectionRules: versionRules('1.1.0') } });
+    expect((await db.updatePolicies.getById(original.id, 'u1'))?.deployment_config).toEqual(config);
+  });
+
+  it('binds fresh managed marker rules to the saved marker location and scope', async () => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const original = await seedDeployment(db);
+    const config = { ...deploymentConfig, installScope: 'user', detectionRules: versionRules('1.0.0'),
+      psadtConfig: { ...DEFAULT_PSADT_CONFIG, registryMarkerPath: 'SOFTWARE\\FixtureMarker' } };
+    const policy = await db.updatePolicies.upsert({ ...original, deployment_config: config });
+    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info,
+      installScope: 'user', currentIntuneAppId: 'app-1', detectionRules: versionRules('1.1.0') });
+    expect(result.success).toBe(true);
+    const [job] = await db.jobs.getByTenantId('t1');
+    expect(job.detection_rules).toEqual([{ ...versionRules('1.1.0')[0],
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\FixtureMarker\\Vendor_App', check32BitOn64System: false }]);
+    expect((await db.updatePolicies.getById(original.id, 'u1'))?.deployment_config).toEqual(config);
+  });
+
+  it.each(['unknown-settings', 'no-current-rules', 'empty-current-rules'])('preserves detection fallback semantics for %s', async mode => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const original = await seedDeployment(db);
+    const config = { ...deploymentConfig, detectionRules: versionRules('1.0.0'),
+      ...(mode !== 'unknown-settings' ? { psadtConfig: { ...DEFAULT_PSADT_CONFIG } } : {}) };
+    const policy = await db.updatePolicies.upsert({ ...original, deployment_config: config });
+    const info = { ...installerResolution().info, currentIntuneAppId: 'app-1',
+      detectionRules: mode === 'no-current-rules' ? undefined : mode === 'empty-current-rules' ? [] : versionRules('1.1.0') };
+    expect((await triggerSqliteAutoUpdate(db, policy, info)).success).toBe(true);
+    expect((await db.jobs.getByTenantId('t1'))[0].detection_rules).toEqual(mode === 'empty-current-rules' ? [] : versionRules('1.0.0'));
+  });
+
   it.each(['canonical', 'submitted'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
     const { db, triggerSqliteAutoUpdate } = await load();
     const app = { ...CURATED_APPS[0], id: 'fixture-app', packageId: 'IntuneGet.Curated.FixtureApp' };
@@ -132,14 +186,16 @@ describe('sqlite auto-update check', () => {
   it('queues a curated update when no approval checkpoint exists', async () => {
     const { db, triggerSqliteAutoUpdate } = await load();
     const app = { ...CURATED_APPS[0], id: 'fixture-app', packageId: 'IntuneGet.Curated.FixtureApp' };
-    curatedApproval.value = { app, release: releaseFixture(app), installer: {} };
+    const release = releaseFixture(app);
+    curatedApproval.value = { app, release, installer: {} };
     const policy = await db.updatePolicies.upsert({ user_id: 'u1', tenant_id: 't1', winget_id: app.packageId.toUpperCase(),
-      policy_type: 'auto_update', deployment_config: deploymentConfig, original_upload_history_id: null, is_enabled: true });
-    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info, wingetId: policy.winget_id },
+      policy_type: 'auto_update', deployment_config: { ...deploymentConfig, psadtConfig: { ...DEFAULT_PSADT_CONFIG } }, original_upload_history_id: null, is_enabled: true });
+    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info, wingetId: policy.winget_id, detectionRules: versionRules('9.9.9') },
       { skipRateLimits: true, skipPriorDeploymentCheck: true });
     expect(result.success).toBe(true);
     expect(await db.jobs.getByTenantId('t1')).toHaveLength(1);
     expect((await db.jobs.getByTenantId('t1'))[0].package_config).toMatchObject({ sourceType: 'curated' });
+    expect((await db.jobs.getByTenantId('t1'))[0].detection_rules).toEqual(buildCuratedCartItem(app, release).detectionRules);
     expect(acquireGraphTokenMock).not.toHaveBeenCalled();
   });
 
