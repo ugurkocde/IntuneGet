@@ -180,6 +180,24 @@ describe('sqlite auto-update check', () => {
     ]);
   });
 
+  it.each(['missing-settings', 'missing-current-rules'])('keeps legacy marker hive behavior when rules are retained: %s', async mode => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const original = await seedDeployment(db);
+    const config = { ...deploymentConfig, detectionRules: versionRules('1.0.0'),
+      ...(mode === 'missing-current-rules' ? { psadtConfig: { ...DEFAULT_PSADT_CONFIG } } : {}) };
+    const policy = await db.updatePolicies.upsert({ ...original, deployment_config: config });
+    const create = vi.spyOn(db.jobs, 'create');
+    expect((await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info,
+      currentIntuneAppId: 'app-1', installScope: 'USER',
+      detectionRules: mode === 'missing-current-rules' ? undefined : versionRules('1.1.0'),
+    })).success).toBe(true);
+    // The local packager treats a legacy noncanonical scope as machine. Keep
+    // that existing behavior together with the retained HKLM detection rule.
+    expect(create.mock.calls[0][0].install_scope).toBe('USER');
+    expect((await db.jobs.getByTenantId('t1'))[0].detection_rules).toEqual(versionRules('1.0.0'));
+    expect((await db.updatePolicies.getById(original.id, 'u1'))?.deployment_config).toEqual(config);
+  });
+
   it.each(['canonical', 'submitted'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
     const { db, triggerSqliteAutoUpdate } = await load();
     const app = { ...CURATED_APPS[0], id: 'fixture-app', packageId: 'IntuneGet.Curated.FixtureApp' };

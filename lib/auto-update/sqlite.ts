@@ -151,11 +151,14 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
     if (config.psadtConfig?.customDetection) {
       return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
     }
-    const resolvedScope = (updateInfo.installScope || config.installScope)?.toLowerCase();
+    let resolvedScope = updateInfo.installScope || config.installScope;
     // Refresh generated rules only when the saved settings establish that
     // detection is not custom. Older policies without settings keep their
     // original rules rather than silently replacing an administrator's rules.
     if (config.psadtConfig && updateInfo.detectionRules) {
+      // Change scope casing only together with the rules. Retained legacy
+      // rules must keep the packager's original hive selection behavior.
+      resolvedScope = resolvedScope?.toLowerCase();
       const detectionRules = reconcileManagedMarkerDetectionRules({
         detectionRules: updateInfo.detectionRules,
         wingetId: updateInfo.wingetId,
