@@ -160,6 +160,26 @@ describe('sqlite auto-update check', () => {
     expect((await db.jobs.getByTenantId('t1'))[0].detection_rules).toEqual(mode === 'empty-current-rules' ? [] : versionRules('1.0.0'));
   });
 
+  it.each([
+    { savedScope: 'machine', installerScope: 'USER', expectedScope: 'user' },
+    { savedScope: 'UsEr', installerScope: null, expectedScope: 'user' },
+    { savedScope: undefined, installerScope: null, expectedScope: undefined },
+  ])('uses the same canonical scope for marker rules and the queued job: $savedScope/$installerScope', async ({ savedScope, installerScope, expectedScope }) => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const original = await seedDeployment(db);
+    const policy = await db.updatePolicies.upsert({ ...original, deployment_config: {
+      ...deploymentConfig, installScope: savedScope, psadtConfig: { ...DEFAULT_PSADT_CONFIG },
+    } });
+    const create = vi.spyOn(db.jobs, 'create');
+    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info,
+      currentIntuneAppId: 'app-1', installScope: installerScope, detectionRules: versionRules('1.1.0') });
+    expect(result.success).toBe(true);
+    expect(create.mock.calls[0][0].install_scope).toBe(expectedScope);
+    expect((await db.jobs.getByTenantId('t1'))[0].detection_rules).toEqual([
+      { ...versionRules('1.1.0')[0], keyPath: `${expectedScope === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE'}\\${DEFAULT_REGISTRY_MARKER_PATH}\\Vendor_App` },
+    ]);
+  });
+
   it.each(['canonical', 'submitted'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
     const { db, triggerSqliteAutoUpdate } = await load();
     const app = { ...CURATED_APPS[0], id: 'fixture-app', packageId: 'IntuneGet.Curated.FixtureApp' };

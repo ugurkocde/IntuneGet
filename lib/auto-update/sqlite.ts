@@ -151,6 +151,7 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
     if (config.psadtConfig?.customDetection) {
       return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
     }
+    const resolvedScope = (updateInfo.installScope || config.installScope)?.toLowerCase();
     // Refresh generated rules only when the saved settings establish that
     // detection is not custom. Older policies without settings keep their
     // original rules rather than silently replacing an administrator's rules.
@@ -159,7 +160,7 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
         detectionRules: updateInfo.detectionRules,
         wingetId: updateInfo.wingetId,
         version: updateInfo.latestVersion,
-        installScope: updateInfo.installScope || config.installScope,
+        installScope: resolvedScope,
         markerPath: config.psadtConfig.registryMarkerPath,
       });
       config = { ...config, detectionRules,
@@ -244,7 +245,7 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
         installer_sha256: updateInfo.installerSha256,
         install_command: updateInfo.installCommand || config.installCommand,
         uninstall_command: updateInfo.uninstallCommand || config.uninstallCommand,
-        install_scope: updateInfo.installScope || config.installScope,
+        install_scope: resolvedScope,
         detection_rules: (config.detectionRules ?? []) as unknown as Json,
         package_config: {
           sourceType: updateInfo.sourceType || config.sourceType,
