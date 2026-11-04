@@ -22,6 +22,52 @@ import type { PackagingJob } from '@/packager/src/job-poller';
 
 describe('bounded registration evidence', () => {
   for (const shell of ['pwsh', 'powershell']) {
+    it.runIf(process.platform === 'win32')(`captures only the exact Tuta key through the complete selector in ${shell}`, () => {
+      const key = '450699d2-1c81-5ee5-aec6-08dddb7af9d7';
+      const command = resolveApplicationUninstallCommand('Tutanota.Tutanota',
+        'REGISTRY_UNINSTALL_PRODUCT:{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}:Tuta Mail');
+      const generated = generateRegistryUninstallPackage('nullsoft', 'Tuta Mail', [], {}, [],
+        'Tutanota.Tutanota', 'Tuta Mail', '365.261030.0', command, '/S').replace(/\r\n/g, '\n');
+      const identity = generated.split('\n').filter(line =>
+        /^\s*\$configuredUninstall(?:ProductCode|DisplayName|LocaleHint) =/.test(line)).join('\n');
+      const start = generated.indexOf('    # Capture the registry uninstall entry');
+      const end = generated.indexOf('\n    if ($selectedApplications.Count -eq 1) {\n', start) + 1;
+      expect(start).toBeGreaterThan(0);
+      expect(end).toBeGreaterThan(start);
+      const selector = generated.slice(start, end);
+      const script = `
+$ErrorActionPreference = 'Stop'
+${identity}
+$adtSession = [pscustomobject]@{ AppVersion = '365.261030.0' }
+$preInstallApplications = @()
+$multiProductInstallationVerified = $false
+function Get-ADTApplication { $fixtureApplications }
+function Start-Sleep { param($Seconds) }
+$tuta = [pscustomobject]@{ PSChildName = '${key}'; PSPath = 'tuta'; DisplayName = 'Tuta 365.261030.0'; DisplayVersion = '365.261030.0'; Publisher = 'Tutao GmbH'; WindowsInstaller = $false; SystemComponent = $false }
+$edge = [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; PSPath = 'edge'; DisplayName = 'Microsoft Edge WebView2 Runtime'; DisplayVersion = '156.0.4314.58'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $false; SystemComponent = $true }
+$fixtureApplications = @($tuta, $edge)
+${selector}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].PSChildName -ne '${key}') { throw 'Exact Tuta key not selected' }
+$fixtureApplications = @($edge)
+${selector}
+if (@($selectedApplications).Count -ne 0) { throw 'WebView2 selected' }
+$fixtureApplications = @($tuta, $tuta)
+${selector}
+if (@($selectedApplications).Count -ne 2) { throw 'Duplicate key was collapsed' }
+$fixtureApplications = @([pscustomobject]@{ PSChildName = 'different-key'; PSPath = 'other'; DisplayName = 'Tuta 999.0.0'; DisplayVersion = '999.0.0'; Publisher = 'Tutao GmbH'; WindowsInstaller = $false; SystemComponent = $false })
+${selector}
+if (@($selectedApplications).Count -ne 0) { throw 'Different-key Tuta was selected by fallback' }
+`;
+      const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command',
+        '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'],
+      { input: script, encoding: 'utf8', timeout: 30_000 });
+      expect(result.status, result.stderr || result.error?.message).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '" + key + "'");
+      expect(generated).toContain("$registeredInstallerType = 'nullsoft'");
+    }, 30_000);
+  }
+
+  for (const shell of ['pwsh', 'powershell']) {
     it.runIf(process.platform === 'win32')(`selects the ZDisk exact key and rejects WebView2 or duplicate keys in ${shell}`, () => {
       const command = resolveApplicationUninstallCommand('YushengBeep.ZDiskCleanerPro', 'REGISTRY_UNINSTALL:ZDiskCleaner Pro');
       const generated = generateRegistryUninstallPackage('nullsoft', 'ZDiskCleaner Pro', [], {}, [], 'YushengBeep.ZDiskCleanerPro', 'ZDiskCleaner Pro', '3.0.0', command, '/S');
