@@ -353,6 +353,18 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('binds Tuta only to its reviewed unbraced NSIS key', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}:Tuta Mail';
+    const expected = 'REGISTRY_UNINSTALL_KEY:450699d2-1c81-5ee5-aec6-08dddb7af9d7:Tuta Mail';
+    expect(resolveApplicationUninstallCommand(' Tutanota.Tutanota ', original)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Tutanota.Tutanota', 'REGISTRY_UNINSTALL:Tuta Mail')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Tutanota.Tutanota', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Tutanota.Other', original)).toBe(original);
+    for (const command of [original.replace('450699D2', '450699D3'), 'vendor.exe --custom']) {
+      expect(resolveApplicationUninstallCommand('Tutanota.Tutanota', command)).toBe(command);
+    }
+  });
+
   it('binds Philips SmartControl only to its reviewed exact NSIS identity', () => {
     const original = 'REGISTRY_UNINSTALL_PRODUCT:{EAF31A0E-C98A-5E6E-9883-2A487A3337A1}:Smart Control';
     const expected = 'REGISTRY_UNINSTALL_KEY:eaf31a0e-c98a-5e6e-9883-2a487a3337a1:SmartControl';

@@ -2021,6 +2021,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // This NSIS registration uses the manifest GUID without braces. Keep the
+  // catalog name as fallback so a different-key Tuta version cannot be captured
+  // by a broader "Tuta*" name match when the reviewed key is absent.
+  'tutanota.tutanota': {
+    generatedDisplayName: 'Tuta Mail',
+    manifestRegistryKey: '{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}',
+    registeredDisplayName: 'Tuta Mail',
+    registeredRegistryKey: '450699d2-1c81-5ee5-aec6-08dddb7af9d7',
+  },
   // OneKey's electron-builder installer registers the bare NSIS key, while
   // WinGet publishes a braced ProductCode and the catalog title OneKey Wallet.
   // Bind capture and removal to the vendor key so unrelated Edge servicing

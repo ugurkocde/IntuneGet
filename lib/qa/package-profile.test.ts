@@ -35,6 +35,35 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('changes the Tuta uninstall profile without changing detection, configuration or installer bytes', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}:Tuta Mail';
+    const tuta = {
+      ...input, wingetId: 'Tutanota.Tutanota', displayName: 'Tuta Mail', publisher: 'Tutanota',
+      version: '365.261030.0', sourceInstallerType: 'nullsoft', silentArgs: '/S',
+      uninstallCommand: original,
+    };
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: tuta.wingetId, displayName: tuta.displayName, publisher: tuta.publisher,
+      version: tuta.version, architecture: tuta.architecture,
+      installerSha256: tuta.installerSha256, installerType: tuta.sourceInstallerType,
+      silentSwitches: tuta.silentArgs, installScope: tuta.installScope,
+      uninstallCommand: original, detectionRules: JSON.stringify(tuta.detectionRules),
+      psadtConfig: JSON.stringify(tuta.psadtConfig),
+    }).identity;
+    const previous = buildQaPackageIdentity({
+      ...tuta, psadtConfig: normalized.profile.psadtConfig,
+      detectionRules: normalized.profile.detectionRules,
+    });
+    expect(normalized.profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:450699d2-1c81-5ee5-aec6-08dddb7af9d7:Tuta Mail'
+    );
+    expect(normalized.packageProfileSha256).not.toBe(previous.packageProfileSha256);
+    expect(normalized.detectionRulesSha256).toBe(previous.detectionRulesSha256);
+    expect(normalized.psadtConfigSha256).toBe(previous.psadtConfigSha256);
+    expect(normalized.profile.installer.sha256).toBe(previous.profile.installer.sha256);
+    expect(normalized.profile.installer.installScope).toBe('machine');
+  });
+
   it('gives the UDS capture repair a new profile while preserving detection and installer identity', () => {
     const uds = {
       ...input, wingetId: 'VirtualCable.UDSClient', displayName: 'UDS Enterprise Client',
