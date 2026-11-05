@@ -35,6 +35,29 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('gives LegendCTL a new capture profile without changing installer or toolchain', () => {
+    const legend = { ...input, wingetId: 'EvilHumphrey.LegendCTL', displayName: 'LegendCTL',
+      publisher: 'EvilHumphrey', version: '2.6.6', uninstallCommand: 'REGISTRY_UNINSTALL:LegendCTL' };
+    const repaired = normalizeQaWorkflowPackageInput({
+      wingetId: legend.wingetId, displayName: legend.displayName, publisher: legend.publisher,
+      version: legend.version, architecture: legend.architecture,
+      installerSha256: legend.installerSha256, installerType: legend.sourceInstallerType,
+      silentSwitches: legend.silentArgs, installScope: legend.installScope,
+      uninstallCommand: legend.uninstallCommand, detectionRules: '[]',
+      psadtConfig: JSON.stringify(legend.psadtConfig),
+    }).identity;
+    const previous = buildQaPackageIdentity({ ...legend, profileKind: 'deployment-config',
+      psadtConfig: repaired.profile.psadtConfig, detectionRules: repaired.profile.detectionRules });
+    expect(repaired.profile.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL:ZD Ultimate Legend Wrapper');
+    expect(repaired.packageProfileSha256).not.toBe(previous.packageProfileSha256);
+    expect(repaired.profile.installer.sha256).toBe(previous.profile.installer.sha256);
+    expect(repaired.detectionRulesSha256).toBe(previous.detectionRulesSha256);
+    expect(repaired.psadtConfigSha256).toBe(previous.psadtConfigSha256);
+    expect(repaired.profile.toolchain).toEqual(previous.profile.toolchain);
+    const unrelated = { ...legend, wingetId: 'Example.App' };
+    expect(buildQaPackageIdentity(unrelated).profile.installer.uninstallCommand).toBe(legend.uninstallCommand);
+  });
+
   it('changes the Tuta uninstall profile without changing detection, configuration or installer bytes', () => {
     const original = 'REGISTRY_UNINSTALL_PRODUCT:{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}:Tuta Mail';
     const tuta = {
