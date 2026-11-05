@@ -575,6 +575,37 @@ describe('PSADT Inno packaging contract', () => {
     } as PackagingJob, 'LegendCTL');
     expect(snapshot).toContain("$configuredUninstallDisplayName = 'ZD Ultimate Legend Wrapper'");
     expect(snapshot).toContain("$configuredUninstallProductCode = ''");
+    const normalized = generated.replace(/\r\n/g, '\n');
+    const identity = normalized.split('\n').filter(line =>
+      /^\s*\$configuredUninstall(?:ProductCode|DisplayName|LocaleHint) =/.test(line)).join('\n');
+    const start = normalized.indexOf('    # Capture the registry uninstall entry');
+    const end = normalized.indexOf('\n    if ($selectedApplications.Count -eq 1) {\n', start) + 1;
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const selector = normalized.slice(start, end);
+    const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+      '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { encoding: 'utf8', timeout: 30_000,
+      input: `
+$ErrorActionPreference = 'Stop'
+${identity}
+$adtSession = [pscustomobject]@{ AppVersion = '2.6.6' }
+$preInstallApplications = @()
+$multiProductInstallationVerified = $false
+function Get-ADTApplication { $fixtureApplications }
+function Start-Sleep { param($Seconds) }
+$legend = [pscustomobject]@{ PSChildName = '{ZDUltimateLegend}_is1'; PSPath = 'legend'; DisplayName = 'ZD Ultimate Legend Wrapper version 2.6.6'; DisplayVersion = '2.6.6'; WindowsInstaller = $false; SystemComponent = $false }
+$edge = [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; PSPath = 'edge'; DisplayName = 'Microsoft Edge WebView2 Runtime'; DisplayVersion = '156.0.0'; WindowsInstaller = $false; SystemComponent = $true }
+$fixtureApplications = @($legend, $edge)
+${selector}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].PSChildName -ne '{ZDUltimateLegend}_is1') { throw 'Suffixed Legend registration not selected' }
+$fixtureApplications = @($edge)
+${selector}
+if (@($selectedApplications).Count -ne 0) { throw 'Bundled runtime selected' }
+$fixtureApplications = @($legend, $legend, $edge)
+${selector}
+if (@($selectedApplications).Count -eq 1) { throw 'Ambiguous Legend registrations selected' }
+` });
+    expect(result.status, result.stderr || result.error?.message).toBe(0);
   }, 30_000);
 
   it('does not inject diagnostic switches into the vendor command line', () => {

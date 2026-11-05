@@ -2021,9 +2021,9 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
-  // WinGet and isolated QA observed this exact Inno registration under the
-  // catalog title LegendCTL. Select it only from the changed install entries;
-  // the existing capture path persists its exact key for removal.
+  // WinGet declares this base name; the observed Inno registration appends
+  // "version <version>". Reuse the existing unique prefix/version selection
+  // among changed entries, then persist the selected exact key for removal.
   'evilhumphrey.legendctl': {
     generatedDisplayName: 'LegendCTL',
     registeredDisplayName: 'ZD Ultimate Legend Wrapper',
