@@ -68,6 +68,18 @@ export class JobProcessor {
     this.logger = createLogger('JobProcessor');
   }
 
+  private hostPlatform(): NodeJS.Platform {
+    return process.platform;
+  }
+
+  private packagingPlatform(): 'linux' | 'win32' {
+    const host = this.hostPlatform();
+    if (host !== 'linux' && host !== 'win32') {
+      throw new Error('Unsupported packaging host; use Linux or Windows');
+    }
+    return host;
+  }
+
   /**
    * Process a packaging job
    * @throws Error if poller is not provided (null)
@@ -77,11 +89,30 @@ export class JobProcessor {
       throw new Error('JobProcessor requires a JobPoller instance to process jobs');
     }
     const poller = this.poller;
-    const jobWorkDir = path.join(this.config.paths.work, job.id);
+    const host = this.packagingPlatform();
+    let jobWorkDir: string;
+    if (host === 'linux') {
+      // Reject external job fields before callbacks, downloads, or cleanup scope.
+      if (typeof job.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(job.id)) throw new Error('Unsafe Linux job directory identifier');
+      const config = job.package_config && typeof job.package_config === 'object' ? job.package_config : {};
+      if (!['msi','wix','exe','inno','nullsoft','burn','portable'].includes(job.installer_type.toLowerCase()) ||
+          'nestedInstallerType' in config || 'nestedInstallerPath' in config) {
+        throw new Error('This installer requires a Windows packager; Linux supports direct installers without nested extraction');
+      }
+      const { validateArchivePath } = await import('./intunewin-writer.js');
+      validateArchivePath('Files/' + this.getInstallerFileName(job));
+      await fs.promises.mkdir(this.config.paths.work, { recursive: true });
+      // Only operator-configured roots are canonicalized. Never reuse a job tree.
+      const root = await fs.promises.realpath(this.config.paths.work);
+      jobWorkDir = await fs.promises.mkdtemp(path.join(root, job.id + '-'));
+    } else {
+      jobWorkDir = path.join(this.config.paths.work, job.id);
+    }
 
     try {
       // Create job work directory
-      await fs.promises.mkdir(jobWorkDir, { recursive: true });
+      if (host === 'win32') await fs.promises.mkdir(jobWorkDir, { recursive: true });
+      else await fs.promises.chmod(jobWorkDir, 0o700);
 
       // Step 1: Download tools if needed (5%)
       await poller.updateJobProgress(job.id, 5, 'Checking tools...');
@@ -206,15 +237,58 @@ export class JobProcessor {
   }
 
   async ensureToolsAvailable(): Promise<void> {
+    const host = this.packagingPlatform();
     const toolsDir = this.config.paths.tools;
     const manifest = this.toolManifest();
     await fs.promises.mkdir(toolsDir, {recursive:true});
+    if (host === 'linux') {
+      const archive = path.join(toolsDir, manifest.psadtTemplate.archiveName);
+      if (!fs.existsSync(archive)) await this.downloadFile(manifest.psadtTemplate.url, archive, manifest.psadtTemplate.sha256);
+      const { readPinnedToolkitArchive } = await import('./toolkit-archive.js');
+      await readPinnedToolkitArchive(await this.loadToolkitArchive(archive));
+      return;
+    }
     const exe = path.join(toolsDir,manifest.intuneWinAppUtil.fileName);
     if (fs.existsSync(exe)) await this.verifyToolFile(exe,manifest.intuneWinAppUtil.sha256);
     const script = path.join(__dirname,'..','scripts','download-tools.ps1');
     if (fs.existsSync(script)) await this.runPowerShell(script,['-ToolsDir',toolsDir]);
     else await this.downloadToolsInline(toolsDir);
     await this.verifyToolFile(exe,manifest.intuneWinAppUtil.sha256);
+  }
+
+  /** Bound cached archive reads; trust is established by hashing these same bytes. */
+  private async loadToolkitArchive(archive: string): Promise<Buffer> {
+    const { TOOLKIT_LIMITS } = await import('./toolkit-archive.js');
+    const before = await fs.promises.lstat(archive);
+    if (!before.isFile() || before.isSymbolicLink() || before.size > TOOLKIT_LIMITS.archiveBytes) {
+      throw new Error('Toolkit archive must be a bounded regular file');
+    }
+    const file = await fs.promises.open(archive, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      const opened = await file.stat();
+      if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size || opened.mtimeMs !== before.mtimeMs) {
+        throw new Error('Toolkit archive changed before reading');
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      while (true) {
+        const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, TOOLKIT_LIMITS.archiveBytes - total + 1));
+        const { bytesRead } = await file.read(chunk, 0, chunk.length, null);
+        if (!bytesRead) break;
+        total += bytesRead;
+        if (total > TOOLKIT_LIMITS.archiveBytes || total > opened.size) throw new Error('Toolkit archive grew while reading');
+        chunks.push(chunk.subarray(0, bytesRead));
+      }
+      const after = await file.stat();
+      const current = await fs.promises.lstat(archive);
+      if (total !== opened.size || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs ||
+          current.isSymbolicLink() || current.dev !== opened.dev || current.ino !== opened.ino || current.size !== opened.size || current.mtimeMs !== opened.mtimeMs) {
+        throw new Error('Toolkit archive changed while reading');
+      }
+      return Buffer.concat(chunks, total);
+    } finally {
+      await file.close();
+    }
   }
 
   /** The inline download path uses the same shipped toolkit verifier. */
@@ -352,6 +426,13 @@ export class JobProcessor {
     installerPath: string,
     workDir: string
   ): Promise<string> {
+    let templateRoot = path.join(this.config.paths.tools, 'PSAppDeployToolkit');
+    if (this.packagingPlatform() === 'linux') {
+      const { initializePinnedToolkit } = await import('./toolkit-archive.js');
+      const archive = path.join(this.config.paths.tools, this.toolManifest().psadtTemplate.archiveName);
+      // processJob owns a fresh private0700 tree; never consume the shared cache.
+      templateRoot = await initializePinnedToolkit(await this.loadToolkitArchive(archive), path.join(workDir, 'toolkit'));
+    }
     const packageDir = path.join(workDir, 'Package');
     const filesDir = path.join(packageDir, 'Files');
     const toolkitDir = path.join(packageDir, 'PSAppDeployToolkit');
@@ -361,7 +442,7 @@ export class JobProcessor {
     await fs.promises.mkdir(toolkitDir, { recursive: true });
 
     // Copy PSADT v4.1 toolkit files
-    const psadtSource = path.join(this.config.paths.tools, 'PSAppDeployToolkit', 'PSAppDeployToolkit');
+    const psadtSource = path.join(templateRoot, 'PSAppDeployToolkit');
     if (!fs.existsSync(psadtSource)) {
       throw new Error(
         `PSAppDeployToolkit module not found at ${psadtSource}. ` +
@@ -371,23 +452,22 @@ export class JobProcessor {
     await this.copyDirectory(psadtSource, toolkitDir);
 
     // Copy Config, Strings, and Assets directories for PSADT v4.1
-    const configSource = path.join(this.config.paths.tools, 'PSAppDeployToolkit', 'Config');
+    const configSource = path.join(templateRoot, 'Config');
     if (fs.existsSync(configSource)) {
       await this.copyDirectory(configSource, path.join(packageDir, 'Config'));
     }
-    const stringsSource = path.join(this.config.paths.tools, 'PSAppDeployToolkit', 'Strings');
+    const stringsSource = path.join(templateRoot, 'Strings');
     if (fs.existsSync(stringsSource)) {
       await this.copyDirectory(stringsSource, path.join(packageDir, 'Strings'));
     }
-    const assetsSource = path.join(this.config.paths.tools, 'PSAppDeployToolkit', 'Assets');
+    const assetsSource = path.join(templateRoot, 'Assets');
     if (fs.existsSync(assetsSource)) {
       await this.copyDirectory(assetsSource, path.join(packageDir, 'Assets'));
     }
 
     // Copy Invoke-AppDeployToolkit.exe for PSADT v4.1
     const deployExeSource = path.join(
-      this.config.paths.tools,
-      'PSAppDeployToolkit',
+      templateRoot,
       'Invoke-AppDeployToolkit.exe'
     );
     if (!fs.existsSync(deployExeSource)) {
@@ -2490,6 +2570,10 @@ ${capturedIdentityValues}
     packageDir: string,
     workDir: string
   ): Promise<PackagingResult> {
+    if (this.packagingPlatform() === 'linux') {
+      const { writeIntunewinPackage } = await import('./intunewin-writer.js');
+      return writeIntunewinPackage(packageDir, 'Invoke-AppDeployToolkit.exe', path.join(workDir, 'Output'));
+    }
     const outputDir = path.join(workDir, 'Output');
     await fs.promises.mkdir(outputDir, { recursive: true });
 
