@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-04T12:22:01.784Z",
-    "expiresAt": "2026-11-11T12:22:01.784Z",
+    "generatedAt": "2026-11-07T12:41:29.399Z",
+    "expiresAt": "2026-11-14T12:41:29.399Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -11195,5 +11195,5 @@
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "YCUYAneE+q4miqlSgbhkYj6D7YOuVOMIPzhQFLbsCC7jvirdPxx0sVITWrmercpavYQxF0G6Btd0fLaGjxr6Bw=="
+  "signature": "llHHozFj6C000EHvd8rdfJhe81q90J/lFGnHYUwYVxnpyB0qkzoeRfST10HspFL1nTKFCa/16QpZntnImPVbBQ=="
 }
