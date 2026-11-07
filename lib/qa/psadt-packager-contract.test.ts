@@ -559,6 +559,24 @@ if ($script:CapturedArgumentList -notlike '*REBOOT=ReallySuppress /QN /norestart
 }
 
 describe('PSADT Inno packaging contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)('captures the LegendCTL registration through the existing marker grammar', () => {
+    const command = resolveApplicationUninstallCommand('EvilHumphrey.LegendCTL', 'REGISTRY_UNINSTALL:LegendCTL');
+    const generated = generateRegistryUninstallPackage('inno', 'LegendCTL', [], {}, [],
+      'EvilHumphrey.LegendCTL', 'LegendCTL', '2.6.6', command);
+    expect(generated).toContain("$configuredUninstallDisplayName = 'ZD Ultimate Legend Wrapper'");
+    expect(generated).toContain('$capturedUninstallKey');
+    expect(generated).toContain('UninstallRegistryKey');
+    const processor = Object.create(JobProcessor.prototype) as {
+      getRegistryInstallSnapshotBlock(job: PackagingJob, name: string): string;
+    };
+    const snapshot = processor.getRegistryInstallSnapshotBlock({
+      winget_id: 'EvilHumphrey.LegendCTL', display_name: 'LegendCTL',
+      installer_type: 'inno', uninstall_command: command, install_scope: 'machine',
+    } as PackagingJob, 'LegendCTL');
+    expect(snapshot).toContain("$configuredUninstallDisplayName = 'ZD Ultimate Legend Wrapper'");
+    expect(snapshot).toContain("$configuredUninstallProductCode = ''");
+  }, 30_000);
+
   it('does not inject diagnostic switches into the vendor command line', () => {
     const innoBlock = packager.slice(
       packager.indexOf("if ($installerTypeLower -eq 'inno')"),

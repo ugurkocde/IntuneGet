@@ -2021,6 +2021,13 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // WinGet and isolated QA observed this exact Inno registration under the
+  // catalog title LegendCTL. Select it only from the changed install entries;
+  // the existing capture path persists its exact key for removal.
+  'evilhumphrey.legendctl': {
+    generatedDisplayName: 'LegendCTL',
+    registeredDisplayName: 'ZD Ultimate Legend Wrapper',
+  },
   // This NSIS registration uses the manifest GUID without braces. Keep the
   // catalog name as fallback so a different-key Tuta version cannot be captured
   // by a broader "Tuta*" name match when the reviewed key is absent.
