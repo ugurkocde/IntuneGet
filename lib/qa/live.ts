@@ -1,7 +1,8 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
-import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
-import { loadInstallerSecurityHolds, installerSecurityReason } from './installer-security-holds';
+import { loadStaleQaCatalogCandidateIds, orderQaQueue, qaQueueCandidateReason } from './queue-selection';
+import { loadInstallerSecurityHolds } from './installer-security-holds';
+import { loadSecurityRecheckSchedule, publicSecurityRecheck } from './security-recheck-schedule';
 import { getPackageCompatibilityBlocks, packageCompatibilityKey } from '@/lib/package-eligibility';
 import { qaSourceKey, qaSourceRetryAtMany } from './source-backoff';
 
@@ -40,6 +41,9 @@ interface CandidateRow {
   installer_sha256: string;
   package_profile_sha256: string | null;
   next_retry_at: string | null;
+  test_level?: string;
+  demand_source?: string;
+  catalog_version_at_enqueue?: string | null;
 }
 
 interface FrameRow {
@@ -457,7 +461,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   }
   const supabase = createServerClient();
   const candidateColumns =
-    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config, installer_url, installer_sha256, package_profile_sha256, next_retry_at';
+    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config, installer_url, installer_sha256, package_profile_sha256, next_retry_at, test_level, demand_source, catalog_version_at_enqueue';
 
   const [activeResult, queueResult, countResult, pollResult, recentResult, control, curated] = await Promise.all([
     supabase
@@ -506,9 +510,11 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
   const heldErrors = await supabase.rpc('qa_installer_security_waiting_errors', {});
   if (heldErrors.error || !Array.isArray(heldErrors.data)) throw new Error('Installer security waiting queue is unavailable');
-  for (const held of heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string; malicious: number }>) {
+  const errorHolds = heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string; malicious: number }>;
+  const schedules = await loadSecurityRecheckSchedule(supabase, [...securityHolds.keys(), ...errorHolds.map(held => held.candidate.installer_sha256)]);
+  for (const held of errorHolds) {
     if (!Number.isInteger(held.malicious) || held.malicious < 0 || held.malicious > 9999) throw new Error('Installer security waiting queue is invalid');
-    waiting.push({ ...held, sourceRetry: false, securityHold: true, securityReason: installerSecurityReason(held.malicious) });
+    waiting.push({ ...held, ...publicSecurityRecheck(schedules.get(held.candidate.installer_sha256.toLowerCase())!, now), sourceRetry: false, securityHold: true });
   }
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
   let cursor = 0, rounds = 0, lookupsClosed = false;
@@ -519,17 +525,17 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       if (candidate.status !== 'queued' && !securityHolds.has(candidate.installer_sha256.toLowerCase())) continue;
       const reason = qaQueueCandidateReason(candidate, now, securityHolds);
       if (reason === 'installer-security-hold' && waiting.length < 10) {
-        const hold = securityHolds.get(candidate.installer_sha256.toLowerCase())!;
-        waiting.push({ candidate, nextCheckAt: hold.nextCheckAt, sourceRetry: false, securityHold: true, securityReason: hold.reason });
+        waiting.push({ candidate, ...publicSecurityRecheck(schedules.get(candidate.installer_sha256.toLowerCase())!, now), sourceRetry: false, securityHold: true });
       }
       else if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
       else if (!reason && !lookupsClosed && queued.length < 10) chunk.push(candidate);
     }
     if (!chunk.length) continue;
     try {
-      const [blocks, retries] = await Promise.all([
+      const [blocks, retries, staleIds] = await Promise.all([
         getPackageCompatibilityBlocks(supabase, chunk.map(input)),
         qaSourceRetryAtMany(supabase, chunk.map(qaSourceKey)),
+        loadStaleQaCatalogCandidateIds(supabase, chunk),
       ]);
       for (const candidate of chunk) {
         if (blocks.has(packageCompatibilityKey(input(candidate)))) {
@@ -538,6 +544,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
           if (grant.error) throw grant.error;
           if (grant.data !== true) continue;
         }
+        if (staleIds.has(candidate.id)) continue;
         const retryAt = retries.get(qaSourceKey(candidate));
         if (retryAt) { if (waiting.length < 10) waiting.push({ candidate, nextCheckAt: retryAt, sourceRetry: true }); }
         else if (queued.length < 10) queued.push(candidate);

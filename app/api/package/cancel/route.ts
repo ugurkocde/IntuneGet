@@ -28,10 +28,10 @@ type PackagingJobUpdate = Database['public']['Tables']['packaging_jobs']['Update
 const CANCELLABLE_STATUSES = ['queued', 'packaging', 'uploading'];
 // Jobs waiting on a shared QA candidate have no workflow run of their own yet.
 // Cancelling only detaches this job; the candidate keeps serving other jobs.
-const QA_WAITING_STATUSES = ['awaiting_qa'];
+const QA_WAITING_STATUSES = ['awaiting_qa', 'blocked_upstream'];
 // Statuses that can be force-dismissed by the user
 const DISMISSABLE_STATUSES = [
-  'queued', 'packaging', 'uploading', 'awaiting_qa', 'completed', 'failed', 'qa_failed',
+  'queued', 'packaging', 'uploading', 'awaiting_qa', 'blocked_upstream', 'completed', 'failed', 'qa_failed',
 ];
 
 export async function POST(request: NextRequest) {

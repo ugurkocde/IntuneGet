@@ -1,18 +1,19 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const state = vi.hoisted(() => ({ claim: vi.fn(), update: vi.fn(), gate: vi.fn(), configured: vi.fn(), realAdapter: false, actualGate: null as typeof import('@/lib/qa/gate').enforceQaGate | null, fetch: vi.fn(), row: {} as Record<string, unknown> }));
+const state = vi.hoisted(() => ({ claim: vi.fn(), update: vi.fn(), gate: vi.fn(), configured: vi.fn(), realAdapter: false, dependencies: vi.fn(), actualGate: null as typeof import('@/lib/qa/gate').enforceQaGate | null, fetch: vi.fn(), row: {} as Record<string, unknown> }));
 vi.mock('@/lib/db', async () => { const { supabaseDb } = await import('@/lib/db/supabase-adapter'); return { getDatabase: () => state.realAdapter ? supabaseDb : ({ jobs: { claim: state.claim, update: state.update } }), verifyPackagerApiKey: () => true }; });
 vi.mock('@/lib/features', () => ({ getFeatureFlags: () => ({ localPackager: true }) }));
 vi.mock('@/lib/supabase', async () => { const { createClient } = await import('@supabase/supabase-js'); return { createServerClient: () => createClient('https://database.example.test', 'fake-key', { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: state.fetch } }), isSupabaseServerConfigured: state.configured }; });
 vi.mock('@/lib/curated-catalog/server', () => ({ validateCuratedPackagingJob: vi.fn(async () => {}) }));
 vi.mock('@/lib/curated-catalog/licence', async (original) => ({ ...await original<object>(), assertCuratedLicenceAccepted: vi.fn(async () => {}) }));
+vi.mock('@/lib/winget-dependencies', () => ({ resolveWingetPackageDependencies: state.dependencies }));
 vi.mock('@/lib/qa/gate', async (original) => { const gate = await original<typeof import('@/lib/qa/gate')>(); state.actualGate = gate.enforceQaGate; return { ...gate, enforceQaGate: state.gate }; });
 import { POST } from './route';
 import { QaGateNotPassedError } from '@/lib/qa/gate';
 const request = () => new NextRequest('http://localhost/api/packager/jobs', { method: 'POST', headers: { Authorization: 'Bearer fake', 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: 'job', packagerId: 'worker' }) });
 describe('local worker reputation boundary', () => {
   beforeEach(() => {
-    vi.resetAllMocks(); state.realAdapter = false; state.configured.mockReturnValue(true);
+    vi.resetAllMocks(); state.dependencies.mockResolvedValue([]); state.realAdapter = false; state.configured.mockReturnValue(true);
     state.claim.mockResolvedValue({ id: 'job', status: 'packaging', packaging_started_at: '2026-10-16T18:00:00Z', winget_id: 'Test.App', version: '1', architecture: 'x64', installer_sha256: 'A'.repeat(64), package_config: { sourceType: 'winget' } });
     state.update.mockResolvedValue({ id: 'job', status: 'awaiting_qa' });
   });
@@ -49,18 +50,32 @@ describe('local worker reputation boundary', () => {
     const response = await POST(request()); expect(response.status).toBe(500);
     expect(await response.json()).not.toHaveProperty('job');
   });
-  it.each(['unknown', 'override', 'read error', 'no engines', 'fractional engines', 'suspicious', 'clean'])(
+  it.each(['unknown', 'override', 'read error', 'no engines', 'fractional engines', 'suspicious', 'clean', 'dependency missing', 'dependency stale', 'dependency covered'])(
     'runs the real gate and Supabase adapter before local handoff: %s', async (kind) => {
       state.realAdapter = true;
       state.row = { ...(await state.claim()), status: 'queued', packager_id: null,
         package_config: { sourceType: 'winget', qaOverride: kind === 'override' } };
       state.gate.mockImplementation(input => state.actualGate!(input));
+      const dependency = kind.startsWith('dependency ');
+      const admitted = kind === 'clean' || kind === 'dependency covered';
+      if (dependency) state.dependencies.mockResolvedValue([{ installerSha256: 'D'.repeat(64) }]);
       const verdict = { virustotal_status: kind === 'unknown' || kind === 'override' ? 'not_found' : 'clean',
         virustotal_malicious: 0, virustotal_suspicious: kind === 'suspicious' ? 1 : 0,
         virustotal_total_engines: kind === 'no engines' ? 0 : kind === 'fractional engines' ? 0.5 : 72 };
       state.fetch.mockImplementation(async (input, init) => {
         const url = new URL(String(input)); let result: unknown;
-        if (url.pathname.endsWith('/qa_package_blocks')) result = null;
+        if (url.pathname.endsWith('/qa_installer_security_holds')) result = [];
+        else if (url.pathname.endsWith('/catalog_file_reputation')) {
+          expect(url.searchParams.get('sha256')).toBe('in.(' + 'd'.repeat(64) + ')');
+          const now = Date.now();
+          result = kind === 'dependency missing' ? [] : [{
+            sha256: 'd'.repeat(64), status: 'found', malicious: 0, suspicious: 0,
+            total_engines: 70, engine_count_version: 2,
+            checked_at: new Date(now - (kind === 'dependency stale' ? 8 : 1) * 86400000).toISOString(),
+            analyzed_at: new Date(now - 86400000).toISOString(),
+            retry_after: new Date(now + 86400000).toISOString(),
+          }];
+        } else if (url.pathname.endsWith('/qa_package_blocks')) result = null;
         else if (url.pathname.endsWith('/qa_package_results')) {
           expect(url.searchParams.get('installer_sha256')).toBe('eq.' + 'A'.repeat(64));
           if (url.searchParams.has('virustotal_malicious')) result = null;
@@ -78,9 +93,12 @@ describe('local worker reputation boundary', () => {
         return new Response(JSON.stringify(result), { status: 200, headers: { 'content-type': 'application/json' } });
       });
       const response = await POST(request()); const body = await response.json();
-      expect(body.claimed).toBe(kind === 'clean');
-      expect(state.row.status).toBe(kind === 'clean' ? 'packaging' : 'awaiting_qa');
-      if (kind !== 'clean') {
+      expect(body.claimed).toBe(admitted);
+      if (dependency) expect(state.dependencies).toHaveBeenCalledWith(expect.objectContaining({
+        wingetId: 'Test.App', version: '1', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      }));
+      expect(state.row.status).toBe(admitted ? 'packaging' : 'awaiting_qa');
+      if (!admitted) {
         expect(body).not.toHaveProperty('job');
         const second = await POST(request());
         expect((await second.json()).claimed).toBe(false);

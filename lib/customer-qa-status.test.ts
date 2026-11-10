@@ -124,3 +124,11 @@ it('keeps live evidence ahead of a recorded reputation reason', async () => {
   holds.mockResolvedValue(new Map([[hash, { reason: 'VirusTotal: 1 engine flagged, rechecking daily', nextCheckAt: '2030-01-01' }]]));
   expect((await enrichCustomerQaStatus([recordedJob()]))[0].qa_status?.category).toBe('installer_security_hold');
 });
+
+it.each(['UPSTREAM_SOURCE_BACKOFF', 'UPSTREAM_METADATA_MISMATCH'])('shows a persisted upstream block with fixed public wording: %s', async error_code => {
+  const blocked = job({ status: 'blocked_upstream', error_code, status_message: 'private https://private.test?token=secret ' + hash });
+  const [actual] = await enrichCustomerQaStatus([blocked]);
+  expect(actual.qa_status).toMatchObject({ category: 'blocked_upstream', reasonCode: error_code });
+  expectPrivateFree(actual.qa_status);
+  expect(actual.status).toBe('blocked_upstream');
+});

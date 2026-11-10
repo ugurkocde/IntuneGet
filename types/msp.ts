@@ -209,6 +209,7 @@ export interface MspJob {
   version: string;
   status: string;
   status_message: string | null;
+  error_code?: 'UPSTREAM_SOURCE_BACKOFF' | 'UPSTREAM_METADATA_MISMATCH' | null;
   progress_percent: number;
   error_message: string | null;
   intune_app_id: string | null;

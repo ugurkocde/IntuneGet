@@ -1,13 +1,53 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveWingetPackageDependencies, type PackagedWingetDependency } from '@/lib/winget-dependencies';
+import { arePackageDependenciesCovered } from '@/lib/qa/dependency-reputation';
 import { getCatalogSource } from '@/lib/catalog';
 import { CuratedEvidenceMismatchError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { classifyQaFailure } from '@/lib/qa/classify';
 import { createServerClient } from '@/lib/supabase';
+import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
 import {
   getPackageCompatibilityBlock,
   type PackageCompatibilityBlockCode,
 } from '@/lib/package-eligibility';
 import type { QaClassification } from '@/types/qa';
+
+export interface ExactQaPayloadKey {
+  wingetId: string;
+  version: string;
+  architecture: string;
+  installerSha256: string;
+}
+
+export function isCoveredCleanReputation(row: {
+  virustotal_status?: unknown;
+  virustotal_malicious?: unknown;
+  virustotal_suspicious?: unknown;
+  virustotal_total_engines?: unknown;
+} | null | undefined): boolean {
+  return row?.virustotal_status === 'clean' && row.virustotal_malicious === 0 &&
+    row.virustotal_suspicious === 0 && typeof row.virustotal_total_engines === 'number' &&
+    Number.isInteger(row.virustotal_total_engines) && row.virustotal_total_engines > 0;
+}
+
+export function exactPayloadReputationQuery(client: SupabaseClient, key: ExactQaPayloadKey) {
+  return client.from('qa_package_results')
+    .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
+    .eq('winget_id', key.wingetId).eq('tested_version', key.version)
+    .eq('architecture', key.architecture).eq('installer_sha256', key.installerSha256)
+    .order('tested_at_utc', { ascending: false })
+    .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
+    .limit(1).maybeSingle();
+}
+
+export function exactPayloadMaliciousQuery(client: SupabaseClient, key: ExactQaPayloadKey) {
+  return client.from('qa_package_results').select('virustotal_malicious, virustotal_total_engines')
+    .eq('winget_id', key.wingetId).eq('tested_version', key.version)
+    .eq('architecture', key.architecture).eq('installer_sha256', key.installerSha256)
+    .gte('virustotal_malicious', 1).order('tested_at_utc', { ascending: false })
+    .limit(1).maybeSingle();
+}
 
 export class QaGateError extends Error {
   readonly code = 'QA_FAILED_CURRENT_VERSION' as const;
@@ -119,6 +159,9 @@ export function describeQaGateError(error: AnyQaGateError): string {
   }
   if (error instanceof QaGateNotPassedError) {
     if (error.details.reason === 'reputation') {
+      if (isCuratedPackageId(error.details.wingetId)) {
+        return `${error.message}. Packaging remains paused until current installer security eligibility can be verified.`;
+      }
       return `${error.message}. Packaging will resume after a clean VirusTotal verdict with engine coverage is available.`;
     }
     return `${error.message}. Automatic deployment will resume after the installation test passes.`;
@@ -138,6 +181,8 @@ export async function enforceQaGate(input: {
   architecture?: string;
   installerSha256?: string;
   packageProfileSha256?: string;
+  /** The trusted resolver's bundle, when the caller already prepares dispatch. */
+  resolvedPackageDependencies?: readonly Pick<PackagedWingetDependency, 'installerSha256'>[];
   requirePassed?: boolean;
   qaOverride?: boolean;
   sourceType?: 'winget' | 'custom' | 'curated';
@@ -152,6 +197,23 @@ export async function enforceQaGate(input: {
     if (input.sourceType === 'custom' || input.qaOverride || (input.architecture || app.architecture) !== app.architecture ||
         (input.installerSha256 && input.installerSha256.toLowerCase() !== release.installerSha256.toLowerCase())) {
       throw new CuratedEvidenceMismatchError();
+    }
+    // Signed approval establishes the reviewed release, not its current
+    // security eligibility. Explicitly released holds stay released; historic
+    // QA verdict rows must not reinstate them or exclude Defender approvals.
+    const hash = release.installerSha256.toLowerCase();
+    const securityHold = (cause?: unknown) => Object.assign(new QaGateNotPassedError({
+      wingetId: app.packageId, version: release.candidate.version,
+      architecture: app.architecture, installerSha256: hash.toUpperCase(),
+      packageProfileSha256: input.packageProfileSha256 || '', reason: 'reputation',
+    }), cause === undefined ? {} : { cause });
+    if (hash.length !== 64 || !/^[a-f0-9]{64}$/.test(hash) || hash === '0'.repeat(64)) throw securityHold();
+    try {
+      const holds = await loadInstallerSecurityHolds(createServerClient(), [hash]);
+      if (holds.has(hash)) throw securityHold();
+    } catch (error) {
+      if (error instanceof QaGateNotPassedError) throw error;
+      throw securityHold(error);
     }
     return;
   }
@@ -196,17 +258,9 @@ export async function enforceQaGate(input: {
   if (installerSha256) {
     let securityResult;
     try {
-      securityResult = await createServerClient()
-        .from('qa_package_results')
-        .select('virustotal_malicious, virustotal_total_engines')
-        .eq('winget_id', input.wingetId)
-        .eq('tested_version', input.version)
-        .eq('architecture', architecture)
-        .eq('installer_sha256', installerSha256)
-        .gte('virustotal_malicious', 1)
-        .order('tested_at_utc', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      securityResult = await exactPayloadMaliciousQuery(createServerClient(), {
+        wingetId: input.wingetId, version: input.version, architecture, installerSha256,
+      });
     } catch (error) {
       throw reputationHold(error);
     }
@@ -229,32 +283,28 @@ export async function enforceQaGate(input: {
   // packaging. QA owns public-installer submission and verdict refreshes.
   let reputationResult;
   try {
-    reputationResult = await createServerClient()
-      .from('qa_package_results')
-      .select('virustotal_status, virustotal_malicious, virustotal_suspicious, virustotal_total_engines')
-      .eq('winget_id', input.wingetId)
-      .eq('tested_version', input.version)
-      .eq('architecture', architecture)
-      .eq('installer_sha256', installerSha256)
-      .order('tested_at_utc', { ascending: false })
-      .order('virustotal_scanned_at_utc', { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
+    reputationResult = await exactPayloadReputationQuery(createServerClient(), {
+      wingetId: input.wingetId, version: input.version, architecture, installerSha256,
+    });
   } catch (error) {
     throw reputationHold(error);
   }
   const { data: reputationRow, error: reputationError } = reputationResult;
   if (reputationError) throw reputationHold(reputationError);
-  if (
-    reputationRow?.virustotal_status !== 'clean' ||
-    reputationRow.virustotal_malicious !== 0 ||
-    reputationRow.virustotal_suspicious !== 0 ||
-    typeof reputationRow.virustotal_total_engines !== 'number' ||
-    !Number.isInteger(reputationRow.virustotal_total_engines) ||
-    reputationRow.virustotal_total_engines <= 0
-  ) {
-    throw reputationHold();
+  if (!isCoveredCleanReputation(reputationRow)) throw reputationHold();
+
+  // Check the bundle being dispatched. Callers that only have a payload tuple
+  // must resolve it first; a primary pass never covers stale prerequisites.
+  let dependenciesCovered: boolean;
+  try {
+    const dependencies = input.resolvedPackageDependencies ?? await resolveWingetPackageDependencies({
+      wingetId: input.wingetId, version: input.version, architecture, installerSha256,
+    });
+    dependenciesCovered = await arePackageDependenciesCovered(createServerClient(), dependencies);
+  } catch (error) {
+    throw reputationHold(error);
   }
+  if (!dependenciesCovered) throw reputationHold();
 
   if (!input.requirePassed && input.qaOverride) return;
 

@@ -2,6 +2,40 @@ import { describe, expect, it } from 'vitest';
 import { extractSilentSwitches } from './silent-switches';
 
 describe('extractSilentSwitches', () => {
+  it.each(['bootstrap_x64.exe', 'bootstrap_x86.exe'])(
+    'preserves the nested MSI command passed to %s',
+    (launcher) => {
+      const tail = '/Q /C:"msiexec /i ""vcredist.msi"" /quiet /norestart"';
+      expect(extractSilentSwitches(`"${launcher}" ${tail}`, 'exe')).toBe(tail);
+    }
+  );
+
+  it.each(['exe', 'inno', 'nullsoft', 'burn'])(
+    'preserves vendor action switches for a %s installer',
+    (type) => {
+      const tail = '/i "payload.msi" /x {PRODUCT-CODE} /p "C:\\config\\settings.ini" /quiet';
+      expect(extractSilentSwitches(`"setup.exe" ${tail}`, type)).toBe(tail);
+    }
+  );
+
+  it('preserves a nested EXE vendor command in a ZIP package', () => {
+    const tail = '/Q /C:"msiexec /i ""payload.msi"" /quiet"';
+    expect(extractSilentSwitches(`"setup.exe" ${tail}`, 'zip', 'exe')).toBe(tail);
+  });
+
+  it.each([
+    ['msiexec /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['"msiexec.exe" /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['"C:\\Windows\\System32\\msiexec.exe" /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['C:\\Windows\\System32\\msiexec.exe /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['msiexec.exe /i "inner.msi" /qn', 'zip', 'msi', '/qn'],
+    ['/i payload.msi /qn', 'msi', undefined, '/qn'],
+    ['/x {PRODUCT-CODE} /qn', 'wix', undefined, '/qn'],
+    ['/p "patch.msp" /qn', 'msi', undefined, '/qn'],
+  ])('keeps outer MSI extraction for %s', (command, type, nestedType, expected) => {
+    expect(extractSilentSwitches(command, type, nestedType)).toBe(expected);
+  });
+
   it('does not mistake PowerShell archive parameters for vendor switches', () => {
     expect(extractSilentSwitches(
       'Expand-Archive -Path "app.zip" -DestinationPath "%ProgramFiles%\\App" -Force',
@@ -78,4 +112,33 @@ describe('extractSilentSwitches', () => {
       'portable'
     )).toBe('');
   });
+
+  it('keeps a bounded EXE verb followed by explicit silent switches', () => {
+    expect(extractSilentSwitches('"sample-setup.exe" install --quiet --accept-license', 'exe'))
+      .toBe('install --quiet --accept-license');
+    expect(extractSilentSwitches('sample.exe deploy /quiet --mode=unattended', 'exe'))
+      .toBe('deploy /quiet --mode=unattended');
+    expect(extractSilentSwitches('sample.exe install --quiet', 'zip', 'exe'))
+      .toBe('install --quiet');
+  });
+
+  it.each([
+    'install', 'install extra --quiet', 'install --quiet && other',
+    'install --quiet;other', 'install --quiet|other', 'install --quiet > output',
+    'install --quiet $(other)', 'install --quiet `other`',
+    'install --path=C:\\temp', 'install --url=https://example.invalid',
+    'C:\\setup install --quiet', 'https://example.invalid --quiet',
+    'install ./payload --quiet', 'install --quiet\n--accept-license',
+    'install -DeploymentType', 'install --quiet --output=../payload',
+    `${'a'.repeat(33)} --quiet`, `install --${'a'.repeat(1024)}`,
+  ])('rejects unsupported or unsafe bare-verb tail %s', (tail) => {
+    expect(extractSilentSwitches(`"sample.exe" ${tail}`, 'exe')).toBe('');
+  });
+
+  it('keeps framework defaults and wrapper exclusions for bare verbs', () => {
+    expect(extractSilentSwitches('sample.exe install --quiet', 'inno'))
+      .toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
+    expect(extractSilentSwitches('sample.exe -DeploymentType', 'exe')).toBe('');
+  });
+
 });

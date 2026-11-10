@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "a9b6e29da2b413b7c42f0accbd67a321da7dac07",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "39611983720",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1",
+    "workflowCommit": "7673041997f6d9da2f7fa361738f58d9f8f6ec72"
+  },
+  "candidate": {
+    "appId": "python-314",
+    "version": "3.14.9",
+    "installerUrl": "https://www.python.org/ftp/python/3.14.9/python-3.14.9-amd64.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.python.org/downloads/release/python-3149/",
+    "discoveredAt": "2026-10-21T13:45:14.209Z",
+    "id": "1408901e966c0392b5571c64"
+  },
+  "previous": {
+    "appId": "python-314",
+    "version": "3.14.8",
+    "installerUrl": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-amd64.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.python.org/downloads/release/python-3148/",
+    "discoveredAt": "2026-10-08T02:36:29.305Z",
+    "id": "8b27121c75797f064bb91167"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "1408901e966c0392b5571c64",
+      "installerSha256": "a247a0b612244a803f507b39fb7121e3602e4160d59c3b99d98e735289c53394",
+      "sourceUrl": "https://www.python.org/ftp/python/3.14.9/python-3.14.9-amd64.exe",
+      "finalOrigin": "https://www.python.org",
+      "signature": {
+        "publisher": "Python Software Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "scanner": "defender",
+        "signatureVersion": "1.461.135.0",
+        "scannedAt": "2026-10-21T13:58:27.1612747Z",
+        "suspicious": 0,
+        "engineVersion": "1.1.26090.9",
+        "status": "clean",
+        "installerSha256": "a247a0b612244a803f507b39fb7121e3602e4160d59c3b99d98e735289c53394"
+      }
+    },
+    "previous": {
+      "candidateId": "8b27121c75797f064bb91167",
+      "installerSha256": "759be887b96e736a3ca886daf8d575f18fcae1a09efab6902f42d59e8999f8ef",
+      "sourceUrl": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-amd64.exe",
+      "finalOrigin": "https://www.python.org",
+      "signature": {
+        "publisher": "Python Software Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "scanner": "defender",
+        "signatureVersion": "1.461.135.0",
+        "scannedAt": "2026-10-21T13:58:33.0383635Z",
+        "suspicious": 0,
+        "engineVersion": "1.1.26090.9",
+        "status": "clean",
+        "installerSha256": "759be887b96e736a3ca886daf8d575f18fcae1a09efab6902f42d59e8999f8ef"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "1408901e966c0392b5571c64",
+    "packageId": "IntuneGet.Curated.Python314",
+    "installerUrl": "https://www.python.org/ftp/python/3.14.9/python-3.14.9-amd64.exe",
+    "installerSha256": "a247a0b612244a803f507b39fb7121e3602e4160d59c3b99d98e735289c53394",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Python314",
+      "displayName": "Python 3.14",
+      "publisher": "Python Software Foundation",
+      "version": "3.14.9",
+      "architecture": "x64",
+      "installerSha256": "a247a0b612244a803f507b39fb7121e3602e4160d59c3b99d98e735289c53394",
+      "installerType": "burn",
+      "installScope": "machine",
+      "silentSwitches": "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=0",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Python 3.14",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Python314\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"3.14.9\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Python314\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"3.14.9\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "7253728E6E3136E83428321C5DE6C3452B5ECF37058333C3A698D7ED967CB325",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Python314\",\"publisher\":\"IntuneGet QA\",\"version\":\"3.14.9\",\"wingetId\":\"IntuneGet.Curated.Python314\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"3.14.9\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Python314\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"1BBEBC4A80C60AAA3BBBC8C1CA806A1E9EE4EC4E105C2BB1E6B2B3A8597E063E\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"A247A0B612244A803F507B39FB7121E3602E4160D59C3B99D98E735289C53394\",\"silentArgs\":\"/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=0\",\"sourceType\":\"burn\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Python 3.14\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"3.14.9\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Python314\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"3072EBB28C8648E941FE1F4D7A8BD6BC93FCB63F225F33A69A7E9FECC567D0FE\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "3072ebb28c8648e941fe1f4d7a8bd6bc93fcb63f225f33a69a7e9fecc567d0fe",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "installerSha256": "a247a0b612244a803f507b39fb7121e3602e4160d59c3b99d98e735289c53394",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "candidateId": "1408901e966c0392b5571c64",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "installerVersion": "3.14.9",
+    "executionProfileSha256": "7253728E6E3136E83428321C5DE6C3452B5ECF37058333C3A698D7ED967CB325",
+    "previousInstallerSha256": "759be887b96e736a3ca886daf8d575f18fcae1a09efab6902f42d59e8999f8ef",
+    "testedAt": "2026-10-21T14:02:00.3221556Z",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "upgradeFromVersion": "3.14.8"
+  },
+  "verifiedAt": "2026-10-21T14:02:07.4881267Z",
+  "authenticatedArtifact": {
+    "id": 12350678752,
+    "sha256": "7208b9e5b3c442719728f8368381a92c20ee43ad814752485d1dd8a9ff3f840a"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-22T20:23:26.791Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

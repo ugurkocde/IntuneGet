@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { buildQaCatalogTestConfig } from './test-config';
 
 describe('buildQaCatalogTestConfig', () => {
+  it('keeps OneKey machine mode while using its exact bare NSIS registry identity', () => {
+    const config = buildQaCatalogTestConfig({
+      app: { wingetId: 'OneKey.OneKey', name: 'OneKey Wallet', publisher: 'OneKey', version: '6.6.3' },
+      manifest: { InstallerType: 'nullsoft', Scope: 'machine' },
+      installer: {
+        Architecture: 'x64', InstallerType: 'nullsoft', Scope: 'machine',
+        ProductCode: '{C63242F1-2B62-5725-B853-31B79889CCF8}',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:c63242f1-2b62-5725-b853-31b79889ccf8:OneKey'
+    );
+    expect(config.scope).toBe('machine');
+    expect(config.silentArgs).toBe('/S');
+    expect(config.psadtConfig.reviewedInstallArguments).toEqual(['/allusers']);
+    expect(config.detectionRules[0]).toMatchObject({
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\OneKey_OneKey',
+      detectionValue: '6.6.3',
+    });
+  });
+
   it('normalizes the WireSock CLI manifest through the shared SDK adapter', () => {
     const config = buildQaCatalogTestConfig({
       app: { wingetId: 'NTKERNEL.WireSockVPNClientCLI', name: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL', version: '3.6.1' },
@@ -922,6 +944,62 @@ describe('buildQaCatalogTestConfig', () => {
       expect.objectContaining({
         keyPath:
           'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\jopemachine_Arvis',
+      }),
+    ]);
+  });
+
+  it('tests UniClipboard in user context when its per-user NSIS manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'UniClipboard.UniClipboard',
+        name: 'UniClipboard',
+        publisher: 'UniClipboard',
+        version: '1.5.0',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        AppsAndFeaturesEntries: [{ DisplayName: 'UniClipboard 1.5.0' }],
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\UniClipboard_UniClipboard',
+      }),
+    ]);
+  });
+
+  it('tests Orca in user context when its per-user NSIS manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'StablyAI.Orca',
+        name: 'Orca',
+        publisher: 'StablyAI',
+        version: '1.4.242',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        AppsAndFeaturesEntries: [{ DisplayName: 'Orca 1.4.242' }],
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\StablyAI_Orca',
       }),
     ]);
   });

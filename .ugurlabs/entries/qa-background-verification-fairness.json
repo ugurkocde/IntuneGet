@@ -1,0 +1,5 @@
+{
+  "title": "Keep background application verification moving",
+  "summary": "Background checks share processing turns more fairly so a busy verification backlog does not prevent other ready checks from progressing.",
+  "type": "fixed"
+}

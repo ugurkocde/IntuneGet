@@ -46,7 +46,7 @@ export function ProgressStepper({
   // before any pipeline stage runs, so it fails at the installation check.
   const isValidationFailure = status === 'failed' && errorStage === 'validation';
   const showQaStage = qaRequired || isValidationFailure;
-  const isQaCurrent = isValidationFailure || (qaRequired && ['awaiting_qa', 'qa_failed'].includes(status));
+  const isQaCurrent = isValidationFailure || (qaRequired && ['blocked_upstream', 'awaiting_qa', 'qa_failed'].includes(status));
   const stages = showQaStage ? [QA_STAGE, ...PROGRESS_STAGES] : PROGRESS_STAGES;
   const currentStage = isQaCurrent ? QA_STAGE : getCurrentStage(progress, status, errorStage);
   const completedStages: string[] = [
@@ -97,7 +97,7 @@ export function ProgressStepper({
                     isJobFailed && isCompleted && !isCurrent && 'bg-status-success/20 border-2 border-status-success',
                     isPending && !isJobCompleted && !isJobFailed && 'bg-bg-elevated border-2 border-overlay/10',
                     isPending && isJobFailed && 'bg-bg-elevated border-2 border-overlay/10',
-                    isCurrent && !isJobFailed && !isJobCompleted && !prefersReducedMotion && 'animate-ring-pulse'
+                    isCurrent && status !== 'blocked_upstream' && !isJobFailed && !isJobCompleted && !prefersReducedMotion && 'animate-ring-pulse'
                   )}
                 >
                   {isFailedStage ? (
@@ -105,7 +105,9 @@ export function ProgressStepper({
                   ) : isJobCompleted || isCompleted ? (
                     <Check className="w-[18px] h-[18px] text-status-success" />
                   ) : isCurrent ? (
-                    isQaStage ? (
+                    status === 'blocked_upstream' ? (
+                      <Clock className="w-[18px] h-[18px] text-status-warning" aria-label="Blocked upstream" />
+                    ) : isQaStage ? (
                       <ShieldCheck className="w-[18px] h-[18px] text-accent-violet animate-pulse" aria-label="Installation check in progress" />
                     ) : (
                       <Loader2 className="w-[18px] h-[18px] text-accent-cyan animate-spin" aria-label="Processing" />
@@ -216,7 +218,7 @@ export function ProgressStepper({
       </div>
 
       {/* Progress Bar with inline percentage - hidden for failed jobs */}
-      {!isJobFailed && status !== 'awaiting_qa' && (
+      {!isJobFailed && !['blocked_upstream', 'awaiting_qa'].includes(status) && (
         <div className="flex items-center gap-2">
           <div
             role="progressbar"

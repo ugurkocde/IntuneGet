@@ -14,11 +14,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
-import { discoverCandidate, discoverPreviousCandidate } from '../lib/curated-catalog/discovery.mjs';
+import { catalogEntries, compareReleaseVersions, releaseAlreadySigned, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
+import { discoverCandidate, discoverPreviousCandidate, upgradeBaselineFromApproved } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
 import { createCuratedGitHubClient } from './curated-github.mjs';
-import { prepareCuratedPublication } from './curated-publication.mjs';
+import { createCuratedGitRunner, prepareCuratedPublication } from './curated-publication.mjs';
 import { enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
@@ -285,7 +285,14 @@ async function plan() {
 
     // Prefer the last approved release for the upgrade test. Chrome's mutable
     // URL cannot serve an older build, so it falls through to the exemption.
-    let previous = latest && latest.candidate.installerUrl !== candidate.installerUrl ? latest.candidate : null;
+    let previous;
+    // Discovery stamps candidates after the plan's initial clock.
+    try { previous = upgradeBaselineFromApproved(app, latest, candidate, new Date()); }
+    catch {
+      row.state = 'Approved upgrade baseline is invalid';
+      alerts.push(`${app.name} ${candidate.version}: the approved upgrade baseline could not be bound to its verified installer hash.`);
+      continue;
+    }
     if (!previous && !latest) {
       try { previous = await discoverPreviousCandidate(app, candidate); } catch { previous = null; }
     }
@@ -355,7 +362,7 @@ async function publish() {
   const evidenceFiles = [];
   for (const runId of JSON.parse(process.env.CURATED_APPROVALS || '[]')) {
     const { app, release, evidence } = await approvedRelease(runId, approvedAt);
-    if (releases.some(item => item.id === release.id || (item.candidate.appId === app.id && compareReleaseVersions(item.candidate.version, release.candidate.version) === 0))) continue;
+    if (releaseAlreadySigned(releases, withdrawnReleaseIds, release)) continue;
     releases.push(release);
     evidenceFiles.push([`catalog/curated/evidence/${app.id}/${release.candidate.id}.json`, evidence]);
   }
@@ -392,21 +399,16 @@ async function publish() {
     '', 'CI validates the signature and definitions. Publication requires independent final patch review of the exact revision.',
   ].filter((line, index, all) => line !== '' || (index > 0 && all[index - 1] !== '')).join('\n');
 
-  const git = (...args) => {
-    const result = spawnSync('git', args, { encoding: 'utf8' });
-    if (result.status !== 0) throw new Error(`git ${args[0]} failed: ${(result.stderr || '').split('\n')[0]}`);
-    return result.stdout.trim();
-  };
+  const git = createCuratedGitRunner();
   const user = await gh(['api', 'user']);
   git('config', 'user.name', user.login);
   git('config', 'user.email', `${user.id}+${user.login}@users.noreply.github.com`);
   git('checkout', '-B', BRANCH);
   git('add', CATALOG_PATH, ...evidenceFiles.map(([path]) => path));
   git('commit', '-m', `${title}\n\n${details}`);
-  const basic = Buffer.from(`x-access-token:${process.env.GH_TOKEN}`).toString('base64');
   const headSha = git('rev-parse', 'HEAD');
   const pr = await prepareCuratedPublication({ gh, repo: WEBSITE, branch: BRANCH, title, details, headSha,
-    push: () => git('-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`, 'push', '--force', `https://github.com/${WEBSITE}.git`, `HEAD:refs/heads/${BRANCH}`) });
+    push: () => git('push', '--force', `https://github.com/${WEBSITE}.git`, `HEAD:refs/heads/${BRANCH}`) });
   const publication = { ...pr, kind: withdraw ? 'withdraw' : added.length ? 'publish' : 'renew', expiresAt: payload.expiresAt, reviewRequired: true };
   await writeFile(resolve(root, 'publication.json'), `${JSON.stringify(publication, null, 2)}\n`);
   await appendSummary(`Prepared ${title} as ${pr.url}.\n\nHead: \`${headSha}\`. Kind: ${publication.kind}. Expires: ${publication.expiresAt}.\n\nAwaiting independent final patch review and a merge guarded by this exact SHA in the QA owner thread.`);

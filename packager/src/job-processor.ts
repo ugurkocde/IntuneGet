@@ -2532,18 +2532,24 @@ ${capturedIdentityValues}
     const effectiveType = sourceType === 'zip' && nestedInstallerType
       ? nestedInstallerType.toLowerCase()
       : sourceType;
+    const hasOuterMsiLauncher = /^(?:"(?:[^"]*[\\/])?msiexec(?:\.exe)?"|(?:[^\s"]*[\\/])?msiexec(?:\.exe)?)\s+/i.test(installCommand);
 
     if (/\bExpand-Archive\b/i.test(installCommand)) {
       return defaultSwitches[effectiveType] ?? '';
     }
 
     let cleaned = installCommand
+      .replace(/^msiexec(?:\.exe)?\s+/i, '')
       .replace(/^"[^"]+"\s*/, '')
-      .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, '')
-      .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '')
-      .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '')
-      .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '')
-      .replace(/\/[ixp]\s+/gi, '');
+      .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, '');
+    // Preserve embedded MSI commands in an EXE vendor argument tail.
+    if (hasOuterMsiLauncher || ['msi', 'wix'].includes(effectiveType)) {
+      cleaned = cleaned
+        .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '')
+        .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '')
+        .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '')
+        .replace(/\/[ixp]\s+/gi, '');
+    }
     cleaned = cleaned.trim();
     if (/^(?:\/\S+|-{1,2}\S+)/.test(cleaned) && cleaned !== '-DeploymentType') {
       return cleaned;

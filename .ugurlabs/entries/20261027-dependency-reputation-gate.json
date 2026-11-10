@@ -1,0 +1,5 @@
+{
+  "title": "Verify prerequisite reputation before deployment",
+  "summary": "Packages wait when a required prerequisite has missing, stale, or adverse security evidence, even when the main installer previously passed QA.",
+  "type": "fixed"
+}

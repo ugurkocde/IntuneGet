@@ -179,6 +179,8 @@ export type AnalyticsJob = Pick<PackagingJob, 'id' | 'user_id' | 'user_email' | 
 export type AnalyticsJobScope = { userId: string; tenantId?: never } | { tenantId: string; userId?: never };
 
 export interface JobStats {
+  /** Distinct workers observed through recent job heartbeats, when supported. */
+  activePackagers?: number;
   queued: number;
   packaging: number;
   uploading: number;

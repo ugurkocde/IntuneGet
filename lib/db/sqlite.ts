@@ -4,6 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
+import { syncSqliteAutoUpdate } from './sqlite-auto-update';
 import type { PackageAssignment, IntuneAppCategorySelection } from '@/types/upload';
 import type { Json } from '@/types/database';
 import type { SavedCustomAppDefinition } from '@/lib/custom-app-definitions';
@@ -60,7 +61,24 @@ function getDb(): Database.Database {
   db.pragma('foreign_keys = ON');
 
   // Apply versioned migrations (baseline, then additive changes)
-  runSqliteMigrations(db);
+  try {
+    runSqliteMigrations(db);
+
+    // Repair history left pending by older local packagers, once per connection.
+    const database = db;
+    database.transaction(() => {
+      const jobs = database.prepare(`SELECT DISTINCT j.id FROM packaging_jobs j
+        JOIN auto_update_history h ON h.packaging_job_id = j.id
+        WHERE j.status IN ('deployed', 'duplicate_skipped', 'failed', 'cancelled')
+        AND h.status IN ('pending', 'packaging', 'deploying') ORDER BY j.updated_at, j.id`).all() as { id: string }[];
+      for (const job of jobs) syncSqliteAutoUpdate(database, job.id);
+    })();
+
+  } catch (error) {
+    db.close();
+    db = null;
+    throw error;
+  }
 
   return db;
 }
@@ -410,7 +428,11 @@ export const sqliteDb: DatabaseAdapter = {
         WHERE ${whereClause}
       `);
 
-      const result = stmt.run(...values);
+      const result = database.transaction(() => {
+        const result = stmt.run(...values);
+        if (result.changes > 0) syncSqliteAutoUpdate(database, id);
+        return result;
+      })();
 
       // Check if the update was successful
       if (result.changes === 0) {
@@ -505,6 +527,7 @@ export const sqliteDb: DatabaseAdapter = {
       deployed: number;
       failed: number;
       cancelled: number;
+      activePackagers: number;
     }> {
       const database = getDb();
       const stmt = database.prepare(`
@@ -522,6 +545,10 @@ export const sqliteDb: DatabaseAdapter = {
         deployed: 0,
         failed: 0,
         cancelled: 0,
+        // Recent job heartbeats measure observed workers, including just-finished jobs.
+        activePackagers: (database.prepare(`SELECT COUNT(DISTINCT packager_id) AS count
+          FROM packaging_jobs WHERE packager_id IS NOT NULL
+          AND packager_heartbeat_at >= ?`).get(new Date(Date.now() - 5 * 60 * 1000).toISOString()) as { count: number }).count,
       };
 
       for (const row of rows) {

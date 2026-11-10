@@ -203,6 +203,33 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Vendor NSIS uses the one-click per-user defaults; WinGet omits Scope.
+    // Run 41131197837 captured an already-missing SYSTEM-profile uninstaller.
+    // The physical missing-file mechanism remains unconfirmed.
+    // https://github.com/OWASP/threat-dragon/blob/v2.6.2/td.vue/vue.config.js
+    wingetId: 'OWASP.ThreatDragon',
+    requiredInstallScope: 'user',
+  },
+  {
+    // WinGet omits Scope; silent installation registers removal in HKCU.
+    // Use the signed-in user instead of LocalSystem's disposable profile.
+    wingetId: 'FunRoutine.WorkFlowy',
+    requiredInstallScope: 'user',
+  },
+  {
+    // T3 Code uses Electron Builder 26.16.1 one-click NSIS with the default
+    // per-user mode. WinGet omits Scope; do not install in SYSTEM's profile.
+    // https://github.com/pingdotgg/t3code/blob/v0.1.6/scripts/build-desktop-artifact.ts
+    wingetId: 'T3Tools.T3Code',
+    requiredInstallScope: 'user',
+  },
+  {
+    // The vendor's assisted NSIS build retains the per-user default.
+    // WinGet omits Scope, so do not run it below SYSTEM's user profile.
+    wingetId: 'GarboMuffin.TurboWarp',
+    requiredInstallScope: 'user',
+  },
+  {
     // The vendor NSIS source requests user execution, installs in LocalAppData
     // and registers removal in HKCU. WinGet explicitly labels these bytes as
     // machine scope; retain that selection while correcting execution context.
@@ -250,6 +277,48 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // https://github.com/jopemachine/arvis/blob/v0.14.6/package.json
     wingetId: 'jopemachine.Arvis',
     requiredInstallScope: 'user',
+  },
+  {
+    // UniClipboard's NSIS installer supports only HKCU/current-user scope.
+    // https://github.com/UniClipboard/UniClipboard/blob/v1.5.0/apps/gui-go/windows/installer.nsi
+    // Run 40449849261 captured SYSTEM registration; its missing-file cause is unconfirmed.
+    wingetId: 'UniClipboard.UniClipboard',
+    requiredInstallScope: 'user',
+  },
+  {
+    // Orca 1.4.242 uses Electron Builder 26.15.3's default one-click NSIS
+    // target without perMachine. Run 40473461347 registered an unavailable
+    // systemprofile uninstaller; keep QA and customer packages in user scope.
+    // The physical missing-file mechanism remains unconfirmed.
+    // https://github.com/stablyai/orca/blob/v1.4.242/config/electron-builder.config.cjs
+    wingetId: 'StablyAI.Orca',
+    requiredInstallScope: 'user',
+  },
+  {
+    // Numara's assisted NSIS installer defaults to per-user mode. Select its
+    // supported all-users mode explicitly for the machine installation profile.
+    // https://github.com/bornova/numara-calculator/blob/v7.6.3/electron-builder.yml
+    wingetId: 'bornova.numara',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
+  },
+  {
+    // OneKey 6.6.3 uses Electron Builder 26.4.0 assisted NSIS, which defaults
+    // to per-user installation. Select its supported all-users mode explicitly
+    // so the machine profile installs and captures the same vendor identity.
+    // https://github.com/OneKeyHQ/app-monorepo/blob/v6.6.3/apps/desktop/electron-builder-win.config.js
+    wingetId: 'OneKey.OneKey',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
+  },
+  {
+    // SPlayer 3.1.1 uses Electron Builder 26.8.1 assisted NSIS, whose silent
+    // default is per-user. Select its supported all-users mode so the declared
+    // machine scope does not register a remover below LocalSystem's profile.
+    // https://github.com/SPlayer-Dev/SPlayer/blob/v3.1.1/electron-builder.config.ts
+    wingetId: 'imsyy.SPlayer',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
   },
   {
     // zyfun 3.4.7 uses Electron Builder's assisted NSIS mode and a custom
@@ -413,6 +482,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // Intune packages in the intended signed-in user context instead.
     wingetId: 'UltimateGadgetLaboratories.UHKAgent',
     requiredInstallScope: 'user',
+  },
+  {
+    // Equibop's assisted NSIS hook seeds both scopes with LocalAppData.
+    // Select the signed-in user and explicit current-user mode together so
+    // the seeded HKLM value cannot force a silent machine installation.
+    // https://github.com/Equicord/Equibop/blob/v3.3.2/build/installer.nsh
+    wingetId: 'Equicord.Equibop',
+    requiredInstallScope: 'user',
+    reviewedInstallArguments: ['/currentuser'],
   },
   {
     // SeaMeet Snap Recorder's Nullsoft installer writes its application and
@@ -705,6 +783,12 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // generated package persists its exact key and command for safe removal.
     wingetId: 'Poly.PolyLens',
     reviewedRegistryUninstallDisplayName: 'Poly Studio',
+  },
+  {
+    // The catalog title differs from the vendor's exact registration. Bind only
+    // UDS Client so its bundled runtimes cannot become uninstall candidates.
+    wingetId: 'VirtualCable.UDSClient',
+    reviewedRegistryUninstallDisplayName: 'UDS Client',
   },
   {
     // The 2.7.18 NSIS installer registers its primary product as `jamovi`,
@@ -1321,6 +1405,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // Apply the existing profile-preserving Opera launcher contract to Air.
+    // Completion still requires removal of the captured exact registry identity.
+    wingetId: 'Opera.OperaAir',
+    requiredProcessesToClose: [
+      { name: 'opera', description: 'Opera Air browser' },
+    ],
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles%\\Opera Air\\opera.exe',
+      arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // The Office Deployment Tool is a self-extracting payload, not an
     // installed application. It intentionally creates no ARP registration.
     // WinGet extracts it to this machine-wide directory, so verify that exact
@@ -1800,6 +1897,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'user',
   },
   {
+    // GameMaker documents administrator privileges for silent installation.
+    // Its published Nullsoft installer is user-scoped; retain that exact
+    // installer selection while running the managed lifecycle as LocalSystem.
+    // https://gamemaker.io/en/help/articles/gamemaker-silent-installation
+    wingetId: 'YoYoGames.GameMaker.Studio.2',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+  },
+  {
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
@@ -1915,6 +2021,40 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // These NSIS registrations use unbraced keys and renamed vendor products.
+  // Keep the catalog names as fallbacks so an unreviewed key for the renamed
+  // product cannot be captured by a broader registered-name match.
+  'zafaco.breitbandmessung': {
+    generatedDisplayName: 'Breitbandmessung',
+    manifestRegistryKey: '{14607473-30DB-509F-94F0-BB7C085C619E}',
+    registeredDisplayName: 'Breitbandmessung',
+    registeredRegistryKey: '14607473-30db-509f-94f0-bb7c085c619e',
+  },
+  'niko.homecontrolprogrammingsoftware': {
+    generatedDisplayName: 'Niko Home Control programming software',
+    manifestRegistryKey: '{E0658CE6-6ECB-5EC8-AE2F-5A81C75FBCD6}',
+    registeredDisplayName: 'Niko Home Control programming software',
+    registeredRegistryKey: 'e0658ce6-6ecb-5ec8-ae2f-5a81c75fbcd6',
+  },
+  // This NSIS registration uses the manifest GUID without braces. Keep the
+  // catalog name as fallback so a different-key Tuta version cannot be captured
+  // by a broader "Tuta*" name match when the reviewed key is absent.
+  'tutanota.tutanota': {
+    generatedDisplayName: 'Tuta Mail',
+    manifestRegistryKey: '{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}',
+    registeredDisplayName: 'Tuta Mail',
+    registeredRegistryKey: '450699d2-1c81-5ee5-aec6-08dddb7af9d7',
+  },
+  // OneKey's electron-builder installer registers the bare NSIS key, while
+  // WinGet publishes a braced ProductCode and the catalog title OneKey Wallet.
+  // Bind capture and removal to the vendor key so unrelated Edge servicing
+  // cannot become the selected uninstall identity.
+  'onekey.onekey': {
+    generatedDisplayName: 'OneKey Wallet',
+    manifestRegistryKey: '{C63242F1-2B62-5725-B853-31B79889CCF8}',
+    registeredDisplayName: 'OneKey',
+    registeredRegistryKey: 'c63242f1-2b62-5725-b853-31b79889ccf8',
+  },
   // WinGet 3.14.0 and isolated run 35536993050 identify this bare NSIS key.
   // The generated braced product code does not match it; Edge servicing must
   // never become the uninstall target when the catalog title also differs.

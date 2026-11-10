@@ -60,7 +60,7 @@ interface PackagingJob {
   architecture: string;
   installer_type: string;
   app_source?: 'win32' | 'store';
-  status: 'awaiting_qa' | 'qa_failed' | 'queued' | 'packaging' | 'completed' | 'failed' | 'uploading' | 'deployed' | 'cancelled' | 'duplicate_skipped';
+  status: 'awaiting_qa' | 'blocked_upstream' | 'qa_failed' | 'queued' | 'packaging' | 'completed' | 'failed' | 'uploading' | 'deployed' | 'cancelled' | 'duplicate_skipped';
   status_message?: string;
   progress_percent: number;
   error_message?: string;
@@ -209,7 +209,7 @@ export default function UploadsPage() {
   // background poll less often and a manual refresh remains available.
   useEffect(() => {
     const hasActiveJobs = jobs.some((job) =>
-      ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status)
+      ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status)
     );
 
     if (!hasActiveJobs || sessionExpired) return;
@@ -366,7 +366,7 @@ export default function UploadsPage() {
   const filteredJobs = jobs.filter((job) => {
     switch (filter) {
       case 'active':
-        return ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+        return ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
       case 'completed':
         return ['completed', 'deployed', 'duplicate_skipped'].includes(job.status);
       case 'failed':
@@ -379,7 +379,7 @@ export default function UploadsPage() {
   const stats = {
     total: jobs.length,
     active: jobs.filter((j) =>
-      ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(j.status)
+      ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(j.status)
     ).length,
     completed: jobs.filter((j) => ['completed', 'deployed', 'duplicate_skipped'].includes(j.status)).length,
     failed: jobs.filter((j) => ['qa_failed', 'failed'].includes(j.status)).length,
@@ -684,6 +684,7 @@ function UploadJobCard({
   const prefersReducedMotion = useReducedMotion();
 
   const statusConfig = {
+    blocked_upstream: { icon: Clock, label: 'Blocked upstream', color: 'text-status-warning', bg: 'bg-status-warning/10', border: 'border-l-status-warning' },
     awaiting_qa: {
       icon: ShieldCheck,
       label: job.qa_status?.category === 'testing' ? 'Testing app'
@@ -761,10 +762,10 @@ function UploadJobCard({
 
   const config = statusConfig[job.status] || statusConfig.queued;
   const StatusIcon = config.icon;
-  const isActive = ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
-  const isStale = job.status !== 'awaiting_qa' && isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
+  const isActive = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isStale = !['blocked_upstream', 'awaiting_qa'].includes(job.status) && isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
   // Allow cancelling active jobs or dismissing completed/failed jobs
-  const isCancellable = ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isCancellable = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
   const isDismissable = ['qa_failed', 'completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
   const canRemove = isCancellable || isDismissable;
 
@@ -951,10 +952,10 @@ function UploadJobCard({
             <ProgressStepper
               progress={job.progress_percent}
               status={job.status}
-              statusMessage={job.status === 'awaiting_qa'
+              statusMessage={['blocked_upstream', 'awaiting_qa'].includes(job.status)
                 ? job.qa_status?.message || 'Validation status is temporarily unavailable. Next event: updated validation information.'
                 : job.status_message}
-              startTime={job.status === 'awaiting_qa'
+              startTime={['blocked_upstream', 'awaiting_qa'].includes(job.status)
                 ? job.qa_requested_at || job.created_at
                 : job.packaging_started_at || job.qa_requested_at || job.created_at}
               endTime={['failed', 'qa_failed'].includes(job.status) ? job.completed_at : null}
@@ -963,12 +964,12 @@ function UploadJobCard({
                 job.qa_requested_at ||
                 job.qa_completed_at ||
                 job.qa_candidate_id ||
-                ['awaiting_qa', 'qa_failed'].includes(job.status)
+                ['blocked_upstream', 'awaiting_qa', 'qa_failed'].includes(job.status)
               )}
               qaHref={job.qa_candidate_id ? '/qa' : undefined}
             />
           )}
-          {job.status === 'awaiting_qa' && job.qa_status?.nextEventAt && Number.isFinite(Date.parse(job.qa_status.nextEventAt)) && (
+          {['blocked_upstream', 'awaiting_qa'].includes(job.status) && job.qa_status?.nextEventAt && Number.isFinite(Date.parse(job.qa_status.nextEventAt)) && (
             <p className="mt-2 text-xs text-text-muted">
               {Date.parse(job.qa_status.nextEventAt) <= Date.now()
                 ? <T>Next check due since</T>

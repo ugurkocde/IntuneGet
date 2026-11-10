@@ -20,6 +20,7 @@ interface PackagerStats {
 // Stale job timeout: 5 minutes (should match packager config)
 const STALE_JOB_TIMEOUT_MS = 5 * 60 * 1000;
 
+/** Recover stale local jobs and report queue health and recently observed workers. */
 export async function GET() {
   try {
     const features = getFeatureFlags();
@@ -50,7 +51,7 @@ export async function GET() {
     const jobStats = await db.jobs.getStats();
 
     const stats: PackagerStats = {
-      activePackagers: 0, // Will be calculated below
+      activePackagers: jobStats.activePackagers ?? 0,
       queuedJobs: jobStats.queued,
       processingJobs: jobStats.packaging + jobStats.uploading,
       recentCompletedJobs: jobStats.deployed,

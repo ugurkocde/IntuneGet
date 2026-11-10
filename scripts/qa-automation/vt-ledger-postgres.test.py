@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import subprocess
 import threading
 import time
@@ -344,6 +345,162 @@ def contracts():
     sql(migration('20261018104456_qa_vt_terminal_newer_index'))
     sql((ROOT/'supabase/tests/qa_vt_terminal_newer_index.sql').read_text())
     print('PASS case-insensitive newer-candidate expression index at catalog scale')
+    sql(migration('20261018130856_qa_vt_fair_metadata_selection'))
+    sql((ROOT/'supabase/tests/qa_vt_fair_metadata_selection.sql').read_text())
+    print('PASS fair public and metadata offers, fallback, quota and cursor ACL')
+    sql(migration('20261018140859_qa_vt_metadata_drain'))
+    sql((ROOT/'supabase/tests/qa_vt_fair_metadata_selection.sql').read_text())
+    sql((ROOT/'supabase/tests/qa_vt_metadata_drain.sql').read_text())
+    print('PASS metadata drain, completed404, passed/cache, source guard and tuple backoff')
+    sql(migration('20261018163200_qa_vt_preflight_priority'))
+    for name in ('qa_vt_terminal_metadata_admission', 'qa_vt_fair_metadata_selection', 'qa_vt_metadata_drain', 'qa_vt_preflight_priority'):
+        sql((ROOT/'supabase/tests'/ (name+'.sql')).read_text())
+    print('PASS preflight priority, null-status fairness, customer priority and no404 replay')
+    reset()
+    for n in range(1, 7):
+        candidate(str(uuid.uuid4()), 'error', format(n, '064x'))
+    sql("update qa_candidates set winget_id='Fixture.Concurrent.'||id")
+    sql("select admit_qa_vt_terminal_metadata_rechecks('local-fixture-only')", 'service_role')
+    replies = [json.loads(r.stdout) for r in parallel(["select claim_qa_vt_metadata_recheck('local-fixture-only')"] * 2)]
+    leased = [r for r in replies if r.get('lease')]
+    assert len(leased) == 2 and len({r['sha256'] for r in leased}) == 2
+    assert value('select count(*) from qa_vt_requests') == 2
+    for role in ('anon', 'authenticated', 'service_role'):
+        denied('select * from qa_vt_claim_lane', 'permission denied for table', role)
+        denied("update qa_vt_claim_lane set last_lane='public'", 'permission denied for table', role)
+    print('PASS concurrent fair claims serialize and API roles cannot pin cursor')
+    sql(migration('20261018183000_qa_vt_upload_url_recovery'))
+    recovery_contract = (ROOT/'supabase/tests/qa_vt_upload_url_recovery.sql').read_text()
+    sql(recovery_contract)
+    # Reuse the synthetic setup, committed only in this disposable database.
+    setup = recovery_contract.split('-- Recovery assertions')[0].replace('begin;', '', 1)
+    sql(setup)
+    recovery_id = '30000000-0000-4000-8000-000000000001'
+    recovery_hash = 'd'*63+'1'
+    args = "'local-fixture-only',"+literal(recovery_id)+","+literal(recovery_hash)
+    request = json.loads(sql('select reserve_qa_vt_candidate_request('+args+",'hash_lookup')", 'service_role').stdout)
+    reservation_id = str(uuid.UUID(request['reservationId']))
+    sql('select record_qa_vt_submission_analysis('+args+','+literal(reservation_id)+",'not_found')", 'service_role')
+    attempts = parallel(['select reserve_qa_vt_candidate_request('+args+",'upload_url')"]*2)
+    assert sum(r.returncode == 0 for r in attempts) == 1
+    assert all(r.returncode == 0 or 'Public installer URL recovery proof unavailable' in r.stderr for r in attempts)
+    assert value('select count(*) from qa_vt_upload_url_recovery_grants where consumed_at is not null') == 1
+    assert value("select count(*) from qa_vt_requests where sha256="+literal(recovery_hash)+" and operation='upload_url'") == 2
+    assert value("select count(*) from qa_vt_requests where operation='upload'") == 0
+    for role in ('anon', 'authenticated', 'service_role'):
+        denied('select * from qa_vt_upload_url_recovery_grants', 'permission denied for table', role)
+    print('PASS audited URL recovery, concurrent single consumption and unchanged actual-upload guard')
+    post_analysis = (ROOT/'supabase/tests/qa_vt_post_analysis_hash_recheck.sql').read_text()
+    setup = post_analysis.split('-- Post-migration assertions')[0]
+    baseline = setup + "do $$ begin if claim_qa_vt_metadata_recheck('local-fixture-only')->>'lease' is not null then raise exception 'Baseline unexpectedly admits exhausted analysis';end if;end $$;rollback;"
+    sql(baseline)
+    print('PASS regression reproduces missing post-analysis metadata lease before migration')
+    sql(migration('20261018230638_qa_vt_post_analysis_hash_recheck'))
+    for http_status in (200, 404, 0, 429):
+        sql("set qa.test_http_status='"+str(http_status)+"';"+post_analysis)
+    sql(setup.replace('begin;', '', 1))
+    attempts = parallel(["select claim_qa_vt_metadata_recheck('local-fixture-only')"]*2)
+    claims = [json.loads(r.stdout) for r in attempts if r.returncode == 0]
+    assert len(claims) == 2 and sum(bool(c.get('lease')) for c in claims) == 1
+    assert value("select count(*) from qa_vt_requests where operation='hash_lookup'") == 1
+    print('PASS post-analysis exact-hash completion,404 parking,temporary retries,exclusions and concurrent single lease')
+    priority = (ROOT/'supabase/tests/qa_vt_post_upload_priority.sql').read_text()
+    before = sql("set qa.priority_case='no_customer';"+priority, check=False)
+    assert before.returncode != 0 and 'Post-upload priority selected wrong tuple' in before.stderr
+    print('PASS regression reproduces uploaded tuple behind fresh metadata before migration')
+    sql(migration('20261019024840_qa_vt_post_upload_priority'))
+    for priority_case in ('no_customer', 'customer_ready', 'customer_fresh', 'backoff'):
+        sql("set qa.priority_case='"+priority_case+"';"+priority)
+    print('PASS uploaded priority, customer-first ordering and unchanged analysis backoff')
+    sql(migration('20261018011340_qa_vt_result_record_refresh'))
+    refresh = (ROOT/'supabase/tests/qa_vt_analysis_record_refresh.sql').read_text()
+    before = sql(refresh, check=False)
+    assert before.returncode != 0 and 'Completed analysis publication proof missing' in before.stderr
+    print('PASS regression reproduces completed analysis missing from publication selection')
+    # The failed disposable transaction rolled back when its psql session exited.
+    claim_before = value("select pg_get_functiondef('public.claim_qa_vt_metadata_recheck(text)'::regprocedure)")
+    acl_before = value("select jsonb_build_array(proowner,proacl::text) from pg_proc "
+                       "where oid='public.list_qa_vt_resolved_record_refreshes(text,integer)'::regprocedure")
+    sql(migration('20261019045306_qa_vt_analysis_record_refresh'))
+    sql(refresh)
+    assert claim_before == value("select pg_get_functiondef('public.claim_qa_vt_metadata_recheck(text)'::regprocedure)")
+    assert acl_before == value("select jsonb_build_array(proowner,proacl::text) from pg_proc "
+                              "where oid='public.list_qa_vt_resolved_record_refreshes(text,integer)'::regprocedure")
+    print('PASS exact analysis completion, no-verdict exclusions, proof precedence and unchanged claim/ACL')
+    missing = sql("select record_qa_dependency_receipt('local-fixture-only',gen_random_uuid(),'123',1,repeat('C',64),'{}','Passed')", check=False)
+    assert missing.returncode != 0 and 'does not exist' in missing.stderr
+    sql(migration('20261019105229_qa_dependency_execution_receipts'))
+    sql((ROOT/'supabase/tests/qa_dependency_execution_receipts.sql').read_text())
+    print('PASS own-run dependency receipt identity, digest, write-once and no-verdict bridge')
+    missing = sql("select admit_qa_vt_dependency_rechecks('local-fixture-only')", check=False)
+    assert missing.returncode != 0 and 'does not exist' in missing.stderr
+    sql(migration('20261019125457_qa_vt_dependency_lookup'))
+    sql((ROOT/'supabase/tests/qa_vt_dependency_lookup.sql').read_text())
+    print('PASS exact installed dependency admission, shared hash lease, finite quota, 404 hold and covered verdict')
+    bound = (ROOT/'supabase/tests/qa_vt_dependency_admission_bound.sql').read_text()
+    denied(bound, 'ADMISSION_UNBOUNDED', role='fixture_owner')
+    print('PASS old admission rejects unreceipted validator calls regression')
+    admit_acl = value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.admit_qa_vt_dependency_rechecks(text)'::regprocedure")
+    untouched = value("select jsonb_agg(pg_get_functiondef(oid) order by proname) from pg_proc where oid in ('public.claim_qa_vt_dependency_recheck(text)'::regprocedure,'public.complete_qa_vt_dependency_recheck(text,uuid,integer,timestamp with time zone,integer,integer,integer,timestamp with time zone)'::regprocedure)")
+    sql(migration('20261019141403_qa_vt_dependency_admission_bound'))
+    sql(bound)
+    sql((ROOT/'supabase/tests/qa_vt_dependency_lookup.sql').read_text())
+    assert admit_acl == value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.admit_qa_vt_dependency_rechecks(text)'::regprocedure")
+    assert untouched == value("select jsonb_agg(pg_get_functiondef(oid) order by proname) from pg_proc where oid in ('public.claim_qa_vt_dependency_recheck(text)'::regprocedure,'public.complete_qa_vt_dependency_recheck(text,uuid,integer,timestamp with time zone,integer,integer,integer,timestamp with time zone)'::regprocedure)")
+    print('PASS receipt-bound admission, zero unreceipted calls, latest attempt, full lookup contracts and unchanged ACL/claim/complete')
+
+    cadence = (ROOT/'supabase/tests/qa_installer_recheck_customer_cadence.sql').read_text()
+    denied(cadence, 'No-demand hash rechecked before seven days', role='fixture_owner')
+    sql(migration('20261022132553_qa_installer_recheck_customer_cadence'))
+    sql(cadence)
+    print('PASS weekly no-demand cadence and next-pass daily customer restoration')
+    active = (ROOT/'supabase/tests/qa_vt_active_candidate_completion.sql').read_text()
+    legacy = migration('20260910224600_correct_virustotal_engine_counts')
+    legacy = 'CREATE OR REPLACE FUNCTION public.cache_qa_file_reputation' + legacy.split('CREATE OR REPLACE FUNCTION public.cache_qa_file_reputation', 1)[1].split('REVOKE ALL ON FUNCTION public.cache_qa_file_reputation', 1)[0]
+    prefix = """begin;
+      alter table public.catalog_file_reputation add column if not exists queued_at timestamptz, add column if not exists priority integer,
+        add column if not exists lease_token uuid, add column if not exists lease_expires_at timestamptz, add column if not exists attempts integer;
+      create temporary table qa_result_publication_fixture(installer_sha256 text,virustotal_status text,
+        virustotal_malicious integer,virustotal_suspicious integer,virustotal_scanned_at_utc timestamptz,tested_at_utc timestamptz);
+      """ + legacy + """
+      create trigger cache_fixture after insert on qa_result_publication_fixture
+        for each row execute function public.cache_qa_file_reputation();
+      """
+    active = active.replace('begin;', prefix, 1)
+    before = sql(active, check=False)
+    assert before.returncode != 0 and 'QA terminal response identity rejected' in before.stderr
+    print('PASS old source rejects active same-lookup persistence regression')
+    completion_acl = value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.complete_qa_vt_metadata_recheck(text,uuid,integer,timestamptz,integer,integer,integer,timestamptz)'::regprocedure")
+    sql(migration('20261023022120_qa_vt_active_candidate_completion'))
+    assert completion_acl == value("select jsonb_build_array(proowner,proacl::text) from pg_proc where oid='public.complete_qa_vt_metadata_recheck(text,uuid,integer,timestamptz,integer,integer,integer,timestamptz)'::regprocedure")
+    sql(active)
+    sql((ROOT/'supabase/tests/qa_vt_analysis_record_refresh.sql').read_text())
+    admission = (ROOT/'supabase/tests/qa_vt_terminal_metadata_admission.sql').read_text()
+    needle = 'truncate public.qa_vt_requests,'
+    assert admission.count(needle) == 1
+    sql(admission.replace(needle, 'truncate public.qa_vt_upload_url_recovery_grants,public.qa_vt_requests,', 1))
+    print('PASS post-migration terminal and metadata completion regression fixtures')
+    print('PASS active exact lookup, replay/binding refusals, monotonic evidence, publication trigger, holds and unchanged ACL')
+    capability = (ROOT/'supabase/tests/qa_vt_metadata_public_capability.sql').read_text()
+    before = sql(capability, check=False)
+    assert before.returncode != 0 and 'does not exist' in before.stderr
+    original_claim = value("select jsonb_build_array(prosrc,proacl::text) from pg_proc where oid='public.claim_qa_vt_metadata_recheck(text)'::regprocedure")
+    sql(migration('20261024002955_qa_vt_metadata_public_capability'))
+    assert original_claim == value("select jsonb_build_array(prosrc,proacl::text) from pg_proc where oid='public.claim_qa_vt_metadata_recheck(text)'::regprocedure")
+    sql(capability)
+    for role in ('anon','authenticated','service_role'):
+        assert value("select has_function_privilege('"+role+"','public.claim_qa_vt_metadata_recheck(text)','EXECUTE') = has_function_privilege('"+role+"','public.claim_qa_vt_metadata_recheck(text,boolean)','EXECUTE')")
+    denied("select claim_qa_vt_metadata_recheck('wrong-fixture',false)", 'authentication|secret|Unauthorized|unauthorized|invalid|Invalid')
+    denied("select claim_qa_vt_metadata_recheck('local-fixture-only',null)", 'QA VT capability required')
+    print('PASS unsupported public work consumes no attempt/lease/reservation and cannot block hash work; legacy body/ACL retained')
+    reservation = (ROOT/'supabase/tests/qa_vcpp_single_attempt_authorizations.sql').read_text()
+    # The disposable postgres session can SET ROLE to exercise the real caller
+    # ACLs; fixture_owner intentionally has no membership in the API roles.
+    before = sql(reservation, role=None, check=False)
+    assert before.returncode != 0 and 'does not exist' in before.stderr
+    sql(migration('20261029000852_qa_vcpp_single_attempt_authorizations'))
+    sql(reservation, role=None)
+    print('PASS VC++ reservation ACL, lifetime uniqueness, full-profile identity, customer/sibling/pin guards and unchanged original lifecycle')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
@@ -356,6 +513,7 @@ def main():
     assert json.loads(inspect.stdout) in (None, {})
     sql("create role fixture_owner nosuperuser nocreatedb nocreaterole noinherit;create role anon;create role authenticated;create role service_role bypassrls;create database " + DB + " owner fixture_owner", role=None, database="postgres")
     try:
+        runpy.run_path(str(ROOT / 'scripts/ci/catalog-sync-schema-postgres.py'))['contracts'](sql)
         sql("create schema extensions authorization fixture_owner;create extension pgcrypto with schema extensions", role=None)
         contracts()
     finally:

@@ -44,6 +44,8 @@ export interface CuratedAppDefinition {
   releaseVersionPattern?: string;
   /** Publisher baseline used only before the first approved release exists. */
   initialUpgradeBaseline?: { version: string; installerUrl: string };
+  /** Reviewed immutable archive for an approved upgrade baseline, retaining its verified hash. */
+  archiveInstallerUrlTemplate?: string;
   /** Official releases never used as the upgrade baseline because their installer misreports its identity. */
   excludedUpgradeBaselines?: string[];
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;

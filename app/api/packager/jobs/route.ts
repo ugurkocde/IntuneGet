@@ -13,6 +13,7 @@ import { getFeatureFlags } from '@/lib/features';
 import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies/ensure-policy';
 import { validateCuratedPackagingJob } from '@/lib/curated-catalog/server';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 
 // Verify the packager auth key (API key for SQLite, service role key for Supabase)
 function verifyPackagerAuth(request: NextRequest): boolean {
@@ -133,7 +134,8 @@ export async function POST(request: NextRequest) {
       console.error(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) failed: ${logValue(error.message)}`);
       return NextResponse.json({ claimed: false, error: error.message, code: error.code }, { status: 409 });
     }
-    if (isSupabaseServerConfigured()) {
+    if (isSupabaseServerConfigured() || isCuratedPackageId(job.winget_id) ||
+        (job.package_config as Win32CartItem | null)?.sourceType === 'curated') {
       const item = job.package_config as Win32CartItem | null;
       try {
         await enforceQaGate({

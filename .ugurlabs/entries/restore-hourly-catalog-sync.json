@@ -1,0 +1,5 @@
+{
+  "title": "Restore hourly catalog synchronization",
+  "summary": "Restores the database counter required for scheduled package metadata updates, while preserving existing catalog data and access controls.",
+  "type": "fixed"
+}

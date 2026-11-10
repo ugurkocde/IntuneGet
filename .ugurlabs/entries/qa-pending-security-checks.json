@@ -1,0 +1,5 @@
+{
+  "title": "Advance pending application security checks",
+  "summary": "Background verification advances installers with missing reputation reports to source checks while preserving customer priority and all security holds.",
+  "type": "fixed"
+}

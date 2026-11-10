@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "websiteCommit": "a7e46629df5fe15c99af7604d62b5906fd82979e",
+    "runId": "40218035676",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "c1a4fdfee8d4712ac72748794b747ec3b628e4f5"
+  },
+  "candidate": {
+    "appId": "powershell-lts",
+    "version": "7.6.9",
+    "installerUrl": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/PowerShell-7.6.9-win-x64.msi",
+    "vendorSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+    "releaseNotesUrl": "https://github.com/PowerShell/PowerShell/releases/tag/v7.6.9",
+    "discoveredAt": "2026-10-25T17:42:00.172Z",
+    "id": "2ad7b784e3980a628c7f6953"
+  },
+  "previous": {
+    "appId": "powershell-lts",
+    "version": "7.6.8",
+    "installerUrl": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.8/PowerShell-7.6.8-win-x64.msi",
+    "vendorSha256": "079e7cecedd1e87fa7b4676e5c33ddfbe66859a44a97fbcd1db797245cbb93d2",
+    "releaseNotesUrl": "https://github.com/PowerShell/PowerShell/releases/tag/v7.6.8",
+    "discoveredAt": "2026-10-22T17:20:23.817Z",
+    "id": "6c30951baedaf0306177083f"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "2ad7b784e3980a628c7f6953",
+      "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+      "sourceUrl": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/PowerShell-7.6.9-win-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.461.201.0",
+        "status": "clean",
+        "scannedAt": "2026-10-25T17:56:12.2568477Z",
+        "scanner": "defender",
+        "malicious": 0,
+        "engineVersion": "1.1.26090.9",
+        "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "6c30951baedaf0306177083f",
+      "installerSha256": "079e7cecedd1e87fa7b4676e5c33ddfbe66859a44a97fbcd1db797245cbb93d2",
+      "sourceUrl": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.8/PowerShell-7.6.8-win-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.461.201.0",
+        "status": "clean",
+        "scannedAt": "2026-10-25T17:57:17.269449Z",
+        "scanner": "defender",
+        "malicious": 0,
+        "engineVersion": "1.1.26090.9",
+        "installerSha256": "079e7cecedd1e87fa7b4676e5c33ddfbe66859a44a97fbcd1db797245cbb93d2",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "2ad7b784e3980a628c7f6953",
+    "packageId": "IntuneGet.Curated.PowerShellLTS",
+    "installerUrl": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/PowerShell-7.6.9-win-x64.msi",
+    "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.PowerShellLTS",
+      "displayName": "PowerShell 7",
+      "publisher": "Microsoft Corporation",
+      "version": "7.6.9",
+      "architecture": "x64",
+      "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart USE_MU=0 ENABLE_MU=0 ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:PowerShell 7",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PowerShellLTS\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"7.6.9\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PowerShellLTS\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"7.6.9\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "5BEBBFAFCCE73AFE446511E016263505007073C29ED9552A23AF17B36BE37AFE",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.PowerShellLTS\",\"publisher\":\"IntuneGet QA\",\"version\":\"7.6.9\",\"wingetId\":\"IntuneGet.Curated.PowerShellLTS\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"7.6.9\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PowerShellLTS\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"6A6D775857ACFC3B8EA4DE05322EA36F48E1B2EAF85122273DD174365AC597E3\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"50D33C7494AAF82B987CFD4DE3F232D04F91FDD4C0DEECA8A669CCED3E7CF8F9\",\"silentArgs\":\"/qn /norestart USE_MU=0 ENABLE_MU=0 ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:PowerShell 7\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"7.6.9\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PowerShellLTS\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"875B316B0D019934BA4E7B73896DEE49C9D424C19CEBDA8CE98B263AB51B8E6B\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "875b316b0d019934ba4e7b73896dee49c9d424c19cebda8ce98b263ab51b8e6b",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "candidateId": "2ad7b784e3980a628c7f6953",
+    "testedAt": "2026-10-25T18:00:01.7583522Z",
+    "upgradeFromVersion": "7.6.8",
+    "installerSha256": "50d33c7494aaf82b987cfd4de3f232d04f91fdd4c0deeca8a669cced3e7cf8f9",
+    "executionContext": "LocalSystem",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "installerVersion": "7.6.9",
+    "executionProfileSha256": "5BEBBFAFCCE73AFE446511E016263505007073C29ED9552A23AF17B36BE37AFE",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testLevel": "psadt-package",
+    "previousInstallerSha256": "079e7cecedd1e87fa7b4676e5c33ddfbe66859a44a97fbcd1db797245cbb93d2",
+    "architecture": "x64"
+  },
+  "verifiedAt": "2026-10-25T18:00:08.7583171Z",
+  "authenticatedArtifact": {
+    "id": 12608595859,
+    "sha256": "407eee681eaf5c5e94d26995a6dccf582ce0d6829eb941b2913c4d4d80f1cc19"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-25T18:25:33.626Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

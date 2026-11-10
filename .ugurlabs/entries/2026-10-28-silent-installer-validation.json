@@ -1,0 +1,5 @@
+{
+  "title": "Explain missing silent installer arguments",
+  "summary": "Deployment errors now explain when an executable installer needs explicit silent switches or a reviewed application adapter, while private diagnostic details remain hidden.",
+  "type": "fixed"
+}

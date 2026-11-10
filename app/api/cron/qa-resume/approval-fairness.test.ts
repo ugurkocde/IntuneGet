@@ -1,3 +1,4 @@
+vi.mock('@/lib/customer-upstream-recovery', () => ({ holdCustomerUpstreamJob: vi.fn(async () => false), reopenCustomerUpstreamJobs: vi.fn(async () => 0) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ client: vi.fn(), guard: vi.fn(), flags: vi.fn(),

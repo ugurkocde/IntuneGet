@@ -6,11 +6,20 @@ const {
   getPackageCompatibilityBlockMock,
   getPackageResultMock,
   packageEqMock,
+  dependencyCoverageMock,
+  resolveDependenciesMock,
 } = vi.hoisted(() => ({
   getQaResultMock: vi.fn(),
   getPackageCompatibilityBlockMock: vi.fn(),
   getPackageResultMock: vi.fn(),
   packageEqMock: vi.fn(),
+  dependencyCoverageMock: vi.fn(),
+  resolveDependenciesMock: vi.fn(),
+}));
+vi.mock('@/lib/qa/dependency-reputation', () => ({ arePackageDependenciesCovered: dependencyCoverageMock }));
+vi.mock('@/lib/winget-dependencies', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/winget-dependencies')>(),
+  resolveWingetPackageDependencies: resolveDependenciesMock,
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({ getQaResult: getQaResultMock }),
@@ -47,6 +56,9 @@ import {
   QaGateNotPassedError,
   QaSecurityGateError,
   describeQaGateError,
+  isCoveredCleanReputation,
+  exactPayloadReputationQuery,
+  exactPayloadMaliciousQuery,
 } from './gate';
 
 const installerSha256 = 'A'.repeat(64);
@@ -94,6 +106,10 @@ const failedRow = {
 
 describe('enforceQaGate', () => {
   beforeEach(() => {
+    dependencyCoverageMock.mockReset();
+    dependencyCoverageMock.mockResolvedValue(true);
+    resolveDependenciesMock.mockReset();
+    resolveDependenciesMock.mockResolvedValue([]);
     getQaResultMock.mockReset();
     getPackageCompatibilityBlockMock.mockReset();
     getPackageCompatibilityBlockMock.mockResolvedValue(null);
@@ -147,6 +163,31 @@ describe('enforceQaGate', () => {
         await expect(enforceQaGate({ ...request, installerSha256: undefined, qaOverride }))
           .rejects.toMatchObject({ details: { reason: 'reputation' } });
       }
+    });
+
+    it.each([{ qaOverride: false, requirePassed: true }, { qaOverride: true, requirePassed: false }])('holds an otherwise Passed payload when a dependency is uncovered: %j', async mode => {
+      getPackageResultMock.mockResolvedValue({ data: clean, error: null });
+      getQaResultMock.mockResolvedValue(clean);
+      resolveDependenciesMock.mockResolvedValue([{ installerSha256: 'C'.repeat(64) }]);
+      dependencyCoverageMock.mockResolvedValue(false);
+      await expect(enforceQaGate({ ...request, ...mode }))
+        .rejects.toMatchObject({ details: { reason: 'reputation' } });
+      expect(resolveDependenciesMock).toHaveBeenCalledWith({
+        wingetId: request.wingetId, version: request.version,
+        architecture: request.architecture, installerSha256,
+      });
+    });
+
+    it('checks the exact resolved bundle being sent rather than a second manifest resolution', async () => {
+      getPackageResultMock.mockResolvedValue({ data: clean, error: null });
+      getQaResultMock.mockResolvedValue(clean);
+      const dispatched = [{ installerSha256: 'C'.repeat(64) }];
+      resolveDependenciesMock.mockResolvedValue([{ installerSha256: 'D'.repeat(64) }]);
+      dependencyCoverageMock.mockImplementation(async (_client, dependencies) => dependencies[0].installerSha256 !== 'C'.repeat(64));
+      await expect(enforceQaGate({ ...request, qaOverride: true, requirePassed: false,
+        resolvedPackageDependencies: dispatched })).rejects.toMatchObject({ details: { reason: 'reputation' } });
+      expect(resolveDependenciesMock).not.toHaveBeenCalled();
+      expect(dependencyCoverageMock).toHaveBeenCalledWith(expect.anything(), dispatched);
     });
 
     it('allows the exact payload only with a clean covered verdict', async () => {
@@ -934,4 +975,30 @@ describe('enforceQaGate', () => {
       })
     ).rejects.toBeInstanceOf(QaGateNotPassedError);
   });
+  it.each([
+    [null, false], [0, false], [1.5, false], [-1, false], [72, true],
+  ])('shares covered-clean engine coverage with demand: %j', async (engines, covered) => {
+    const row = { ...failedRow, outcome: 'Passed', virustotal_total_engines: engines };
+    expect(isCoveredCleanReputation(row)).toBe(covered);
+    getPackageResultMock.mockResolvedValue({ data: row, error: null });
+    const result = enforceQaGate({ wingetId: row.winget_id, version: row.tested_version,
+      architecture: row.architecture, installerSha256, requirePassed: true });
+    if (covered) await expect(result).resolves.toBeUndefined();
+    else await expect(result).rejects.toMatchObject({ details: { reason: 'reputation' } });
+  });
+  it('uses the exact same newest-row ordering without an outcome filter', async () => {
+    const builder: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'gte', 'order', 'limit']) builder[method] = vi.fn(() => builder);
+    builder.maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+    const client = { from: vi.fn(() => builder) };
+    const key = { wingetId: 'Example.App', version: '1.2.3', architecture: 'x64', installerSha256 };
+    await exactPayloadReputationQuery(client as never, key);
+    expect(builder.order).toHaveBeenNthCalledWith(1, 'tested_at_utc', { ascending: false });
+    expect(builder.order).toHaveBeenNthCalledWith(2, 'virustotal_scanned_at_utc', { ascending: false, nullsFirst: false });
+    expect(builder.eq).not.toHaveBeenCalledWith('outcome', expect.anything());
+    expect(builder.eq).toHaveBeenCalledWith('installer_sha256', installerSha256);
+    await exactPayloadMaliciousQuery(client as never, key);
+    expect(builder.gte).toHaveBeenCalledWith('virustotal_malicious', 1);
+  });
+
 });

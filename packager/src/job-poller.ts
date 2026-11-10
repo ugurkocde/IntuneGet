@@ -269,7 +269,43 @@ export class JobPoller {
       return { claimed: false };
     }
 
-    return { claimed: true, job: claimedJob as PackagingJob };
+    if (!claimedJob) return { claimed: false };
+    const claimed = claimedJob as PackagingJob;
+    if (!await this.curatedInstallerSecurityEligible(claimed)) {
+      // This client can claim directly without the website route. Never hand
+      // held bytes to the execution handler, even if persisting the wait fails.
+      try {
+        const { data: waiting, error } = await this.supabase!
+          .from('packaging_jobs')
+          .update({ status: 'awaiting_qa', status_message: 'Installer security verification is unavailable or on hold.',
+            completed_at: null, packager_id: null, packager_heartbeat_at: null, claimed_at: null, packaging_started_at: null })
+          .eq('id', claimed.id).eq('status', 'packaging')
+          .eq('packager_id', this.config.packagerId).eq('claimed_at', now)
+          .select('id').maybeSingle();
+        if (error || !waiting) this.logger.error('Could not preserve the curated installer security wait');
+      } catch {
+        this.logger.error('Could not preserve the curated installer security wait');
+      }
+      return { claimed: false, error: 'Curated installer security verification is unavailable or on hold.' };
+    }
+    return { claimed: true, job: claimed };
+  }
+
+  private async curatedInstallerSecurityEligible(job: PackagingJob): Promise<boolean> {
+    const config = job.package_config && typeof job.package_config === 'object' && !Array.isArray(job.package_config)
+      ? job.package_config as Record<string, unknown> : {};
+    if (!job.winget_id.toLowerCase().startsWith('intuneget.curated.') && config.sourceType !== 'curated') return true;
+    const hash = typeof job.installer_sha256 === 'string' ? job.installer_sha256.toLowerCase() : '';
+    if (hash.length !== 64 || !/^[a-f0-9]{64}$/.test(hash) || hash === '0'.repeat(64)) return false;
+    try {
+      const { data, error } = await this.supabase!.from('qa_installer_security_holds')
+        .select('sha256').eq('sha256', hash).is('released_at', null);
+      if (error || !Array.isArray(data) || data.some(row => !row || typeof row.sha256 !== 'string' ||
+          row.sha256.length !== 64 || !/^[a-f0-9]{64}$/.test(row.sha256))) return false;
+      return !data.some(row => row.sha256 === hash);
+    } catch {
+      return false;
+    }
   }
 
   /**

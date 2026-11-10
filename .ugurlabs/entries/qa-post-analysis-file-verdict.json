@@ -1,0 +1,5 @@
+{
+  "title": "Complete uploaded installer security checks",
+  "summary": "Allows uploaded installer security checks to finish through a verified file report when the initial analysis checks cannot complete. Existing security holds and upload limits remain in place.",
+  "type": "fixed"
+}

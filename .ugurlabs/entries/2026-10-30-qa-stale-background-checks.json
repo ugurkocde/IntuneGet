@@ -1,0 +1,5 @@
+{
+  "title": "Avoid redundant QA checks for outdated releases",
+  "summary": "Background validation now skips superseded catalog versions while preserving customer-requested packages and repair checks.",
+  "type": "fixed"
+}

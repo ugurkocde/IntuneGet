@@ -1,3 +1,4 @@
+vi.mock('@/lib/customer-upstream-recovery', () => ({ holdCustomerUpstreamJob: vi.fn(async () => false), reopenCustomerUpstreamJobs: vi.fn(async () => 0) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -61,6 +62,8 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 }));
 
 import { GET } from './route';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { CuratedCatalogError, CuratedEvidenceMismatchError } from '@/lib/curated-catalog/core.mjs';
@@ -151,6 +154,71 @@ describe('GET /api/cron/qa-resume', () => {
       item,
       trustedInstallers: [],
     }));
+  });
+
+  it.each(['removed', 'metadata mismatch', 'unrecognized preflight', 'retryable', 'unknown', 'concurrent cancel', 'concurrent config', 'concurrent version', 'concurrent candidate', 'write error'])('isolates manifest reconciliation failure from the remaining batch: %s', async kind => {
+    const job = {
+      id: 'recovered-job', winget_id: 'Vendor.App', version: '1.0', status: 'awaiting_qa',
+      updated_at: '2026-10-18T00:00:00Z', qa_candidate_id: null, architecture: 'x64',
+      installer_url: 'https://example.test/old.exe', installer_sha256: 'B'.repeat(64),
+      cancelled_at: null, archived_at: null, github_run_id: null, intune_app_id: null,
+      package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64' },
+      is_auto_update: true,
+    };
+    const store = jobStore(job);
+    const later = { ...job, id: 'later-job', qa_candidate_id: 'later-candidate' };
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') {
+        if (++reads === 1) return chain({ data: [structuredClone(job), later], error: null });
+        if (kind === 'write error' && reads === 2) return chain({ data: null, error: { message: 'synthetic private database error' } });
+        return store.updateQuery();
+      }
+      if (table === 'qa_candidates') return candidateQuery([{ id: 'later-candidate', status: 'queued' }]);
+      throw new Error('Unexpected table');
+    }) });
+    reconcileCatalogInstallerMock.mockImplementation(async () => {
+      if (kind === 'concurrent cancel') store.row.cancelled_at = '2026-10-18T00:01:00Z';
+      if (kind === 'concurrent config') store.row.updated_at = '2026-10-18T00:01:00Z';
+      if (kind === 'concurrent version') store.row.version = '2.0';
+      if (kind === 'concurrent candidate') store.row.qa_candidate_id = 'new-candidate';
+      if (kind === 'unknown') throw new Error('https://private.invalid/secret tenant-private');
+      throw new InstallerPreflightError(kind === 'metadata mismatch' ? 'MANIFEST_CHANGED' : kind === 'unrecognized preflight' ? 'NEW_UNKNOWN_CODE' : kind === 'retryable' ? 'UPSTREAM_UNAVAILABLE' : 'MANIFEST_UNAVAILABLE', 'https://private.invalid/secret tenant-private', kind === 'retryable');
+    });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ resumed: 0, failed: kind === 'removed' ? 1 : 0 });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ wingetId: later.winget_id }));
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(findPendingApprovalBlocksMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(store.row)).not.toContain('private.invalid');
+    expect(JSON.stringify(body)).not.toContain('tenant-private');
+    if (kind === 'removed') {
+      expect(store.row.status).toBe('qa_failed');
+      expect(store.row.error_message).toBe('The selected package could not be validated. Review your selection before trying again.');
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledOnce();
+    } else {
+      expect(store.row.status).toBe('awaiting_qa');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+      if (['retryable', 'unknown', 'metadata mismatch', 'unrecognized preflight', 'write error'].includes(kind)) {
+        expect(store.writes.some(write => vi.mocked(write.update).mock.calls.some(([patch]) => 'qa_resume_due_at' in patch))).toBe(true);
+      }
+    }
+  });
+
+  it.each(['held', 'evidence unavailable'])('never reaches packaging or Graph while an upstream job is %s', async outcome => {
+    if (outcome === 'held') vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
+    else vi.mocked(holdCustomerUpstreamJob).mockRejectedValueOnce(new Error('private evidence error'));
+    const waitingJob = { id: 'upstream-job', status: 'awaiting_qa', winget_id: 'Vendor.App', version: '1.0' };
+    createServerClientMock.mockReturnValue({ from: vi.fn(() => chain({ data: [waitingJob], error: null })) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject(outcome === 'held' ? { held: 1, resumed: 0 } : { waiting: 1, resumed: 0 });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(findPendingApprovalBlocksMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('keeps an unverified Passed payload waiting before a claim, local=%s', async (localPackager) => {
@@ -794,7 +862,7 @@ describe('GET /api/cron/qa-resume', () => {
     );
   });
 
-  it.each([true, false])('rebuilds a superseded exact QA profile when relink matches=%s', async (matches) => {
+  it.each([true, false])('rebuilds a catalog-version-superseded exact QA profile when relink matches=%s', async (matches) => {
     const job = {
       tenant_id: 'tenant-1', id: 'job-superseded',
       qa_candidate_id: 'candidate-old',
@@ -837,7 +905,7 @@ describe('GET /api/cron/qa-resume', () => {
             data: {
               id: 'candidate-old',
               status: 'superseded',
-              failure_summary: null,
+              failure_summary: 'Superseded before dispatch: catalog-version-changed.',
               package_profile_sha256: 'A'.repeat(64),
             },
             error: null,
@@ -1151,6 +1219,118 @@ describe('GET /api/cron/qa-resume', () => {
     }));
     expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
     expect(client.from).not.toHaveBeenCalledWith('qa_package_results');
+  });
+
+  describe('dispatch preflight retry', () => {
+    function setup() {
+      getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+      const store = jobStore({
+        id: 'retry-job', tenant_id: 'tenant-test', status: 'awaiting_qa',
+        winget_id: 'Example.App', display_name: 'Example App', version: '1.0',
+        installer_type: 'exe', install_command: 'installer.exe /silent',
+        installer_url: 'https://example.test/installer.exe',
+        qa_candidate_id: 'passed-candidate', execution_profile_sha256: 'B'.repeat(64),
+        installer_sha256: 'A'.repeat(64), architecture: 'x64', github_run_id: null,
+        qa_completed_at: '2026-10-01T00:00:00Z', packaging_started_at: null,
+        package_config: { installerSha256: 'A'.repeat(64), architecture: 'x64' },
+      });
+      let reading = true;
+      createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          if (reading) { reading = false; return chain({ data: [structuredClone(store.row)], error: null }); }
+          return store.updateQuery();
+        }
+        if (table === 'qa_candidates') return chain({ data: {
+          id: 'passed-candidate', status: 'passed', package_profile_sha256: 'B'.repeat(64),
+        }, error: null });
+        if (table === 'qa_package_results') return chain({ data: { outcome: 'Passed' }, error: null });
+        throw new Error('Unexpected table');
+      }) });
+      const run = async () => {
+        reading = true;
+        return GET(new Request('https://example.test/api/cron/qa-resume', {
+          headers: { authorization: 'Bearer secret' },
+        }));
+      };
+      return { store, run };
+    }
+
+    it.each([null, '2026-10-01T00:00:00Z'])('holds a retryable preflight failure and restores QA completion %s', async priorCompletion => {
+      const { store, run } = setup();
+      store.row.qa_completed_at = priorCompletion;
+      triggerPackagingWorkflowMock.mockRejectedValue(new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true));
+      const started = Date.now();
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0, resumed: 0 });
+      expect(store.row).toMatchObject({ status: 'awaiting_qa', qa_completed_at: priorCompletion, packaging_started_at: null, github_run_id: null });
+      expect(Date.parse(store.row.qa_resume_due_at as string)).toBeGreaterThanOrEqual(started + 60_000);
+      expect(Date.parse(store.row.qa_resume_due_at as string)).toBeLessThanOrEqual(Date.now() + 60_000);
+      for (const key of ['completed_at', 'error_code', 'error_message']) expect(store.row).not.toHaveProperty(key);
+      expect(JSON.stringify(store.row)).not.toContain('socket hang up');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
+    });
+
+    it.each(['status', 'github_run_id', 'qa_candidate_id', 'installer_sha256', 'architecture', 'config hash', 'config architecture'])('does not roll back concurrent %s changes', async field => {
+      const { store, run } = setup();
+      let concurrent: Record<string, unknown>;
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        if (field === 'config hash') (store.row.package_config as Record<string, unknown>).installerSha256 = 'C'.repeat(64);
+        else if (field === 'config architecture') (store.row.package_config as Record<string, unknown>).architecture = 'arm64';
+        else store.row[field] = field === 'status' ? 'cancelled' : field === 'github_run_id' ? '123' : 'changed';
+        concurrent = structuredClone(store.row);
+        throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true);
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0, resumed: 0 });
+      expect(store.row).toEqual(concurrent!);
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a rollback database error without terminalizing the job', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        vi.spyOn(store, 'updateQuery').mockReturnValueOnce(chain({ data: null, error: new Error('synthetic rollback failure') }));
+        throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true);
+      });
+      await expect(run()).rejects.toThrow('synthetic rollback failure');
+      expect(store.row.status).toBe('packaging');
+      expect(store.row).not.toHaveProperty('completed_at');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      new InstallerPreflightError('MANIFEST_CHANGED', 'manifest changed'),
+      new InstallerPreflightError('INSTALLER_QUARANTINED', 'quarantined'),
+      new Error('socket hang up'),
+    ])('keeps nonretryable or ambiguous dispatch errors terminal: %s', async error => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValue(error);
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 1 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'QA_RESUME_DISPATCH_FAILED', error_message: error.message });
+      expect(store.row.completed_at).toEqual(expect.any(String));
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith('retry-job', 'failed', error.message);
+    });
+
+    it('rechecks upstream, QA and approval gates before another preflight attempt', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValue(new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'socket hang up', true));
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+      enforceQaGateMock.mockRejectedValueOnce(new Error('synthetic temporary QA evidence outage'));
+      expect(await (await run()).json()).toMatchObject({ waiting: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+      findPendingApprovalBlocksMock.mockResolvedValueOnce([{ reason: 'release_check_failed', message: 'Approval pending' }]);
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(2);
+      expect(holdCustomerUpstreamJob).toHaveBeenCalledTimes(5);
+      expect(enforceQaGateMock).toHaveBeenCalledTimes(4);
+      expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(3);
+      expect(store.row.status).toBe('awaiting_qa');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
   });
 
   it('finalizes auto-update tracking when packaging dispatch fails after QA passes', async () => {

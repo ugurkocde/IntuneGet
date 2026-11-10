@@ -1,0 +1,5 @@
+{
+  "title": "Reduce repeated catalog sync requests",
+  "summary": "Hourly package sync skips unchanged upstream manifests while retaining a daily full refresh and checking changed packages normally.",
+  "type": "improved"
+}

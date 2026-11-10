@@ -16,6 +16,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { createClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
+import { readLimited, readImage as readRasterImage, createRasterImageDecoder } from './image-input.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -62,6 +63,7 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_HTML_BYTES = 1024 * 1024;
 const MAX_REDIRECTS = 5;
 const MAX_INPUT_PIXELS = 4096 * 4096;
+const rasterImage = createRasterImageDecoder(sharp, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' });
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('SUPABASE_URL and SUPABASE_SERVICE_KEY are required');
@@ -127,31 +129,7 @@ async function fetchWithTimeout(url, timeoutMs = 10000, redirectCount = 0) {
   }
 }
 
-async function readLimited(response, maxBytes) {
-  const declared = Number.parseInt(response.headers.get('content-length') || '0', 10);
-  if (declared > maxBytes) throw new Error(`Response exceeds ${maxBytes} bytes`);
-  const reader = response.body?.getReader();
-  if (!reader) return Buffer.alloc(0);
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel();
-      throw new Error(`Response exceeds ${maxBytes} bytes`);
-    }
-    chunks.push(Buffer.from(value));
-  }
-  return Buffer.concat(chunks, total);
-}
-
-async function readImage(response) {
-  const contentType = (response.headers.get('content-type') || '').toLowerCase();
-  if (!contentType.startsWith('image/')) return null;
-  return readLimited(response, MAX_IMAGE_BYTES);
-}
+const readImage = response => readRasterImage(response, MAX_IMAGE_BYTES);
 
 /**
  * Resize a source image buffer to the standard icon sizes and save to disk.
@@ -162,7 +140,7 @@ async function resizeAndSave(sourceBuffer, outputDir) {
 
   let sourceDim = 0;
   try {
-    const meta = await sharp(sourceBuffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' }).metadata();
+    const meta = await rasterImage.metadata(sourceBuffer);
     sourceDim = Math.min(meta.width || 0, meta.height || 0);
   } catch {
     // metadata read failed — fall through and let resize attempts log their own errors
@@ -181,7 +159,7 @@ async function resizeAndSave(sourceBuffer, outputDir) {
       continue;
     }
     try {
-      await sharp(sourceBuffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' })
+      await (await rasterImage.pipeline(sourceBuffer))
         .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .png()
         .toFile(targetPath);
@@ -377,7 +355,7 @@ async function tryHomepageImage(homepage) {
 
     // Validate dimensions/aspect via sharp metadata so we don't ship a banner.
     try {
-      const meta = await sharp(buf, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' }).metadata();
+      const meta = await rasterImage.metadata(buf);
       const w = meta.width || 0;
       const h = meta.height || 0;
       if (w < 64 || h < 64) continue;
@@ -634,7 +612,7 @@ async function main() {
       // place is the right call -- they at least show the user something.
       if (buffer) {
         try {
-          const meta = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' }).metadata();
+          const meta = await rasterImage.metadata(buffer);
           const minDim = Math.min(meta.width || 0, meta.height || 0);
           if (minDim < 256) {
             buffer = null;

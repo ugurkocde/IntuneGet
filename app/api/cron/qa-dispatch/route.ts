@@ -8,7 +8,7 @@ import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipelin
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
 import { diagnoseInstallerSource, InstallerPreflightError } from '@/lib/installer-preflight';
-import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
+import { loadStaleQaCatalogCandidateIds, orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
 import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
@@ -174,7 +174,20 @@ export async function GET(request: Request) {
       .update(recovery)
       .eq('id', candidate.id)
       .eq('status', candidate.status);
-    if (error) throw error;
+    if (error) {
+      if (recovery.status !== 'queued' || error.code !== 'P0001' ||
+        error.message !== 'Active VC++ authorization cannot be requeued') throw error;
+      // The database rejected the retry before changing the row. Preserve the
+      // single attempt and run identity, rather than aborting every cron tick.
+      // Authorization finalization and result admission remain separate gates.
+      const { error: terminalError } = await supabase
+        .from('qa_candidates')
+        .update(qaTimeoutRecoveryUpdate(candidate, now.toISOString(), 0,
+          'Single-attempt VC++ dispatch ended without a terminal report; automatic retry is forbidden.'))
+        .eq('id', candidate.id)
+        .eq('status', candidate.status);
+      if (terminalError) throw terminalError;
+    }
     reconciled++;
   }
 
@@ -222,7 +235,7 @@ export async function GET(request: Request) {
     let queueQuery = orderQaQueue(supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts, next_retry_at'
+        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts, next_retry_at, status, test_level, demand_source, catalog_version_at_enqueue'
       )
       .eq('test_level', 'psadt-package')
       .eq('status', 'queued')
@@ -277,6 +290,18 @@ export async function GET(request: Request) {
       }
     }
 
+    const staleIds = await loadStaleQaCatalogCandidateIds(supabase, eligible);
+    if (staleIds.size) {
+      const { data: updated, error } = await supabase.from('qa_candidates')
+        .update({ status: 'superseded', finished_at: supersededAt,
+          failure_summary: 'Superseded before dispatch: catalog-version-changed.', updated_at: supersededAt })
+        .in('id', [...staleIds]).eq('status', 'queued').eq('test_level', 'psadt-package')
+        .in('demand_source', ['managed', 'catalog']).contains('test_config', { profileKind: 'catalog-default' })
+        .select('id');
+      if (error) throw error;
+      superseded += updated?.length || 0;
+    }
+
     for (const [reason, ids] of invalidByReason) {
       const { data: updated, error: supersedeError } = await supabase
         .from('qa_candidates')
@@ -311,6 +336,7 @@ export async function GET(request: Request) {
     cursor = nextCursor;
 
     for (const candidate of eligible) {
+      if (staleIds.has(candidate.id)) continue;
       const sourceKey = qaSourceKey(candidate);
       const sourceRetryAt = await qaSourceRetryAt(supabase, sourceKey);
       if (sourceRetryAt) {
@@ -430,7 +456,7 @@ export async function GET(request: Request) {
                   phase_started_at: null,
                   phase_updated_at: null,
                   failure_summary:
-                    'The installer source is temporarily unavailable; another check is scheduled.',
+                    'Installer verification is blocked. The app was not tested. Automatic source rechecks remain scheduled.',
                   updated_at: deferredAt,
                 })
             .eq('id', claimed.id)

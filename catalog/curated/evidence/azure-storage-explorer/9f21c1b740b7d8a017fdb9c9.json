@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "websiteCommit": "3a90a7d4fc12b7b4a1cd3ed090f8572ebfc2877e",
+    "workflowCommit": "0e4ab166fbc4c37ccd501b8f3e024cbc20e5b266",
+    "runId": "41090990935",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "azure-storage-explorer",
+    "version": "1.47.0",
+    "installerUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.47.0/StorageExplorer-windows-x64.exe",
+    "vendorSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+    "releaseNotesUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/tag/v1.47.0",
+    "discoveredAt": "2026-10-30T16:18:14.773Z",
+    "id": "9f21c1b740b7d8a017fdb9c9"
+  },
+  "previous": {
+    "appId": "azure-storage-explorer",
+    "version": "1.46.0",
+    "installerUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.46.0/StorageExplorer-windows-x64.exe",
+    "vendorSha256": "2aec3da3f7fff243279a86ab2fbece419e3867ff5ac97d45296edbd150d62349",
+    "releaseNotesUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/tag/v1.46.0",
+    "discoveredAt": "2026-10-08T13:29:05.007Z",
+    "id": "7a6859ec68f0e75d26113bb9"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "9f21c1b740b7d8a017fdb9c9",
+      "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+      "sourceUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.47.0/StorageExplorer-windows-x64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Microsoft Corporation"
+      },
+      "security": {
+        "engineVersion": "1.1.26100.4",
+        "scanner": "defender",
+        "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+        "signatureVersion": "1.463.41.0",
+        "scannedAt": "2026-10-30T16:43:14.8065168Z",
+        "status": "clean",
+        "malicious": 0,
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "7a6859ec68f0e75d26113bb9",
+      "installerSha256": "2aec3da3f7fff243279a86ab2fbece419e3867ff5ac97d45296edbd150d62349",
+      "sourceUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.46.0/StorageExplorer-windows-x64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Microsoft Corporation"
+      },
+      "security": {
+        "engineVersion": "1.1.26100.4",
+        "scanner": "defender",
+        "installerSha256": "2aec3da3f7fff243279a86ab2fbece419e3867ff5ac97d45296edbd150d62349",
+        "signatureVersion": "1.463.41.0",
+        "scannedAt": "2026-10-30T16:44:45.6702881Z",
+        "status": "clean",
+        "malicious": 0,
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "9f21c1b740b7d8a017fdb9c9",
+    "packageId": "IntuneGet.Curated.AzureStorageExplorer",
+    "installerUrl": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.47.0/StorageExplorer-windows-x64.exe",
+    "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.AzureStorageExplorer",
+      "displayName": "Microsoft Azure Storage Explorer",
+      "publisher": "Microsoft Corporation",
+      "version": "1.47.0",
+      "architecture": "x64",
+      "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:{746B270C-5E45-41AA-BB5E-E81793FBD404}_is1:Microsoft Azure Storage Explorer",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureStorageExplorer\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.47.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureStorageExplorer\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.47.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "E51F2E635CCB93200B1B63A6DE03C921EF9D243371E8FDF22AE53B5B3AABA6E7",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.AzureStorageExplorer\",\"publisher\":\"IntuneGet QA\",\"version\":\"1.47.0\",\"wingetId\":\"IntuneGet.Curated.AzureStorageExplorer\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.47.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureStorageExplorer\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"2C6929C5731864EFAA394799CC66230633442B3349080B1AA442F991016C4005\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"5E750C31D857F5B7859CB02D6680DD396B01E32B839D349A702C9B0DEA39FF94\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:{746B270C-5E45-41AA-BB5E-E81793FBD404}_is1:Microsoft Azure Storage Explorer\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.47.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureStorageExplorer\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"DC806E3AB8A1CDEFE648C4D82C02AAD6C4D0C954DD6C8C03C92431D5AF27ED87\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "dc806e3ab8a1cdefe648c4d82c02aad6c4d0c954dd6c8c03c92431d5af27ed87",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "candidateId": "9f21c1b740b7d8a017fdb9c9",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerSha256": "5e750c31d857f5b7859cb02d6680dd396b01e32b839d349a702c9b0dea39ff94",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "previousInstallerSha256": "2aec3da3f7fff243279a86ab2fbece419e3867ff5ac97d45296edbd150d62349",
+    "testedAt": "2026-10-30T16:47:07.1672006Z",
+    "architecture": "x64",
+    "installerVersion": "1.47.0",
+    "testLevel": "psadt-package",
+    "executionProfileSha256": "E51F2E635CCB93200B1B63A6DE03C921EF9D243371E8FDF22AE53B5B3AABA6E7",
+    "executionContext": "LocalSystem",
+    "upgradeFromVersion": "1.46.0"
+  },
+  "verifiedAt": "2026-10-30T16:47:16.1055239Z",
+  "authenticatedArtifact": {
+    "id": 12995475061,
+    "sha256": "5968277fdf3f9675a73517e247bff48c0176847eb7a13efa851346cd2ba18612"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-30T17:15:43.083Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

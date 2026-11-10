@@ -1389,6 +1389,7 @@
       "version": "9.14.0",
       "installerUrl": "https://download.calibre-ebook.com/9.14.0/calibre-64bit-9.14.0.msi"
     },
+      "archiveInstallerUrlTemplate": "https://download.calibre-ebook.com/{version}/calibre-64bit-{version}.msi",
     "installedIdentity": {
       "displayNamePattern": "^calibre 64bit$",
       "executablePaths": [
@@ -1396,7 +1397,7 @@
       ]
     },
     "autoUpdate": "none",
-    "notes": "Publisher 64-bit machine MSI with GitHub asset SHA-256; the portable installer is excluded. The publisher removes installers from older GitHub releases, so the reviewed 9.14.0 MSI on the publisher download host is the initial upgrade baseline, hash measured in the isolated VM."
+      "notes": "Publisher 64-bit machine MSI with GitHub asset SHA-256; the portable installer is excluded. The publisher removes installers from older GitHub releases, so the reviewed 9.14.0 MSI on the publisher download host is the initial upgrade baseline, hash measured in the isolated VM. Approved previous releases use the publisher archive with their original verified hash."
   },
   {
     "id": "pdfsam",

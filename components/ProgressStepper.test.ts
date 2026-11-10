@@ -18,6 +18,15 @@ function render(props: Parameters<typeof ProgressStepper>[0]) {
 }
 
 describe('ProgressStepper validation failures', () => {
+  it('keeps an upstream block before packaging without claiming a running installation check', () => {
+    const html = renderToStaticMarkup(createElement(ProgressStepper, { progress: 0, status: 'blocked_upstream', qaRequired: true }));
+    expect(html).toContain('aria-label="Blocked upstream"');
+    expect(html).not.toContain('Installation check in progress');
+    expect(html).not.toContain('animate-ring-pulse');
+    const labels = labelClasses(html);
+    expect(labels.get('Installation check')).not.toContain('text-status-success');
+    for (const label of PIPELINE_LABELS) expect(labels.get(label)).not.toContain('text-status-success');
+  });
   it.each([false, true])('fails at the installation check and leaves the pipeline pending (qaRequired %s)', (qaRequired) => {
     const labels = render({ progress: 0, status: 'failed', errorStage: 'validation', qaRequired });
 

@@ -6,13 +6,13 @@ import { buildCuratedCartItem, curatedWorkflowInput } from './package';
 import { normalizeQaWorkflowPackageInput, QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import type { CuratedAppDefinition, CuratedRelease } from './types';
 
-export function releaseFixture(app: CuratedAppDefinition = CURATED_APPS[0], version = '120.0.0.0'): CuratedRelease {
+export function releaseFixture(app: CuratedAppDefinition = CURATED_APPS[0], version = '120.0.0.0', fileName = 'test'): CuratedRelease {
   const now = Date.now();
   const at = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
   const hash = 'a'.repeat(64);
   const source = app.allowedInstallerSources[0];
   const candidate = createCandidate(app, {
-    version, installerUrl: `${source.origin}${source.pathPrefix}test.${app.installerType === 'msi' ? 'msi' : 'exe'}`,
+    version, installerUrl: `${source.origin}${source.pathPrefix}${fileName}.${app.installerType === 'msi' ? 'msi' : 'exe'}`,
     vendorSha256: hash,
   }, new Date(at(24)));
   const release: CuratedRelease = {

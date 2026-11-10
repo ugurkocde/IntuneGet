@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const original = readFileSync(new URL('../../supabase/migrations/20260824101502_add_qa_idle_catalog_backfill.sql', import.meta.url), 'utf8');
 const migration = readFileSync(new URL('../../supabase/migrations/20261008080541_qa_idle_catalog_backfill_due_waiting_work.sql', import.meta.url), 'utf8');
+const securityMigration = readFileSync(new URL('../../supabase/migrations/20261024212346_qa_idle_catalog_ignore_security_holds.sql', import.meta.url), 'utf8');
 let db: PGlite;
 const select = async (limit: number | null = 3) => (await db.query<{ winget_id: string }>(
   'select * from public.qa_idle_catalog_backfill_ids($1)', [limit])).rows.map(row => row.winget_id);
@@ -19,8 +20,9 @@ beforeAll(async () => {
       app_source text default 'win32', is_locale_variant boolean default false,
       popularity_rank integer, chocolatey_downloads bigint default 0, updated_at timestamptz default now());
     create table qa_candidates(winget_id text, version text default '1', catalog_version_at_enqueue text,
-      test_level text default 'psadt-package', status text, next_retry_at timestamptz not null default '-infinity',
+      installer_sha256 text default repeat('a',64), test_level text default 'psadt-package', status text, next_retry_at timestamptz not null default '-infinity',
       test_config jsonb default '{"profileKind":"catalog-default"}', priority integer default 1, attempts integer default 2);
+    create table qa_installer_security_holds(sha256 text primary key, released_at timestamptz, malicious_verdicts integer, next_check_at timestamptz default now());
     create table package_eligibility_blocks(winget_id text);
     create table qa_package_blocks(winget_id text, version text);
     create table qa_catalog_reconciliations(winget_id text, catalog_version text, observed_head_sha text);
@@ -31,9 +33,10 @@ beforeAll(async () => {
   expect(await select()).toEqual([]); // Reproduce the original starvation before upgrading.
   await db.exec(migration);
   expect(await select()).toEqual(['Example.App']);
+  await db.exec(securityMigration);
 }, 30000);
 beforeEach(async () => {
-  await db.exec(`truncate curated_apps,qa_candidates,package_eligibility_blocks,qa_package_blocks,
+  await db.exec(`truncate qa_installer_security_holds,curated_apps,qa_candidates,package_eligibility_blocks,qa_package_blocks,
     qa_catalog_reconciliations,qa_winget_poll_state;
     insert into curated_apps(winget_id,popularity_rank) values ('Example.App',1),('Other.App',2);`);
 });
@@ -98,6 +101,44 @@ describe('retry-aware idle catalog backfill', () => {
     expect(await select(100)).toHaveLength(20);
     expect((await select(20))).not.toContain('Null');
   });
+  it.each([0, 1, 2, 3])('allows idle intake beside an unreleased %i-verdict hold without changing it', async malicious => {
+    await candidate('queued', 'now()');
+    await db.query("insert into qa_installer_security_holds (sha256,released_at,malicious_verdicts) values (repeat('a',64),null,$1)", [malicious]);
+    const before = (await db.query('select * from qa_candidates')).rows;
+    const holds = (await db.query('select * from qa_installer_security_holds')).rows;
+    expect(await select()).toEqual(['Example.App', 'Other.App']);
+    expect((await db.query('select * from qa_candidates')).rows).toEqual(before);
+    expect((await db.query('select * from qa_installer_security_holds')).rows).toEqual(holds);
+  });
+  it('matches uppercase installer hashes to the canonical hold', async () => {
+    await candidate('queued', 'now()');
+    await db.exec("update qa_candidates set installer_sha256=repeat('A',64); insert into qa_installer_security_holds (sha256,released_at,malicious_verdicts) values (repeat('a',64),null,1)");
+    expect(await select()).toEqual(['Example.App', 'Other.App']);
+  });
+  it('leaves capacity to a due candidate after its hold is released', async () => {
+    await candidate('queued', 'now()');
+    await db.exec("insert into qa_installer_security_holds (sha256,released_at,malicious_verdicts) values (repeat('a',64),now(),1)");
+    expect(await select()).toEqual([]);
+  });
+  it('still blocks intake when other due or active work exists beside a hold', async () => {
+    await candidate('queued', 'now()');
+    await db.exec("insert into qa_installer_security_holds (sha256,released_at,malicious_verdicts) values (repeat('a',64),null,1)");
+    await candidate('queued', 'now()', 'Runnable.App');
+    await db.exec("update qa_candidates set installer_sha256=repeat('b',64) where winget_id='Runnable.App'");
+    expect(await select()).toEqual([]);
+    await db.exec("update qa_candidates set status='running' where winget_id='Runnable.App'");
+    expect(await select()).toEqual([]);
+  });
+  it('does not use the recheck date to release a hold or suppress intake', async () => {
+    await candidate('queued', 'now()');
+    await db.exec("insert into qa_installer_security_holds values (repeat('a',64),null,1,now()+interval '7 days')");
+    expect(await select()).toEqual(['Example.App', 'Other.App']);
+  });
+  it('conservatively leaves capacity to a due row with no installer hash', async () => {
+    await candidate('queued', 'now()');
+    await db.exec('update qa_candidates set installer_sha256=null');
+    expect(await select()).toEqual([]);
+  });
   it('keeps invoker security, an empty search path and service-only execution', async () => {
     const result = await db.query(`select prosecdef,provolatile,proconfig,
       has_function_privilege('anon','qa_idle_catalog_backfill_ids(integer)','execute') anon,
@@ -106,8 +147,18 @@ describe('retry-aware idle catalog backfill', () => {
       from pg_proc where proname='qa_idle_catalog_backfill_ids'`);
     expect(result.rows).toEqual([{ prosecdef: false, provolatile: 's', proconfig: ['search_path=""'], anon: false, authenticated: false, service: true }]);
   });
-  it('changes only the due-time predicate in the function body', () => {
-    const body = (sql: string) => sql.split('as $$')[1].split('$$;')[0];
-    expect(body(migration)).toBe(body(original).replace("where waiting_work.status = 'queued'", "where waiting_work.status = 'queued' and waiting_work.next_retry_at <= now()"));
+  it('changes only the active-hold predicate compared with the due-time selector', () => {
+    const body = (sql: string) => sql.replace(/\r/g, '').split('as $$')[1].split('$$;')[0];
+    const holdPredicate = `
+        and not exists (
+          select 1 from public.qa_installer_security_holds as hold
+          where hold.sha256 = lower(waiting_work.installer_sha256)
+            and hold.released_at is null
+        )`;
+    expect(body(securityMigration)).toBe(body(migration).replace(
+      "waiting_work.next_retry_at <= now()", "waiting_work.next_retry_at <= now()" + holdPredicate));
+    const claim = readFileSync(new URL('../../supabase/migrations/20261012153307_qa_installer_security_holds.sql', import.meta.url), 'utf8');
+    expect(claim).toContain(
+      'h.sha256 = lower(qa_candidates.installer_sha256) and h.released_at is null');
   });
 });

@@ -5,6 +5,7 @@ import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/in
 import { qaSourceKey, qaSourceRetryAtMany } from '@/lib/qa/source-backoff';
 import type { Database } from '@/types/database';
 import { describeQaGateError, QaGateNotPassedError } from '@/lib/qa/gate';
+import { customerUpstreamStatus } from '@/lib/customer-upstream-status';
 
 type Candidate = Pick<Database['public']['Tables']['qa_candidates']['Row'], 'id' | 'winget_id' | 'version' | 'architecture' | 'installer_url' | 'installer_sha256' | 'package_profile_sha256' | 'status' | 'phase' | 'next_retry_at'>;
 type Result = Pick<Database['public']['Tables']['qa_package_results']['Row'], 'package_profile_sha256' | 'winget_id' | 'tested_version' | 'architecture' | 'installer_sha256' | 'virustotal_status' | 'virustotal_malicious' | 'virustotal_suspicious'>;
@@ -29,6 +30,8 @@ function storedReputationHold(job: PackagingJob): CustomerQaStatus {
 // Called only with jobs already authorized by the package GET route. These
 // SELECTs supply display evidence; none of their results decide a write.
 export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
+  jobs = jobs.map(job => job.status === 'blocked_upstream'
+    ? { ...job, qa_status: customerUpstreamStatus(job.error_code) } : job);
   const waiting = jobs.filter(job => job.status === 'awaiting_qa');
   if (!waiting.length) return jobs;
   const fallback = () => jobs.map(job => job.status === 'awaiting_qa' ? { ...job, qa_status: storedReputationHold(job) } : job);

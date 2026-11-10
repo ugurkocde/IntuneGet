@@ -1,0 +1,5 @@
+{
+  "title": "Keep catalog version checks reliable during repeated lookups",
+  "summary": "Version checks reuse unchanged upstream listings after a fresh server validation, reducing GitHub quota usage while preserving current availability checks.",
+  "type": "improved"
+}
