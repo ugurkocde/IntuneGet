@@ -412,6 +412,18 @@ def contracts():
     for priority_case in ('no_customer', 'customer_ready', 'customer_fresh', 'backoff'):
         sql("set qa.priority_case='"+priority_case+"';"+priority)
     print('PASS uploaded priority, customer-first ordering and unchanged analysis backoff')
+    no_upload = (ROOT/'supabase/tests/qa_defender_pilot_no_upload.sql').read_text()
+    before = sql(no_upload, check=False)
+    assert before.returncode != 0 and 'Pilot upload was not refused' in before.stderr
+    pilot_patch = migration('20261110134102_qa_defender_pilot_no_upload')
+    production_pin = 'cd14fa085865af02c1b5f3b0ac1401352f2297ff26a6204d3e92d3f74b236602'
+    assert pilot_patch.count(production_pin) == 1
+    # Normalize only the disposable database's function-source pin, never shipped SQL.
+    fixture_pin = value("select encode(extensions.digest(pg_get_functiondef('public.reserve_qa_vt_candidate_request(text,uuid,text,text,uuid)'::regprocedure),'sha256'),'hex')")
+    sql(pilot_patch.replace(production_pin, fixture_pin))
+    sql(no_upload)
+    sql((ROOT/'supabase/tests/qa_vt_upload_url_recovery.sql').read_text())
+    print('PASS PG17 Defender pilot upload refusal, zero quota/evidence mutation, auth/hash/lease guards, hash lookup and unrelated upload recovery')
     sql(migration('20261018011340_qa_vt_result_record_refresh'))
     refresh = (ROOT/'supabase/tests/qa_vt_analysis_record_refresh.sql').read_text()
     before = sql(refresh, check=False)
