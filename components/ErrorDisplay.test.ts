@@ -11,7 +11,7 @@ describe('ErrorDisplay QA failure stage', () => {
       errorCategory: 'installer',
       errorMessage: 'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.',
     }));
-    expect(html).toContain('Installation check');
+    expect(html).toContain('Deployment validation');
     expect(html).toContain('MANIFEST_CHANGED');
     expect(html).toContain('Refresh the app catalog and select the current version');
     expect(html).not.toContain('There was an issue creating');
@@ -24,7 +24,7 @@ describe('ErrorDisplay QA failure stage', () => {
       errorMessage: 'Detection after installation did not pass.',
     }));
     expect(html).toContain('Detection after installation did not pass.');
-    expect(html).toContain('Installation check');
+    expect(html).toContain('Deployment validation');
     expect(html).not.toContain('trusted manifest');
     expect(html).not.toContain('unsupported installer format');
   });
@@ -46,6 +46,31 @@ describe('ErrorDisplay QA failure stage', () => {
     expect(html).toContain('Failed at: Validation');
     expect(html).toContain('SHA256 hash mismatch');
     expect(html).not.toContain('Installation check');
+  });
+});
+
+describe('ErrorDisplay validation stops without lifecycle evidence', () => {
+  it.each([
+    'Security checks stopped this request before installation testing.',
+    'The requested app version is unavailable.',
+    'Detection after installation did not pass.',
+    null,
+  ])('does not infer an installation test outcome from the QA code: %s', errorMessage => {
+    const props = {
+      errorCode: 'QA_FAILED_EXECUTION_PROFILE',
+      errorStage: 'validation',
+      errorCategory: 'installer',
+      errorMessage,
+    };
+    const stored = { ...props };
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, props));
+    expect(html).toContain('Failed at: Deployment validation');
+    expect(html).toContain('Deployment stopped during validation. Review the details above before trying again.');
+    expect(html).not.toContain('Installation check');
+    expect(html).not.toContain('did not pass the installation check');
+    expect(html).not.toContain('unsupported installer format');
+    if (errorMessage) expect(html).toContain(errorMessage);
+    expect(props).toEqual(stored);
   });
 });
 
