@@ -198,3 +198,21 @@ it.each(['query error','query exception'])('preserves pure availability annotati
  expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:'VERSION_UNAVAILABLE',message:versionUnavailableMessage,nextEventAt:null});
  const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();expect(waiting.qa_status?.category).toBe('unavailable');
 });
+
+it('preserves the byte-identical waiting display when a legacy failure joins its batch', async () => {
+  const waiting = job({ id: 'waiting', qa_candidate_id: other, installer_sha256: 'c'.repeat(64) });
+  state.candidates = [candidate({ id: other, installer_sha256: 'c'.repeat(64) })];
+  const [alone] = await enrichCustomerQaStatus([waiting]);
+  state.candidates.push(candidate({ status: 'error', phase: 'scanning_installer' }));
+  holds.mockResolvedValue(new Map([[hash, { reason: holdReason(0), nextCheckAt: '2030-01-01' }]]));
+  const [, batched] = await enrichCustomerQaStatus([legacyHoldJob(), waiting]);
+  expect(JSON.stringify(batched)).toBe(JSON.stringify(alone));
+});
+
+it('leaves legacy failures unannotated without querying above the 50 id bound', async () => {
+  const inputs = Array.from({ length: 51 }, (_, index) => legacyHoldJob(0, {
+    id: `job-${index}`, qa_candidate_id: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+  }));
+  expect(await enrichCustomerQaStatus(inputs)).toEqual(inputs);
+  expect(from).not.toHaveBeenCalled();
+});
