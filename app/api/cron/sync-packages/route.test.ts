@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET } from './route';
 
 const mocks = vi.hoisted(() => ({
-  apps: [{ winget_id: 'Example.App', latest_version: '2.0', description: 'Example', upstream_miss_count: 0 }],
+  apps: [{ winget_id: 'Example.App', latest_version: '2.0', description: 'Example', upstream_miss_count: 0 }] as Array<Record<string, unknown>>,
   metadata: {} as Record<string, unknown>,
   writes: [] as Array<{ table: string; value: Record<string, unknown> }>,
+  deletes: [] as Array<{ table: string; filters: Record<string, unknown> }>,
   historyError: null as { message: string } | null,
   appError: null as { message: string } | null,
   client: {
@@ -21,6 +22,18 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: (table: s
   update: (value: Record<string, unknown>) => ({ eq: async () => {
     mocks.writes.push({ table, value }); return { error: mocks.appError };
   } }),
+  delete: () => {
+    const filters: Record<string, unknown> = {};
+    const chain = {
+      eq: (column: string, value: unknown) => {
+        filters[column] = value;
+        if (Object.keys(filters).length < 2) return chain;
+        mocks.deletes.push({ table, filters });
+        return Promise.resolve({ error: null });
+      },
+    };
+    return chain;
+  },
 }) }) }));
 vi.mock('./select-apps', () => ({ selectAppsToSync: async () => mocks.apps }));
 vi.mock('@/lib/winget-sync-resolution.mjs', async (original) => ({
@@ -43,7 +56,7 @@ beforeEach(() => {
   vi.stubEnv('GITHUB_PAT', 'fake-token');
   mocks.apps = [{ winget_id: 'Example.App', latest_version: '2.0', description: 'Example', upstream_miss_count: 0 }];
   mocks.metadata = { upstream_etags: { 'Example.App': entry(), 'Not.Selected': entry() } };
-  mocks.writes = []; mocks.historyError = null; mocks.appError = null;
+  mocks.writes = []; mocks.deletes = []; mocks.historyError = null; mocks.appError = null;
   mocks.client.fetchVersions.mockResolvedValue(['2.0']);
   mocks.client.fetchVersionsWithValidator.mockResolvedValue({ notModified: false, versions: ['2.0'], etag: '"new"' });
   mocks.client.fetchInstallerManifest.mockResolvedValue({ InstallerType: 'exe', Installers: [] });
@@ -99,5 +112,34 @@ describe('conditional hourly package sync', () => {
     mocks.client.fetchVersionsWithValidator.mockResolvedValue({ notModified: false, versions: [], etag: null });
     expect(await (await GET(request())).json()).toMatchObject({ unavailable: 1, skipped: 0 });
     expect(completion()?.metadata).toMatchObject({ upstream_etags: {} });
+  });
+});
+
+describe('upstream_removed recovery', () => {
+  const blockedApp = () => ({ winget_id: 'Example.App', latest_version: '2.0', description: 'Example',
+    upstream_miss_count: 3, upstream_removed_block: true });
+
+  it('lifts the block and re-verifies an app that resolves again, without a conditional request', async () => {
+    mocks.apps = [blockedApp()];
+    expect(await (await GET(request())).json()).toMatchObject({ synced: 1, unavailable: 0 });
+    expect(mocks.client.fetchVersionsWithValidator).toHaveBeenCalledWith('Example.App', null);
+    expect(mocks.deletes).toEqual([{ table: 'package_eligibility_blocks',
+      filters: { winget_id: 'Example.App', block_code: 'upstream_removed' } }]);
+    expect(mocks.writes.find(w => w.table === 'curated_apps')?.value)
+      .toMatchObject({ is_verified: true, upstream_miss_count: 0 });
+  });
+
+  it('keeps the block while the package is still missing', async () => {
+    mocks.apps = [blockedApp()];
+    mocks.client.fetchVersionsWithValidator.mockResolvedValue({ notModified: false, versions: [], etag: null });
+    expect(await (await GET(request())).json()).toMatchObject({ unavailable: 1 });
+    expect(mocks.deletes).toEqual([]);
+    expect(mocks.writes.some(w => w.table === 'curated_apps' && 'is_verified' in w.value)).toBe(false);
+  });
+
+  it('does not touch eligibility for an unblocked app', async () => {
+    await GET(request());
+    expect(mocks.deletes).toEqual([]);
+    expect(mocks.writes.find(w => w.table === 'curated_apps')?.value).not.toHaveProperty('is_verified');
   });
 });
