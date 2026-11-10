@@ -37,11 +37,25 @@ it.each(fixtures)('prepares only the approved corrected profile without seeding 
         await expect(pg.exec(fixtureMigration), signature).rejects.toThrow(/Reviewed corrected-profile sequence changed/);
         await pg.exec('rollback');
       }
-      await pg.exec('begin');
-      const missingAnchor = fixtureMigration.replace('needle := $needle$not exists (select 1 from public.qa_package_blocks', 'needle := $needle$missing (select 1 from public.qa_package_blocks');
-      expect(missingAnchor).not.toBe(fixtureMigration);
-      await expect(pg.exec(missingAnchor)).rejects.toThrow(/anchor changed/);
-      await pg.exec('rollback');
+      const anchors = Array.from(fixtureMigration.matchAll(/needle := \$needle\$([\s\S]*?)\$needle\$;/g), m => m[1]);
+      expect(anchors).toHaveLength(4);
+      for (const [index, needle] of anchors.entries()) {
+        await pg.exec('begin');
+        const missingAnchor = fixtureMigration.replace('needle := $needle$' + needle, 'needle := $needle$missing_' + needle);
+        await expect(pg.exec(missingAnchor), 'missing anchor ' + index).rejects.toThrow(/anchor changed/);
+        await pg.exec('rollback;begin');
+        const signature = index === 0 ? 'public.adopt_qa_repair_corrected_candidate(uuid,jsonb,text,text,text)' : index === 3 ? 'public.claim_qa_work(text,uuid,text)' : 'public.qa_retest_grant_eligible(uuid)';
+        const source = (await pg.query<{ definition: string }>('select pg_get_functiondef($1::regprocedure) as definition', [signature])).rows[0].definition;
+        expect(source.split(needle)).toHaveLength(2);
+        await pg.exec(source.replace(needle, needle + ' /* ' + needle + ' */'));
+        const hash = (await pg.query<{ hash: string }>("select encode(extensions.digest(pg_get_functiondef($1::regprocedure),'sha256'),'hex') as hash", [signature])).rows[0].hash;
+        const before = crypto.createHash('sha256').update(source).digest('hex');
+        expect(fixtureMigration.split(before)).toHaveLength(2);
+        // Only this rollback fixture's pin changes so the second-occurrence
+        // anchor guard is reached; the shipped migration pins stay untouched.
+        await expect(pg.exec(fixtureMigration.replace(before, hash)), 'duplicate anchor ' + index).rejects.toThrow(/anchor changed/);
+        await pg.exec('rollback');
+      }
       await pg.exec(fixtureMigration);
     }
     const oldCanonical = f.oldCanonicalJson;
@@ -94,6 +108,27 @@ it.each(fixtures)('prepares only the approved corrected profile without seeding 
       await expect(adopt(f.repairId, candidate, oldProfile, newProfile)).rejects.toThrow();
     }
     await expect(adopt('00000000-0000-4000-8000-000000000001')).rejects.toThrow();
+    // Exercise the complete non-allowlisted adoption, with all other gates met.
+    const otherRepair = '00000000-0000-4000-8000-000000000001';
+    await pg.exec('begin');
+    await pg.query('update public.qa_repair_requests set id=$1', [otherRepair]);
+    await expect(adopt(otherRepair)).rejects.toThrow(/owned or active/);
+    await pg.exec('rollback;begin');
+    // The legacy blocked path must still work after the new migration, even
+    // when the repair does not qualify for the two-tuple exception.
+    await pg.query('update public.qa_repair_requests set id=$1', [otherRepair]);
+    await pg.query("insert into public.qa_package_blocks(winget_id,version,architecture,installer_sha256,block_code) values($1,$2,$3,$4,'failed_managed_lifecycle')", [f.app, f.version, f.architecture, f.hash]);
+    await pg.exec('set local role service_role');
+    const legacyId = (await adopt(otherRepair)).rows[0].id;
+    expect((await pg.query('select public.qa_retest_grant_eligible($1) as allowed', [legacyId])).rows[0]).toEqual({ allowed: false });
+    await pg.query("update public.qa_candidates set status='queued',next_retry_at=now() where id=$1", [legacyId]);
+    expect((await pg.query<{ result: { reason: string } }>("select public.claim_qa_work('ordinary',$1,$2) as result", [legacyId, pin])).rows[0].result.reason).toBe('package_compatibility_blocked');
+    await pg.query("update public.qa_candidates set status='superseded' where id=$1", [legacyId]);
+    await pg.query("select public.create_qa_retest_grant($1,now()+interval '1 hour','legacy fixture')", [legacyId]);
+    expect((await pg.query('select public.qa_retest_grant_eligible($1) as allowed', [legacyId])).rows[0]).toEqual({ allowed: true });
+    await pg.query('update public.qa_retest_grants set closed_at=now()');
+    expect((await pg.query('select public.qa_retest_grant_eligible($1) as allowed', [legacyId])).rows[0]).toEqual({ allowed: false });
+    await pg.exec('rollback');
     const oldRow = (await pg.query('select to_jsonb(c) as row from public.qa_candidates c where id=$1', [f.oldCandidateId])).rows[0];
     await pg.query("insert into public.packaging_jobs(qa_candidate_id,status) values($1,'qa_failed')", [f.oldCandidateId]);
     const oldCustomers = (await pg.query('select to_jsonb(j) as row from public.packaging_jobs j')).rows;
@@ -157,6 +192,10 @@ it.each(fixtures)('prepares only the approved corrected profile without seeding 
     await pg.exec('reset role');
     for (const sql of [
       "update public.qa_repair_profile_corrections set old_profile=repeat('F',64)",
+      "update public.qa_candidates set test_config=jsonb_set(test_config,'{packageProfileCanonicalJson}',to_jsonb('invalid'::text)) where id='" + f.oldCandidateId + "'",
+      "update public.qa_candidates set test_config=jsonb_set(test_config,'{detectionRules}','[]') where id='" + f.oldCandidateId + "'",
+      "update public.qa_candidates set version='999' where id='" + f.oldCandidateId + "'",
+      "update public.qa_candidates set installer_sha256=repeat('F',64) where id='" + f.oldCandidateId + "'",
     ]) {
       await pg.exec('begin'); await pg.exec(sql);
       await pg.exec('set local role service_role');
@@ -164,6 +203,8 @@ it.each(fixtures)('prepares only the approved corrected profile without seeding 
       await pg.exec('rollback');
     }
     await pg.exec('begin');
+    await expect(pg.exec("update public.qa_repair_profile_corrections set contract='other-contract'")).rejects.toThrow(/contract_check/);
+    await pg.exec('rollback;begin');
     await expect(pg.exec('update public.qa_repair_profile_corrections set old_candidate_id=new_candidate_id')).rejects.toThrow();
     await pg.exec('rollback');
     await pg.exec('set role service_role');
