@@ -1,3 +1,4 @@
+import { knownUnavailableDisposition } from '@/lib/unsupported-dependency';
 import type { PackagingJob } from '@/lib/db/types';
 import type { CustomerQaStatus } from '@/types/customer-qa';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
@@ -8,7 +9,7 @@ import { describeQaGateError, QaGateNotPassedError } from '@/lib/qa/gate';
 import { customerUpstreamStatus } from '@/lib/customer-upstream-status';
 
 type Candidate = Pick<Database['public']['Tables']['qa_candidates']['Row'], 'id' | 'winget_id' | 'version' | 'architecture' | 'installer_url' | 'installer_sha256' | 'package_profile_sha256' | 'status' | 'phase' | 'next_retry_at'>;
-type Result = Pick<Database['public']['Tables']['qa_package_results']['Row'], 'package_profile_sha256' | 'winget_id' | 'tested_version' | 'architecture' | 'installer_sha256' | 'virustotal_status' | 'virustotal_malicious' | 'virustotal_suspicious'>;
+type Result = Pick<Database['public']['Tables']['qa_package_results']['Row'], 'package_profile_sha256' | 'winget_id' | 'tested_version' | 'architecture' | 'installer_sha256' | 'virustotal_status' | 'virustotal_malicious' | 'virustotal_suspicious' | 'outcome'>;
 const unavailable: CustomerQaStatus = { category: 'unavailable', message: 'Validation status is temporarily unavailable. Next event: updated validation information.', nextEventAt: null };
 const reputationUnknown: CustomerQaStatus = { category: 'reputation_unknown', message: 'Installer reputation is not yet verified. Next event: a verified security verdict.', nextEventAt: null };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,15 +28,28 @@ function storedReputationHold(job: PackagingJob): CustomerQaStatus {
   return { ...(job.status_message === expected ? reputationUnknown : unavailable) };
 }
 
+/** Display only: preserve the exact pre-candidate availability refusal. */
+function storedAvailabilityStatus(job: PackagingJob): CustomerQaStatus | null {
+  if (job.status !== 'qa_failed' || job.error_code !== 'QA_FAILED_EXECUTION_PROFILE' || job.qa_candidate_id !== null) return null;
+  const disposition = knownUnavailableDisposition(job.error_message);
+  if (!disposition || (disposition.code !== 'VERSION_UNAVAILABLE' && disposition.code !== 'PACKAGE_UNAVAILABLE')) return null;
+  return { category: 'unavailable', reasonCode: disposition.code, message: disposition.message, nextEventAt: null };
+}
+
 // Called only with jobs already authorized by the package GET route. These
 // SELECTs supply display evidence; none of their results decide a write.
 export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
-  jobs = jobs.map(job => job.status === 'blocked_upstream'
-    ? { ...job, qa_status: customerUpstreamStatus(job.error_code) } : job);
+  jobs = jobs.map(job => {
+    if (job.status === 'blocked_upstream') return { ...job, qa_status: customerUpstreamStatus(job.error_code) };
+    const availability = storedAvailabilityStatus(job);
+    return availability ? { ...job, qa_status: availability } : job;
+  });
   const waiting = jobs.filter(job => job.status === 'awaiting_qa');
-  if (!waiting.length) return jobs;
+  const eligibleFailed = jobs.filter(job => job.status === 'qa_failed' && job.error_code === 'QA_FAILED_EXECUTION_PROFILE'
+    && [installerSecurityReason(0), installerSecurityReason(1)].includes(job.error_message || ''));
+  if (!waiting.length && !eligibleFailed.length) return jobs;
   const fallback = () => jobs.map(job => job.status === 'awaiting_qa' ? { ...job, qa_status: storedReputationHold(job) } : job);
-  const ids = [...new Set(waiting.map(job => job.qa_candidate_id).filter((id): id is string => typeof id === 'string' && uuid.test(id)))];
+  const ids = [...new Set([...waiting, ...eligibleFailed].map(job => job.qa_candidate_id).filter((id): id is string => typeof id === 'string' && uuid.test(id)))];
   if (!isSupabaseServerConfigured() || !ids.length || ids.length > 50) return fallback();
   try {
     const client = createServerClient();
@@ -50,13 +64,29 @@ export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]):
       loadInstallerSecurityHolds(client, rows.map(row => row.installer_sha256)),
       qaSourceRetryAtMany(client, rows.map(qaSourceKey)),
       profiles.length ? client.from('qa_package_results')
-        .select('package_profile_sha256,winget_id,tested_version,architecture,installer_sha256,virustotal_status,virustotal_malicious,virustotal_suspicious')
+        .select('package_profile_sha256,winget_id,tested_version,architecture,installer_sha256,virustotal_status,virustotal_malicious,virustotal_suspicious,outcome')
         .in('package_profile_sha256', profiles).limit(profiles.length + 1) : Promise.resolve({ data: [], error: null }),
       hashes.length ? client.from('catalog_file_reputation').select('sha256,status,malicious,suspicious')
         .in('sha256', hashes).limit(hashes.length + 1) : Promise.resolve({ data: [], error: null }),
     ]);
     if (results.error || (results.data?.length ?? 0) > profiles.length || reputation.error || (reputation.data?.length ?? 0) > hashes.length) return fallback();
     return jobs.map(job => {
+      if (job.status === 'qa_failed') {
+        if (!eligibleFailed.some(row => row.id === job.id)) return job;
+        const candidate = rows.find(row => row.id === job.qa_candidate_id);
+        if (!candidate || !tupleMatches(job, candidate) || candidate.status !== 'error' || candidate.phase !== 'scanning_installer'
+          || !digest.test(job.execution_profile_sha256 || '') || !digest.test(candidate.package_profile_sha256 || '')
+          || !same(job.execution_profile_sha256, candidate.package_profile_sha256)) return job;
+        const hold = holds.get(candidate.installer_sha256.toLowerCase());
+        if (!hold || ![installerSecurityReason(0), installerSecurityReason(1)].includes(hold.reason)) return job;
+        const failedResult = (results.data as Result[]).some(row => row.outcome === 'Failed'
+          && same(row.package_profile_sha256, candidate.package_profile_sha256) && same(row.winget_id, candidate.winget_id)
+          && row.tested_version === candidate.version && same(row.architecture, candidate.architecture)
+          && same(row.installer_sha256, candidate.installer_sha256));
+        if (failedResult) return job;
+        return { ...job, qa_status: { category: 'installer_security_hold' as const,
+          message: 'A security check stopped this deployment before the installation test ran.', nextEventAt: null } };
+      }
       if (job.status !== 'awaiting_qa') return job;
       const candidate = rows.find(row => row.id === job.qa_candidate_id);
       if (!candidate || !tupleMatches(job, candidate)) return { ...job, qa_status: storedReputationHold(job) };
