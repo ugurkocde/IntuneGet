@@ -6,6 +6,7 @@ import type { PackagingWorkflowRun, WorkflowAttemptJobs } from './runner-loss';
  */
 
 import { createHmac } from 'node:crypto';
+import { dispatchRateLimitError } from './workflow-dispatch-rate-limit';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
 import { assertCuratedLicenceAccepted } from '@/lib/curated-catalog/licence';
@@ -372,8 +373,10 @@ export async function triggerPackagingWorkflow(
 
   if (!response.ok) {
     const errorText = await response.text();
+    const rateLimit = dispatchRateLimitError(response, errorText);
+    if (rateLimit) throw rateLimit;
     throw new Error(
-      `Failed to trigger GitHub Actions workflow: ${response.status} ${response.statusText} - ${errorText}`
+      `Failed to trigger GitHub Actions workflow: HTTP ${response.status}`
     );
   }
 

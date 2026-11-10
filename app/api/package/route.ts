@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
@@ -907,6 +908,30 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
+            const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError ? result.reason : null;
+            // The ordinary QA resume path rebuilds and revalidates hosted inputs.
+            // Custom uploads do not use that path and must not be enqueued here.
+            const rateHold = rateLimit && dispatch?.item.sourceType !== 'custom'
+              ? dispatchRateLimitHold(rateLimit, null) : null;
+            if (rateHold && dispatch) {
+              let retryWriteFailed = false;
+              const held = await db.jobs.update(dispatch.jobId, rateHold, {
+                status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null,
+              }).catch(() => {
+                retryWriteFailed = true;
+                console.error(`[Package] Could not schedule a capacity retry for job ${logValue(dispatch.jobId)}`);
+                return null;
+              });
+              if (held) jobs.push({ id: dispatch.jobId, user_id: userId, tenant_id: tenantId,
+                winget_id: dispatch.item.wingetId, version: dispatch.item.version,
+                display_name: dispatch.item.displayName, publisher: dispatch.item.publisher,
+                status: 'awaiting_qa', package_config: dispatch.item, created_at: dispatch.createdAt });
+              else errors.push({ wingetId: dispatch.item.wingetId,
+                error: retryWriteFailed
+                  ? 'Packaging could not schedule its automatic retry. Refresh the deployment status.'
+                  : 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' });
+              continue;
+            }
             // The final dispatch boundary re-checks QA, security and
             // compatibility evidence. A block there is a validation outcome
             // with its own reason, not a failure to start the workflow.
@@ -922,7 +947,7 @@ export async function POST(request: NextRequest) {
                 progress_percent: 0,
                 error_stage: qaGateError ? 'validation' : 'authenticate',
                 error_category: qaGateError ? null : 'network',
-                error_code: qaGateError ? qaGateError.code : 'WORKFLOW_DISPATCH_FAILED',
+                error_code: qaGateError ? qaGateError.code : rateLimit?.code ?? 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
                 completed_at: reputationHold ? null : new Date().toISOString(),
               }).catch((updateError) => {
