@@ -72,8 +72,52 @@ function workflowInputs(overrides: Partial<WorkflowInputs> = {}): WorkflowInputs
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe('packaging run identity capture', () => {
+  const jobId = '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7';
+  const run = (overrides: Record<string, unknown> = {}) => ({
+    id: 42, html_url: 'https://github.com/example/workflow-repo/actions/runs/42',
+    name: 'Create and Deploy IntuneWin Package', status: 'queued', conclusion: null,
+    created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    display_title: `Package ${jobId}`, event: 'repository_dispatch',
+    path: '.github/workflows/package-intunewin.yml', head_branch: 'main', run_attempt: 1,
+    ...overrides,
+  });
+  async function capture(runs: Record<string, unknown>[]) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const fetchMock = vi.fn().mockImplementation(async (url: string) =>
+      url.endsWith('/dispatches') ? new Response(null, { status: 204 })
+        : Response.json({ total_count: runs.length, workflow_runs: runs }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    return result;
+  }
+  it('captures this job instead of another concurrent newer dispatch', async () => {
+    expect(await capture([run({ id: 43, display_title: 'Package 11111111-1111-4111-8111-111111111111' }), run()]))
+      .toMatchObject({ success: true, runId: 42 });
+  });
+  it.each([
+    { display_title: 'package-app' },
+    { display_title: `Package ${jobId} extra` },
+    { event: 'workflow_dispatch' },
+    { path: '.github/workflows/intune-qa.yml' },
+    { head_branch: 'other' },
+    { run_attempt: 2 },
+    { created_at: 'invalid' },
+    { created_at: '2025-12-31T23:00:00Z' },
+    { id: 0 },
+  ])('does not attribute a run with mismatched metadata %j', async (override) => {
+    expect((await capture([run(override)])).runId).toBeUndefined();
+  });
+  it('does not choose between duplicate exact job identities', async () => {
+    expect((await capture([run(), run({ id: 43 })])).runId).toBeUndefined();
+  });
 });
 
 reconcileCatalogInstallerMock.mockImplementation(async (item) => ({

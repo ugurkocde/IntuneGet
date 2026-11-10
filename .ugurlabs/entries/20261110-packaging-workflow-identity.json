@@ -1,0 +1,5 @@
+{
+  "title": "Correct workflow links for concurrent deployments",
+  "summary": "Packaging jobs now identify their own workflow run instead of borrowing a nearby deployment's run when several packages start together.",
+  "type": "fixed"
+}

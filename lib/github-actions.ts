@@ -382,7 +382,7 @@ export async function triggerPackagingWorkflow(
   }
 
   // Try to capture the run ID by polling recent runs in the private repo
-  const runInfo = await captureWorkflowRunId(triggerTime, cfg);
+  const runInfo = await captureWorkflowRunId(inputs.jobId, triggerTime, cfg);
 
   return {
     success: true,
@@ -393,28 +393,41 @@ export async function triggerPackagingWorkflow(
 
 /**
  * Attempt to capture the workflow run ID after triggering
- * Polls recent runs to find one that started after the trigger time
+ * Capture only an exact job identity emitted by the packaging workflow.
+ * Time alone cannot distinguish concurrent dispatches, including runs whose
+ * runner never starts and therefore never sends a correcting callback.
  */
 async function captureWorkflowRunId(
+  jobId: string,
   triggerTime: Date,
   config: GitHubActionsConfig,
   maxAttempts: number = 5,
   delayMs: number = 2000
 ): Promise<{ id: number; html_url: string } | null> {
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(jobId)) return null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     // Wait before checking (workflow takes time to appear)
     await new Promise(resolve => setTimeout(resolve, delayMs));
 
     try {
-      const runs = await getWorkflowRuns(config, { per_page: 5 });
-
-      // Find a run that started after our trigger time
-      for (const run of runs.workflow_runs) {
-        const runCreatedAt = new Date(run.created_at);
-        // Allow 30 second tolerance for clock differences
-        if (runCreatedAt >= new Date(triggerTime.getTime() - 30000)) {
-          return { id: run.id, html_url: run.html_url };
-        }
+      const runs = await getWorkflowRuns(config, { per_page: 25 });
+      const matches = runs.workflow_runs.filter(run => {
+        const createdAt = Date.parse(run.created_at);
+        return Number.isSafeInteger(run.id) && run.id > 0
+          && run.display_title === `Package ${jobId}`
+          && run.event === 'repository_dispatch'
+          && run.path?.split('@')[0] === `.github/workflows/${config.workflowFile}`
+          && run.head_branch === config.ref
+          && run.run_attempt === 1
+          && Number.isFinite(createdAt)
+          && createdAt >= triggerTime.getTime() - 30_000
+          && createdAt <= triggerTime.getTime() + 10 * 60_000;
+      });
+      // Never choose a newest run when the same identity is ambiguous.
+      if (matches.length > 1) return null;
+      if (matches.length === 1) {
+        const run = matches[0];
+        return { id: run.id, html_url: `https://github.com/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.workflowsRepo)}/actions/runs/${run.id}` };
       }
     } catch (error) {
       console.warn(`Failed to capture run ID (attempt ${attempt + 1}):`, error);
@@ -444,6 +457,11 @@ export async function getWorkflowRuns(
     html_url: string;
     created_at: string;
     updated_at: string;
+    display_title?: string;
+    event?: string;
+    path?: string;
+    head_branch?: string;
+    run_attempt?: number;
   }>;
 }> {
   const cfg = config || getGitHubActionsConfig();
