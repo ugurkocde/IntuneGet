@@ -61,10 +61,12 @@ import { evaluatePackagingContract } from '@/lib/packaging-contract';
 import type { NormalizedInstaller } from '@/types/winget';
 import {
   getPackageEligibilityBlocks,
+  getPackageCompatibilityBlock,
   PACKAGE_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
 import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
 import { enrichCustomerQaStatus } from '@/lib/customer-qa-status';
+import { unsupportedDependencyMessage, knownUnavailableDisposition } from '@/lib/unsupported-dependency';
 
 export const maxDuration = 300;
 
@@ -699,13 +701,21 @@ export async function POST(request: NextRequest) {
                   demandSource: 'customer',
                 });
             const qaDeferred = qaDemand?.state === 'waiting' && isDeferredCustomerQaEnabled();
+            // This is display classification of an existing exact block only.
+            // An unavailable lookup retains the original closed QA disposition.
+            const unsupportedMessage = qaDemand?.state === 'failed' && !qaDemand.candidateId
+              ? unsupportedDependencyMessage(await getPackageCompatibilityBlock(createServerClient(), {
+                  wingetId: item.wingetId, version: item.version, architecture: item.architecture || 'x64', installerSha256,
+                }).catch(() => null)) : null;
+            const unavailable = qaDemand?.state === 'failed' && !qaDemand.candidateId && !unsupportedMessage
+              ? knownUnavailableDisposition(qaDemand.failureSummary) : null;
             // Self-hosted installs have no QA pipeline, so local jobs must remain pollable.
             const initialStatus = isLocalPackagerMode && !supabaseServerConfigured
               ? 'queued'
               : qaDemand?.state === 'waiting' && !qaDeferred
                 ? 'awaiting_qa'
                 : qaDemand?.state === 'failed'
-                  ? 'qa_failed'
+                  ? unsupportedMessage || unavailable ? 'failed' : 'qa_failed'
                   : 'queued';
             const now = new Date().toISOString();
 
@@ -733,7 +743,7 @@ export async function POST(request: NextRequest) {
                   ? 'Preparing deployment while installation validation remains scheduled'
                   : 'Waiting for installation validation before deployment'
                 : qaDemand?.state === 'failed'
-                  ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                  ? unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                   : null,
               progress_percent: 0,
               execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
@@ -742,11 +752,12 @@ export async function POST(request: NextRequest) {
               qa_requested_at: qaDemand ? now : null,
               qa_completed_at: qaDemand?.state === 'passed' ? now : null,
               error_message: qaDemand?.state === 'failed'
-                ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                ? unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                 : null,
-              error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
+              error_code: qaDemand?.state === 'failed' ? unsupportedMessage ? 'DEPENDENCY_NOT_SUPPORTED' : unavailable?.code || 'QA_FAILED_EXECUTION_PROFILE' : null,
               error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
-              error_category: qaDemand?.state === 'failed' ? 'installer' : null,
+              error_category: qaDemand?.state === 'failed' ? unsupportedMessage || unavailable ? 'validation' : 'installer' : null,
+              ...(unsupportedMessage || unavailable ? { completed_at: now } : {}),
             });
 
             if (!jobRecord) {

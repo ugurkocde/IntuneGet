@@ -1,0 +1,5 @@
+{
+  "title": "Clearer explanations before installation testing",
+  "summary": "Deployment requests distinguish unsupported dependencies and unavailable packages from failed installation tests. Exact pretest security holds keep waiting, and matching older failures explain that a security check stopped deployment before testing. Security admission remains unchanged.",
+  "type": "improved"
+}
