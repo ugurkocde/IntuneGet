@@ -410,8 +410,24 @@ async function captureWorkflowRunId(
     await new Promise(resolve => setTimeout(resolve, delayMs));
 
     try {
-      const runs = await getWorkflowRuns(config, { per_page: 25 });
-      const matches = runs.workflow_runs.filter(run => {
+      const query = {
+        workflowFile: config.workflowFile, branch: config.ref,
+        event: 'repository_dispatch',
+        created: `>=${new Date(triggerTime.getTime() - 30_000).toISOString()}`,
+        per_page: 100,
+      };
+      const first = await getWorkflowRuns(config, query);
+      if (!Number.isSafeInteger(first.total_count) || first.total_count < 0 || first.total_count > 200) continue;
+      let candidates = first.workflow_runs;
+      if (first.total_count > candidates.length) {
+        if (candidates.length !== 100) continue;
+        const second = await getWorkflowRuns(config, { ...query, page: 2 });
+        if (second.total_count !== first.total_count) continue;
+        candidates = [...candidates, ...second.workflow_runs];
+      }
+      // A changing or truncated page set cannot establish a unique identity.
+      if (candidates.length !== first.total_count) continue;
+      const matches = candidates.filter(run => {
         const createdAt = Date.parse(run.created_at);
         return Number.isSafeInteger(run.id) && run.id > 0
           && run.display_title === `Package ${jobId}`
@@ -446,6 +462,11 @@ export async function getWorkflowRuns(
   options?: {
     status?: 'queued' | 'in_progress' | 'completed';
     per_page?: number;
+    workflowFile?: string;
+    branch?: string;
+    event?: string;
+    created?: string;
+    page?: number;
   }
 ): Promise<{
   total_count: number;
@@ -473,9 +494,15 @@ export async function getWorkflowRuns(
   if (options?.per_page) {
     params.set('per_page', options.per_page.toString());
   }
+  for (const key of ['branch', 'event', 'created'] as const) {
+    if (options?.[key]) params.set(key, options[key]);
+  }
+  if (options?.page) params.set('page', options.page.toString());
 
   // Query the private workflows repository
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/runs?${params.toString()}`;
+  const runsPath = options?.workflowFile
+    ? `workflows/${encodeURIComponent(options.workflowFile)}/runs` : 'runs';
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/${runsPath}?${params.toString()}`;
 
   const response = await fetch(url, {
     headers: {

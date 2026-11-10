@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cancelWorkflowRun,
+  getWorkflowRuns,
   triggerPackagingWorkflow,
   type GitHubActionsConfig,
   type WorkflowInputs,
@@ -117,6 +118,61 @@ describe('packaging run identity capture', () => {
   });
   it('does not choose between duplicate exact job identities', async () => {
     expect((await capture([run(), run({ id: 43 })])).runId).toBeUndefined();
+  });
+  it('filters unrelated workflows before limiting the capture page', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/dispatches')) return new Response(null, { status: 204 });
+      const url = new URL(input);
+      const filtered = url.pathname.endsWith('/workflows/package-intunewin.yml/runs')
+        && url.searchParams.get('branch') === 'main'
+        && url.searchParams.get('event') === 'repository_dispatch'
+        && url.searchParams.get('created') === '>=2025-12-31T23:59:30.000Z';
+      return Response.json({ total_count: 1, workflow_runs: filtered ? [run()] : [run({ path: '.github/workflows/intune-qa.yml' })] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ runId: 42 });
+  });
+  it('searches a second bounded page of packaging runs', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.endsWith('/dispatches')) return new Response(null, { status: 204 });
+      const url = new URL(input);
+      return Response.json({ total_count: 101, workflow_runs: url.searchParams.get('page') === '2'
+        ? [run()] : Array.from({ length: 100 }, (_, n) => run({ id: n + 100, display_title: 'Package another-job' })) });
+    }));
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ runId: 42 });
+  });
+  it('does not choose from a truncated capture window', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => input.endsWith('/dispatches')
+      ? new Response(null, { status: 204 }) : Response.json({ total_count: 201, workflow_runs: [run()] })));
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect((await pending).runId).toBeUndefined();
+  });
+  it.each(['duplicate identity', 'changing count'])('refuses an ambiguous page set: %s', async kind => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.endsWith('/dispatches')) return new Response(null, { status: 204 });
+      const second = new URL(input).searchParams.get('page') === '2';
+      return Response.json({ total_count: second && kind === 'changing count' ? 102 : 101,
+        workflow_runs: second ? [run({ id: 43 })]
+          : [run(), ...Array.from({ length: 99 }, (_, n) => run({ id: n + 100, display_title: 'Package another-job' }))] });
+    }));
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect((await pending).runId).toBeUndefined();
+  });
+  it('keeps repository wide listing available to other callers', async () => {
+    const request = vi.fn(async (_url: string) => Response.json({ total_count: 0, workflow_runs: [] }));
+    vi.stubGlobal('fetch', request);
+    await getWorkflowRuns(config, { per_page: 5 });
+    expect(new URL(request.mock.calls[0][0]).pathname).toBe('/repos/example/workflow-repo/actions/runs');
   });
 });
 
