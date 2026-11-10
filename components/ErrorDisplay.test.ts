@@ -61,3 +61,9 @@ describe('ErrorDisplay QA failure stage', () => {
 });
 
 it.each(['VERSION_UNAVAILABLE','PACKAGE_UNAVAILABLE'])('shows availability without a failed QA claim: %s',errorCode=>{const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode,errorCategory:'validation',errorMessage:'This app version is not available for automated deployment.'}));expect(html).toContain('Not available');expect(html).toContain('did not run an installation test');expect(html).not.toContain('did not pass');});
+
+it('does not offer another version when the whole app is unavailable', () => {
+ const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode:'PACKAGE_UNAVAILABLE',errorCategory:'validation'}));
+ expect(html).toContain('This app is not available for automated deployment. This request did not run an installation test.');
+ expect(html).not.toContain('Select an available app version');
+});

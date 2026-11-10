@@ -167,7 +167,12 @@ export function ErrorDisplay({
     showReVerify: false,
   } : unsupportedDependency ? {
     message: 'This dependency is not supported for automated deployment yet.', showReVerify: false,
-  } : unavailable ? { message: 'Select an available app version. This request did not run an installation test.', showReVerify: false } : categoryHints[errorCategory || ''];
+  } : unavailable ? {
+    message: errorCode === 'PACKAGE_UNAVAILABLE'
+      ? 'This app is not available for automated deployment. This request did not run an installation test.'
+      : 'Select an available app version. This request did not run an installation test.',
+    showReVerify: false,
+  } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
   const details = errorDetails as ErrorDetails | null;
 
