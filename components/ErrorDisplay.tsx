@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { T } from 'gt-next';
 import {
   AlertCircle,
   Download,
@@ -160,7 +161,7 @@ export function ErrorDisplay({
     ? 'A security check stopped this deployment before the installation test ran.' : errorMessage;
   const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE';
   const stage = unavailable ? { ...stageConfig.validation, label: 'Not available' }
-    : qaFailed ? { ...stageConfig.validation, label: blockedBeforeTest ? 'Security check' : 'Deployment validation' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
+    : qaFailed ? { ...stageConfig.validation, label: blockedBeforeTest ? 'Security check' : <T>Deployment validation</T> } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
   // describes package creation. The QA code alone does not prove a test ran.
@@ -169,7 +170,7 @@ export function ErrorDisplay({
       ? 'A security check stopped this deployment before the installation test ran.'
       : errorMessage?.includes('MANIFEST_CHANGED')
       ? 'Refresh the app catalog and select the current version. The selected installer no longer matches the trusted manifest, so it was blocked before testing or packaging.'
-      : 'Deployment stopped during validation. Review the details above before trying again.',
+      : <T>Deployment stopped during validation. Review the details above before trying again.</T>,
     showReVerify: false,
   } : unavailable ? {
     message: errorCode === 'PACKAGE_UNAVAILABLE'

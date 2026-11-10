@@ -1,7 +1,17 @@
-import { createElement } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErrorDisplay } from './ErrorDisplay';
+
+const translation = vi.hoisted(() => ({ messages: [] as string[], localized: false }));
+vi.mock('gt-next', () => ({
+  T: ({ children }: { children: ReactNode }) => {
+    if (typeof children !== 'string') return children;
+    translation.messages.push(children);
+    return translation.localized ? `translated: ${children}` : children;
+  },
+}));
+beforeEach(() => { translation.messages = []; translation.localized = false; });
 
 describe('ErrorDisplay QA failure stage', () => {
   it('preserves the manifest rejection and avoids packaging guidance for a legacy QA failure', () => {
@@ -50,6 +60,21 @@ describe('ErrorDisplay QA failure stage', () => {
 });
 
 describe('ErrorDisplay validation stops without lifecycle evidence', () => {
+  it('translates the fixed stage and hint while retaining the original failure detail', () => {
+    translation.localized = true;
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, {
+      errorCode: 'QA_FAILED_EXECUTION_PROFILE', errorStage: 'validation',
+      errorMessage: 'Original failure detail.',
+    }));
+    expect(html).toContain('Failed at: translated: Deployment validation');
+    expect(html).toContain('translated: Deployment stopped during validation. Review the details above before trying again.');
+    expect(html).toContain('Original failure detail.');
+    expect(translation.messages).toEqual([
+      'Deployment validation',
+      'Deployment stopped during validation. Review the details above before trying again.',
+    ]);
+  });
+
   it.each([
     'Security checks stopped this request before installation testing.',
     'The requested app version is unavailable.',
