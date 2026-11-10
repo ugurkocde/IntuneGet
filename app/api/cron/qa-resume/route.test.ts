@@ -65,6 +65,7 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 
 import { GET } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
@@ -1234,6 +1235,7 @@ describe('GET /api/cron/qa-resume', () => {
         qa_candidate_id: 'passed-candidate', execution_profile_sha256: 'B'.repeat(64),
         installer_sha256: 'A'.repeat(64), architecture: 'x64', github_run_id: null,
         qa_completed_at: '2026-10-01T00:00:00Z', packaging_started_at: null,
+        error_details: null,
         package_config: { installerSha256: 'A'.repeat(64), architecture: 'x64' },
       });
       let reading = true;
@@ -1256,6 +1258,72 @@ describe('GET /api/cron/qa-resume', () => {
       };
       return { store, run };
     }
+
+    it('defers explicit rate limits five times then stops without resetting the persisted budget', async () => {
+      const { store, run } = setup();
+      const error = new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
+      triggerPackagingWorkflowMock.mockRejectedValue(error);
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0, resumed: 0 });
+        expect(store.row).toMatchObject({ status: 'awaiting_qa', completed_at: null,
+          error_details: { workflow_dispatch_rate_limit_attempts: attempt }, github_run_id: null });
+      }
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 1 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'WORKFLOW_DISPATCH_RATE_LIMITED' });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(6);
+    });
+
+    it('never rolls a concurrent accepted run back into the rate limit hold', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        store.row.github_run_id = '123';
+        throw new WorkflowDispatchRateLimitError(403, new Date(Date.now() + 60_000).toISOString());
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0 });
+      expect(store.row.github_run_id).toBe('123');
+      expect(store.row.status).toBe('packaging');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+    it('preserves an accepted run even when the rate limit budget is exhausted', async () => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_rate_limit_attempts: 5 };
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        store.row.github_run_id = '123';
+        throw new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123' });
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+    it('runs upstream, QA and approval admission again before a rate limit retry', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValue(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()));
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      enforceQaGateMock.mockRejectedValueOnce(new Error('synthetic outage'));
+      expect(await (await run()).json()).toMatchObject({ waiting: 1 });
+      findPendingApprovalBlocksMock.mockResolvedValueOnce([{ reason: 'release_check_failed', message: 'Approval pending' }]);
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(2);
+      expect(store.row.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: 2 });
+      expect(holdCustomerUpstreamJob).toHaveBeenCalledTimes(5);
+      expect(enforceQaGateMock).toHaveBeenCalledTimes(4);
+      expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(3);
+    });
+    it('clears the rate limit error when a retry starts without resetting its budget', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()));
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      triggerPackagingWorkflowMock.mockResolvedValueOnce({ success: true, runId: 42, runUrl: 'https://example.test/run/42' });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '42',
+        error_code: null, error_message: null, error_stage: null, error_category: null,
+        error_details: { workflow_dispatch_rate_limit_attempts: 1 } });
+    });
 
     it.each(['Microsoft.WindowsAppRuntime.2', 'https://private.invalid/hidden'])('classifies an unreviewed dependency without a QA failure: %s', async id => {
       const { store, run } = setup();

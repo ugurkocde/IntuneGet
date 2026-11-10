@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { STALE_JOB_TIMEOUT_MINUTES, STALE_JOB_ERROR_MESSAGE } from '@/lib/stale-jobs';
 import type { PackagingJob } from '@/lib/db/types';
+import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 
 const {
   getDatabaseMock,
@@ -906,6 +907,52 @@ describe('POST /api/package (workflow dispatch)', () => {
       } finally { vi.unstubAllGlobals(); }
     }
   );
+
+  it('holds a rejected hosted dispatch for automatic retry instead of reporting a failure', async () => {
+    const row: Record<string, unknown> = { status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null };
+    updateMock.mockImplementationOnce(async (_id, patch, conditions) => {
+      if (!Object.entries(conditions).every(([key, value]) => row[key] === value)) return null;
+      Object.assign(row, patch);
+      return row;
+    });
+    const retryAt = new Date(Date.now() + 120_000).toISOString();
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429, retryAt));
+    const body = await (await postSingleItem()).json();
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'awaiting_qa', completed_at: null, qa_resume_due_at: retryAt,
+      error_details: { workflow_dispatch_rate_limit_attempts: 1 },
+    }), expect.objectContaining({ status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null }));
+    expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
+    expect(body.errors).toBeUndefined();
+  });
+  it('does not advertise a rate limit hold if a concurrent job update wins', async () => {
+    updateMock.mockResolvedValueOnce(null);
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
+      new Date(Date.now() + 120_000).toISOString()));
+    const body = await (await postSingleItem()).json();
+    expect(body.jobs).toEqual([]);
+    expect(body.errors).toEqual([{ wingetId: 'Test.App', error: 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' }]);
+    expect(updateMock).toHaveBeenCalledOnce();
+    expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
+  });
+  it('still reports other dispatched jobs when saving a capacity hold fails', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
+      new Date(Date.now() + 120_000).toISOString()));
+    updateMock.mockImplementation(async (_id, patch) => {
+      if (patch.status === 'awaiting_qa') throw new Error('private database fault');
+      return patch;
+    });
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item(), makeWin32Item({ wingetId: 'Other.App' })] }),
+    }));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.jobs).toEqual([expect.objectContaining({ winget_id: 'Other.App', status: 'packaging' })]);
+    expect(body.errors).toEqual([{ wingetId: 'Test.App',
+      error: 'Packaging could not schedule its automatic retry. Refresh the deployment status.' }]);
+    expect(JSON.stringify(body)).not.toContain('private database fault');
+    });
 
   it('reports an unreviewed dependency as unsupported without claiming a failed installation test', async () => {
     ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
