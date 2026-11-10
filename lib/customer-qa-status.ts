@@ -1,4 +1,4 @@
-import { PACKAGE_UNAVAILABLE_MESSAGE, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
+import { knownUnavailableDisposition } from '@/lib/unsupported-dependency';
 import type { PackagingJob } from '@/lib/db/types';
 import type { CustomerQaStatus } from '@/types/customer-qa';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
@@ -26,12 +26,6 @@ function storedReputationHold(job: PackagingJob): CustomerQaStatus {
     installerSha256: '', packageProfileSha256: '', reason: 'reputation',
   }));
   return { ...(job.status_message === expected ? reputationUnknown : unavailable) };
-}
-
-function knownUnavailableDisposition(summary: string | null | undefined): { code: 'VERSION_UNAVAILABLE' | 'PACKAGE_UNAVAILABLE'; message: string } | null {
-  if (summary === PACKAGE_VERSION_UNAVAILABLE_MESSAGE) return { code: 'VERSION_UNAVAILABLE', message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE };
-  if (summary === PACKAGE_UNAVAILABLE_MESSAGE) return { code: 'PACKAGE_UNAVAILABLE', message: PACKAGE_UNAVAILABLE_MESSAGE };
-  return null;
 }
 
 /** Display only: preserve the exact pre-candidate availability refusal. */

@@ -14,6 +14,17 @@ vi.mock('gt-next', () => ({
 beforeEach(() => { translation.messages = []; translation.localized = false; });
 
 describe('ErrorDisplay QA failure stage', () => {
+  it('names an unsupported dependency without QA or installer failure guidance', () => {
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, {
+      errorCode: 'DEPENDENCY_NOT_SUPPORTED', errorStage: 'validation', errorCategory: 'validation',
+      errorMessage: 'This app requires Microsoft.WindowsAppRuntime.2, which is not supported yet. Automated deployment is blocked.',
+    }));
+    expect(html).toContain('Not supported yet');
+    expect(html).toContain('Microsoft.WindowsAppRuntime.2');
+    expect(html).not.toContain('did not pass');
+    expect(html).not.toContain('unsupported installer format');
+    expect(html).not.toContain('downloaded file');
+  });
   it('preserves the manifest rejection and avoids packaging guidance for a legacy QA failure', () => {
     const html = renderToStaticMarkup(createElement(ErrorDisplay, {
       errorCode: 'QA_FAILED_EXECUTION_PROFILE',
