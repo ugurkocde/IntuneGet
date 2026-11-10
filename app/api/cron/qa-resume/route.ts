@@ -495,6 +495,9 @@ export async function GET(request: Request) {
           : 'Installation test passed; packaging started automatically',
         qa_completed_at: qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
+        ...(job.error_code === 'WORKFLOW_DISPATCH_RATE_LIMITED' ? {
+          error_code: null, error_message: null, error_stage: null, error_category: null,
+        } : {}),
       })
       .eq('id', job.id)
       .eq('status', 'awaiting_qa'))

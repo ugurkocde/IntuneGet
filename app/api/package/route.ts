@@ -904,12 +904,14 @@ export async function POST(request: NextRequest) {
               ? dispatchRateLimitHold(rateLimit, null) : null;
             if (rateHold && dispatch) {
               const held = await db.jobs.update(dispatch.jobId, rateHold, {
-                status: 'packaging', github_run_id: null, cancelled_at: null, archived_at: null,
+                status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null,
               });
               if (held) jobs.push({ id: dispatch.jobId, user_id: userId, tenant_id: tenantId,
                 winget_id: dispatch.item.wingetId, version: dispatch.item.version,
                 display_name: dispatch.item.displayName, publisher: dispatch.item.publisher,
                 status: 'awaiting_qa', package_config: dispatch.item, created_at: dispatch.createdAt });
+              else errors.push({ wingetId: dispatch.item.wingetId,
+                error: 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' });
               continue;
             }
             // The final dispatch boundary re-checks QA, security and

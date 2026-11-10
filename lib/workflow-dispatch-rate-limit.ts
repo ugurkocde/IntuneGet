@@ -35,6 +35,7 @@ export function dispatchRateLimitError(response: Response, detail: string, now =
 
 /** Persist the bounded budget in existing job error metadata on both databases. */
 export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError, details: Json | null, now = Date.now()) {
+  if (details !== null && (typeof details !== 'object' || Array.isArray(details))) return null;
   const previous = details && typeof details === 'object' && !Array.isArray(details) ? details : {};
   const count = previous[ATTEMPTS_KEY] ?? 0;
   if (typeof count !== 'number' || !Number.isInteger(count) || count < 0 || count >= MAX_DEFERRALS) return null;

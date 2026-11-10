@@ -1311,6 +1311,16 @@ describe('GET /api/cron/qa-resume', () => {
       expect(enforceQaGateMock).toHaveBeenCalledTimes(4);
       expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(3);
     });
+    it('clears the rate limit error when a retry starts without resetting its budget', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()));
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      triggerPackagingWorkflowMock.mockResolvedValueOnce({ success: true, runId: 42, runUrl: 'https://example.test/run/42' });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '42',
+        error_code: null, error_message: null, error_stage: null, error_category: null,
+        error_details: { workflow_dispatch_rate_limit_attempts: 1 } });
+    });
 
     it.each([null, '2026-10-01T00:00:00Z'])('holds a retryable preflight failure and restores QA completion %s', async priorCompletion => {
       const { store, run } = setup();

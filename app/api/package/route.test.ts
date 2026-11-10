@@ -906,13 +906,19 @@ describe('POST /api/package (workflow dispatch)', () => {
   );
 
   it('holds a rejected hosted dispatch for automatic retry instead of reporting a failure', async () => {
+    const row: Record<string, unknown> = { status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null };
+    updateMock.mockImplementationOnce(async (_id, patch, conditions) => {
+      if (!Object.entries(conditions).every(([key, value]) => row[key] === value)) return null;
+      Object.assign(row, patch);
+      return row;
+    });
     const retryAt = new Date(Date.now() + 120_000).toISOString();
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429, retryAt));
     const body = await (await postSingleItem()).json();
     expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       status: 'awaiting_qa', completed_at: null, qa_resume_due_at: retryAt,
       error_details: { workflow_dispatch_rate_limit_attempts: 1 },
-    }), expect.objectContaining({ status: 'packaging', github_run_id: null, cancelled_at: null, archived_at: null }));
+    }), expect.objectContaining({ status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null }));
     expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
     expect(body.errors).toBeUndefined();
   });
@@ -922,8 +928,9 @@ describe('POST /api/package (workflow dispatch)', () => {
       new Date(Date.now() + 120_000).toISOString()));
     const body = await (await postSingleItem()).json();
     expect(body.jobs).toEqual([]);
+    expect(body.errors).toEqual([{ wingetId: 'Test.App', error: 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' }]);
     expect(updateMock).toHaveBeenCalledOnce();
-    expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'packaging', github_run_id: null });
+    expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
   });
 
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {

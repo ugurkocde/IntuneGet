@@ -45,4 +45,7 @@ describe('explicit GitHub dispatch rejection', () => {
     expect(dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(now).toISOString()),
       { workflow_dispatch_rate_limit_attempts: count }, now)).toBeNull();
   });
+  it.each(['invalid', []])('does not reset malformed error metadata %j', details => {
+    expect(dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(now).toISOString()), details, now)).toBeNull();
+  });
 });
