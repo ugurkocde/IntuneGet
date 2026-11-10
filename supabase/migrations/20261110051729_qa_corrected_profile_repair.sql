@@ -10,7 +10,7 @@ create table public.qa_repair_profile_corrections (
   check (old_candidate_id<>new_candidate_id and old_profile<>new_profile)
 );
 alter table public.qa_repair_profile_corrections enable row level security;
-revoke all on public.qa_repair_profile_corrections from public,anon,authenticated;
+revoke all on public.qa_repair_profile_corrections from public,anon,authenticated,service_role;
 grant select,insert on public.qa_repair_profile_corrections to service_role;
 
 do $migration$
@@ -124,7 +124,11 @@ begin
     raise exception 'Corrected profile function anchor 7 changed';
   end if;
   definition := replace(definition,needle,replacement);
-  definition := replace(definition,E' LANGUAGE plpgsql\n',E' LANGUAGE plpgsql\n SECURITY INVOKER\n');
+  needle := E' LANGUAGE plpgsql\n';
+  if (length(definition)-length(replace(definition,needle,'')))/length(needle)<>1 then
+    raise exception 'Corrected profile language anchor changed';
+  end if;
+  definition := replace(definition,needle,E' LANGUAGE plpgsql\n SECURITY INVOKER\n');
   execute definition;
 end;
 $migration$;

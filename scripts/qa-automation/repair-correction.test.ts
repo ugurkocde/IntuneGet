@@ -14,7 +14,11 @@ it('preserves atomic adoption, lineage, customer and repair gates for corrected 
     await pg.exec(coverage.slice(0,coverage.indexOf('$$;')+3));
     await pg.exec('revoke all on function public.qa_vt_dependency_coverage(uuid) from public,anon,authenticated;grant execute on function public.qa_vt_dependency_coverage(uuid) to service_role;');
     const migration=read('20261110051729_qa_corrected_profile_repair.sql');
+    // Supabase grants ALL to service_role by default for new public tables.
+    await pg.exec('alter default privileges in schema public grant all on tables to service_role;');
     await pg.exec(migration);
+    for(const privilege of ['UPDATE','DELETE','TRUNCATE'])expect((await pg.query('select has_table_privilege($1,$2,$3) as allowed',['service_role','public.qa_repair_profile_corrections',privilege])).rows[0]).toEqual({allowed:false});
+    for(const privilege of ['SELECT','INSERT'])expect((await pg.query('select has_table_privilege($1,$2,$3) as allowed',['service_role','public.qa_repair_profile_corrections',privilege])).rows[0]).toEqual({allowed:true});
     const old='11111111-1111-4111-8111-111111111111',repair='22222222-2222-4222-8222-222222222222',hash='A'.repeat(64),pin='b'.repeat(40);
     const args='/Q /C:"msiexec /i ""vcredist.msi"" /quiet /norestart"';
     const canon=(silentArgs:string)=>JSON.stringify({profileKind:'deployment-config',toolchain:{packagerCommit:pin},installer:{sourceType:'exe',installScope:'machine',silentArgs},psadtConfig:{},detectionRules:[]});
