@@ -2,6 +2,40 @@ import { describe, expect, it } from 'vitest';
 import { extractSilentSwitches } from './silent-switches';
 
 describe('extractSilentSwitches', () => {
+  it.each(['bootstrap_x64.exe', 'bootstrap_x86.exe'])(
+    'preserves the nested MSI command passed to %s',
+    (launcher) => {
+      const tail = '/Q /C:"msiexec /i ""vcredist.msi"" /quiet /norestart"';
+      expect(extractSilentSwitches(`"${launcher}" ${tail}`, 'exe')).toBe(tail);
+    }
+  );
+
+  it.each(['exe', 'inno', 'nullsoft', 'burn'])(
+    'preserves vendor action switches for a %s installer',
+    (type) => {
+      const tail = '/i "payload.msi" /x {PRODUCT-CODE} /p "C:\\config\\settings.ini" /quiet';
+      expect(extractSilentSwitches(`"setup.exe" ${tail}`, type)).toBe(tail);
+    }
+  );
+
+  it('preserves a nested EXE vendor command in a ZIP package', () => {
+    const tail = '/Q /C:"msiexec /i ""payload.msi"" /quiet"';
+    expect(extractSilentSwitches(`"setup.exe" ${tail}`, 'zip', 'exe')).toBe(tail);
+  });
+
+  it.each([
+    ['msiexec /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['"msiexec.exe" /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['"C:\\Windows\\System32\\msiexec.exe" /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['C:\\Windows\\System32\\msiexec.exe /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['msiexec.exe /i "inner.msi" /qn', 'zip', 'msi', '/qn'],
+    ['/i payload.msi /qn', 'msi', undefined, '/qn'],
+    ['/x {PRODUCT-CODE} /qn', 'wix', undefined, '/qn'],
+    ['/p "patch.msp" /qn', 'msi', undefined, '/qn'],
+  ])('keeps outer MSI extraction for %s', (command, type, nestedType, expected) => {
+    expect(extractSilentSwitches(command, type, nestedType)).toBe(expected);
+  });
+
   it('does not mistake PowerShell archive parameters for vendor switches', () => {
     expect(extractSilentSwitches(
       'Expand-Archive -Path "app.zip" -DestinationPath "%ProgramFiles%\\App" -Force',
