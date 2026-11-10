@@ -1,0 +1,5 @@
+{
+  "title": "Packaging waits for GitHub capacity",
+  "summary": "Packaging requests from the catalog cart and deployments resuming after validation can wait and retry after GitHub explicitly refuses a workflow request because of its request limit. Installation and security checks still apply.",
+  "type": "improved"
+}
