@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    if (isRetiredRunCallback(currentJob.infrastructure_retry_run_id, data.runId)
+    if (isRetiredRunCallback(currentJob.infrastructure_retry_run_id, data.runId, data.attemptId)
       || !shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
       return NextResponse.json({
         success: true,

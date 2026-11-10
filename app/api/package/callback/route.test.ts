@@ -11,8 +11,8 @@ vi.mock('@/lib/installer-preflight', () => ({ quarantineInstaller: vi.fn() }));
 import { POST } from './route';
 
 const jobId = '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7';
-const send = (runId: string | undefined) => {
-  const body = JSON.stringify({ jobId, status: 'packaging', runId });
+const send = (runId: string | undefined, attemptId?: string, status = 'packaging') => {
+  const body = JSON.stringify({ jobId, status, runId, attemptId });
   const signature = createHmac('sha256', 'fixture-secret').update(body).digest('base64');
   return POST(new NextRequest('http://localhost/api/package/callback', { method: 'POST', body, headers: { 'X-Signature': signature } }));
 };
@@ -36,6 +36,25 @@ describe('retired customer run callback fences', () => {
   });
   it('ignores unidentified callbacks after a run has been retired', async () => {
     expect(await (await send(undefined)).json()).toMatchObject({ ignored: true });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it('applies replacement upload progress whose identity is carried only by attemptId', async () => {
+    expect((await send(undefined, '43-1', 'uploading')).status).toBe(200);
+    expect(state.update).toHaveBeenCalledWith(jobId, expect.objectContaining({ status: 'uploading' }),
+      { status: 'packaging', updated_at: '2026-11-10T10:00:00Z' });
+  });
+  it('rejects a retired attempt without an explicit runId', async () => {
+    expect(await (await send(undefined, '42-1', 'uploading')).json()).toMatchObject({ ignored: true });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it('rejects contradictory explicit and attempt identities', async () => {
+    expect(await (await send('43', '42-1')).json()).toMatchObject({ ignored: true });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it('rejects malformed or unsafe attempt identities after retirement', async () => {
+    for (const attempt of ['43-0', '43-1-extra', '9007199254740993-1']) {
+      expect(await (await send(undefined, attempt)).json()).toMatchObject({ ignored: true });
+    }
     expect(state.update).not.toHaveBeenCalled();
   });
   it('allows a different authenticated run and guards the observed row revision', async () => {
