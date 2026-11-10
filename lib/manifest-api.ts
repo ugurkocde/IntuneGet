@@ -578,6 +578,12 @@ function coerceInstallersArray(
   }
 
   return installerArray.map((inst) => {
+    const installerType = normalizeInstallerType((inst.InstallerType as string) || defaultType);
+    const rowType = defaultType ? normalizeInstallerType(defaultType) : undefined;
+    // A flattened row describes one selected installer. Its switches cannot
+    // become defaults for a different installer family in the cached array.
+    const compatibleRowSwitches = !inst.InstallerType || rowType === installerType ||
+      (['msi', 'wix'].includes(installerType) && !!rowType && ['msi', 'wix'].includes(rowType));
     const explicitProductCode = typeof inst.ProductCode === 'string'
       ? inst.ProductCode.trim()
       : '';
@@ -586,12 +592,12 @@ function coerceInstallersArray(
     Architecture: (inst.Architecture as WingetInstaller['Architecture']) || 'x64',
     InstallerUrl: (inst.InstallerUrl as string) || '',
     InstallerSha256: (inst.InstallerSha256 as string) || '',
-    InstallerType: normalizeInstallerType((inst.InstallerType as string) || defaultType),
+    InstallerType: installerType,
     NestedInstallerType: inst.NestedInstallerType as WingetInstaller['NestedInstallerType'],
     NestedInstallerFiles: inst.NestedInstallerFiles as WingetInstaller['NestedInstallerFiles'],
     Scope: inst.Scope as WingetInstaller['Scope'],
     InstallerSwitches: mergeInstallerSwitches(
-      defaultSilentArgs ? { Silent: defaultSilentArgs } : undefined,
+      defaultSilentArgs && compatibleRowSwitches ? { Silent: defaultSilentArgs } : undefined,
       inst.InstallerSwitches
     ),
     InstallLocationRequired: inst.InstallLocationRequired === true,
