@@ -153,7 +153,9 @@ export function ErrorDisplay({
   }
 
   const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
-  const stage = qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
+  const unsupportedDependency = errorCode === 'DEPENDENCY_NOT_SUPPORTED';
+  const stage = unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
+    : qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
   // describes package creation. The exact QA code identifies the real stage.
@@ -162,6 +164,8 @@ export function ErrorDisplay({
       ? 'Refresh the app catalog and select the current version. The selected installer no longer matches the trusted manifest, so it was blocked before testing or packaging.'
       : 'This package did not pass the installation check. Review the failure details above before trying another version or configuration.',
     showReVerify: false,
+  } : unsupportedDependency ? {
+    message: 'This dependency is not supported for automated deployment yet.', showReVerify: false,
   } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
   const details = errorDetails as ErrorDetails | null;

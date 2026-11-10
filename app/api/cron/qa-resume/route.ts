@@ -2,6 +2,7 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
+import { unsupportedDependencyMessage } from '@/lib/unsupported-dependency';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
@@ -277,15 +278,17 @@ export async function GET(request: Request) {
     };
     if (compatibilityBlock) {
       const now = new Date().toISOString();
+      const unsupportedMessage = unsupportedDependencyMessage(compatibilityBlock);
+      const message = unsupportedMessage || PACKAGE_VERSION_UNAVAILABLE_MESSAGE;
       let failureUpdate = supabase
         .from('packaging_jobs')
         .update({
-          status: 'qa_failed',
-          status_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
-          error_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
-          error_code: 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
+          status: unsupportedMessage ? 'failed' : 'qa_failed',
+          status_message: message,
+          error_message: message,
+          error_code: unsupportedMessage ? 'DEPENDENCY_NOT_SUPPORTED' : 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
           error_stage: 'validation',
-          error_category: 'installer',
+          error_category: unsupportedMessage ? 'validation' : 'installer',
           completed_at: now,
         })
         .eq('id', job.id)
@@ -299,7 +302,7 @@ export async function GET(request: Request) {
       if (blockError) throw new Error(`Could not hold quarantined QA job: ${blockError.message}`);
       if (blockedJob) {
         failed++;
-        await handleAutoUpdateJobCompletion(job.id, 'failed', PACKAGE_VERSION_UNAVAILABLE_MESSAGE);
+        await handleAutoUpdateJobCompletion(job.id, 'failed', message);
       }
       continue;
     }

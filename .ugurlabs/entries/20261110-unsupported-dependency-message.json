@@ -1,0 +1,5 @@
+{
+  "title": "Clearer explanations for unsupported dependencies",
+  "summary": "New deployment requests identify an unsupported required dependency instead of reporting a failed installation test. Automated deployment stays blocked until the dependency is supported.",
+  "type": "improved"
+}

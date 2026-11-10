@@ -1255,6 +1255,20 @@ describe('GET /api/cron/qa-resume', () => {
       return { store, run };
     }
 
+    it.each(['Microsoft.WindowsAppRuntime.2', 'https://private.invalid/hidden'])('classifies an unreviewed dependency without a QA failure: %s', async id => {
+      const { store, run } = setup();
+      getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'unreviewed_dependency',
+        detail: `WinGet dependency ${id} is not in the reviewed redistribution allowlist.` });
+      expect(await (await run()).json()).toMatchObject({ failed: 1, resumed: 0 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'DEPENDENCY_NOT_SUPPORTED',
+        error_stage: 'validation', error_category: 'validation' });
+      expect(String(store.row.error_message)).toContain('which is not supported yet'.replace('which ', id.startsWith('https:') ? 'that ' : 'which '));
+      expect(JSON.stringify(store.row)).not.toContain('private.invalid');
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith('retry-job', 'failed', store.row.error_message);
+    });
+
     it.each([null, '2026-10-01T00:00:00Z'])('holds a retryable preflight failure and restores QA completion %s', async priorCompletion => {
       const { store, run } = setup();
       store.row.qa_completed_at = priorCompletion;
