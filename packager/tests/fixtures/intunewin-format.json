@@ -1,0 +1,19 @@
+{
+  "referenceToolVersion": "1.8.7.0",
+  "referenceToolSha256": "C1BA45B5CB939E84AF064BB7FF4B38FB3DFE33C8DC1078FD9B157672EAE671F6",
+  "setupFile": "Invoke-AppDeployToolkit.exe",
+  "payloadName": "IntunePackage.intunewin",
+  "outerEntries": [
+    "IntuneWinPackage/Contents/IntunePackage.intunewin",
+    "IntuneWinPackage/Metadata/Detection.xml"
+  ],
+  "profileIdentifier": "ProfileVersion1",
+  "fileDigestAlgorithm": "SHA256",
+  "payloadMacBytes": 32,
+  "payloadIvBytes": 16,
+  "fileCrc32": {
+    "Invoke-AppDeployToolkit.exe": 3761179337,
+    "Files/empty.txt": 0,
+    "Files/payload.txt": 1032329234
+  }
+}
