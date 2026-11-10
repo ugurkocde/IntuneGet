@@ -1,0 +1,5 @@
+{
+  "type": "fixed",
+  "title": "Clarify stopped deployments in managed tenant views",
+  "summary": "Managed tenant job lists now show that a deployment stopped without claiming an installation test ran. Existing failure details and job actions are preserved."
+}
