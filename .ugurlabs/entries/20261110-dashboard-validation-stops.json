@@ -1,0 +1,5 @@
+{
+  "title": "Clarify deployment validation stops in uploads",
+  "summary": "Upload error messages preserve the failure details without implying that an installation test ran when its outcome is unknown.",
+  "type": "fixed"
+}
