@@ -21,7 +21,7 @@ describe('retired customer run callback fences', () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.stubEnv('CALLBACK_SECRET', 'fixture-secret');
-    state.job = { id: jobId, status: 'packaging', updated_at: '2026-11-10T10:00:00Z', infrastructure_retry_run_id: '42' };
+    state.job = { id: jobId, status: 'packaging', updated_at: '2026-11-10T10:00:00Z', github_run_id: '43', infrastructure_retry_run_id: '42' };
     state.get.mockReset().mockImplementation(async () => state.job);
     state.history.mockReset().mockResolvedValue({});
     state.completed.mockReset().mockResolvedValue(undefined);
@@ -101,11 +101,27 @@ describe('retired customer run callback fences', () => {
     expect(state.update).toHaveBeenCalledTimes(1);
     expect(state.cleanup).not.toHaveBeenCalled();
   });
-  it('keeps the fresh heartbeat ordering guard', async () => {
+  it.each(['deployed', 'failed', 'duplicate_skipped'])('preserves %s after a concurrent same-status write with a later database timestamp', async status => {
     state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce({ ...state.job, updated_at: '2026-11-10T10:00:11Z' });
+    state.update.mockResolvedValueOnce(null).mockImplementationOnce(async (_id, patch) => ({ ...state.job, ...patch }));
+    expect(await (await send('43', '43-1', status, { heartbeatAt: '2026-11-10T10:00:10Z', intuneAppId: 'fixture-app' })).json()).toMatchObject({ success: true, job: { status } });
+    expect(state.update).toHaveBeenCalledTimes(2);
+    expect(state.update).toHaveBeenLastCalledWith(jobId, expect.objectContaining({ status }),
+      { status: 'packaging', updated_at: '2026-11-10T10:00:11Z' });
+    expect(state.completed).toHaveBeenCalledTimes(1);
+    expect(state.history).toHaveBeenCalledTimes(status === 'deployed' ? 1 : 0);
+  });
+  it.each([
+    { status: 'uploading' },
+    { github_run_id: '44' },
+    { infrastructure_retry_run_id: '44' },
+  ])('does not rescue a terminal callback after execution state changes: %j', async change => {
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce({ ...state.job, ...change, updated_at: '2026-11-10T10:00:11Z' });
     state.update.mockResolvedValueOnce(null);
     expect(await (await send('43', '43-1', 'deployed', { heartbeatAt: '2026-11-10T10:00:10Z' })).json()).toMatchObject({ ignored: true });
     expect(state.update).toHaveBeenCalledTimes(1);
+    expect(state.history).not.toHaveBeenCalled();
+    expect(state.completed).not.toHaveBeenCalled();
   });
   it('does not retry a progress callback after a lost compare and set', async () => {
     state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce({ ...state.job, updated_at: '2026-11-10T10:00:01Z' });
