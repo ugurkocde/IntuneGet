@@ -169,3 +169,32 @@ it('does not query for ineligible failed rows and handles a mixed authorized lis
  const ineligible=legacyHoldJob(0,{error_code:'OTHER'});expect(await enrichCustomerQaStatus([ineligible])).toEqual([ineligible]);expect(from).not.toHaveBeenCalled();
  setPretestHold();const [waiting,failed]=await enrichCustomerQaStatus([job(),legacyHoldJob()]);expect(waiting.qa_status?.category).toBe('installer_security_hold');expect(failed.qa_status?.message).toBe(pretestMessage);
 });
+
+const versionUnavailableMessage = 'This app version is not available for automated deployment.';
+const appUnavailableMessage = 'This app is not available for automated deployment.';
+const unavailableLegacyJob = (patch = {}) => job({ id:'unavailable-job',status:'qa_failed',qa_candidate_id:null,error_code:'QA_FAILED_EXECUTION_PROFILE',error_message:versionUnavailableMessage,...patch });
+it.each([[versionUnavailableMessage,'VERSION_UNAVAILABLE'],[appUnavailableMessage,'PACKAGE_UNAVAILABLE']])('annotates only the exact unavailable cause %s',async(message,code)=>{
+ const input=unavailableLegacyJob({error_message:message});const [actual]=await enrichCustomerQaStatus([input]);
+ expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:code,message,nextEventAt:null});
+ const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();expect(from).not.toHaveBeenCalled();expect(holds).not.toHaveBeenCalled();
+});
+it.each([
+ ['linked candidate',{qa_candidate_id:id}],['missing candidate',{qa_candidate_id:undefined}],
+ ['compatibility code',{error_code:'QA_PACKAGE_COMPATIBILITY_BLOCKED'}],['missing code',{error_code:null}],['other code',{error_code:'OTHER'}],
+ ['trailing space',{error_message:versionUnavailableMessage+' '}],['different case',{error_message:versionUnavailableMessage.toLowerCase()}],
+ ['architecture',{error_message:'This app architecture is not available for automated deployment.'}],['generic failure',{error_message:'This app did not pass the isolated installation test.'}],
+ ['different status',{status:'failed'}],
+])('keeps an unavailable lookalike unchanged: %s',async(_kind,patch)=>{
+ const input=unavailableLegacyJob(patch);expect(await enrichCustomerQaStatus([input])).toEqual([input]);expect(from).not.toHaveBeenCalled();
+});
+it('keeps unavailable, waiting and exact security evidence separate in a mixed list',async()=>{
+ setPretestHold();const [unavailable,waiting,failed]=await enrichCustomerQaStatus([unavailableLegacyJob(),job({id:'waiting-job'}),legacyHoldJob()]);
+ expect(unavailable.qa_status?.reasonCode).toBe('VERSION_UNAVAILABLE');expect(waiting.qa_status?.category).toBe('installer_security_hold');expect(failed.qa_status?.message).toBe(pretestMessage);
+ expect(from.mock.results[0].value.in).toHaveBeenCalledWith('id',[id]);
+});
+it.each(['query error','query exception'])('preserves pure availability annotation through the waiting fallback: %s',async kind=>{
+ if(kind==='query error')state.error=true;else from.mockImplementation(()=>{throw Error('private failure');});
+ const input=unavailableLegacyJob();const [actual,waiting]=await enrichCustomerQaStatus([input,job()]);
+ expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:'VERSION_UNAVAILABLE',message:versionUnavailableMessage,nextEventAt:null});
+ const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();expect(waiting.qa_status?.category).toBe('unavailable');
+});

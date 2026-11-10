@@ -684,6 +684,9 @@ function UploadJobCard({
   const prefersReducedMotion = useReducedMotion();
 
   const securityBlocked = job.status === 'qa_failed' && job.qa_status?.category === 'installer_security_hold';
+  const availabilityCode = job.status === 'qa_failed' && job.qa_status?.category === 'unavailable'
+    && (job.qa_status.reasonCode === 'VERSION_UNAVAILABLE' || job.qa_status.reasonCode === 'PACKAGE_UNAVAILABLE')
+    ? job.qa_status.reasonCode : null;
   const statusConfig = {
     blocked_upstream: { icon: Clock, label: 'Blocked upstream', color: 'text-status-warning', bg: 'bg-status-warning/10', border: 'border-l-status-warning' },
     awaiting_qa: {
@@ -698,7 +701,9 @@ function UploadJobCard({
     },
     qa_failed: {
       icon: XCircle,
-      label: securityBlocked ? 'Security check blocked deployment' : 'Installation test failed',
+      label: securityBlocked ? 'Security check blocked deployment'
+        : availabilityCode === 'PACKAGE_UNAVAILABLE' ? 'App not available'
+          : availabilityCode === 'VERSION_UNAVAILABLE' ? 'App version not available' : 'Installation test failed',
       color: 'text-status-error',
       bg: 'bg-status-error/10',
       border: 'border-l-status-error',
@@ -988,10 +993,10 @@ function UploadJobCard({
           {/* Error message */}
           {['failed', 'qa_failed'].includes(job.status) && (job.error_message || job.error_code || job.status_message) && (
             <ErrorDisplay
-              errorMessage={job.error_message || job.status_message}
+              errorMessage={availabilityCode ? job.qa_status?.message : (job.error_message || job.status_message)}
               errorStage={job.error_stage}
               errorCategory={job.error_category}
-              errorCode={job.error_code}
+              errorCode={availabilityCode || job.error_code}
               errorDetails={job.error_details}
               securityBlocked={securityBlocked}
             />

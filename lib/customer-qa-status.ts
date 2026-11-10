@@ -1,3 +1,4 @@
+import { knownUnavailableDisposition } from '@/lib/unsupported-dependency';
 import type { PackagingJob } from '@/lib/db/types';
 import type { CustomerQaStatus } from '@/types/customer-qa';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
@@ -27,11 +28,22 @@ function storedReputationHold(job: PackagingJob): CustomerQaStatus {
   return { ...(job.status_message === expected ? reputationUnknown : unavailable) };
 }
 
+/** Display only: preserve the exact pre-candidate availability refusal. */
+function storedAvailabilityStatus(job: PackagingJob): CustomerQaStatus | null {
+  if (job.status !== 'qa_failed' || job.error_code !== 'QA_FAILED_EXECUTION_PROFILE' || job.qa_candidate_id !== null) return null;
+  const disposition = knownUnavailableDisposition(job.error_message);
+  if (!disposition || (disposition.code !== 'VERSION_UNAVAILABLE' && disposition.code !== 'PACKAGE_UNAVAILABLE')) return null;
+  return { category: 'unavailable', reasonCode: disposition.code, message: disposition.message, nextEventAt: null };
+}
+
 // Called only with jobs already authorized by the package GET route. These
 // SELECTs supply display evidence; none of their results decide a write.
 export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
-  jobs = jobs.map(job => job.status === 'blocked_upstream'
-    ? { ...job, qa_status: customerUpstreamStatus(job.error_code) } : job);
+  jobs = jobs.map(job => {
+    if (job.status === 'blocked_upstream') return { ...job, qa_status: customerUpstreamStatus(job.error_code) };
+    const availability = storedAvailabilityStatus(job);
+    return availability ? { ...job, qa_status: availability } : job;
+  });
   const waiting = jobs.filter(job => job.status === 'awaiting_qa');
   const eligibleFailed = jobs.filter(job => job.status === 'qa_failed' && job.error_code === 'QA_FAILED_EXECUTION_PROFILE'
     && [installerSecurityReason(0), installerSecurityReason(1)].includes(job.error_message || ''));

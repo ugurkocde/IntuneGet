@@ -76,3 +76,8 @@ it('ignores the display flag for other error codes',()=>{
  const props={errorCode:'HASH_MISMATCH',errorStage:'validation',errorMessage:'SHA mismatch'};
  expect(renderToStaticMarkup(createElement(ErrorDisplay,{...props,securityBlocked:true}))).toBe(renderToStaticMarkup(createElement(ErrorDisplay,props)));
 });
+
+it.each(['VERSION_UNAVAILABLE','PACKAGE_UNAVAILABLE'])('keeps legacy installer category out of availability guidance %s',errorCode=>{
+ const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode,errorCategory:'installer',errorStage:'validation',errorMessage:'This app version is not available for automated deployment.'}));
+ expect(html).toContain('Not available');expect(html).toContain('This request did not run an installation test.');expect(html).not.toContain('unsupported installer format');expect(html).not.toContain('did not pass the installation check');
+});
