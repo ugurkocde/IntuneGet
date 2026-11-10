@@ -15,12 +15,18 @@ function createSupabaseMock(options: {
   rankedError?: { message: string };
   unsyncedError?: { message: string };
   blocksError?: { message: string };
+  touchError?: { message: string };
 }) {
   const from = vi.fn((table: string) => {
     let isUnsyncedQuery = false;
     let isBlockedAppsQuery = false;
+    let isUpdate = false;
     const chain: Record<string, unknown> = {};
     chain.select = vi.fn(() => chain);
+    chain.update = vi.fn(() => {
+      isUpdate = true;
+      return chain;
+    });
     chain.eq = vi.fn(() => chain);
     chain.is = vi.fn(() => {
       // .is('latest_version', null) only appears on the never-synced query
@@ -28,7 +34,8 @@ function createSupabaseMock(options: {
       return chain;
     });
     chain.in = vi.fn(() => {
-      // .in('winget_id', ids) only appears on the blocked-app lookup
+      // The block touch ends with .in(); the blocked-app lookup continues to .limit()
+      if (isUpdate) return Promise.resolve({ error: options.touchError || null });
       isBlockedAppsQuery = true;
       return chain;
     });
@@ -49,7 +56,12 @@ function createSupabaseMock(options: {
   return { from } as unknown as SupabaseClient;
 }
 
-type MockChain = { eq: ReturnType<typeof vi.fn>; in: ReturnType<typeof vi.fn> };
+type MockChain = {
+  eq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+};
 
 function chainsFor(supabase: SupabaseClient, table: string): MockChain[] {
   const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>;
@@ -131,8 +143,12 @@ describe('selectAppsToSync', () => {
       ['Google.Chrome', true],
       ['Microsoft.Edge', false],
     ]);
-    const [blockQuery] = chainsFor(supabase, 'package_eligibility_blocks');
+    const [blockQuery, touch] = chainsFor(supabase, 'package_eligibility_blocks');
     expect(blockQuery.eq).toHaveBeenCalledWith('block_code', 'upstream_removed');
+    expect(blockQuery.order).toHaveBeenCalledWith('updated_at', { ascending: true });
+    expect(touch.update).toHaveBeenCalledWith({ updated_at: expect.any(String) });
+    expect(touch.eq).toHaveBeenCalledWith('block_code', 'upstream_removed');
+    expect(touch.in).toHaveBeenCalledWith('winget_id', ['Google.Chrome']);
     const blockedLookup = chainsFor(supabase, 'curated_apps')[2];
     expect(blockedLookup.in).toHaveBeenCalledWith('winget_id', ['Google.Chrome']);
     expect(blockedLookup.eq).not.toHaveBeenCalledWith('is_verified', true);
@@ -147,6 +163,27 @@ describe('selectAppsToSync', () => {
     await expect(selectAppsToSync(supabase)).rejects.toEqual({
       message: 'connection refused',
     });
+  });
+
+  it('rotates selected blocks even when their app row is filtered out', async () => {
+    const supabase = createSupabaseMock({ blockRows: [{ winget_id: 'Store.Only.App' }], blockedAppRows: [] });
+
+    expect(await selectAppsToSync(supabase)).toEqual([]);
+    const [, touch] = chainsFor(supabase, 'package_eligibility_blocks');
+    expect(touch.in).toHaveBeenCalledWith('winget_id', ['Store.Only.App']);
+  });
+
+  it('does not touch blocks when none are selected', async () => {
+    const supabase = createSupabaseMock({});
+
+    await selectAppsToSync(supabase);
+    expect(chainsFor(supabase, 'package_eligibility_blocks')).toHaveLength(1);
+  });
+
+  it('throws when the block rotation fails', async () => {
+    const supabase = createSupabaseMock({ blockRows: [{ winget_id: 'A.B' }], touchError: { message: 'touch failed' } });
+
+    await expect(selectAppsToSync(supabase)).rejects.toEqual({ message: 'touch failed' });
   });
 
   it('throws when the block lookup fails', async () => {
