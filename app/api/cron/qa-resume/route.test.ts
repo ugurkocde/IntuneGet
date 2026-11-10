@@ -1233,6 +1233,7 @@ describe('GET /api/cron/qa-resume', () => {
         qa_candidate_id: 'passed-candidate', execution_profile_sha256: 'B'.repeat(64),
         installer_sha256: 'A'.repeat(64), architecture: 'x64', github_run_id: null,
         qa_completed_at: '2026-10-01T00:00:00Z', packaging_started_at: null,
+        error_details: null,
         package_config: { installerSha256: 'A'.repeat(64), architecture: 'x64' },
       });
       let reading = true;
