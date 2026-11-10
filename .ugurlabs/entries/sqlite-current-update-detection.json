@@ -1,0 +1,5 @@
+{
+  "title": "Use current detection rules for SQLite automatic updates",
+  "summary": "Self hosted automatic updates use the new version's generated detection rules while preserving saved settings, custom detection holds and curated release checks.",
+  "type": "fixed"
+}
