@@ -87,6 +87,20 @@ async function selectUpstreamRemovedApps(supabase: SupabaseClient): Promise<AppT
   const ids = (blocks || []).map((block: { winget_id: string }) => block.winget_id);
   if (ids.length === 0) return [];
 
+  // Rotate the recheck window whatever the outcome. Without this, blocks whose
+  // recheck errors, reports installer_manifest_missing, or whose app row fails
+  // the filters below would keep the oldest updated_at forever and starve
+  // every block queued behind them.
+  const { error: touchError } = await supabase
+    .from('package_eligibility_blocks')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('block_code', 'upstream_removed')
+    .in('winget_id', ids);
+
+  if (touchError) {
+    throw touchError;
+  }
+
   const { data: apps, error: appsError } = await supabase
     .from('curated_apps')
     .select(APP_COLUMNS)

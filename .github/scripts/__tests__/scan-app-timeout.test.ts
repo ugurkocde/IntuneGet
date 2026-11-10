@@ -61,6 +61,7 @@ $outcome = Invoke-Winget -Arguments @('-NoProfile', '-NonInteractive', '-Command
 `;
 
 describe.runIf(available)('scanner timeout diagnostics', () => {
+  // The child has its own 20 s deadline; allow startup and cleanup before Vitest expires.
   it('runs the benign process fixture without inherited TEMP or TMP', () => {
     const value = run(`
 $outcome = Invoke-Winget -Arguments @('-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 30') -TimeoutSeconds 1
@@ -68,7 +69,7 @@ $outcome = Invoke-Winget -Arguments @('-NoProfile', '-NonInteractive', '-Command
 `, scanner, true);
     expect(value.outcome).toEqual({ ExitCode: -1, TimedOut: true, Output: 'Timed out after 1 seconds' });
     expect(value.captures).toEqual([]);
-  });
+  }, 25000);
 
   it.runIf(process.platform === 'win32')('writes a private capture on timeout and preserves the original error', () => {
     const value = run(`${timeout}

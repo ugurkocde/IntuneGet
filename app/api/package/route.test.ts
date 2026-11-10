@@ -22,6 +22,7 @@ const {
   getLiveInstallersMock,
   ensureQaDemandMock,
   getPackageEligibilityBlocksMock,
+  getPackageCompatibilityBlockMock,
   isSupabaseServerConfiguredMock,
   curatedState,
   actualDispatch,
@@ -49,6 +50,7 @@ const {
   getLiveInstallersMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
+  getPackageCompatibilityBlockMock: vi.fn().mockResolvedValue(null),
   isSupabaseServerConfiguredMock: vi.fn(),
 }));
 
@@ -106,6 +108,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
   return {
     ...original,
     getPackageEligibilityBlocks: getPackageEligibilityBlocksMock,
+    getPackageCompatibilityBlock: getPackageCompatibilityBlockMock,
   };
 });
 
@@ -903,6 +906,31 @@ describe('POST /api/package (workflow dispatch)', () => {
       } finally { vi.unstubAllGlobals(); }
     }
   );
+
+  it('reports an unreviewed dependency as unsupported without claiming a failed installation test', async () => {
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) }, failureSummary: 'This app version is not available for automated deployment.' });
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'unreviewed_dependency',
+      detail: 'WinGet dependency Microsoft.EdgeWebView2Runtime is not in the reviewed redistribution allowlist.' });
+    const body = await (await postSingleItem()).json();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed',
+      error_code: 'DEPENDENCY_NOT_SUPPORTED', error_category: 'validation', qa_completed_at: null, qa_candidate_id: null,
+      status_message: 'This app requires Microsoft.EdgeWebView2Runtime, which is not supported yet. Automated deployment is blocked.' }));
+    expect(body.jobs[0].status).toBe('failed');
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).toHaveBeenCalledOnce();
+  });
+  it.each(['other block', 'lookup unavailable'])('keeps the existing closed QA result when classification is %s', async kind => {
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) }, failureSummary: 'Existing failure summary.' });
+    if (kind === 'lookup unavailable') getPackageCompatibilityBlockMock.mockRejectedValueOnce(new Error('private lookup fault'));
+    else getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'unsupported_dependency_shape', detail: 'Not a supported dependency shape.' });
+    await postSingleItem();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'qa_failed',
+      error_code: 'QA_FAILED_EXECUTION_PROFILE', error_message: 'Existing failure summary.' }));
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).toHaveBeenCalledOnce();
+  });
 
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(
@@ -2193,7 +2221,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(body.jobs[0]).toMatchObject({ status: 'failed' });
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
@@ -2217,7 +2245,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(body.jobs[0]).toMatchObject({ status: 'failed' });
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
