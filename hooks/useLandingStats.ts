@@ -118,20 +118,3 @@ export async function trackSigninClick(): Promise<void> {
     // Silently ignore errors
   }
 }
-
-export async function trackDeployment(count: number = 1): Promise<void> {
-  try {
-    // Fire-and-forget
-    fetch('/api/stats/track-deploy', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ count }),
-    }).catch(() => {
-      // Silently ignore errors
-    });
-  } catch {
-    // Silently ignore errors
-  }
-}
