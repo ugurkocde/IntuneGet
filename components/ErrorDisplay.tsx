@@ -38,6 +38,7 @@ interface ErrorDisplayProps {
   errorCategory?: string | null;
   errorCode?: string | null;
   errorDetails?: ErrorDetails | null;
+  securityBlocked?: boolean;
 }
 
 const stageConfig: Record<string, { icon: typeof Download; label: string }> = {
@@ -122,6 +123,7 @@ export function ErrorDisplay({
   errorCategory,
   errorCode,
   errorDetails,
+  securityBlocked = false,
 }: ErrorDisplayProps) {
   // Fallback to basic display if no structured error data
   if (!errorCode && !errorStage && !errorCategory) {
@@ -153,15 +155,20 @@ export function ErrorDisplay({
   }
 
   const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
+  const blockedBeforeTest = qaFailed && securityBlocked;
+  const displayErrorMessage = blockedBeforeTest
+    ? 'A security check stopped this deployment before the installation test ran.' : errorMessage;
   const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE';
   const unsupportedDependency = errorCode === 'DEPENDENCY_NOT_SUPPORTED';
   const stage = unavailable ? { ...stageConfig.validation, label: 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
-    : qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
+    : qaFailed ? { ...stageConfig.validation, label: blockedBeforeTest ? 'Security check' : 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
   // describes package creation. The exact QA code identifies the real stage.
   const hint = qaFailed ? {
-    message: errorMessage?.includes('MANIFEST_CHANGED')
+    message: blockedBeforeTest
+      ? 'A security check stopped this deployment before the installation test ran.'
+      : errorMessage?.includes('MANIFEST_CHANGED')
       ? 'Refresh the app catalog and select the current version. The selected installer no longer matches the trusted manifest, so it was blocked before testing or packaging.'
       : 'This package did not pass the installation check. Review the failure details above before trying another version or configuration.',
     showReVerify: false,
@@ -199,7 +206,7 @@ export function ErrorDisplay({
 
       {/* Main error message */}
       <div className="text-sm text-status-error/90">
-        <p>{codeMessage || errorMessage || 'An error occurred'}</p>
+        <p>{codeMessage || displayErrorMessage || 'An error occurred'}</p>
       </div>
 
       {/* Hash mismatch details */}

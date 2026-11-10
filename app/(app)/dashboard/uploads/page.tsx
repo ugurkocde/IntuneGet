@@ -683,6 +683,7 @@ function UploadJobCard({
 }) {
   const prefersReducedMotion = useReducedMotion();
 
+  const securityBlocked = job.status === 'qa_failed' && job.qa_status?.category === 'installer_security_hold';
   const statusConfig = {
     blocked_upstream: { icon: Clock, label: 'Blocked upstream', color: 'text-status-warning', bg: 'bg-status-warning/10', border: 'border-l-status-warning' },
     awaiting_qa: {
@@ -697,7 +698,7 @@ function UploadJobCard({
     },
     qa_failed: {
       icon: XCircle,
-      label: 'Installation test failed',
+      label: securityBlocked ? 'Security check blocked deployment' : 'Installation test failed',
       color: 'text-status-error',
       bg: 'bg-status-error/10',
       border: 'border-l-status-error',
@@ -992,6 +993,7 @@ function UploadJobCard({
               errorCategory={job.error_category}
               errorCode={job.error_code}
               errorDetails={job.error_details}
+              securityBlocked={securityBlocked}
             />
           )}
 

@@ -6,7 +6,7 @@ const { state, from, holds, retries } = vi.hoisted(() => ({
   from: vi.fn(), holds: vi.fn(), retries: vi.fn(),
 }));
 vi.mock('@/lib/supabase', () => ({ isSupabaseServerConfigured: () => state.configured, createServerClient: () => ({ from }) }));
-vi.mock('@/lib/qa/installer-security-holds', () => ({ loadInstallerSecurityHolds: holds, installerSecurityReason: (n: number) => n ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal: awaiting engine coverage, rechecking daily' }));
+vi.mock('@/lib/qa/installer-security-holds', () => ({ loadInstallerSecurityHolds: holds, installerSecurityReason: (n: number) => n === 0 ? 'VirusTotal: awaiting engine coverage, rechecking daily' : n === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.' }));
 vi.mock('@/lib/qa/source-backoff', () => ({ qaSourceKey: (row: { id: string }) => row.id, qaSourceRetryAtMany: retries }));
 const id = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -131,4 +131,41 @@ it.each(['UPSTREAM_SOURCE_BACKOFF', 'UPSTREAM_METADATA_MISMATCH'])('shows a pers
   expect(actual.qa_status).toMatchObject({ category: 'blocked_upstream', reasonCode: error_code });
   expectPrivateFree(actual.qa_status);
   expect(actual.status).toBe('blocked_upstream');
+});
+
+const pretestMessage = 'A security check stopped this deployment before the installation test ran.';
+const holdReason = (n: number) => n === 0 ? 'VirusTotal: awaiting engine coverage, rechecking daily' : n === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.';
+const legacyHoldJob = (n = 0, patch = {}) => job({ status: 'qa_failed', execution_profile_sha256: profile, error_code: 'QA_FAILED_EXECUTION_PROFILE', error_message: holdReason(n), qa_completed_at: '2026-01-01T00:00:00Z', ...patch });
+const setPretestHold = (n = 0) => {
+ state.candidates = [candidate({ status: 'error', phase: 'scanning_installer' })];
+ holds.mockResolvedValue(new Map([[hash, { reason: holdReason(n), nextCheckAt: '2030-01-01T00:00:00Z' }]]));
+};
+it.each([0,1])('annotates exact legacy pretest hold %i without changing stored state', async n => {
+ setPretestHold(n); const input=legacyHoldJob(n); const [actual]=await enrichCustomerQaStatus([input]);
+ expect(actual.qa_status).toEqual({category:'installer_security_hold',message:pretestMessage,nextEventAt:null});
+ expectPrivateFree(actual.qa_status); expect(Object.keys(actual.qa_status!).sort()).toEqual(['category','message','nextEventAt']);
+ const {qa_status,...stored}=actual; expect(stored).toEqual(input); expect(qa_status).toBeDefined();
+});
+it.each(['profile','candidate id','version','architecture','hash','phase null','phase queued','candidate status','no hold','two engines','failed result','error code','error message','invalid uuid'])('does not annotate a legacy mismatch: %s', async kind => {
+ setPretestHold(); const patch: Record<string,unknown> = {};
+ if(kind==='profile')patch.execution_profile_sha256='c'.repeat(64);
+ if(kind==='candidate id')state.candidates=[candidate({id:other,status:'error',phase:'scanning_installer'})];
+ if(['version','architecture','hash'].includes(kind)) state.candidates=[candidate({status:'error',phase:'scanning_installer',...(kind==='version'?{version:'2'}:kind==='architecture'?{architecture:'x86'}:{installer_sha256:'c'.repeat(64)})})];
+ if(kind==='phase null'||kind==='phase queued') state.candidates=[candidate({status:'error',phase:kind==='phase null'?null:'queued'})];
+ if(kind==='candidate status')state.candidates=[candidate({status:'failed',phase:'scanning_installer'})];
+ if(kind==='no hold')holds.mockResolvedValue(new Map());
+ if(kind==='two engines')holds.mockResolvedValue(new Map([[hash,{reason:holdReason(2),nextCheckAt:'2030-01-01'}]]));
+ if(kind==='failed result')state.results=[{...candidate(),tested_version:'1.0',outcome:'Failed'}];
+ if(kind==='error code')patch.error_code='OTHER_ERROR';
+ if(kind==='error message')patch.error_message='The required installation test could not complete.';
+ if(kind==='invalid uuid')patch.qa_candidate_id='invalid';
+ const input=legacyHoldJob(0,patch);const [actual]=await enrichCustomerQaStatus([input]); expect(actual).toEqual(input);expect(actual.qa_status).toBeUndefined();
+});
+it.each(['query error','query exception','hold rejection','not configured'])('leaves legacy failure unchanged when evidence fails: %s', async kind=>{
+ setPretestHold();if(kind==='query error')state.error=true;if(kind==='query exception')from.mockImplementation(()=>{throw Error('private error');});if(kind==='hold rejection')holds.mockRejectedValueOnce(Error('private error'));if(kind==='not configured')state.configured=false;
+ const input=legacyHoldJob();expect(await enrichCustomerQaStatus([input])).toEqual([input]);
+});
+it('does not query for ineligible failed rows and handles a mixed authorized list',async()=>{
+ const ineligible=legacyHoldJob(0,{error_code:'OTHER'});expect(await enrichCustomerQaStatus([ineligible])).toEqual([ineligible]);expect(from).not.toHaveBeenCalled();
+ setPretestHold();const [waiting,failed]=await enrichCustomerQaStatus([job(),legacyHoldJob()]);expect(waiting.qa_status?.category).toBe('installer_security_hold');expect(failed.qa_status?.message).toBe(pretestMessage);
 });

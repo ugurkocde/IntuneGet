@@ -67,3 +67,12 @@ it('does not offer another version when the whole app is unavailable', () => {
  expect(html).toContain('This app is not available for automated deployment. This request did not run an installation test.');
  expect(html).not.toContain('Select an available app version');
 });
+
+it('uses truthful pretest wording only for an annotated QA failure',()=>{
+ const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode:'QA_FAILED_EXECUTION_PROFILE',errorStage:'validation',errorMessage:'VirusTotal: awaiting engine coverage, rechecking daily',securityBlocked:true}));
+ expect(html).toContain('Security check');expect(html).toContain('A security check stopped this deployment before the installation test ran.');expect(html).not.toContain('did not pass the installation check');expect(html).not.toContain('VirusTotal');
+});
+it('ignores the display flag for other error codes',()=>{
+ const props={errorCode:'HASH_MISMATCH',errorStage:'validation',errorMessage:'SHA mismatch'};
+ expect(renderToStaticMarkup(createElement(ErrorDisplay,{...props,securityBlocked:true}))).toBe(renderToStaticMarkup(createElement(ErrorDisplay,props)));
+});
