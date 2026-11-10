@@ -121,6 +121,34 @@ $path = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tablet\\Wacom\
     expect(uninstallScript(job)).toContain('Remove-Item -LiteralPath $installPath -Recurse -Force');
   });
 
+  it.each(['bootstrap_x64.exe', 'bootstrap_x86.exe'])(
+    'preserves the nested Windows Installer command in %s',
+    (launcher) => {
+      const tail = '/Q /C:"msiexec /i ""vcredist.msi"" /quiet /norestart"';
+      expect(generator.extractSilentSwitches.call(generator, `"${launcher}" ${tail}`, 'exe')).toBe(tail);
+    }
+  );
+
+  it.each(['exe', 'inno', 'nullsoft', 'burn'])(
+    'preserves vendor action arguments for %s',
+    (type) => {
+      const tail = '/i "payload.msi" /x {PRODUCT-CODE} /p "settings.ini" /quiet';
+      expect(generator.extractSilentSwitches.call(generator, `"setup.exe" ${tail}`, type)).toBe(tail);
+    }
+  );
+
+  it.each([
+    ['msiexec /i "payload.msi" /qn ALLUSERS=1', 'exe', undefined, '/qn ALLUSERS=1'],
+    ['"C:\\Windows\\System32\\msiexec.exe" /i "payload.msi" /qn', 'exe', undefined, '/qn'],
+    ['msiexec /i "payload.msi" /qn ALLUSERS=1', 'zip', 'msi', '/qn ALLUSERS=1'],
+    ['"setup.exe" /Q /C:"msiexec /i ""inner.msi"" /quiet"', 'zip', 'exe', '/Q /C:"msiexec /i ""inner.msi"" /quiet"'],
+    ['"setup.exe"', 'exe', undefined, '/S'],
+    ['"setup.exe"', 'inno', undefined, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
+    ['/x {PRODUCT-CODE} /qn', 'wix', undefined, '/qn'],
+  ])('keeps the local extraction contract for %s', (command, type, nestedType, expected) => {
+    expect(generator.extractSilentSwitches.call(generator, command, type, nestedType)).toBe(expected);
+  });
+
   it.each([
     ['Expand-Archive -Path "app.zip" -DestinationPath app -Force', 'zip', 'inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
     ['powershell.exe -Command Expand-Archive -Path app.zip -DestinationPath app', 'zip', 'inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],

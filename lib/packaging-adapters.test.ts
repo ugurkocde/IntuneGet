@@ -353,6 +353,30 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('binds Breitbandmessung only to its reviewed unbraced NSIS key', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{14607473-30DB-509F-94F0-BB7C085C619E}:Breitbandmessung';
+    const expected = 'REGISTRY_UNINSTALL_KEY:14607473-30db-509f-94f0-bb7c085c619e:Breitbandmessung';
+    expect(resolveApplicationUninstallCommand(' zafaco.Breitbandmessung ', original)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('zafaco.Breitbandmessung', 'REGISTRY_UNINSTALL:Breitbandmessung')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('zafaco.Breitbandmessung', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('zafaco.Breitbandmessung.Other', original)).toBe(original);
+    for (const command of [original.replace('14607473', '00000000'), 'vendor.exe --custom']) {
+      expect(resolveApplicationUninstallCommand('zafaco.Breitbandmessung', command)).toBe(command);
+    }
+  });
+
+  it('binds Niko Home Control only to its reviewed unbraced NSIS key', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{E0658CE6-6ECB-5EC8-AE2F-5A81C75FBCD6}:Niko Home Control programming software';
+    const expected = 'REGISTRY_UNINSTALL_KEY:e0658ce6-6ecb-5ec8-ae2f-5a81c75fbcd6:Niko Home Control programming software';
+    expect(resolveApplicationUninstallCommand(' Niko.HomeControlProgrammingSoftware ', original)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Niko.HomeControlProgrammingSoftware', 'REGISTRY_UNINSTALL:Niko Home Control programming software')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Niko.HomeControlProgrammingSoftware', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Niko.HomeControlProgrammingSoftware.Other', original)).toBe(original);
+    for (const command of [original.replace('E0658CE6', '00000000'), 'vendor.exe --custom']) {
+      expect(resolveApplicationUninstallCommand('Niko.HomeControlProgrammingSoftware', command)).toBe(command);
+    }
+  });
+
   it('binds Tuta only to its reviewed unbraced NSIS key', () => {
     const original = 'REGISTRY_UNINSTALL_PRODUCT:{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}:Tuta Mail';
     const expected = 'REGISTRY_UNINSTALL_KEY:450699d2-1c81-5ee5-aec6-08dddb7af9d7:Tuta Mail';

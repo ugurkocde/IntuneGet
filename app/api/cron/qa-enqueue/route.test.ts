@@ -8,6 +8,7 @@ const {
   resolveManifestMock,
   resolveDependenciesMock,
   adoptRepairMock,
+  adoptCorrectedRepairMock,
 } = vi.hoisted(() => ({
   getPackageCompatibilityBlockMock: vi.fn(),
   createServerClientMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   resolveManifestMock: vi.fn(),
   resolveDependenciesMock: vi.fn().mockResolvedValue([]),
   adoptRepairMock: vi.fn(),
+  adoptCorrectedRepairMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
@@ -24,6 +26,10 @@ vi.mock('@/lib/qa/repair-adoption', async importOriginal => ({
   adoptRepairCurrentCandidate: adoptRepairMock,
 }));
 vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
+vi.mock('@/lib/qa/repair-correction',async original=>({
+  ...await original<typeof import('@/lib/qa/repair-correction')>(),
+  adoptRepairCorrectedCandidate:adoptCorrectedRepairMock,
+}));
 vi.mock('@/lib/qa/winget-changes', () => ({ detectWingetChanges: detectWingetChangesMock }));
 vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
   createWingetManifestClient: createManifestClientMock,
@@ -37,7 +43,7 @@ vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
   };
 });
 
-import { GET } from './route';
+import { GET, POST } from './route';
 import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
 import { prioritizeToolchainBackfill } from '@/lib/qa/toolchain-backfill';
 import {
@@ -410,6 +416,32 @@ afterEach(() => {
   delete process.env.QA_MAINTENANCE_MODE;
   delete process.env.CRON_SECRET;
   vi.restoreAllMocks();
+});
+
+describe('POST corrected profile preparation',()=>{
+  const body={repairId:'22222222-2222-4222-8222-222222222222',expectedOldProfile:'A'.repeat(64),expectedNewProfile:'B'.repeat(64),contract:'exe-embedded-msi-target@1779'};
+  const request=(data:unknown=body,authorized=true,query='')=>new Request('https://intuneget.com/api/cron/qa-enqueue'+query,{method:'POST',headers:authorized?{authorization:'Bearer test-cron-secret'}:{},body:JSON.stringify(data)});
+  it('authenticates and validates exact fields before any database or manifest access',async()=>{
+    expect((await POST(request(body,false))).status).toBe(401);
+    expect((await POST(request({...body,silentArgs:'/override'}))).status).toBe(400);
+    expect((await POST(request(body,true,'?id=Example.App'))).status).toBe(400);
+    expect(createServerClientMock).not.toHaveBeenCalled();expect(createManifestClientMock).not.toHaveBeenCalled();
+  });
+  it('prepares one exact request without starting a scheduler scan or a heartbeat write',async()=>{
+    const f=createSupabaseStub({requiredPackagerCommit:QA_PSADT_TOOLCHAIN.packagerCommit});
+    createServerClientMock.mockReturnValue(f.client);
+    adoptCorrectedRepairMock.mockResolvedValueOnce({outcome:'adopted',candidateId:'prepared'});
+    const response=await POST(request());expect(response.status).toBe(200);
+    expect(adoptCorrectedRepairMock).toHaveBeenCalledOnce();expect(f.pollRunInserts).toEqual([]);
+    expect(f.candidateInserts).toEqual([]);expect(f.pipelineControlUpdates).toEqual([]);expect(detectWingetChangesMock).not.toHaveBeenCalled();
+  });
+  it('retains pipeline pause and release readiness guards',async()=>{
+    for(const options of [{paused:true},{requiredPackagerCommit:'f'.repeat(40)}]){
+      createServerClientMock.mockReturnValue(createSupabaseStub(options).client);
+      expect((await POST(request())).status).toBe(409);
+    }
+    expect(adoptCorrectedRepairMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/cron/qa-enqueue', () => {

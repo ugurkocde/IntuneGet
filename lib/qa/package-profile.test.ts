@@ -35,6 +35,64 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('changes the Breitbandmessung uninstall profile without changing detection, configuration or installer bytes', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{14607473-30DB-509F-94F0-BB7C085C619E}:Breitbandmessung';
+    const application = {
+      ...input, wingetId: 'zafaco.Breitbandmessung', displayName: 'Breitbandmessung', publisher: 'zafaco',
+      version: '3.13.0', sourceInstallerType: 'nullsoft', silentArgs: '/S',
+      uninstallCommand: original,
+    };
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: application.wingetId, displayName: application.displayName, publisher: application.publisher,
+      version: application.version, architecture: application.architecture,
+      installerSha256: application.installerSha256, installerType: application.sourceInstallerType,
+      silentSwitches: application.silentArgs, installScope: application.installScope,
+      uninstallCommand: original, detectionRules: JSON.stringify(application.detectionRules),
+      psadtConfig: JSON.stringify(application.psadtConfig),
+    }).identity;
+    const previous = buildQaPackageIdentity({
+      ...application, psadtConfig: normalized.profile.psadtConfig,
+      detectionRules: normalized.profile.detectionRules,
+    });
+    expect(normalized.profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:14607473-30db-509f-94f0-bb7c085c619e:Breitbandmessung'
+    );
+    expect(normalized.packageProfileSha256).not.toBe(previous.packageProfileSha256);
+    expect(normalized.detectionRulesSha256).toBe(previous.detectionRulesSha256);
+    expect(normalized.psadtConfigSha256).toBe(previous.psadtConfigSha256);
+    expect(normalized.profile.installer.sha256).toBe(previous.profile.installer.sha256);
+    expect(normalized.profile.installer.installScope).toBe('machine');
+  });
+
+  it('changes the Niko Home Control uninstall profile without changing detection, configuration or installer bytes', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{E0658CE6-6ECB-5EC8-AE2F-5A81C75FBCD6}:Niko Home Control programming software';
+    const application = {
+      ...input, wingetId: 'Niko.HomeControlProgrammingSoftware', displayName: 'Niko Home Control programming software', publisher: 'Niko',
+      version: '2.28.16662', sourceInstallerType: 'nullsoft', silentArgs: '/S',
+      uninstallCommand: original,
+    };
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: application.wingetId, displayName: application.displayName, publisher: application.publisher,
+      version: application.version, architecture: application.architecture,
+      installerSha256: application.installerSha256, installerType: application.sourceInstallerType,
+      silentSwitches: application.silentArgs, installScope: application.installScope,
+      uninstallCommand: original, detectionRules: JSON.stringify(application.detectionRules),
+      psadtConfig: JSON.stringify(application.psadtConfig),
+    }).identity;
+    const previous = buildQaPackageIdentity({
+      ...application, psadtConfig: normalized.profile.psadtConfig,
+      detectionRules: normalized.profile.detectionRules,
+    });
+    expect(normalized.profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:e0658ce6-6ecb-5ec8-ae2f-5a81c75fbcd6:Niko Home Control programming software'
+    );
+    expect(normalized.packageProfileSha256).not.toBe(previous.packageProfileSha256);
+    expect(normalized.detectionRulesSha256).toBe(previous.detectionRulesSha256);
+    expect(normalized.psadtConfigSha256).toBe(previous.psadtConfigSha256);
+    expect(normalized.profile.installer.sha256).toBe(previous.profile.installer.sha256);
+    expect(normalized.profile.installer.installScope).toBe('machine');
+  });
+
   it('changes the Tuta uninstall profile without changing detection, configuration or installer bytes', () => {
     const original = 'REGISTRY_UNINSTALL_PRODUCT:{450699D2-1C81-5EE5-AEC6-08DDDB7AF9D7}:Tuta Mail';
     const tuta = {

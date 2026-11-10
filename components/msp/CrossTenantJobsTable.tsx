@@ -95,7 +95,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       case 'failed':
         return 'Failed';
       case 'qa_failed':
-        return 'Installation test failed';
+        return 'Deployment stopped';
       case 'blocked_upstream':
         return 'Blocked upstream';
       case 'awaiting_qa':

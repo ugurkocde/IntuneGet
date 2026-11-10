@@ -26,6 +26,7 @@ export function extractSilentSwitches(
   const effectiveType = sourceType === 'zip' && nestedInstallerType
     ? nestedInstallerType.toLowerCase()
     : sourceType;
+  const hasOuterMsiLauncher = /^(?:"(?:[^"]*[\\/])?msiexec(?:\.exe)?"|(?:[^\s"]*[\\/])?msiexec(?:\.exe)?)\s+/i.test(installCommand);
 
   // Archive extraction parameters are not vendor silent switches. Never pass
   // values such as "-Archive -Path" to a nested executable.
@@ -40,13 +41,15 @@ export function extractSilentSwitches(
     .replace(/^"[^"]+"\s*/, '') // Remove quoted paths like "C:\path\installer.exe"
     .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, ''); // Remove unquoted paths ending in installer extensions
 
-  // Strip msiexec action switches and their targets:
-  // /i filename.msi, /x {GUID}, /p patch.msp, etc.
-  cleaned = cleaned
-    .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '') // /i "quoted path.msi"
-    .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '') // /x {GUID}
-    .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '') // /i filename.msi
-    .replace(/\/[ixp]\s+/gi, ''); // /i alone (leftover)
+  // MSI action targets belong to the outer Windows Installer invocation.
+  // In an EXE tail they may instead be part of the vendor's nested command.
+  if (hasOuterMsiLauncher || ['msi', 'wix'].includes(effectiveType)) {
+    cleaned = cleaned
+      .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '') // /i "quoted path.msi"
+      .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '') // /x {GUID}
+      .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '') // /i filename.msi
+      .replace(/\/[ixp]\s+/gi, ''); // /i alone (leftover)
+  }
 
   // Preserve the complete vendor argument tail, including positional operands.
   // Commands such as Office Deployment Tool's
