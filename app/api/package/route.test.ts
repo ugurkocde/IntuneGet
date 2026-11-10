@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { STALE_JOB_TIMEOUT_MINUTES, STALE_JOB_ERROR_MESSAGE } from '@/lib/stale-jobs';
 import type { PackagingJob } from '@/lib/db/types';
+import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 
 const {
   getDatabaseMock,
@@ -903,6 +904,27 @@ describe('POST /api/package (workflow dispatch)', () => {
       } finally { vi.unstubAllGlobals(); }
     }
   );
+
+  it('holds a rejected hosted dispatch for automatic retry instead of reporting a failure', async () => {
+    const retryAt = new Date(Date.now() + 120_000).toISOString();
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429, retryAt));
+    const body = await (await postSingleItem()).json();
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'awaiting_qa', completed_at: null, qa_resume_due_at: retryAt,
+      error_details: { workflow_dispatch_rate_limit_attempts: 1 },
+    }), expect.objectContaining({ status: 'packaging', github_run_id: null, cancelled_at: null, archived_at: null }));
+    expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
+    expect(body.errors).toBeUndefined();
+  });
+  it('does not advertise a rate limit hold if a concurrent job update wins', async () => {
+    updateMock.mockResolvedValueOnce(null);
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
+      new Date(Date.now() + 120_000).toISOString()));
+    const body = await (await postSingleItem()).json();
+    expect(body.jobs).toEqual([]);
+    expect(updateMock).toHaveBeenCalledOnce();
+    expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'packaging', github_run_id: null });
+  });
 
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(

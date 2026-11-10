@@ -2,6 +2,7 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
@@ -560,6 +561,33 @@ export async function GET(request: Request) {
       resumed++;
     } catch (error) {
       const licenceRequired = error instanceof CuratedLicenceError;
+      const rateLimit = error instanceof WorkflowDispatchRateLimitError ? error : null;
+      const rateHold = rateLimit ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
+      if (rateLimit) {
+        const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
+          .from('packaging_jobs')
+          .update(rateHold ? { ...rateHold, qa_completed_at: job.qa_completed_at ?? null } : {
+            status: 'failed',
+            status_message: 'GitHub capacity retries have stopped. No new deployment was started.',
+            error_code: rateLimit.code,
+            error_stage: 'authenticate', error_category: 'network', error_message: rateLimit.message,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id)
+          .eq('status', 'packaging')
+          .is('github_run_id', null)
+          .is('cancelled_at', null)
+          .is('archived_at', null))
+          .select('id')
+          .maybeSingle();
+        if (holdError) throw holdError;
+        if (heldJob && rateHold) held++;
+        if (heldJob && !rateHold) {
+          await handleAutoUpdateJobCompletion(job.id, 'failed', rateLimit.message);
+          failed++;
+        }
+        continue;
+      }
       // This typed failure is raised before dispatch. Ambiguous dispatch
       // failures must retain the terminal path below rather than be replayed.
       if (error instanceof InstallerPreflightError && error.retryable) {
