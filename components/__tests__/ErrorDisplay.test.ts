@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { createElement } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ErrorDisplay } from '../ErrorDisplay';
 import { isIntuneApprovalFailure } from '@/lib/intune-approval';
+
+vi.mock('gt-next', () => ({ T: ({ children }: { children: ReactNode }) => children }));
 
 describe('approval failure guidance', () => {
   it('explains the retained upload instead of suggesting approval automatically enables retry', () => {

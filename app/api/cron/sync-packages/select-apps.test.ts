@@ -10,36 +10,65 @@ interface AppRow {
 function createSupabaseMock(options: {
   rankedRows?: AppRow[];
   unsyncedRows?: AppRow[];
+  blockRows?: Array<{ winget_id: string }>;
+  blockedAppRows?: AppRow[];
   rankedError?: { message: string };
   unsyncedError?: { message: string };
+  blocksError?: { message: string };
+  touchError?: { message: string };
 }) {
-  const from = vi.fn(() => {
+  const from = vi.fn((table: string) => {
     let isUnsyncedQuery = false;
-    const filters: Array<[string, unknown]> = [];
+    let isBlockedAppsQuery = false;
+    let isUpdate = false;
     const chain: Record<string, unknown> = {};
     chain.select = vi.fn(() => chain);
-    chain.eq = vi.fn((column: string, value: unknown) => {
-      filters.push([column, value]);
+    chain.update = vi.fn(() => {
+      isUpdate = true;
       return chain;
     });
+    chain.eq = vi.fn(() => chain);
     chain.is = vi.fn(() => {
       // .is('latest_version', null) only appears on the never-synced query
       isUnsyncedQuery = true;
       return chain;
     });
+    chain.in = vi.fn(() => {
+      // The block touch ends with .in(); the blocked-app lookup continues to .limit()
+      if (isUpdate) return Promise.resolve({ error: options.touchError || null });
+      isBlockedAppsQuery = true;
+      return chain;
+    });
     chain.order = vi.fn(() => chain);
-    chain.limit = vi.fn(async () =>
-      ({
-        ...(isUnsyncedQuery
-          ? { data: options.unsyncedRows || [], error: options.unsyncedError || null }
-          : { data: options.rankedRows || [], error: options.rankedError || null }),
-        filters,
-      })
-    );
+    chain.limit = vi.fn(async () => {
+      if (table === 'package_eligibility_blocks') {
+        return { data: options.blockRows || [], error: options.blocksError || null };
+      }
+      if (isBlockedAppsQuery) return { data: options.blockedAppRows || [], error: null };
+      if (isUnsyncedQuery) {
+        return { data: options.unsyncedRows || [], error: options.unsyncedError || null };
+      }
+      return { data: options.rankedRows || [], error: options.rankedError || null };
+    });
     return chain;
   });
 
   return { from } as unknown as SupabaseClient;
+}
+
+type MockChain = {
+  eq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+};
+
+function chainsFor(supabase: SupabaseClient, table: string): MockChain[] {
+  const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>;
+  return fromMock.mock.calls
+    .map((call: unknown[], index: number) => ({ table: call[0], chain: fromMock.mock.results[index].value }))
+    .filter((entry: { table: unknown }) => entry.table === table)
+    .map((entry: { chain: unknown }) => entry.chain as MockChain);
 }
 
 describe('selectAppsToSync', () => {
@@ -87,20 +116,43 @@ describe('selectAppsToSync', () => {
     expect(apps).toEqual([]);
   });
 
-  it('restricts both selections to verified Win32 WinGet packages', async () => {
+  it('restricts the ranked and never-synced selections to verified Win32 WinGet packages', async () => {
     const supabase = createSupabaseMock({});
 
     await selectAppsToSync(supabase);
 
-    const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>;
-    const queryChains = fromMock.mock.results
-      .map((result: { value: unknown }) => result.value as { eq: ReturnType<typeof vi.fn> });
+    const queryChains = chainsFor(supabase, 'curated_apps');
     expect(queryChains).toHaveLength(2);
     for (const chain of queryChains) {
       expect(chain.eq).toHaveBeenCalledWith('is_verified', true);
       expect(chain.eq).toHaveBeenCalledWith('is_winget_verified', true);
       expect(chain.eq).toHaveBeenCalledWith('app_source', 'win32');
     }
+  });
+
+  it('re-checks apps blocked as upstream_removed even though they are unverified', async () => {
+    const supabase = createSupabaseMock({
+      rankedRows: [{ winget_id: 'Microsoft.Edge', latest_version: '120.0.0' }],
+      blockRows: [{ winget_id: 'Google.Chrome' }],
+      blockedAppRows: [{ winget_id: 'Google.Chrome', latest_version: '157.0.8103.39' }],
+    });
+
+    const apps = await selectAppsToSync(supabase);
+
+    expect(apps.map((a) => [a.winget_id, Boolean(a.upstream_removed_block)])).toEqual([
+      ['Google.Chrome', true],
+      ['Microsoft.Edge', false],
+    ]);
+    const [blockQuery, touch] = chainsFor(supabase, 'package_eligibility_blocks');
+    expect(blockQuery.eq).toHaveBeenCalledWith('block_code', 'upstream_removed');
+    expect(blockQuery.order).toHaveBeenCalledWith('updated_at', { ascending: true });
+    expect(touch.update).toHaveBeenCalledWith({ updated_at: expect.any(String) });
+    expect(touch.eq).toHaveBeenCalledWith('block_code', 'upstream_removed');
+    expect(touch.in).toHaveBeenCalledWith('winget_id', ['Google.Chrome']);
+    const blockedLookup = chainsFor(supabase, 'curated_apps')[2];
+    expect(blockedLookup.in).toHaveBeenCalledWith('winget_id', ['Google.Chrome']);
+    expect(blockedLookup.eq).not.toHaveBeenCalledWith('is_verified', true);
+    expect(blockedLookup.eq).toHaveBeenCalledWith('app_source', 'win32');
   });
 
   it('throws when a query fails', async () => {
@@ -111,5 +163,32 @@ describe('selectAppsToSync', () => {
     await expect(selectAppsToSync(supabase)).rejects.toEqual({
       message: 'connection refused',
     });
+  });
+
+  it('rotates selected blocks even when their app row is filtered out', async () => {
+    const supabase = createSupabaseMock({ blockRows: [{ winget_id: 'Store.Only.App' }], blockedAppRows: [] });
+
+    expect(await selectAppsToSync(supabase)).toEqual([]);
+    const [, touch] = chainsFor(supabase, 'package_eligibility_blocks');
+    expect(touch.in).toHaveBeenCalledWith('winget_id', ['Store.Only.App']);
+  });
+
+  it('does not touch blocks when none are selected', async () => {
+    const supabase = createSupabaseMock({});
+
+    await selectAppsToSync(supabase);
+    expect(chainsFor(supabase, 'package_eligibility_blocks')).toHaveLength(1);
+  });
+
+  it('throws when the block rotation fails', async () => {
+    const supabase = createSupabaseMock({ blockRows: [{ winget_id: 'A.B' }], touchError: { message: 'touch failed' } });
+
+    await expect(selectAppsToSync(supabase)).rejects.toEqual({ message: 'touch failed' });
+  });
+
+  it('throws when the block lookup fails', async () => {
+    const supabase = createSupabaseMock({ blocksError: { message: 'blocks unavailable' } });
+
+    await expect(selectAppsToSync(supabase)).rejects.toEqual({ message: 'blocks unavailable' });
   });
 });

@@ -1,0 +1,5 @@
+{
+  "title": "Safer verification for corrected packages",
+  "summary": "Corrected EXE installer profiles can receive isolated repair verification while security checks and customer deployment protections remain enforced.",
+  "type": "improved"
+}
