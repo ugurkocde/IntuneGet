@@ -153,8 +153,9 @@ export function ErrorDisplay({
   }
 
   const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
+  const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE';
   const unsupportedDependency = errorCode === 'DEPENDENCY_NOT_SUPPORTED';
-  const stage = unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
+  const stage = unavailable ? { ...stageConfig.validation, label: 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
     : qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
@@ -166,7 +167,7 @@ export function ErrorDisplay({
     showReVerify: false,
   } : unsupportedDependency ? {
     message: 'This dependency is not supported for automated deployment yet.', showReVerify: false,
-  } : categoryHints[errorCategory || ''];
+  } : unavailable ? { message: 'Select an available app version. This request did not run an installation test.', showReVerify: false } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
   const details = errorDetails as ErrorDetails | null;
 

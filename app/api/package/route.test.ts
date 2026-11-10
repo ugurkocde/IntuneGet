@@ -2221,7 +2221,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(body.jobs[0]).toMatchObject({ status: 'failed' });
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
@@ -2245,7 +2245,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(body.jobs[0]).toMatchObject({ status: 'failed' });
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { unsupportedDependencyMessage } from './unsupported-dependency';
+import { unsupportedDependencyMessage, knownUnavailableDisposition, isExactPretestCandidate } from './unsupported-dependency';
 import { resolveWingetPackageDependencies } from './winget-dependencies';
 import type { NormalizedInstaller } from '@/types/winget';
 
@@ -41,4 +41,18 @@ describe('unsupported dependency customer wording', () => {
       expect(lookups).toBe(1);
     }
   });
+});
+
+describe("pretest classification boundaries", () => {
+ it("accepts only exact unavailable producer messages", () => {
+ expect(knownUnavailableDisposition("This app version is not available for automated deployment.")?.code).toBe("VERSION_UNAVAILABLE");
+ expect(knownUnavailableDisposition("This app is not available for automated deployment.")?.code).toBe("PACKAGE_UNAVAILABLE");
+ for(const value of [null, "Failed QA", "This app version is not available for automated deployment. extra"]) expect(knownUnavailableDisposition(value)).toBeNull();
+ });
+ it("requires every exact identity field and pretest phase", () => {
+ const c={id:"candidate", status:"error", phase:"scanning_installer",winget_id:"Example.App",version:"1",architecture:"x86",installer_sha256:"A".repeat(64),package_profile_sha256:"B".repeat(64)};
+ const e={candidateId:"candidate",wingetId:"Example.App",version:"1",architecture:"x86",hash:"a".repeat(64),profile:"b".repeat(64)};
+ expect(isExactPretestCandidate(c,e)).toBe(true);
+ for(const patch of [{status:"failed"},{phase:"installing"},{winget_id:"Other.App"},{version:"2"},{architecture:"x64"},{installer_sha256:"C".repeat(64)},{package_profile_sha256:"C".repeat(64)}]) expect(isExactPretestCandidate({...c,...patch},e)).toBe(false);
+ });
 });

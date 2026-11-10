@@ -59,3 +59,5 @@ describe('ErrorDisplay QA failure stage', () => {
     expect(html).not.toContain('Installation check');
   });
 });
+
+it.each(['VERSION_UNAVAILABLE','PACKAGE_UNAVAILABLE'])('shows availability without a failed QA claim: %s',errorCode=>{const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode,errorCategory:'validation',errorMessage:'This app version is not available for automated deployment.'}));expect(html).toContain('Not available');expect(html).toContain('did not run an installation test');expect(html).not.toContain('did not pass');});
