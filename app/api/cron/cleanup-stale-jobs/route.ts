@@ -7,6 +7,8 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getFeatureFlags } from '@/lib/features';
+import { reconcileRunnerLosses } from '@/lib/runner-loss-reconciliation';
 import { createClient } from '@supabase/supabase-js';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import {
@@ -36,6 +38,7 @@ export async function GET(request: Request) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    const early = getFeatureFlags().localPackager ? { reconciled: 0, deferred: false } : await reconcileRunnerLosses(supabase);
     const cutoffTime = new Date(
       Date.now() - STALE_JOB_TIMEOUT_MINUTES * 60 * 1000
     ).toISOString();
@@ -94,6 +97,7 @@ export async function GET(request: Request) {
         success: true,
         message: 'No stale jobs found',
         cleaned: 0,
+        ...early,
       });
     }
 
@@ -149,6 +153,7 @@ export async function GET(request: Request) {
       success: true,
       message: `Marked ${failedJobs.length} stale job(s) as failed`,
       cleaned: failedJobs.length,
+      ...early,
       jobs: failedJobs.map((job) => ({
         id: job.id,
         previousStatus: job.status,

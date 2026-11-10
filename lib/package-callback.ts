@@ -81,6 +81,8 @@ export function shouldApplyCallback(
   currentUpdatedAt: string,
   heartbeatAt?: string,
 ): boolean {
+  if (currentStatus === 'awaiting_qa') return false;
+  if (currentStatus === 'awaiting_qa') return false;
   const normalizedCurrent = packageJobStatuses.includes(currentStatus as PackageJobStatus)
     ? currentStatus as PackageJobStatus
     : 'queued';
@@ -122,4 +124,9 @@ export function sanitizeErrorDetails(
         return [key, '[redacted complex value]'];
       }),
   );
+}
+
+/** A retired run cannot mutate the fresh admission or its replacement run. */
+export function isRetiredRunCallback(retiredRunId: string | null | undefined, incomingRunId: string | number | undefined): boolean {
+  return !!retiredRunId && (incomingRunId === undefined || String(incomingRunId) === retiredRunId);
 }

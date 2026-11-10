@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cancelWorkflowRun,
   getWorkflowRuns,
+  getWorkflowRun,
+  getWorkflowRunAttemptJobs,
+  getCheckRunAnnotations,
+  WorkflowReadRateLimitError,
   triggerPackagingWorkflow,
   type GitHubActionsConfig,
   type WorkflowInputs,
@@ -1280,5 +1284,34 @@ describe('cancelWorkflowRun', () => {
 
     expect(await cancelWorkflowRun(42, config)).toMatchObject({ success: true });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('bounded runner evidence reads', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('reads the first exact attempt with a bounded request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ total_count: 0, jobs: [] })));
+    vi.stubGlobal('fetch', fetchMock);
+    await getWorkflowRunAttemptJobs(42, config);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/example/workflow-repo/actions/runs/42/attempts/1/jobs?per_page=100',
+      expect.objectContaining({ signal: expect.any(AbortSignal), redirect: 'error' }));
+  });
+  it('reads only the configured repository check annotations', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{ message: 'runner lost' }, { invalid: true }])));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await getCheckRunAnnotations(101, config)).toEqual([{ message: 'runner lost' }]);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.github.com/repos/example/workflow-repo/check-runs/101/annotations?per_page=100');
+  });
+  it.each([429, 403])('stops all evidence reads on quota HTTP %i', async status => {
+    for (const operation of [getWorkflowRun, getWorkflowRunAttemptJobs, getCheckRunAnnotations]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private upstream body', { status,
+        headers: { 'x-ratelimit-remaining': '0', 'retry-after': '60' } })));
+      await expect(operation(42, config)).rejects.toBeInstanceOf(WorkflowReadRateLimitError);
+    }
+  });
+  it('never exposes an upstream error response body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private upstream body', { status: 500 })));
+    await expect(getWorkflowRun(42, config)).rejects.toThrow('GitHub workflow evidence unavailable (HTTP 500)');
   });
 });

@@ -1,3 +1,4 @@
+import type { PackagingWorkflowRun, WorkflowAttemptJobs } from './runner-loss';
 /**
  * GitHub Actions Client
  * Triggers packaging workflows via GitHub REST API
@@ -610,8 +611,9 @@ export const UNSTARTED_WORKFLOW_RUN_STATUSES = ['queued', 'waiting', 'pending', 
  */
 export async function getWorkflowRun(
   runId: number,
-  config?: GitHubActionsConfig
-): Promise<{
+  config?: GitHubActionsConfig,
+  timeoutMs = 8_000,
+): Promise<PackagingWorkflowRun & {
   id: number;
   name: string;
   status: string;
@@ -625,6 +627,8 @@ export async function getWorkflowRun(
   const url = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/runs/${runId}`;
 
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    redirect: 'error',
     headers: {
       Authorization: `Bearer ${cfg.token}`,
       Accept: 'application/vnd.github.v3+json',
@@ -632,12 +636,43 @@ export async function getWorkflowRun(
     },
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Failed to get workflow run: ${response.status} ${response.statusText} - ${errorText}`
-    );
-  }
+  if (!response.ok) throwWorkflowReadError(response);
 
   return response.json();
+}
+
+/** A read-side quota refusal stops the entire bounded reconciliation pass. */
+export class WorkflowReadRateLimitError extends Error {
+  constructor(public retryAfter: string | null, public reset: string | null) {
+    super('GitHub workflow evidence is temporarily rate limited');
+  }
+}
+
+function throwWorkflowReadError(response: Response): never {
+  if (response.status === 429 || response.status === 403 &&
+    (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after'))) {
+    throw new WorkflowReadRateLimitError(response.headers.get('retry-after'), response.headers.get('x-ratelimit-reset'));
+  }
+  throw new Error('GitHub workflow evidence unavailable (HTTP ' + response.status + ')');
+}
+
+async function workflowEvidence<T>(suffix: string, config: GitHubActionsConfig, timeoutMs: number): Promise<T> {
+  const response = await fetch('https://api.github.com/repos/' + config.owner + '/' + config.workflowsRepo + suffix, {
+    headers: { Authorization: 'Bearer ' + config.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) throwWorkflowReadError(response);
+  return response.json();
+}
+
+export function getWorkflowRunAttemptJobs(runId: number, config = getGitHubActionsConfig(), timeoutMs = 8_000): Promise<WorkflowAttemptJobs> {
+  if (!Number.isSafeInteger(runId) || runId <= 0) throw new Error('Invalid workflow run ID');
+  return workflowEvidence('/actions/runs/' + runId + '/attempts/1/jobs?per_page=100', config, timeoutMs);
+}
+
+export async function getCheckRunAnnotations(checkId: number, config = getGitHubActionsConfig(), timeoutMs = 8_000): Promise<Array<{ message: string }>> {
+  if (!Number.isSafeInteger(checkId) || checkId <= 0) throw new Error('Invalid check run ID');
+  const rows = await workflowEvidence<unknown>('/check-runs/' + checkId + '/annotations?per_page=100', config, timeoutMs);
+  if (!Array.isArray(rows)) throw new Error('Invalid check annotations');
+  return rows.filter((x): x is { message: string } => !!x && typeof x.message === 'string').map(x => ({ message: x.message }));
 }

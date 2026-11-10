@@ -1,5 +1,5 @@
 {
-  "title": "Correct workflow links for concurrent deployments",
-  "summary": "Packaging jobs now identify their own workflow run instead of borrowing a nearby deployment's run when several packages start together.",
+  "title": "Recover packaging jobs after a lost build runner",
+  "summary": "Packaging jobs identify their own workflow run and report ended runs sooner. A verified runner loss before any step starts can retry once through the existing deployment checks.",
   "type": "fixed"
 }

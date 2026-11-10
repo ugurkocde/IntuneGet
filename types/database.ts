@@ -1020,6 +1020,8 @@ export interface Database {
           qa_candidate_id: string | null;
           qa_requested_at: string | null;
           qa_resume_due_at: string;
+          infrastructure_retry_count: number;
+          infrastructure_retry_run_id: string | null;
           qa_completed_at: string | null;
         };
         Insert: {
@@ -1074,6 +1076,8 @@ export interface Database {
           qa_candidate_id?: string | null;
           qa_requested_at?: string | null;
           qa_resume_due_at?: string;
+          infrastructure_retry_count?: number;
+          infrastructure_retry_run_id?: string | null;
           qa_completed_at?: string | null;
         };
         Update: {
@@ -1128,6 +1132,8 @@ export interface Database {
           qa_candidate_id?: string | null;
           qa_requested_at?: string | null;
           qa_resume_due_at?: string;
+          infrastructure_retry_count?: number;
+          infrastructure_retry_run_id?: string | null;
           qa_completed_at?: string | null;
         };
         Relationships: GenericRelationship[];

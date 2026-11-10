@@ -15,6 +15,7 @@ import {
   packageCallbackSchema,
   sanitizeErrorDetails,
   shouldApplyCallback,
+  isRetiredRunCallback,
 } from '@/lib/package-callback';
 
 export async function POST(request: NextRequest) {
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    if (!shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
+    if (isRetiredRunCallback(currentJob.infrastructure_retry_run_id, data.runId)
+      || !shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
       return NextResponse.json({
         success: true,
         ignored: true,
@@ -164,7 +166,7 @@ export async function POST(request: NextRequest) {
 
     // Optimistic status condition prevents a cancellation or another terminal
     // callback from being overwritten between the read and the update.
-    const updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status });
+    const updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status, updated_at: currentJob.updated_at });
 
     if (!updatedJob) {
       const latestJob = await db.jobs.getById(data.jobId);
