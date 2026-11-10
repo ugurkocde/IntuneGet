@@ -903,15 +903,22 @@ export async function POST(request: NextRequest) {
             const rateHold = rateLimit && dispatch?.item.sourceType !== 'custom'
               ? dispatchRateLimitHold(rateLimit, null) : null;
             if (rateHold && dispatch) {
+              let retryWriteFailed = false;
               const held = await db.jobs.update(dispatch.jobId, rateHold, {
                 status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null,
+              }).catch(() => {
+                retryWriteFailed = true;
+                console.error(`[Package] Could not schedule a capacity retry for job ${logValue(dispatch.jobId)}`);
+                return null;
               });
               if (held) jobs.push({ id: dispatch.jobId, user_id: userId, tenant_id: tenantId,
                 winget_id: dispatch.item.wingetId, version: dispatch.item.version,
                 display_name: dispatch.item.displayName, publisher: dispatch.item.publisher,
                 status: 'awaiting_qa', package_config: dispatch.item, created_at: dispatch.createdAt });
               else errors.push({ wingetId: dispatch.item.wingetId,
-                error: 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' });
+                error: retryWriteFailed
+                  ? 'Packaging could not schedule its automatic retry. Refresh the deployment status.'
+                  : 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' });
               continue;
             }
             // The final dispatch boundary re-checks QA, security and

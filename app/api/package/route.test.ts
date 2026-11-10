@@ -932,6 +932,24 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(updateMock).toHaveBeenCalledOnce();
     expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
   });
+  it('still reports other dispatched jobs when saving a capacity hold fails', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
+      new Date(Date.now() + 120_000).toISOString()));
+    updateMock.mockImplementation(async (_id, patch) => {
+      if (patch.status === 'awaiting_qa') throw new Error('private database fault');
+      return patch;
+    });
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item(), makeWin32Item({ wingetId: 'Other.App' })] }),
+    }));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.jobs).toEqual([expect.objectContaining({ winget_id: 'Other.App', status: 'packaging' })]);
+    expect(body.errors).toEqual([{ wingetId: 'Test.App',
+      error: 'Packaging could not schedule its automatic retry. Refresh the deployment status.' }]);
+    expect(JSON.stringify(body)).not.toContain('private database fault');
+  });
 
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(
