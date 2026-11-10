@@ -703,7 +703,7 @@ function UploadJobCard({
       icon: XCircle,
       label: securityBlocked ? 'Security check blocked deployment'
         : availabilityCode === 'PACKAGE_UNAVAILABLE' ? 'App not available'
-          : availabilityCode === 'VERSION_UNAVAILABLE' ? 'App version not available' : 'Installation test failed',
+          : availabilityCode === 'VERSION_UNAVAILABLE' ? 'App version not available' : <T>Deployment stopped</T>,
       color: 'text-status-error',
       bg: 'bg-status-error/10',
       border: 'border-l-status-error',
