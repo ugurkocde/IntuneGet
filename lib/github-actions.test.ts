@@ -13,6 +13,7 @@ import {
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 import { QaCompatibilityGateError } from './qa/gate';
 import { generateUninstallCommand } from './detection-rules';
+import { WorkflowDispatchRateLimitError } from './workflow-dispatch-rate-limit';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -186,6 +187,30 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('exposes a rejected dispatch as a typed hold without sending a second POST', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('secondary rate limit exceeded: private details', {
+      status: 403, headers: { 'retry-after': '120' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true });
+    await expect(result).rejects.toBeInstanceOf(WorkflowDispatchRateLimitError);
+    await expect(result).rejects.not.toThrow('private details');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([401, 403, 404, 422, 500, 502, 503, 504])('sends ambiguous or permanent dispatch status %s only once', async status => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('private response details', { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true });
+    await expect(result).rejects.not.toBeInstanceOf(WorkflowDispatchRateLimitError);
+    await expect(result).rejects.not.toThrow('private response details');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it('does not resend a dispatch whose network response is unknown', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('connection lost'));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true })).rejects.toThrow('connection lost');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it('dispatches authored catalog detection rules with the matching QA identity', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
