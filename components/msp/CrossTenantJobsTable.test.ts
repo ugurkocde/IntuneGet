@@ -19,3 +19,31 @@ describe('MSP blocked upstream reason', () => {
     expect(html).not.toContain('UPSTREAM_');
   });
 });
+
+describe('MSP validation stops', () => {
+  it.each([
+    'Security checks stopped this request before installation testing.',
+    'The requested app version is unavailable.',
+    'Installation exited with an error.',
+    null,
+  ])('does not infer an installation test outcome from qa_failed: %s', errorMessage => {
+    const job = { id: 'fake-job', status: 'qa_failed', error_message: errorMessage,
+      display_name: 'Example', winget_id: 'Vendor.App', version: '1', tenant_display_name: 'Example tenant',
+      created_at: '2026-10-18T00:00:00Z', intune_app_url: 'https://example.invalid/app' } as unknown as MspJob;
+    const stored = { ...job };
+    const html = renderToStaticMarkup(createElement(CrossTenantJobsTable, { jobs: [job] }));
+    expect(html).toContain('Deployment stopped');
+    expect(html).not.toContain('Installation test failed');
+    if (errorMessage) expect(html).toContain(errorMessage);
+    expect(html).toContain('href="https://example.invalid/app"');
+    expect(job).toEqual(stored);
+  });
+
+  it.each([['failed', 'Failed'], ['completed', 'Completed']])('preserves the %s label', (status, label) => {
+    const job = { id: 'fake-job', status, display_name: 'Example', winget_id: 'Vendor.App', version: '1',
+      tenant_display_name: 'Example tenant', created_at: '2026-10-18T00:00:00Z', intune_app_url: null } as unknown as MspJob;
+    const html = renderToStaticMarkup(createElement(CrossTenantJobsTable, { jobs: [job] }));
+    expect(html).toContain(`>${label}</span>`);
+    expect(html).not.toContain('Deployment stopped');
+  });
+});
