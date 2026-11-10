@@ -6,6 +6,10 @@
 drop trigger if exists on_upload_history_insert on public.upload_history;
 drop function if exists public.increment_apps_deployed();
 
+-- Block job status writes until commit so a deployment committing during the
+-- recount cannot have its trigger increment overwritten by a stale count.
+lock table public.packaging_jobs in share mode;
+
 update public.site_counters
 set value = (select count(*) from public.packaging_jobs where status = 'deployed'),
     updated_at = now()
