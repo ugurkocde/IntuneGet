@@ -99,8 +99,10 @@ For other hosting providers or bare metal.
 
 Prerequisites:
 
-- **Node API 10 is required:** Node.js 22.14.0 or later in the 22.x line,
-  or Node.js 23.6.0 or later. An [LTS release](https://nodejs.org/en/about/previous-releases)
+- **Node API 10 is required:** For the source installation below, use
+  Node.js 22.14.0 or later in the 22.x line, Node.js 24.0.0 or later in the
+  24.x line, or Node.js 26.0.0 or later. These versions also support the
+  locked build and test tools. An [LTS release](https://nodejs.org/en/about/previous-releases)
   is recommended. The optional `better-sqlite3` dependency ships prebuilt
   binaries for Windows, macOS and Linux with glibc or musl, on x64 and arm64.
 - Linux glibc prebuilds require glibc 2.34 or later and a `libstdc++`
@@ -113,8 +115,9 @@ Prerequisites:
 
 Use the lockfile install below with lifecycle scripts suppressed. Older npm
 versions can invoke an implicit native build even when a prebuilt binary is
-available; this installation path avoids that step. Verify that the database
-opens before building or starting the app. No native compilation is needed
+available; this installation path avoids that step. For SQLite mode, verify
+that the database opens before building or starting the app. Supabase users
+should skip the SQLite check below. No native compilation is needed
 for the supplied binaries on the supported platforms above.
 
 ```bash
@@ -123,7 +126,7 @@ git clone https://github.com/ugurkocde/IntuneGet.git
 cd IntuneGet
 npm ci --ignore-scripts
 
-# Verify SQLite support before building
+# SQLite mode only: verify support before building. Skip this in Supabase mode.
 node -e "if (Number(process.versions.napi || 0) < 10) throw new Error('SQLite mode requires Node API 10'); const Database = require('better-sqlite3'); const db = new Database(':memory:'); console.log('SQLite', db.prepare('SELECT sqlite_version() AS version').get().version); db.close();"
 
 # Build for production
