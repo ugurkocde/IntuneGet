@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isGitHubActionsConfigured, getGitHubActionsConfig, getWorkflowRun, getWorkflowRunAttemptJobs, getCheckRunAnnotations, WorkflowReadRateLimitError } from './github-actions';
+import { isGitHubActionsConfigured, getGitHubActionsConfig, getWorkflowRun, getWorkflowRunAttemptJobs, getCheckRunAnnotations, findPackagingWorkflowRun, WorkflowReadRateLimitError } from './github-actions';
 import { classifyRunnerLoss, isExactPackagingRun, type RunnerLossJob } from './runner-loss';
 import { handleAutoUpdateJobCompletion } from './auto-update/cleanup';
 
@@ -16,9 +16,9 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
     .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null)
     .lt('updated_at', cutoff).order('updated_at', { ascending: true }).limit(5);
   // A deployment without the required migration keeps the existing stale path.
-  if (error || !data?.length) return result;
+  if (error) return result;
   const expected = getGitHubActionsConfig();
-  for (const raw of data.slice(0, 5)) {
+  for (const raw of (data ?? []).slice(0, 5)) {
     if (Date.now() >= deadline) { result.deferred = true; break; }
     const job = raw as RunnerLossJob & { updated_at: string; is_auto_update?: boolean };
     if (!/^[1-9]\d*$/.test(job.github_run_id ?? '') || !Number.isSafeInteger(Number(job.github_run_id))) continue;
@@ -79,6 +79,42 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
       if (e instanceof WorkflowReadRateLimitError) { result.deferred = true; break; }
       // Unavailable evidence never authorizes retry or a guessed terminal write.
     }
+  }
+  // Recover at most one uncaptured identity after the existing bound-run pass.
+  // Binding alone never retries, completes or changes the customer job status.
+  if (result.deferred || Date.now() >= deadline) return result;
+  const missingQuery = (head = false) => supabase.from('packaging_jobs')
+    .select('id,status,github_run_id,updated_at,packaging_started_at,infrastructure_retry_count,infrastructure_retry_run_id', { head, count: head ? 'exact' : undefined })
+    .in('status', ['packaging', 'uploading']).is('github_run_id', null)
+    .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null)
+    .not('packaging_started_at', 'is', null).in('infrastructure_retry_count', [0, 1])
+    .lt('updated_at', cutoff).order('packaging_started_at', { ascending: false }).order('id', { ascending: true })
+    .abortSignal(AbortSignal.timeout(Math.max(1, deadline - Date.now())));
+  const { count, error: countError } = await missingQuery(true);
+  if (countError || !Number.isSafeInteger(count) || count == null || count <= 0 || Date.now() >= deadline) return result;
+  // The cron runs every five minutes. Rotate over the whole eligible set so
+  // an unmatched row cannot keep the only lookup slot on every pass. No job
+  // timestamp is written on a miss, preserving the existing stale timeout.
+  const offset = Math.floor(started / (5 * 60_000)) % count;
+  const { data: missing, error: missingError } = await missingQuery().range(offset, offset);
+  if (missingError || !missing?.length || Date.now() >= deadline) return result;
+  const job = missing[0];
+  if (!job.packaging_started_at || ![0, 1].includes(job.infrastructure_retry_count)) return result;
+  try {
+    const run = await findPackagingWorkflowRun(job.id, job.packaging_started_at, expected, Math.max(1, Math.min(8_000, deadline - Date.now())));
+    if (!run || !Number.isSafeInteger(run.id) || run.id <= 0 || String(run.id) === job.infrastructure_retry_run_id || Date.now() >= deadline) return result;
+    const { data: owners, error: ownerError } = await supabase.from('packaging_jobs').select('id').eq('github_run_id', String(run.id)).limit(1);
+    if (ownerError || !owners || owners.length || Date.now() >= deadline) return result;
+    let bind = supabase.from('packaging_jobs').update({ github_run_id: String(run.id),
+      github_run_url: `https://github.com/${encodeURIComponent(expected.owner)}/${encodeURIComponent(expected.workflowsRepo)}/actions/runs/${run.id}` })
+      .eq('id', job.id).eq('status', job.status).eq('updated_at', job.updated_at).is('github_run_id', null)
+      .eq('packaging_started_at', job.packaging_started_at).eq('infrastructure_retry_count', job.infrastructure_retry_count)
+      .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null);
+    bind = job.infrastructure_retry_run_id == null ? bind.is('infrastructure_retry_run_id', null) : bind.eq('infrastructure_retry_run_id', job.infrastructure_retry_run_id);
+    const { data: changed, error: bindError } = await bind.select('id');
+    if (!bindError && changed?.length === 1) result.reconciled++;
+  } catch (e) {
+    if (e instanceof WorkflowReadRateLimitError) result.deferred = true;
   }
   return result;
 }

@@ -1,0 +1,5 @@
+{
+  "title": "Recover missing packaging run links",
+  "summary": "Packaging jobs can recover an exact missing workflow link from complete matching run evidence so the existing runner recovery can handle a stopped run sooner. Ambiguous matches remain unchanged.",
+  "type": "fixed"
+}

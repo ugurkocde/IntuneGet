@@ -1,4 +1,5 @@
 import type { PackagingWorkflowRun, WorkflowAttemptJobs } from './runner-loss';
+import { isExactPackagingRun } from './runner-loss';
 /**
  * GitHub Actions Client
  * Triggers packaging workflows via GitHub REST API
@@ -666,6 +667,29 @@ async function workflowEvidence<T>(suffix: string, config: GitHubActionsConfig, 
   });
   if (!response.ok) throwWorkflowReadError(response);
   return response.json();
+}
+
+/** Recover an identity from a complete bounded window, never from time alone. */
+export async function findPackagingWorkflowRun(jobId: string, startedAt: string, config: GitHubActionsConfig, timeoutMs = 8_000): Promise<{ id: number } | null> {
+  const started = Date.parse(startedAt);
+  if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(jobId) || !Number.isFinite(started)) return null;
+  const deadline = Date.now() + Math.max(1, Math.min(timeoutMs, 8_000));
+  const query = new URLSearchParams({ branch: config.ref.replace(/^refs\/heads\//, ''), event: 'repository_dispatch',
+    created: `${new Date(started - 60_000).toISOString()}..${new Date(started + 10 * 60_000).toISOString()}`, per_page: '100' });
+  type Page = { total_count: number; workflow_runs: PackagingWorkflowRun[] };
+  const page = (number: number) => workflowEvidence<Page>(`/actions/workflows/${encodeURIComponent(config.workflowFile)}/runs?${query}&page=${number}`, config, Math.max(1, deadline - Date.now()));
+  const first = await page(1);
+  if (!Number.isSafeInteger(first.total_count) || first.total_count < 0 || first.total_count > 200 || !Array.isArray(first.workflow_runs)) return null;
+  let runs = first.workflow_runs;
+  if (first.total_count > runs.length) {
+    if (runs.length !== 100 || Date.now() >= deadline) return null;
+    const second = await page(2);
+    if (second.total_count !== first.total_count || !Array.isArray(second.workflow_runs)) return null;
+    runs = [...runs, ...second.workflow_runs];
+  }
+  if (Date.now() >= deadline || runs.length !== first.total_count || new Set(runs.map(r => r.id)).size !== runs.length) return null;
+  const matches = runs.filter(run => isExactPackagingRun({ id: jobId, status: 'packaging', github_run_id: String(run.id), packaging_started_at: startedAt }, run, config));
+  return matches.length === 1 ? { id: matches[0].id } : null;
 }
 
 export function getWorkflowRunAttemptJobs(runId: number, config = getGitHubActionsConfig(), timeoutMs = 8_000): Promise<WorkflowAttemptJobs> {
