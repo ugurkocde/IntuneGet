@@ -1,0 +1,5 @@
+{
+  "title": "Keep packaging callbacks tied to their active run",
+  "summary": "Competing or retired workflow runs can no longer acknowledge another run's active packaging job. Existing jobs acquire ownership from their first valid callback.",
+  "type": "fixed"
+}

@@ -59,7 +59,7 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
       const now = new Date().toISOString();
       const patch = retry ? {
         status: 'awaiting_qa', status_message: message, infrastructure_retry_count: 1,
-        infrastructure_retry_run_id: job.github_run_id, github_run_id: null, github_run_url: null,
+        infrastructure_retry_run_id: job.github_run_id, github_run_id: null, github_run_url: null, callback_run_id: null,
         packaging_started_at: null, progress_percent: 0, progress_message: null,
         error_message: null, error_code: null, error_category: null, error_stage: null,
         error_details: null, completed_at: null, qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(), updated_at: now,

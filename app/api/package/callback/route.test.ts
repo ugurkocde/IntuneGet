@@ -21,7 +21,7 @@ describe('retired customer run callback fences', () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.stubEnv('CALLBACK_SECRET', 'fixture-secret');
-    state.job = { id: jobId, status: 'packaging', updated_at: '2026-11-10T10:00:00Z', github_run_id: '43', infrastructure_retry_run_id: '42' };
+    state.job = { id: jobId, status: 'packaging', updated_at: '2026-11-10T10:00:00Z', github_run_id: '43', callback_run_id: '43', infrastructure_retry_run_id: '42' };
     state.get.mockReset().mockImplementation(async () => state.job);
     state.history.mockReset().mockResolvedValue({});
     state.completed.mockReset().mockResolvedValue(undefined);
@@ -45,7 +45,7 @@ describe('retired customer run callback fences', () => {
   it('applies replacement upload progress whose identity is carried only by attemptId', async () => {
     expect((await send(undefined, '43-1', 'uploading')).status).toBe(200);
     expect(state.update).toHaveBeenCalledWith(jobId, expect.objectContaining({ status: 'uploading' }),
-      { status: 'packaging', updated_at: '2026-11-10T10:00:00Z' });
+      { status: 'packaging', updated_at: '2026-11-10T10:00:00Z', callback_run_id: '43' });
   });
   it('rejects a retired attempt without an explicit runId', async () => {
     expect(await (await send(undefined, '42-1', 'uploading')).json()).toMatchObject({ ignored: true });
@@ -64,13 +64,94 @@ describe('retired customer run callback fences', () => {
   it('allows a different authenticated run and guards the observed row revision', async () => {
     expect((await send('43')).status).toBe(200);
     expect(state.update).toHaveBeenCalledWith(jobId, expect.objectContaining({ github_run_id: '43' }),
-      { status: 'packaging', updated_at: '2026-11-10T10:00:00Z' });
+      { status: 'packaging', updated_at: '2026-11-10T10:00:00Z', callback_run_id: '43' });
   });
   it('preserves legitimate callback correction of a historical guessed run ID', async () => {
     state.job.infrastructure_retry_run_id = null;
     state.job.github_run_id = '41';
     expect((await send('43')).status).toBe(200);
     expect(state.update).toHaveBeenCalled();
+  });
+  it('claims an authenticated callback separately from a historical captured run', async () => {
+    state.job.infrastructure_retry_run_id = null;
+    state.job.github_run_id = '41';
+    state.job.callback_run_id = null;
+    expect((await send('43', '43-1')).status).toBe(200);
+    expect(state.update).toHaveBeenCalledWith(jobId,
+      expect.objectContaining({ github_run_id: '43', callback_run_id: '43' }),
+      expect.objectContaining({ callback_run_id: null }));
+  });
+  it.each(['packaging', 'deployed'])('refuses a foreign callback owner before stale or %s status checks', async status => {
+    state.job.callback_run_id = '43';
+    state.job.status = status;
+    expect(await (await send('44', '44-1', 'packaging', {
+      heartbeatAt: '2026-11-10T09:59:59Z',
+    })).json()).toMatchObject({ success: false, reason: 'run_not_owner' });
+    expect(state.update).not.toHaveBeenCalled();
+    expect(state.history).not.toHaveBeenCalled();
+  });
+  it('refuses a first-claim CAS loser instead of returning an active winner as success', async () => {
+    state.job.github_run_id = '41';
+    state.job.callback_run_id = null;
+    const winner = { ...state.job, github_run_id: '43', callback_run_id: '43', updated_at: '2026-11-10T10:00:01Z' };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(winner);
+    state.update.mockResolvedValueOnce(null);
+    expect(await (await send('44', '44-1')).json()).toMatchObject({
+      success: false, reason: 'run_not_owner',
+    });
+    expect(state.update).toHaveBeenCalledTimes(1);
+    expect(state.history).not.toHaveBeenCalled();
+    expect(state.completed).not.toHaveBeenCalled();
+    expect(state.cleanup).not.toHaveBeenCalled();
+  });
+  it('accepts a new attempt from the same authenticated callback owner', async () => {
+    state.job.callback_run_id = '43';
+    expect(await (await send('43', '43-2')).json()).toMatchObject({ success: true });
+    expect(state.update).toHaveBeenCalled();
+  });
+  it('never acknowledges a retired runner with the active replacement job', async () => {
+    state.job.callback_run_id = '43';
+    expect(await (await send('42', '42-1')).json()).toMatchObject({ success: false });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it('does not acknowledge an unowned stale heartbeat as an active claim', async () => {
+    state.job.callback_run_id = null;
+    expect(await (await send('43', '43-1', 'packaging', {
+      heartbeatAt: '2026-11-10T09:59:59Z',
+    })).json()).toMatchObject({ success: false, reason: 'ownership_unconfirmed' });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it.each([[undefined, undefined], ['43', '44-1'], ['0', undefined]])('rejects an unowned callback with invalid identity %s/%s', async (run, attempt) => {
+    state.job.callback_run_id = null;
+    state.job.infrastructure_retry_run_id = null;
+    expect(await (await send(run, attempt)).json()).toMatchObject({ success: false, reason: 'run_identity_missing' });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it('retries an unowned claim once after a dispatcher capture write', async () => {
+    state.job.callback_run_id = null;
+    const fresh = { ...state.job, github_run_id: '41', updated_at: '2026-11-10T10:00:01Z' };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh);
+    state.update.mockResolvedValueOnce(null).mockImplementationOnce(async (_id, patch) => ({ ...fresh, ...patch }));
+    expect(await (await send('43', '43-1')).json()).toMatchObject({ success: true, job: { callback_run_id: '43', github_run_id: '43' } });
+    expect(state.update).toHaveBeenLastCalledWith(jobId, expect.objectContaining({ callback_run_id: '43' }), expect.objectContaining({ callback_run_id: null, updated_at: fresh.updated_at }));
+  });
+  it('refuses a competing claim that wins the second CAS', async () => {
+    state.job.callback_run_id = null;
+    const fresh = { ...state.job, updated_at: '2026-11-10T10:00:01Z' };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh)
+      .mockResolvedValueOnce({ ...fresh, callback_run_id: '44' });
+    state.update.mockResolvedValue(null);
+    expect(await (await send('43', '43-1')).json()).toMatchObject({ success: false, reason: 'run_not_owner' });
+    expect(state.update).toHaveBeenCalledTimes(2);
+    expect(state.completed).not.toHaveBeenCalled();
+  });
+  it('acknowledges an ambiguous write only after the same owner is read back', async () => {
+    state.job.callback_run_id = null;
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce({ ...state.job, callback_run_id: '43' });
+    state.update.mockResolvedValueOnce(null);
+    expect(await (await send('43', '43-1')).json()).toMatchObject({ success: true, ignored: true });
+    expect(state.update).toHaveBeenCalledTimes(1);
+    expect(state.completed).not.toHaveBeenCalled();
   });
   it.each(['deployed', 'failed', 'duplicate_skipped'])('retries one eligible %s transition against a freshly read revision', async status => {
     const fresh = { ...state.job, updated_at: '2026-11-10T10:00:05Z' };
@@ -81,7 +162,7 @@ describe('retired customer run callback fences', () => {
     expect(state.get).toHaveBeenCalledTimes(2);
     expect(state.update).toHaveBeenCalledTimes(2);
     expect(state.update).toHaveBeenLastCalledWith(jobId, expect.objectContaining({ status }),
-      { status: fresh.status, updated_at: fresh.updated_at });
+      { status: fresh.status, updated_at: fresh.updated_at, callback_run_id: fresh.callback_run_id });
     expect(state.completed).toHaveBeenCalledTimes(1);
     expect(state.cleanup).toHaveBeenCalledTimes(1);
     expect(state.history).toHaveBeenCalledTimes(status === 'deployed' ? 1 : 0);
@@ -107,7 +188,7 @@ describe('retired customer run callback fences', () => {
     expect(await (await send('43', '43-1', status, { heartbeatAt: '2026-11-10T10:00:10Z', intuneAppId: 'fixture-app' })).json()).toMatchObject({ success: true, job: { status } });
     expect(state.update).toHaveBeenCalledTimes(2);
     expect(state.update).toHaveBeenLastCalledWith(jobId, expect.objectContaining({ status }),
-      { status: 'packaging', updated_at: '2026-11-10T10:00:11Z' });
+      { status: 'packaging', updated_at: '2026-11-10T10:00:11Z', callback_run_id: '43' });
     expect(state.completed).toHaveBeenCalledTimes(1);
     expect(state.history).toHaveBeenCalledTimes(status === 'deployed' ? 1 : 0);
   });
@@ -134,7 +215,7 @@ describe('retired customer run callback fences', () => {
     state.update.mockResolvedValue(null);
     expect(await (await send('43', '43-1', 'deployed')).json()).toMatchObject({ ignored: true });
     expect(state.update).toHaveBeenCalledTimes(2);
-    expect(state.get).toHaveBeenCalledTimes(2);
+    expect(state.get).toHaveBeenCalledTimes(3);
     expect(state.history).not.toHaveBeenCalled();
     expect(state.completed).not.toHaveBeenCalled();
   });

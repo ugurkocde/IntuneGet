@@ -309,7 +309,7 @@ describe('once-only runner recovery integration', () => {
     expect(await (await call()).json()).toMatchObject({ reconciled: 1, cleaned: 0 });
     const q = state.queries.find(q => q.kind === 'update')!;
     expect(q.data).toMatchObject({ status: 'awaiting_qa', infrastructure_retry_count: 1, infrastructure_retry_run_id: '42',
-      github_run_id: null, github_run_url: null, packaging_started_at: null, error_code: null, completed_at: null });
+      github_run_id: null, github_run_url: null, callback_run_id: null, packaging_started_at: null, error_code: null, completed_at: null });
     for (const f of [['eq', 'status', 'packaging'], ['eq', 'updated_at', state.recentJobs[0].updated_at],
       ['eq', 'github_run_id', '42'], ['eq', 'qa_candidate_id', 'candidate'], ['eq', 'execution_profile_sha256', 'a'.repeat(64)],
       ['eq', 'infrastructure_retry_count', 0], ['is', 'intune_app_id', null], ['is', 'cancelled_at', null], ['is', 'archived_at', null]]) {
