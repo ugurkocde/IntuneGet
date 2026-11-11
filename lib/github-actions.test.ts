@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cancelWorkflowRun,
+  getWorkflowRuns,
+  getWorkflowRun,
+  getWorkflowRunAttemptJobs,
+  getCheckRunAnnotations,
+  WorkflowReadRateLimitError,
   triggerPackagingWorkflow,
   type GitHubActionsConfig,
   type WorkflowInputs,
@@ -8,6 +13,7 @@ import {
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 import { QaCompatibilityGateError } from './qa/gate';
 import { generateUninstallCommand } from './detection-rules';
+import { WorkflowDispatchRateLimitError } from './workflow-dispatch-rate-limit';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -72,8 +78,107 @@ function workflowInputs(overrides: Partial<WorkflowInputs> = {}): WorkflowInputs
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe('packaging run identity capture', () => {
+  const jobId = '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7';
+  const run = (overrides: Record<string, unknown> = {}) => ({
+    id: 42, html_url: 'https://github.com/example/workflow-repo/actions/runs/42',
+    name: 'Create and Deploy IntuneWin Package', status: 'queued', conclusion: null,
+    created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    display_title: `Package ${jobId}`, event: 'repository_dispatch',
+    path: '.github/workflows/package-intunewin.yml', head_branch: 'main', run_attempt: 1,
+    ...overrides,
+  });
+  async function capture(runs: Record<string, unknown>[]) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const fetchMock = vi.fn().mockImplementation(async (url: string) =>
+      url.endsWith('/dispatches') ? new Response(null, { status: 204 })
+        : Response.json({ total_count: runs.length, workflow_runs: runs }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    return result;
+  }
+  it('captures this job instead of another concurrent newer dispatch', async () => {
+    expect(await capture([run({ id: 43, display_title: 'Package 11111111-1111-4111-8111-111111111111' }), run()]))
+      .toMatchObject({ success: true, runId: 42 });
+  });
+  it.each([
+    { display_title: 'package-app' },
+    { display_title: `Package ${jobId} extra` },
+    { event: 'workflow_dispatch' },
+    { path: '.github/workflows/intune-qa.yml' },
+    { head_branch: 'other' },
+    { run_attempt: 2 },
+    { created_at: 'invalid' },
+    { created_at: '2025-12-31T23:00:00Z' },
+    { id: 0 },
+  ])('does not attribute a run with mismatched metadata %j', async (override) => {
+    expect((await capture([run(override)])).runId).toBeUndefined();
+  });
+  it('does not choose between duplicate exact job identities', async () => {
+    expect((await capture([run(), run({ id: 43 })])).runId).toBeUndefined();
+  });
+  it('filters unrelated workflows before limiting the capture page', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/dispatches')) return new Response(null, { status: 204 });
+      const url = new URL(input);
+      const filtered = url.pathname.endsWith('/workflows/package-intunewin.yml/runs')
+        && url.searchParams.get('branch') === 'main'
+        && url.searchParams.get('event') === 'repository_dispatch'
+        && url.searchParams.get('created') === '>=2025-12-31T23:59:30.000Z';
+      return Response.json({ total_count: 1, workflow_runs: filtered ? [run()] : [run({ path: '.github/workflows/intune-qa.yml' })] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ runId: 42 });
+  });
+  it('searches a second bounded page of packaging runs', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.endsWith('/dispatches')) return new Response(null, { status: 204 });
+      const url = new URL(input);
+      return Response.json({ total_count: 101, workflow_runs: url.searchParams.get('page') === '2'
+        ? [run()] : Array.from({ length: 100 }, (_, n) => run({ id: n + 100, display_title: 'Package another-job' })) });
+    }));
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ runId: 42 });
+  });
+  it('does not choose from a truncated capture window', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => input.endsWith('/dispatches')
+      ? new Response(null, { status: 204 }) : Response.json({ total_count: 201, workflow_runs: [run()] })));
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect((await pending).runId).toBeUndefined();
+  });
+  it.each(['duplicate identity', 'changing count'])('refuses an ambiguous page set: %s', async kind => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.endsWith('/dispatches')) return new Response(null, { status: 204 });
+      const second = new URL(input).searchParams.get('page') === '2';
+      return Response.json({ total_count: second && kind === 'changing count' ? 102 : 101,
+        workflow_runs: second ? [run({ id: 43 })]
+          : [run(), ...Array.from({ length: 99 }, (_, n) => run({ id: n + 100, display_title: 'Package another-job' }))] });
+    }));
+    const pending = triggerPackagingWorkflow(workflowInputs(), config);
+    await vi.runAllTimersAsync();
+    expect((await pending).runId).toBeUndefined();
+  });
+  it('keeps repository wide listing available to other callers', async () => {
+    const request = vi.fn(async (_url: string) => Response.json({ total_count: 0, workflow_runs: [] }));
+    vi.stubGlobal('fetch', request);
+    await getWorkflowRuns(config, { per_page: 5 });
+    expect(new URL(request.mock.calls[0][0]).pathname).toBe('/repos/example/workflow-repo/actions/runs');
+  });
 });
 
 reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
@@ -82,6 +187,30 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('exposes a rejected dispatch as a typed hold without sending a second POST', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('secondary rate limit exceeded: private details', {
+      status: 403, headers: { 'retry-after': '120' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true });
+    await expect(result).rejects.toBeInstanceOf(WorkflowDispatchRateLimitError);
+    await expect(result).rejects.not.toThrow('private details');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([401, 403, 404, 422, 500, 502, 503, 504])('sends ambiguous or permanent dispatch status %s only once', async status => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('private response details', { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true });
+    await expect(result).rejects.not.toBeInstanceOf(WorkflowDispatchRateLimitError);
+    await expect(result).rejects.not.toThrow('private response details');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it('does not resend a dispatch whose network response is unknown', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('connection lost'));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true })).rejects.toThrow('connection lost');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it('dispatches authored catalog detection rules with the matching QA identity', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1180,5 +1309,34 @@ describe('cancelWorkflowRun', () => {
 
     expect(await cancelWorkflowRun(42, config)).toMatchObject({ success: true });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('bounded runner evidence reads', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('reads the first exact attempt with a bounded request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ total_count: 0, jobs: [] })));
+    vi.stubGlobal('fetch', fetchMock);
+    await getWorkflowRunAttemptJobs(42, config);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/example/workflow-repo/actions/runs/42/attempts/1/jobs?per_page=100',
+      expect.objectContaining({ signal: expect.any(AbortSignal), redirect: 'error' }));
+  });
+  it('reads only the configured repository check annotations', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{ message: 'runner lost' }, { invalid: true }])));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await getCheckRunAnnotations(101, config)).toEqual([{ message: 'runner lost' }]);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.github.com/repos/example/workflow-repo/check-runs/101/annotations?per_page=100');
+  });
+  it.each([429, 403])('stops all evidence reads on quota HTTP %i', async status => {
+    for (const operation of [getWorkflowRun, getWorkflowRunAttemptJobs, getCheckRunAnnotations]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private upstream body', { status,
+        headers: { 'x-ratelimit-remaining': '0', 'retry-after': '60' } })));
+      await expect(operation(42, config)).rejects.toBeInstanceOf(WorkflowReadRateLimitError);
+    }
+  });
+  it('never exposes an upstream error response body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private upstream body', { status: 500 })));
+    await expect(getWorkflowRun(42, config)).rejects.toThrow('GitHub workflow evidence unavailable (HTTP 500)');
   });
 });

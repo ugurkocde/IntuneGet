@@ -1,7 +1,10 @@
+import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { unsupportedDependencyMessage, knownUnavailableDisposition, isExactPretestCandidate } from '@/lib/unsupported-dependency';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
@@ -18,7 +21,6 @@ import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 import { enforceQaGate, describeQaGateError, QaGateError, QaGateNotPassedError, QaSecurityGateError, QaCompatibilityGateError } from '@/lib/qa/gate';
-import { installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { CuratedCatalogError, CuratedEvidenceMismatchError } from '@/lib/curated-catalog/core.mjs';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
@@ -92,11 +94,12 @@ export async function GET(request: Request) {
       github_run_id: string | null;
       failure_summary: string | null;
       package_profile_sha256: string | null;
+      winget_id: string | null; version: string | null; architecture: string | null; installer_sha256: string | null;
     } | null = null;
     if (job.qa_candidate_id && !skipCustomerQa) {
       const { data, error: candidateError } = await supabase
         .from('qa_candidates')
-        .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
+        .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256, winget_id, version, architecture, installer_sha256')
         .eq('id', job.qa_candidate_id)
         .maybeSingle();
       if (candidateError) throw candidateError;
@@ -106,6 +109,7 @@ export async function GET(request: Request) {
     let candidateStatus = candidate?.status;
     let candidateFailureSummary = candidate?.failure_summary;
     let appVersionAlreadyPassed = false;
+    let demandWasEvaluated = false;
 
     if (!skipCustomerQa && (!candidate || candidateStatus === 'superseded')) {
       // A waiting job can outlive the catalog metadata and packager revision
@@ -161,6 +165,7 @@ export async function GET(request: Request) {
         }
       }
       const installerType = item.installerType || job.installer_type || 'exe';
+      demandWasEvaluated = true;
       const demand = await ensureQaDemand(supabase, {
         wingetId: job.winget_id,
         displayName: item.displayName || job.display_name,
@@ -224,7 +229,7 @@ export async function GET(request: Request) {
         }
         const { data, error: candidateError } = await supabase
           .from('qa_candidates')
-          .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
+          .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256, winget_id, version, architecture, installer_sha256')
           .eq('id', demand.candidateId)
           .maybeSingle();
         if (candidateError) throw candidateError;
@@ -277,15 +282,17 @@ export async function GET(request: Request) {
     };
     if (compatibilityBlock) {
       const now = new Date().toISOString();
+      const unsupportedMessage = unsupportedDependencyMessage(compatibilityBlock);
+      const message = unsupportedMessage || PACKAGE_VERSION_UNAVAILABLE_MESSAGE;
       let failureUpdate = supabase
         .from('packaging_jobs')
         .update({
-          status: 'qa_failed',
-          status_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
-          error_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
-          error_code: 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
+          status: unsupportedMessage ? 'failed' : 'qa_failed',
+          status_message: message,
+          error_message: message,
+          error_code: unsupportedMessage ? 'DEPENDENCY_NOT_SUPPORTED' : 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
           error_stage: 'validation',
-          error_category: 'installer',
+          error_category: unsupportedMessage ? 'validation' : 'installer',
           completed_at: now,
         })
         .eq('id', job.id)
@@ -299,8 +306,22 @@ export async function GET(request: Request) {
       if (blockError) throw new Error(`Could not hold quarantined QA job: ${blockError.message}`);
       if (blockedJob) {
         failed++;
-        await handleAutoUpdateJobCompletion(job.id, 'failed', PACKAGE_VERSION_UNAVAILABLE_MESSAGE);
+        await handleAutoUpdateJobCompletion(job.id, 'failed', message);
       }
+      continue;
+    }
+
+
+    const unavailable = !skipCustomerQa && demandWasEvaluated && candidateStatus === 'failed' && !observed.qa_candidate_id
+      ? knownUnavailableDisposition(candidateFailureSummary) : null;
+    if (unavailable) {
+      const { data: changed, error: unavailableError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+        status: 'failed', status_message: unavailable.message, error_message: unavailable.message,
+        error_code: unavailable.code, error_stage: 'validation', error_category: 'validation',
+        qa_completed_at: null, completed_at: new Date().toISOString(),
+      }).eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
+      if (unavailableError) { waitingIds.push(job.id); waiting++; }
+      else if (changed) { failed++; await handleAutoUpdateJobCompletion(job.id, 'failed', unavailable.message); }
       continue;
     }
 
@@ -312,6 +333,38 @@ export async function GET(request: Request) {
       waitingIds.push(job.id);
       waiting++;
       continue;
+    }
+
+
+    if (!skipCustomerQa && isExactPretestCandidate(candidate, {
+      candidateId: observed.qa_candidate_id, wingetId: job.winget_id, version: job.version,
+      architecture: observedConfig?.architecture || observed.architecture || 'x64',
+      hash: observedConfig?.installerSha256 || observed.installer_sha256 || '', profile: job.execution_profile_sha256,
+    })) {
+      try {
+        const holds = await loadInstallerSecurityHolds(supabase, [candidate.installer_sha256!]);
+        const hold = holds.get(candidate.installer_sha256!.toLowerCase());
+        if (hold && [installerSecurityReason(0), installerSecurityReason(1)].includes(hold.reason)) {
+          const { data: failedResult, error: failedError } = await supabase.from('qa_package_results').select('outcome')
+            .eq('package_profile_sha256', candidate.package_profile_sha256!).eq('winget_id', job.winget_id)
+            .eq('tested_version', job.version).eq('architecture', candidate.architecture!)
+            .eq('installer_sha256', candidate.installer_sha256!).eq('outcome', 'Failed').limit(1).maybeSingle();
+          if (failedError) throw new Error('Security hold evidence unavailable');
+          if (!failedResult) {
+            const now = Date.now();
+            const next = Date.parse(hold.nextCheckAt);
+            if (!Number.isFinite(next)) throw new Error('Security hold schedule unavailable');
+            const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+              status_message: hold.reason, qa_resume_due_at: new Date(Math.max(now + 60_000, Math.min(next, now + 86_400_000))).toISOString(),
+            }).eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
+            if (holdError) throw new Error('Could not defer security-held deployment');
+            if (heldJob) held++;
+            continue;
+          }
+        }
+      } catch {
+        waitingIds.push(job.id); waiting++; continue;
+      }
     }
 
     if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
@@ -494,6 +547,9 @@ export async function GET(request: Request) {
           : 'Installation test passed; packaging started automatically',
         qa_completed_at: qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
+        ...(job.error_code === 'WORKFLOW_DISPATCH_RATE_LIMITED' ? {
+          error_code: null, error_message: null, error_stage: null, error_category: null,
+        } : {}),
       })
       .eq('id', job.id)
       .eq('status', 'awaiting_qa'))
@@ -560,6 +616,33 @@ export async function GET(request: Request) {
       resumed++;
     } catch (error) {
       const licenceRequired = error instanceof CuratedLicenceError;
+      const rateLimit = error instanceof WorkflowDispatchRateLimitError ? error : null;
+      const rateHold = rateLimit ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
+      if (rateLimit) {
+        const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
+          .from('packaging_jobs')
+          .update(rateHold ? { ...rateHold, qa_completed_at: job.qa_completed_at ?? null } : {
+            status: 'failed',
+            status_message: 'GitHub capacity retries have stopped. No new deployment was started.',
+            error_code: rateLimit.code,
+            error_stage: 'authenticate', error_category: 'network', error_message: rateLimit.message,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id)
+          .eq('status', 'packaging')
+          .is('github_run_id', null)
+          .is('cancelled_at', null)
+          .is('archived_at', null))
+          .select('id')
+          .maybeSingle();
+        if (holdError) throw holdError;
+        if (heldJob && rateHold) held++;
+        if (heldJob && !rateHold) {
+          await handleAutoUpdateJobCompletion(job.id, 'failed', rateLimit.message);
+          failed++;
+        }
+        continue;
+      }
       // This typed failure is raised before dispatch. Ambiguous dispatch
       // failures must retain the terminal path below rather than be replayed.
       if (error instanceof InstallerPreflightError && error.retryable) {

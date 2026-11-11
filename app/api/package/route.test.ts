@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { STALE_JOB_TIMEOUT_MINUTES, STALE_JOB_ERROR_MESSAGE } from '@/lib/stale-jobs';
 import type { PackagingJob } from '@/lib/db/types';
+import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 
 const {
   getDatabaseMock,
@@ -22,6 +23,7 @@ const {
   getLiveInstallersMock,
   ensureQaDemandMock,
   getPackageEligibilityBlocksMock,
+  getPackageCompatibilityBlockMock,
   isSupabaseServerConfiguredMock,
   curatedState,
   actualDispatch,
@@ -49,6 +51,7 @@ const {
   getLiveInstallersMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
+  getPackageCompatibilityBlockMock: vi.fn().mockResolvedValue(null),
   isSupabaseServerConfiguredMock: vi.fn(),
 }));
 
@@ -106,6 +109,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
   return {
     ...original,
     getPackageEligibilityBlocks: getPackageEligibilityBlocksMock,
+    getPackageCompatibilityBlock: getPackageCompatibilityBlockMock,
   };
 });
 
@@ -231,7 +235,7 @@ describe('GET /api/package (userId listing)', () => {
       error_message: STALE_JOB_ERROR_MESSAGE,
       completed_at: expect.any(String),
       updated_at: expect.any(String),
-    });
+    }, { status: staleJob.status, updated_at: staleJob.updated_at });
     expect(body.jobs).toHaveLength(1);
     expect(body.jobs[0].status).toBe('failed');
     expect(body.jobs[0].error_message).toBe(STALE_JOB_ERROR_MESSAGE);
@@ -903,6 +907,77 @@ describe('POST /api/package (workflow dispatch)', () => {
       } finally { vi.unstubAllGlobals(); }
     }
   );
+
+  it('holds a rejected hosted dispatch for automatic retry instead of reporting a failure', async () => {
+    const row: Record<string, unknown> = { status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null };
+    updateMock.mockImplementationOnce(async (_id, patch, conditions) => {
+      if (!Object.entries(conditions).every(([key, value]) => row[key] === value)) return null;
+      Object.assign(row, patch);
+      return row;
+    });
+    const retryAt = new Date(Date.now() + 120_000).toISOString();
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429, retryAt));
+    const body = await (await postSingleItem()).json();
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'awaiting_qa', completed_at: null, qa_resume_due_at: retryAt,
+      error_details: { workflow_dispatch_rate_limit_attempts: 1 },
+    }), expect.objectContaining({ status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null }));
+    expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
+    expect(body.errors).toBeUndefined();
+  });
+  it('does not advertise a rate limit hold if a concurrent job update wins', async () => {
+    updateMock.mockResolvedValueOnce(null);
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
+      new Date(Date.now() + 120_000).toISOString()));
+    const body = await (await postSingleItem()).json();
+    expect(body.jobs).toEqual([]);
+    expect(body.errors).toEqual([{ wingetId: 'Test.App', error: 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' }]);
+    expect(updateMock).toHaveBeenCalledOnce();
+    expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
+  });
+  it('still reports other dispatched jobs when saving a capacity hold fails', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
+      new Date(Date.now() + 120_000).toISOString()));
+    updateMock.mockImplementation(async (_id, patch) => {
+      if (patch.status === 'awaiting_qa') throw new Error('private database fault');
+      return patch;
+    });
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item(), makeWin32Item({ wingetId: 'Other.App' })] }),
+    }));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.jobs).toEqual([expect.objectContaining({ winget_id: 'Other.App', status: 'packaging' })]);
+    expect(body.errors).toEqual([{ wingetId: 'Test.App',
+      error: 'Packaging could not schedule its automatic retry. Refresh the deployment status.' }]);
+    expect(JSON.stringify(body)).not.toContain('private database fault');
+    });
+
+  it('reports an unreviewed dependency as unsupported without claiming a failed installation test', async () => {
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) }, failureSummary: 'This app version is not available for automated deployment.' });
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'unreviewed_dependency',
+      detail: 'WinGet dependency Microsoft.EdgeWebView2Runtime is not in the reviewed redistribution allowlist.' });
+    const body = await (await postSingleItem()).json();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed',
+      error_code: 'DEPENDENCY_NOT_SUPPORTED', error_category: 'validation', qa_completed_at: null, qa_candidate_id: null,
+      status_message: 'This app requires Microsoft.EdgeWebView2Runtime, which is not supported yet. Automated deployment is blocked.' }));
+    expect(body.jobs[0].status).toBe('failed');
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).toHaveBeenCalledOnce();
+  });
+  it.each(['other block', 'lookup unavailable'])('keeps the existing closed QA result when classification is %s', async kind => {
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) }, failureSummary: 'Existing failure summary.' });
+    if (kind === 'lookup unavailable') getPackageCompatibilityBlockMock.mockRejectedValueOnce(new Error('private lookup fault'));
+    else getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'unsupported_dependency_shape', detail: 'Not a supported dependency shape.' });
+    await postSingleItem();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'qa_failed',
+      error_code: 'QA_FAILED_EXECUTION_PROFILE', error_message: 'Existing failure summary.' }));
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).toHaveBeenCalledOnce();
+  });
 
   it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(
@@ -2193,7 +2268,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(body.jobs[0]).toMatchObject({ status: 'failed' });
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
@@ -2217,7 +2292,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(body.jobs[0]).toMatchObject({ status: 'failed' });
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 

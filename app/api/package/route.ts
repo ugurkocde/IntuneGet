@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
@@ -60,10 +61,12 @@ import { evaluatePackagingContract } from '@/lib/packaging-contract';
 import type { NormalizedInstaller } from '@/types/winget';
 import {
   getPackageEligibilityBlocks,
+  getPackageCompatibilityBlock,
   PACKAGE_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
 import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
 import { enrichCustomerQaStatus } from '@/lib/customer-qa-status';
+import { unsupportedDependencyMessage, knownUnavailableDisposition } from '@/lib/unsupported-dependency';
 
 export const maxDuration = 300;
 
@@ -698,13 +701,21 @@ export async function POST(request: NextRequest) {
                   demandSource: 'customer',
                 });
             const qaDeferred = qaDemand?.state === 'waiting' && isDeferredCustomerQaEnabled();
+            // This is display classification of an existing exact block only.
+            // An unavailable lookup retains the original closed QA disposition.
+            const unsupportedMessage = qaDemand?.state === 'failed' && !qaDemand.candidateId
+              ? unsupportedDependencyMessage(await getPackageCompatibilityBlock(createServerClient(), {
+                  wingetId: item.wingetId, version: item.version, architecture: item.architecture || 'x64', installerSha256,
+                }).catch(() => null)) : null;
+            const unavailable = qaDemand?.state === 'failed' && !qaDemand.candidateId && !unsupportedMessage
+              ? knownUnavailableDisposition(qaDemand.failureSummary) : null;
             // Self-hosted installs have no QA pipeline, so local jobs must remain pollable.
             const initialStatus = isLocalPackagerMode && !supabaseServerConfigured
               ? 'queued'
               : qaDemand?.state === 'waiting' && !qaDeferred
                 ? 'awaiting_qa'
                 : qaDemand?.state === 'failed'
-                  ? 'qa_failed'
+                  ? unsupportedMessage || unavailable ? 'failed' : 'qa_failed'
                   : 'queued';
             const now = new Date().toISOString();
 
@@ -732,7 +743,7 @@ export async function POST(request: NextRequest) {
                   ? 'Preparing deployment while installation validation remains scheduled'
                   : 'Waiting for installation validation before deployment'
                 : qaDemand?.state === 'failed'
-                  ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                  ? unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                   : null,
               progress_percent: 0,
               execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
@@ -741,11 +752,12 @@ export async function POST(request: NextRequest) {
               qa_requested_at: qaDemand ? now : null,
               qa_completed_at: qaDemand?.state === 'passed' ? now : null,
               error_message: qaDemand?.state === 'failed'
-                ? qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                ? unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                 : null,
-              error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
+              error_code: qaDemand?.state === 'failed' ? unsupportedMessage ? 'DEPENDENCY_NOT_SUPPORTED' : unavailable?.code || 'QA_FAILED_EXECUTION_PROFILE' : null,
               error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
-              error_category: qaDemand?.state === 'failed' ? 'installer' : null,
+              error_category: qaDemand?.state === 'failed' ? unsupportedMessage || unavailable ? 'validation' : 'installer' : null,
+              ...(unsupportedMessage || unavailable ? { completed_at: now } : {}),
             });
 
             if (!jobRecord) {
@@ -896,6 +908,30 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
+            const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError ? result.reason : null;
+            // The ordinary QA resume path rebuilds and revalidates hosted inputs.
+            // Custom uploads do not use that path and must not be enqueued here.
+            const rateHold = rateLimit && dispatch?.item.sourceType !== 'custom'
+              ? dispatchRateLimitHold(rateLimit, null) : null;
+            if (rateHold && dispatch) {
+              let retryWriteFailed = false;
+              const held = await db.jobs.update(dispatch.jobId, rateHold, {
+                status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null,
+              }).catch(() => {
+                retryWriteFailed = true;
+                console.error(`[Package] Could not schedule a capacity retry for job ${logValue(dispatch.jobId)}`);
+                return null;
+              });
+              if (held) jobs.push({ id: dispatch.jobId, user_id: userId, tenant_id: tenantId,
+                winget_id: dispatch.item.wingetId, version: dispatch.item.version,
+                display_name: dispatch.item.displayName, publisher: dispatch.item.publisher,
+                status: 'awaiting_qa', package_config: dispatch.item, created_at: dispatch.createdAt });
+              else errors.push({ wingetId: dispatch.item.wingetId,
+                error: retryWriteFailed
+                  ? 'Packaging could not schedule its automatic retry. Refresh the deployment status.'
+                  : 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' });
+              continue;
+            }
             // The final dispatch boundary re-checks QA, security and
             // compatibility evidence. A block there is a validation outcome
             // with its own reason, not a failure to start the workflow.
@@ -911,7 +947,7 @@ export async function POST(request: NextRequest) {
                 progress_percent: 0,
                 error_stage: qaGateError ? 'validation' : 'authenticate',
                 error_category: qaGateError ? null : 'network',
-                error_code: qaGateError ? qaGateError.code : 'WORKFLOW_DISPATCH_FAILED',
+                error_code: qaGateError ? qaGateError.code : rateLimit?.code ?? 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
                 completed_at: reputationHold ? null : new Date().toISOString(),
               }).catch((updateError) => {
@@ -1011,7 +1047,7 @@ async function healStaleJobs(
           error_message: STALE_JOB_ERROR_MESSAGE,
           completed_at: now,
           updated_at: now,
-        })
+        }, { status: job.status, updated_at: job.updated_at })
         .catch((error) => {
           console.error(`Failed to heal stale job ${job.id}:`, error);
           return null;

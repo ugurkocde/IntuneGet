@@ -1,0 +1,5 @@
+{
+  "title": "Recover packaging jobs after a lost build runner",
+  "summary": "Packaging jobs identify their own workflow run and report ended runs sooner. A verified runner loss before any step starts can retry once through the existing deployment checks.",
+  "type": "fixed"
+}

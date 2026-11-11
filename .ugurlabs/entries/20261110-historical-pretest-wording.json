@@ -1,0 +1,5 @@
+{
+  "title": "Explain deployment stops before installation tests",
+  "summary": "Upload history now distinguishes verified security stops and unavailable app versions from failed installation tests. Existing deployment records and actions stay unchanged.",
+  "type": "fixed"
+}

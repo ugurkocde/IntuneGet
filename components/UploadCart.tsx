@@ -29,7 +29,6 @@ import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { usePermissionStatus } from '@/hooks/usePermissionStatus';
 import { useMspOptional } from '@/hooks/useMspOptional';
-import { trackDeployment } from '@/hooks/useLandingStats';
 import { PermissionStatusIndicator } from '@/components/PermissionStatusIndicator';
 import {
   AlertDialog,
@@ -215,7 +214,6 @@ export function UploadCart() {
   const handleDeploy = async () => {
     if (items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
 
-    trackDeployment(items.length);
     setError(null);
 
     if (!isAuthenticated) {

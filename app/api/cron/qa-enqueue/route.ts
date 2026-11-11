@@ -1,5 +1,6 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { adoptRepairCurrentCandidate, repairIdFromRequest } from '@/lib/qa/repair-adoption';
+import { adoptRepairCorrectedCandidate, parseRepairCorrectionRequest } from '@/lib/qa/repair-correction';
 import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
@@ -1397,6 +1398,33 @@ export async function GET(request: Request) {
       },
       { status: 500 }
     );
+  }
+}
+
+/** Explicit repair preparation only; the hourly GET never invokes this path. */
+export async function POST(request: Request) {
+  const secret=process.env.CRON_SECRET;
+  if(!secret || request.headers.get('authorization')!==`Bearer ${secret}`) {
+    return NextResponse.json({error:'Unauthorized'},{status:401});
+  }
+  let correction;
+  try {
+    if(new URL(request.url).search)throw new Error('Query parameters are not accepted');
+    correction=parseRepairCorrectionRequest(await request.json());
+  } catch {
+    return NextResponse.json({error:'Invalid correction request'},{status:400});
+  }
+  try {
+    const supabase=createServerClient();
+    const control=await getQaPipelineControl(supabase);
+    if(isQaMaintenanceMode() || control.paused || !isQaPackagerReleaseReady(control,QA_PSADT_TOOLCHAIN.packagerCommit)) {
+      return NextResponse.json({outcome:'denied',reason:'pipeline_not_ready'},{status:409});
+    }
+    const result=await adoptRepairCorrectedCandidate(supabase,
+      createWingetManifestClient({token:process.env.GITHUB_PAT,maxRetries:2}),correction);
+    return NextResponse.json(result,{status:result.outcome==='adopted'?200:409});
+  } catch {
+    return NextResponse.json({error:'Corrected profile preparation unavailable'},{status:503});
   }
 }
 

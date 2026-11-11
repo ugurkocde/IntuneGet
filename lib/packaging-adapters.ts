@@ -2028,6 +2028,21 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'LegendCTL',
     registeredDisplayName: 'ZD Ultimate Legend Wrapper',
   },
+  // These NSIS registrations use unbraced keys and renamed vendor products.
+  // Keep the catalog names as fallbacks so an unreviewed key for the renamed
+  // product cannot be captured by a broader registered-name match.
+  'zafaco.breitbandmessung': {
+    generatedDisplayName: 'Breitbandmessung',
+    manifestRegistryKey: '{14607473-30DB-509F-94F0-BB7C085C619E}',
+    registeredDisplayName: 'Breitbandmessung',
+    registeredRegistryKey: '14607473-30db-509f-94f0-bb7c085c619e',
+  },
+  'niko.homecontrolprogrammingsoftware': {
+    generatedDisplayName: 'Niko Home Control programming software',
+    manifestRegistryKey: '{E0658CE6-6ECB-5EC8-AE2F-5A81C75FBCD6}',
+    registeredDisplayName: 'Niko Home Control programming software',
+    registeredRegistryKey: 'e0658ce6-6ecb-5ec8-ae2f-5a81c75fbcd6',
+  },
   // This NSIS registration uses the manifest GUID without braces. Keep the
   // catalog name as fallback so a different-key Tuta version cannot be captured
   // by a broader "Tuta*" name match when the reviewed key is absent.
