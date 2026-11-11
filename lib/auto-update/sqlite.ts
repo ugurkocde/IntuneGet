@@ -23,6 +23,7 @@ import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import type { Json } from '@/types/database';
 import type { DetectionRule } from '@/types/intune';
 import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
+import { parseAssignmentMigration } from '@/lib/update-policies/build-deployment-config';
 import { getCatalogSource } from '@/lib/catalog';
 import { compareVersions } from '@/lib/version-compare';
 import { getLatestInstallerInfo } from '@/lib/auto-update/trigger';
@@ -233,6 +234,7 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
       historyId = history.id;
 
       const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
+      const migration = parseAssignmentMigration(config);
       const autoSupersede = Boolean(sourceIntuneAppId);
 
       const job = await db.jobs.create({
@@ -267,6 +269,10 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
           sourceIntuneAppId,
           autoSupersede,
           supersedenceType: autoSupersede ? 'update' : undefined,
+          assignmentMigration: {
+            carryOverAssignments: Boolean(migration?.carryOverAssignments),
+            removeAssignmentsFromPreviousApp: Boolean(migration?.removeAssignmentsFromPreviousApp),
+          },
           description: config.description,
           notes: config.notes,
           autoUpdateHistoryId: history.id,

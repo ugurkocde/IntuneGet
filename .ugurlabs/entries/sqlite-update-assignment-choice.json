@@ -1,0 +1,5 @@
+{
+  "title": "Preserve assignment choices in self-hosted automatic updates",
+  "summary": "SQLite automatic updates now pass the saved assignment migration choice to the local packager, including removing previous app assignments when selected. Updates without a saved choice keep the existing default.",
+  "type": "fixed"
+}
