@@ -4,7 +4,7 @@ This guide covers setting up a local development environment for IntuneGet.
 
 ## Prerequisites
 
-- Node.js 22 or later
+- Node.js 22.14.0 or later in the 22.x line, or 23.6.0 or later (Node API 10)
 - npm, pnpm, or yarn
 - Git
 - A code editor (VS Code recommended)
@@ -17,7 +17,7 @@ git clone https://github.com/ugurkocde/IntuneGet.git
 cd IntuneGet
 
 # Install dependencies
-npm install
+npm ci --ignore-scripts
 
 # Copy environment template
 cp .env.example .env.local
