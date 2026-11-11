@@ -1,0 +1,5 @@
+{
+  "title": "Explain architecture availability on deployment cards",
+  "summary": "Deployment cards distinguish recorded architecture refusals from installation test failures without changing deployment eligibility.",
+  "type": "fixed"
+}
