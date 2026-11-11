@@ -426,7 +426,7 @@ def contracts():
     print('PASS PG17 Defender pilot upload refusal, zero quota/evidence mutation, auth/hash/lease guards, hash lookup and unrelated upload recovery')
     static_scan = (ROOT/'supabase/tests/qa_reader_static_scan_reservation.sql').read_text()
     before = sql(static_scan, check=False)
-    assert before.returncode != 0 and 'Reader scan-only reservation unavailable' in before.stderr
+    assert before.returncode != 0 and 'Reader scan-only reservation unavailable' in before.stderr, before.stderr
     static_patch = migration('20261111044500_qa_reader_static_scan_reservation')
     for signature, production_pin in (
         ('reserve_qa_vt_candidate_request(text,uuid,text,text,uuid)',

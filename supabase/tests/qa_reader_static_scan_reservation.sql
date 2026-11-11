@@ -1,6 +1,7 @@
 -- Disposable database only. All fixture changes roll back, including clock seams.
 begin;
-truncate public.qa_vt_requests,public.qa_vt_metadata_rechecks,public.qa_vt_submission_intents;
+truncate public.qa_vt_upload_url_recovery_grants,public.qa_vt_requests,
+  public.qa_vt_metadata_rechecks,public.qa_vt_submission_intents;
 delete from public.qa_candidates;
 delete from public.catalog_file_reputation;
 delete from public.qa_installer_security_holds;
