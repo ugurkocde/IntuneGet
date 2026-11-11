@@ -1,0 +1,5 @@
+{
+  "title": "Preserve deployment results during concurrent progress updates",
+  "summary": "Terminal packaging callbacks can complete after a concurrent update to the same execution without losing the deployment result.",
+  "type": "fixed"
+}

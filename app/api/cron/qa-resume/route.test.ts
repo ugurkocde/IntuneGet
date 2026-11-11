@@ -625,6 +625,8 @@ describe('GET /api/cron/qa-resume', () => {
     });
     const job = {
       id: 'job-deferred-customer',
+      infrastructure_retry_count: 1,
+      infrastructure_retry_run_id: '42',
       tenant_id: 'tenant-1',
       qa_candidate_id: 'candidate-queued',
       created_at: '2026-09-01T12:00:00Z',
@@ -692,6 +694,12 @@ describe('GET /api/cron/qa-resume', () => {
       qa_completed_at: null,
     }));
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+    for (const update of [claimUpdate.update, provenanceUpdate.update]) {
+      for (const [patch] of update.mock.calls) {
+        expect(patch).not.toHaveProperty('infrastructure_retry_count');
+        expect(patch).not.toHaveProperty('infrastructure_retry_run_id');
+      }
+    }
   });
 
   it('resumes existing customer uploads without querying or creating QA in maintenance', async () => {

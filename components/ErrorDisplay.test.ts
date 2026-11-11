@@ -112,6 +112,21 @@ describe('ErrorDisplay validation stops without lifecycle evidence', () => {
 
 it.each(['VERSION_UNAVAILABLE','PACKAGE_UNAVAILABLE'])('shows availability without a failed QA claim: %s',errorCode=>{const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode,errorCategory:'validation',errorMessage:'This app version is not available for automated deployment.'}));expect(html).toContain('Not available');expect(html).toContain('did not run an installation test');expect(html).not.toContain('did not pass');});
 
+it('explains architecture availability without suggesting a different version or a failed test', () => {
+ const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode:'ARCHITECTURE_UNAVAILABLE',errorCategory:'validation',errorMessage:'Automated deployment is not available for this app architecture.'}));
+ expect(html).toContain('Architecture not available');expect(html).toContain('This request did not run an installation test.');
+ expect(html).not.toContain('Select an available app version');expect(html).not.toContain('did not pass');
+});
+
+it('translates architecture guidance while preserving the supplied detail', () => {
+ translation.localized=true;
+ const detail='Automated deployment is not available for this app architecture.';
+ const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode:'ARCHITECTURE_UNAVAILABLE',errorCategory:'validation',errorMessage:detail}));
+ expect(html).toContain('translated: Architecture not available');
+ expect(translation.messages).toContain('Automated deployment is not available for this architecture. This request did not run an installation test.');
+ expect(html).toContain(detail);expect(html).not.toContain('translated: '+detail);
+});
+
 it('does not offer another version when the whole app is unavailable', () => {
  const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode:'PACKAGE_UNAVAILABLE',errorCategory:'validation'}));
  expect(html).toContain('This app is not available for automated deployment. This request did not run an installation test.');

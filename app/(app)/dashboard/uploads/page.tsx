@@ -685,7 +685,7 @@ function UploadJobCard({
 
   const securityBlocked = job.status === 'qa_failed' && job.qa_status?.category === 'installer_security_hold';
   const availabilityCode = job.status === 'qa_failed' && job.qa_status?.category === 'unavailable'
-    && (job.qa_status.reasonCode === 'VERSION_UNAVAILABLE' || job.qa_status.reasonCode === 'PACKAGE_UNAVAILABLE')
+    && (job.qa_status.reasonCode === 'VERSION_UNAVAILABLE' || job.qa_status.reasonCode === 'PACKAGE_UNAVAILABLE' || job.qa_status.reasonCode === 'ARCHITECTURE_UNAVAILABLE')
     ? job.qa_status.reasonCode : null;
   const statusConfig = {
     blocked_upstream: { icon: Clock, label: 'Blocked upstream', color: 'text-status-warning', bg: 'bg-status-warning/10', border: 'border-l-status-warning' },
@@ -703,7 +703,8 @@ function UploadJobCard({
       icon: XCircle,
       label: securityBlocked ? 'Security check blocked deployment'
         : availabilityCode === 'PACKAGE_UNAVAILABLE' ? 'App not available'
-          : availabilityCode === 'VERSION_UNAVAILABLE' ? 'App version not available' : <T>Deployment stopped</T>,
+          : availabilityCode === 'VERSION_UNAVAILABLE' ? 'App version not available'
+            : availabilityCode === 'ARCHITECTURE_UNAVAILABLE' ? <T>App architecture not available</T> : <T>Deployment stopped</T>,
       color: 'text-status-error',
       bg: 'bg-status-error/10',
       border: 'border-l-status-error',

@@ -235,7 +235,7 @@ describe('GET /api/package (userId listing)', () => {
       error_message: STALE_JOB_ERROR_MESSAGE,
       completed_at: expect.any(String),
       updated_at: expect.any(String),
-    });
+    }, { status: staleJob.status, updated_at: staleJob.updated_at });
     expect(body.jobs).toHaveLength(1);
     expect(body.jobs[0].status).toBe('failed');
     expect(body.jobs[0].error_message).toBe(STALE_JOB_ERROR_MESSAGE);

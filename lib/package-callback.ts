@@ -81,6 +81,7 @@ export function shouldApplyCallback(
   currentUpdatedAt: string,
   heartbeatAt?: string,
 ): boolean {
+  if (currentStatus === 'awaiting_qa') return false;
   const normalizedCurrent = packageJobStatuses.includes(currentStatus as PackageJobStatus)
     ? currentStatus as PackageJobStatus
     : 'queued';
@@ -122,4 +123,22 @@ export function sanitizeErrorDetails(
         return [key, '[redacted complex value]'];
       }),
   );
+}
+
+/** A retired run cannot mutate the fresh admission or its replacement run. */
+export function isRetiredRunCallback(
+  retiredRunId: string | null | undefined,
+  incomingRunId: string | number | undefined,
+  attemptId?: string,
+): boolean {
+  if (!retiredRunId) return false;
+  const validId = (value: string) => /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value));
+  const explicit = incomingRunId === undefined ? undefined : String(incomingRunId);
+  const attempt = attemptId?.match(/^([1-9]\d*)-([1-9]\d*)$/);
+  if (explicit !== undefined && !validId(explicit)) return true;
+  if (attemptId !== undefined && (!attempt || !validId(attempt[1]) || !validId(attempt[2]))) return true;
+  const fromAttempt = attempt?.[1];
+  if (explicit && fromAttempt && explicit !== fromAttempt) return true;
+  const identity = explicit ?? fromAttempt;
+  return identity === undefined || identity === retiredRunId;
 }

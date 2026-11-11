@@ -1047,7 +1047,7 @@ async function healStaleJobs(
           error_message: STALE_JOB_ERROR_MESSAGE,
           completed_at: now,
           updated_at: now,
-        })
+        }, { status: job.status, updated_at: job.updated_at })
         .catch((error) => {
           console.error(`Failed to heal stale job ${job.id}:`, error);
           return null;

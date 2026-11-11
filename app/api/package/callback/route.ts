@@ -15,6 +15,8 @@ import {
   packageCallbackSchema,
   sanitizeErrorDetails,
   shouldApplyCallback,
+  isRetiredRunCallback,
+  terminalPackageStatuses,
 } from '@/lib/package-callback';
 
 export async function POST(request: NextRequest) {
@@ -48,12 +50,13 @@ export async function POST(request: NextRequest) {
     }
     const data = parsed.data;
     const db = getDatabase();
-    const currentJob = await db.jobs.getById(data.jobId);
+    let currentJob = await db.jobs.getById(data.jobId);
     if (!currentJob) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    if (!shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
+    if (isRetiredRunCallback(currentJob.infrastructure_retry_run_id, data.runId, data.attemptId)
+      || !shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
       return NextResponse.json({
         success: true,
         ignored: true,
@@ -164,16 +167,33 @@ export async function POST(request: NextRequest) {
 
     // Optimistic status condition prevents a cancellation or another terminal
     // callback from being overwritten between the read and the update.
-    const updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status });
+    let updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status, updated_at: currentJob.updated_at });
 
     if (!updatedJob) {
       const latestJob = await db.jobs.getById(data.jobId);
-      return NextResponse.json({
-        success: true,
-        ignored: true,
-        reason: 'job_changed_during_callback',
-        job: latestJob,
-      });
+      // A same-status write advances the database clock beyond the runner's
+      // heartbeat. Rescue only the unchanged execution state, then fence the
+      // second write by the fresh revision before running terminal side effects.
+      if (latestJob && terminalPackageStatuses.has(data.status)
+        && latestJob.status === currentJob.status
+        && latestJob.github_run_id === currentJob.github_run_id
+        && latestJob.infrastructure_retry_run_id === currentJob.infrastructure_retry_run_id
+        && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
+        && shouldApplyCallback(latestJob.status, data.status, latestJob.updated_at)) {
+        updatedJob = await db.jobs.update(data.jobId, {
+          ...updateData,
+          status_message: data.message ?? latestJob.status_message,
+        }, { status: latestJob.status, updated_at: latestJob.updated_at });
+        if (updatedJob) currentJob = latestJob;
+      }
+      if (!updatedJob) {
+        return NextResponse.json({
+          success: true,
+          ignored: true,
+          reason: 'job_changed_during_callback',
+          job: latestJob,
+        });
+      }
     }
 
     // Side effects run only after the state transition succeeds, making callback
