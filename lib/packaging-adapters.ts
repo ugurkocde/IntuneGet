@@ -2021,6 +2021,13 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // WinGet declares this base name; the observed Inno registration appends
+  // "version <version>". Reuse the existing unique prefix/version selection
+  // among changed entries, then persist the selected exact key for removal.
+  'evilhumphrey.legendctl': {
+    generatedDisplayName: 'LegendCTL',
+    registeredDisplayName: 'ZD Ultimate Legend Wrapper',
+  },
   // These NSIS registrations use unbraced keys and renamed vendor products.
   // Keep the catalog names as fallbacks so an unreviewed key for the renamed
   // product cannot be captured by a broader registered-name match.
