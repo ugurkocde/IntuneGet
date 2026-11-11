@@ -298,6 +298,25 @@ describe('sqlite auto-update check', () => {
     expect(updatedPolicy?.last_auto_update_version).toBe('1.1.0');
   });
 
+  it.each([true, false, undefined])('preserves the saved assignment migration choice %s', async choice => {
+    const { db, runSqliteUpdateCheck } = await load();
+    const policy = await seedDeployment(db);
+    await db.updatePolicies.upsert({ ...policy, deployment_config: {
+      ...deploymentConfig,
+      ...(choice === undefined ? {} : { assignmentMigration: {
+        carryOverAssignments: choice, removeAssignmentsFromPreviousApp: choice,
+      } }),
+    } });
+    getAppsByWingetIdsMock.mockResolvedValue([{ winget_id: 'Vendor.App', name: 'Vendor App', latest_version: '1.1.0' }]);
+    getLatestInstallerInfoMock.mockResolvedValue(installerResolution());
+    expect((await runSqliteUpdateCheck(db)).triggered).toBe(1);
+    const [job] = await db.jobs.getByTenantId('t1');
+    expect(job.package_config).toMatchObject({ sourceIntuneAppId: 'app-1', autoSupersede: true, supersedenceType: 'update' });
+    const config = job.package_config as { assignmentMigration?: { carryOverAssignments?: boolean; removeAssignmentsFromPreviousApp?: boolean } };
+    expect(config.assignmentMigration?.carryOverAssignments ?? false).toBe(Boolean(choice));
+    expect(config.assignmentMigration?.removeAssignmentsFromPreviousApp ?? false).toBe(Boolean(choice));
+  });
+
   it('removes a stored detection once the app is no longer behind', async () => {
     const { db, runSqliteUpdateCheck } = await load();
     await seedDeployment(db);
