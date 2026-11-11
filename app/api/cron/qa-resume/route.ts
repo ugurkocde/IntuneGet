@@ -3,13 +3,14 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
-import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, WorkflowDispatchRetryStopped, DISPATCH_IDENTITY_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import { unsupportedDependencyMessage, knownUnavailableDisposition, isExactPretestCandidate } from '@/lib/unsupported-dependency';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
 import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
@@ -272,7 +273,7 @@ export async function GET(request: Request) {
       waiting++;
       continue;
     }
-    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T): T => {
+    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T, guardDueTime = false): T => {
       const identityFields = [
         ['qa_candidate_id', observed.qa_candidate_id],
         ['installer_sha256', observed.installer_sha256],
@@ -283,7 +284,10 @@ export async function GET(request: Request) {
       for (const [column, value] of identityFields) {
         query = value == null ? query.is(column, null) : query.eq(column, value);
       }
-      return query;
+      if (!guardDueTime) return query;
+      return job.qa_resume_due_at == null
+        ? query.is('qa_resume_due_at', null)
+        : query.eq('qa_resume_due_at', job.qa_resume_due_at);
     };
     if (compatibilityBlock) {
       const now = new Date().toISOString();
@@ -543,7 +547,13 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString();
     const nextStatus = features.localPackager ? 'queued' : 'packaging';
-    const { data: claimed, error: claimError } = await guardObservedIdentity(supabase
+    const retryDetails = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
+      ? job.error_details : {};
+    const retryIdentity = retryDetails[DISPATCH_IDENTITY_KEY];
+    const deferredClaim = Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
+    let claimedPackaging = false;
+    const claimForDispatch = async () => {
+      const claim = guardObservedIdentity(supabase
       .from('packaging_jobs')
       .update({
         status: nextStatus,
@@ -552,23 +562,53 @@ export async function GET(request: Request) {
           : 'Installation test passed; packaging started automatically',
         qa_completed_at: qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
-        ...(job.error_code === 'WORKFLOW_DISPATCH_RATE_LIMITED' ? {
+        ...(['WORKFLOW_DISPATCH_RATE_LIMITED', 'WORKFLOW_DISPATCH_UNCONFIRMED'].includes(job.error_code ?? '') ? {
           error_code: null, error_message: null, error_stage: null, error_category: null,
         } : {}),
       })
       .eq('id', job.id)
-      .eq('status', 'awaiting_qa'))
+      .eq('status', 'awaiting_qa')
+      .is('callback_run_id', null).is('github_run_id', null)
+      .is('cancelled_at', null).is('archived_at', null));
+      const { data: claimed, error: claimError } = await (job.qa_resume_due_at == null
+        ? claim.is('qa_resume_due_at', null)
+        : claim.eq('qa_resume_due_at', job.qa_resume_due_at))
       .select('id')
       .maybeSingle();
-    if (claimError) throw claimError;
-    if (!claimed) continue;
+      if (claimError) throw claimError;
+      if (!claimed) throw new WorkflowDispatchRetryStopped();
+      claimedPackaging = !features.localPackager;
+    };
+    if (!deferredClaim) {
+      try { await claimForDispatch(); }
+      catch (error) { if (error instanceof WorkflowDispatchRetryStopped) continue; throw error; }
+    }
 
-    if (features.localPackager) {
+    if (features.localPackager && !deferredClaim) {
       resumed++;
       continue;
     }
 
     try {
+      const rejectChangedRetry = async () => {
+        const message = 'Packaging inputs changed after GitHub did not confirm startup. Start a new deployment.';
+        const { data: changed, error: writeError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+          status: 'failed', error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED',
+          status_message: message, error_message: message, error_stage: 'validation', error_category: 'validation',
+          completed_at: new Date().toISOString(),
+        }).eq('id', job.id).eq('status', 'awaiting_qa').is('callback_run_id', null).is('github_run_id', null)
+          .is('cancelled_at', null).is('archived_at', null), true).select('id').maybeSingle();
+        if (writeError) waiting++;
+        if (changed) {
+          failed++;
+          try { await handleAutoUpdateJobCompletion(job.id, 'failed', message); }
+          catch { console.error('[QA Resume] Could not finish auto update tracking after a changed retry payload.'); }
+        }
+        throw new WorkflowDispatchRetryStopped();
+      };
+      if (deferredClaim && (features.localPackager || typeof retryIdentity !== 'string' || !/^[a-f0-9]{64}$/i.test(retryIdentity))) {
+        await rejectChangedRetry();
+      }
       const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
       const autoUpdate = job.is_auto_update ? item as Win32CartItem & {
         sourceIntuneAppId?: string; autoSupersede?: boolean; supersedenceType?: string;
@@ -603,7 +643,9 @@ export async function GET(request: Request) {
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
         detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
         requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
-        assignments: item.assignments ? JSON.stringify(item.assignments) : undefined,
+        assignments: item.assignments ? JSON.stringify(deferredClaim
+          ? sanitizeAssignmentsForDispatch(item.assignments, Boolean(item.requirementRules?.length))
+          : item.assignments) : undefined,
         categories: item.categories ? JSON.stringify(item.categories) : undefined,
         espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
         relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
@@ -617,7 +659,12 @@ export async function GET(request: Request) {
         sourceType: item.sourceType,
         curatedReleaseId: item.curatedReleaseId,
       };
-      const trigger = await triggerPackagingWorkflow(workflowInputs);
+      const trigger = await triggerPackagingWorkflow(workflowInputs, undefined, deferredClaim ? {
+        beforeDispatch: async identity => {
+          if (identity !== retryIdentity) await rejectChangedRetry();
+          await claimForDispatch();
+        },
+      } : undefined);
       await supabase
         .from('packaging_jobs')
         .update({
@@ -625,27 +672,31 @@ export async function GET(request: Request) {
           github_run_url: trigger.runUrl || null,
         })
         .eq('id', job.id)
-        .eq('status', 'packaging');
+        .eq('status', 'packaging')
+        .is('callback_run_id', null);
       resumed++;
     } catch (error) {
+      if (error instanceof WorkflowDispatchRetryStopped) continue;
+      const failureStatus = claimedPackaging ? 'packaging' : 'awaiting_qa';
       const licenceRequired = error instanceof CuratedLicenceError;
-      const rateLimit = error instanceof WorkflowDispatchRateLimitError ? error : null;
+      const rateLimit = error instanceof WorkflowDispatchRateLimitError || error instanceof WorkflowDispatchUnconfirmedError ? error : null;
       const rateHold = rateLimit ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
       if (rateLimit) {
         const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
           .from('packaging_jobs')
           .update(rateHold ? { ...rateHold, qa_completed_at: job.qa_completed_at ?? null } : {
             status: 'failed',
-            status_message: 'GitHub capacity retries have stopped. No new deployment was started.',
+            status_message: 'Automatic packaging retries have stopped. Check deployment status before trying again.',
             error_code: rateLimit.code,
             error_stage: 'authenticate', error_category: 'network', error_message: rateLimit.message,
             completed_at: new Date().toISOString(),
           })
           .eq('id', job.id)
-          .eq('status', 'packaging')
+          .eq('status', failureStatus)
           .is('github_run_id', null)
+          .is('callback_run_id', null)
           .is('cancelled_at', null)
-          .is('archived_at', null))
+          .is('archived_at', null), !claimedPackaging)
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
@@ -656,8 +707,7 @@ export async function GET(request: Request) {
         }
         continue;
       }
-      // This typed failure is raised before dispatch. Ambiguous dispatch
-      // failures must retain the terminal path below rather than be replayed.
+      // Preflight failures can occur before a deferred retry claims the job.
       if (error instanceof InstallerPreflightError && error.retryable) {
         const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
           .from('packaging_jobs')
@@ -669,15 +719,15 @@ export async function GET(request: Request) {
             qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(),
           })
           .eq('id', job.id)
-          .eq('status', 'packaging')
-          .is('github_run_id', null))
+          .eq('status', failureStatus)
+          .is('github_run_id', null).is('callback_run_id', null), !claimedPackaging)
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
         if (heldJob) held++;
         continue;
       }
-      const { data: failedJob } = await supabase
+      const { data: failedJob } = await guardObservedIdentity(supabase
         .from('packaging_jobs')
         .update({
           status: 'failed',
@@ -693,17 +743,19 @@ export async function GET(request: Request) {
           completed_at: new Date().toISOString(),
         })
         .eq('id', job.id)
-        .eq('status', 'packaging')
+        .eq('status', failureStatus)
+        .is('github_run_id', null).is('callback_run_id', null)
+        .is('cancelled_at', null).is('archived_at', null), !claimedPackaging)
         .select('id')
         .maybeSingle();
       if (failedJob) {
+        failed++;
         await handleAutoUpdateJobCompletion(
           job.id,
           'failed',
           error instanceof Error ? error.message : 'Unknown resume error'
         );
       }
-      failed++;
     }
   }
 

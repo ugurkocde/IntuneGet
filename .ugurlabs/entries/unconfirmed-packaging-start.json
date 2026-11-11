@@ -1,0 +1,5 @@
+{
+  "title": "Retry temporary packaging startup failures",
+  "summary": "New hosted cart deployments can retry when GitHub does not confirm startup, while keeping the admitted packaging inputs unchanged and protecting runs that already own the deployment.",
+  "type": "fixed"
+}

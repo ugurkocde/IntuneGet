@@ -65,7 +65,7 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 
 import { GET } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
-import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
@@ -777,7 +777,7 @@ describe('GET /api/cron/qa-resume', () => {
       status_message: 'Preparing deployment',
       qa_completed_at: null,
     }));
-    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }), undefined, undefined);
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
   });
@@ -1241,7 +1241,7 @@ describe('GET /api/cron/qa-resume', () => {
         installer_type: 'exe', install_command: 'installer.exe /silent',
         installer_url: 'https://example.test/installer.exe',
         qa_candidate_id: 'passed-candidate', execution_profile_sha256: 'B'.repeat(64),
-        installer_sha256: 'A'.repeat(64), architecture: 'x64', github_run_id: null,
+        installer_sha256: 'A'.repeat(64), architecture: 'x64', github_run_id: null, callback_run_id: null,
         qa_completed_at: '2026-10-01T00:00:00Z', packaging_started_at: null,
         error_details: null,
         package_config: { installerSha256: 'A'.repeat(64), architecture: 'x64' },
@@ -1267,6 +1267,179 @@ describe('GET /api/cron/qa-resume', () => {
       return { store, run };
     }
 
+    it('holds a fresh unconfirmed dispatch and shares the existing bounded retry budget', async () => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        await options.beforeDispatch('A'.repeat(64));
+        throw new WorkflowDispatchUnconfirmedError(503);
+      });
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+        expect(store.row).toMatchObject({ status: 'awaiting_qa', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED',
+          error_details: { workflow_dispatch_rate_limit_attempts: attempt } });
+      }
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 1 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED' });
+    });
+    it.each([0, 5])('never overwrites a late callback owner when an unconfirmed hold budget is %s', async count => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_rate_limit_attempts: count };
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        store.row.callback_run_id = '43';
+        throw new WorkflowDispatchUnconfirmedError(null);
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', callback_run_id: '43' });
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+    it('does not dispatch an awaiting row already owned by a late original run', async () => {
+      const { store, run } = setup();
+      store.row.callback_run_id = '43';
+      expect(await (await run()).json()).toMatchObject({ resumed: 0, failed: 0 });
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      expect(store.row.status).toBe('awaiting_qa');
+    });
+    it('does not overwrite the original callback owner with a later dispatch capture', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        store.row.callback_run_id = '43';
+        store.row.github_run_id = '43';
+        return { success: true, runId: 44 };
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', callback_run_id: '43', github_run_id: '43' });
+    });
+    it('keeps a pinned retry closed until validation then fails a changed payload without dispatch', async () => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      store.row.is_auto_update = true;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        expect(store.row.status).toBe('awaiting_qa');
+        await options.beforeDispatch('B'.repeat(64));
+        throw new Error('POST must not be reached');
+      });
+      expect(await (await run()).json()).toMatchObject({ failed: 1, resumed: 0 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED' });
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledOnce();
+    });
+    it.each([null, 'malformed'])('never dispatches an old unconfirmed row without a valid admission pin: %s', async pin => {
+      const { store, run } = setup();
+      store.row.error_code = 'WORKFLOW_DISPATCH_UNCONFIRMED';
+      store.row.error_details = pin === null ? null : { workflow_dispatch_unconfirmed_identity: pin };
+      expect(await (await run()).json()).toMatchObject({ failed: 1, resumed: 0 });
+      expect(store.row).toMatchObject({ status: 'failed', callback_run_id: null });
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    });
+    it('retains the admission pin through a 429 and refuses changed inputs on the next retry', async () => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64), workflow_dispatch_rate_limit_attempts: 1 };
+      triggerPackagingWorkflowMock.mockImplementationOnce(async (_input, _config, options) => {
+        await options.beforeDispatch('A'.repeat(64));
+        throw new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+      expect(store.row).toMatchObject({ error_code: 'WORKFLOW_DISPATCH_RATE_LIMITED',
+        error_details: { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64), workflow_dispatch_rate_limit_attempts: 2 } });
+      triggerPackagingWorkflowMock.mockImplementationOnce(async (_input, _config, options) => {
+        expect(store.row.status).toBe('awaiting_qa');
+        await options.beforeDispatch('B'.repeat(64));
+        throw new Error('POST must not be reached');
+      });
+      expect(await (await run()).json()).toMatchObject({ failed: 1, resumed: 0 });
+      expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+    });
+    it.each(['preflight', 'generic'])('handles a pinned %s failure before the deferred claim', async kind => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockRejectedValueOnce(kind === 'preflight'
+        ? new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'synthetic unavailable', true) : new Error('synthetic unavailable'));
+      expect(await (await run()).json()).toMatchObject(kind === 'preflight' ? { held: 1, failed: 0 } : { failed: 1 });
+      expect(store.row.status).toBe(kind === 'preflight' ? 'awaiting_qa' : 'failed');
+      expect(store.row.callback_run_id).toBeNull();
+    });
+    it('claims an unchanged pinned payload only at the dispatch boundary', async () => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        expect(store.row.status).toBe('awaiting_qa');
+        await options.beforeDispatch('A'.repeat(64));
+        expect(store.row.status).toBe('packaging');
+        return { success: true };
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(store.row.error_details).toEqual({ workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) });
+    });
+    it('does not let a stale worker claim again after another worker schedules a new hold', async () => {
+      const { store, run } = setup();
+      store.row.qa_resume_due_at = '2026-01-01T00:00:00Z';
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      let release!: () => void;
+      let reached!: () => void;
+      const paused = new Promise<void>(resolve => { reached = resolve; });
+      const resume = new Promise<void>(resolve => { release = resolve; });
+      findPendingApprovalBlocksMock.mockImplementationOnce(async () => { reached(); await resume; return []; });
+      let posts = 0;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        await options.beforeDispatch('A'.repeat(64));
+        posts++;
+        throw new WorkflowDispatchUnconfirmedError(503);
+      });
+      const stale = run();
+      await paused;
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      const held = structuredClone(store.row);
+      release();
+      expect(await (await stale).json()).toMatchObject({ held: 0, failed: 0, resumed: 0 });
+      expect(posts).toBe(1);
+      expect(store.row).toEqual(held);
+      expect(store.row.error_details).toMatchObject({ workflow_dispatch_rate_limit_attempts: 1 });
+    });
+    it.each([true, false])('uses admission assignment sanitization only for pinned retries: %s', async pinned => {
+      const { store, run } = setup();
+      const assignments = [{ type: 'allUsers', intent: 'updateOnly' }];
+      store.row.package_config = { ...store.row.package_config as object, assignments,
+        requirementRules: [{ ruleType: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Fixture' }] };
+      if (pinned) store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockImplementation(async (input, _config, options) => {
+        expect(JSON.parse(input.assignments)).toEqual([{ ...assignments[0], intent: pinned ? 'required' : 'updateOnly' }]);
+        if (pinned) await options.beforeDispatch('A'.repeat(64));
+        return { success: true };
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+    });
+    it.each(['preflight', 'generic', 'identity'])('preserves a newer hold when stale validation ends with %s before claiming', async kind => {
+      const { store, run } = setup();
+      store.row.qa_resume_due_at = '2026-01-01T00:00:00Z';
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      let newer!: Record<string, unknown>;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        expect(store.row.status).toBe('awaiting_qa');
+        store.row.qa_resume_due_at = new Date(Date.now() + 600_000).toISOString();
+        store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64), workflow_dispatch_rate_limit_attempts: 2 };
+        newer = structuredClone(store.row);
+        if (kind === 'identity') await options.beforeDispatch('B'.repeat(64));
+        if (kind === 'preflight') throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'synthetic unavailable', true);
+        throw new Error('synthetic validation failure');
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0, resumed: 0 });
+      expect(store.row).toEqual(newer);
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+    it.each([null, '43'])('stops a lost deferred claim without writing a failure over the winner with owner %s', async owner => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        expect(store.row.status).toBe('awaiting_qa');
+        store.row.status = 'packaging';
+        store.row.callback_run_id = owner;
+        await options.beforeDispatch('A'.repeat(64));
+        throw new Error('POST must not be reached');
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 0, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', callback_run_id: owner });
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
     it('defers explicit rate limits five times then stops without resetting the persisted budget', async () => {
       const { store, run } = setup();
       const error = new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
@@ -1304,9 +1477,14 @@ describe('GET /api/cron/qa-resume', () => {
       expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123' });
       expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     });
-    it('runs upstream, QA and approval admission again before a rate limit retry', async () => {
+    it.each(['rate limit', 'unconfirmed'])('runs upstream, QA and approval admission again before a %s retry', async kind => {
       const { store, run } = setup();
-      triggerPackagingWorkflowMock.mockRejectedValue(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()));
+      if (kind === 'unconfirmed') store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        if (options?.beforeDispatch) await options.beforeDispatch('A'.repeat(64));
+        throw kind === 'unconfirmed' ? new WorkflowDispatchUnconfirmedError(503)
+          : new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
+      });
       expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
       vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
       expect(await (await run()).json()).toMatchObject({ held: 1 });
@@ -1317,7 +1495,8 @@ describe('GET /api/cron/qa-resume', () => {
       expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
       expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
       expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(2);
-      expect(store.row.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: 2 });
+      expect(store.row.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: 2,
+        ...(kind === 'unconfirmed' ? { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) } : {}) });
       expect(holdCustomerUpstreamJob).toHaveBeenCalledTimes(5);
       expect(enforceQaGateMock).toHaveBeenCalledTimes(4);
       expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(3);

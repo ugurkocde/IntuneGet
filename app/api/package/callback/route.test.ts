@@ -30,8 +30,9 @@ describe('retired customer run callback fences', () => {
   });
   it('ignores a late callback while fresh QA admission is pending', async () => {
     state.job.status = 'awaiting_qa';
+    state.job.callback_run_id = null;
     state.job.infrastructure_retry_run_id = null;
-    expect(await (await send('43')).json()).toMatchObject({ ignored: true });
+    expect(await (await send('43')).json()).toMatchObject({ success: false, ignored: true, reason: 'ownership_unconfirmed' });
     expect(state.update).not.toHaveBeenCalled();
   });
   it('ignores the retired run even after the replacement is packaging', async () => {

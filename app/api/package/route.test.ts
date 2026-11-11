@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { STALE_JOB_TIMEOUT_MINUTES, STALE_JOB_ERROR_MESSAGE } from '@/lib/stale-jobs';
 import type { PackagingJob } from '@/lib/db/types';
-import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 
 const {
   getDatabaseMock,
@@ -935,7 +935,7 @@ describe('POST /api/package (workflow dispatch)', () => {
   );
 
   it('holds a rejected hosted dispatch for automatic retry instead of reporting a failure', async () => {
-    const row: Record<string, unknown> = { status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null };
+    const row: Record<string, unknown> = { status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null };
     updateMock.mockImplementationOnce(async (_id, patch, conditions) => {
       if (!Object.entries(conditions).every(([key, value]) => row[key] === value)) return null;
       Object.assign(row, patch);
@@ -960,6 +960,39 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(body.errors).toEqual([{ wingetId: 'Test.App', error: 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' }]);
     expect(updateMock).toHaveBeenCalledOnce();
     expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
+  });
+  it('holds a fresh unconfirmed hosted dispatch with an owner null fence', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503, Date.now(), 'A'.repeat(64)));
+    const body = await (await postSingleItem()).json();
+    expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
+    expect(body.errors).toBeUndefined();
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED' }),
+      expect.objectContaining({ callback_run_id: null, github_run_id: null, status: 'queued' }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.any(Object), undefined,
+      expect.objectContaining({ newJobAdmission: true }));
+  });
+  it('does not fail or hold a fresh dispatch after its callback owner wins', async () => {
+    updateMock.mockImplementationOnce(async (_id, _patch, conditions) => conditions.callback_run_id === null ? null : { status: 'awaiting_qa' });
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(null, Date.now(), 'A'.repeat(64)));
+    const body = await (await postSingleItem()).json();
+    expect(body.jobs).toEqual([]);
+    expect(updateMock).toHaveBeenCalledOnce();
+    expect(updateMock.mock.calls[0][1].status).toBe('awaiting_qa');
+  });
+  it('persists request forceCreate only with a pinned unconfirmed hold', async () => {
+    const item = { ...makeWin32Item(), forceCreate: false };
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503, Date.now(), 'A'.repeat(64)));
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [item], forceCreate: true }),
+    }));
+    expect(await response.json()).toMatchObject({ jobs: [{ status: 'awaiting_qa' }] });
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ package_config: expect.objectContaining({ forceCreate: false }) }));
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0].forceCreate).toBe(true);
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      package_config: expect.objectContaining({ forceCreate: true }),
+      error_details: expect.objectContaining({ workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) }),
+    }), expect.objectContaining({ callback_run_id: null }));
   });
   it('still reports other dispatched jobs when saving a capacity hold fails', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,

@@ -13,7 +13,8 @@ import {
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 import { QaCompatibilityGateError } from './qa/gate';
 import { generateUninstallCommand } from './detection-rules';
-import { WorkflowDispatchRateLimitError } from './workflow-dispatch-rate-limit';
+import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, WorkflowDispatchRetryStopped } from './workflow-dispatch-rate-limit';
+import { sanitizeAssignmentsForDispatch } from './assignment-intents';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -208,8 +209,68 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   it('does not resend a dispatch whose network response is unknown', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('connection lost'));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true })).rejects.toThrow('connection lost');
+    await expect(triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true })).rejects.toBeInstanceOf(WorkflowDispatchUnconfirmedError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([500, 502, 503, 504])('classifies only the fresh dispatch HTTP %s as unconfirmed without exposing its body', async status => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('private dispatch body', { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true });
+    await expect(result).rejects.toBeInstanceOf(WorkflowDispatchUnconfirmedError);
+    await expect(result).rejects.not.toThrow('private dispatch body');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each(['installerSha256', 'installerUrl', 'psadtConfig', 'jobId', 'tenantId'])('checks the admitted payload before reopening a job when %s changes', async field => {
+    const input = workflowInputs({ sourceType: 'winget', wingetId: 'Example.App', installerSha256: 'A'.repeat(64), hashValidationMode: 'strict' });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const error = await triggerPackagingWorkflow(input, config, { skipRunCapture: true, newJobAdmission: true }).catch(error => error);
+    expect(error.dispatchIdentity).toMatch(/^[a-f0-9]{64}$/);
+    fetchMock.mockClear().mockResolvedValue(new Response(null, { status: 204 }));
+    const changed = { ...input, [field]: field === 'installerSha256' ? 'B'.repeat(64)
+      : field === 'installerUrl' ? 'https://example.test/changed.exe' : field === 'psadtConfig' ? '{"brandingCompanyName":"Changed"}' : 'changed' };
+    const reopen = vi.fn(async (identity: string) => { if (identity !== error.dispatchIdentity) throw new WorkflowDispatchRetryStopped(); });
+    await expect(triggerPackagingWorkflow(changed, config, { skipRunCapture: true, beforeDispatch: reopen })).rejects.toBeInstanceOf(WorkflowDispatchRetryStopped);
+    expect(reopen).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('builds and checks one payload before the POST and does not pin unmarked admissions', async () => {
+    const input = workflowInputs({ sourceType: 'winget', wingetId: 'Example.App', installerSha256: 'A'.repeat(64), hashValidationMode: 'strict' });
+    const order: string[] = [];
+    const fetchMock = vi.fn().mockImplementation(async () => { order.push('POST'); return new Response(null, { status: 503 }); });
+    vi.stubGlobal('fetch', fetchMock);
+    const error = await triggerPackagingWorkflow(input, config, { skipRunCapture: true,
+      beforeDispatch: async identity => { expect(identity).toMatch(/^[a-f0-9]{64}$/); order.push('claim'); input.installerUrl = 'https://example.test/late-change.exe'; },
+    }).catch(error => error);
+    expect(order).toEqual(['claim', 'POST']);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body)).client_payload.installer.url).not.toContain('late-change');
+    expect(error.dispatchIdentity).toBeUndefined();
+  });
+  it('never creates an admission pin for a custom upload even when marked new', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const error = await triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true, newJobAdmission: true }).catch(error => error);
+    expect(error).toBeInstanceOf(WorkflowDispatchUnconfirmedError);
+    expect(error.dispatchIdentity).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+  it('keeps the actual dispatch identity when stored forceCreate and normalized assignments are replayed', async () => {
+    const stored = { forceCreate: true, assignments: [{ type: 'allUsers' as const, intent: 'updateOnly' as const }],
+      requirementRules: [{ ruleType: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Fixture' }] };
+    const admission = workflowInputs({ sourceType: 'winget', wingetId: 'Example.App', installerSha256: 'A'.repeat(64),
+      hashValidationMode: 'strict', forceCreate: true, requirementRules: JSON.stringify(stored.requirementRules),
+      assignments: JSON.stringify([{ type: 'allUsers', intent: 'required' }]) });
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const failure = await triggerPackagingWorkflow(admission, config, { skipRunCapture: true, newJobAdmission: true }).catch(error => error);
+    expect(failure.dispatchIdentity).toMatch(/^[a-f0-9]{64}$/);
+    const check = vi.fn(async (identity: string) => { expect(identity).toBe(failure.dispatchIdentity); });
+    await triggerPackagingWorkflow({ ...admission, forceCreate: stored.forceCreate,
+      assignments: JSON.stringify(sanitizeAssignmentsForDispatch(stored.assignments, Boolean(stored.requirementRules.length))),
+    }, config, { skipRunCapture: true, beforeDispatch: check });
+    expect(check).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).client_payload).toEqual(JSON.parse(fetchMock.mock.calls[0][1].body).client_payload);
   });
   it('dispatches authored catalog detection rules with the matching QA identity', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));

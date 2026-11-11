@@ -6,8 +6,8 @@ import { isExactPackagingRun } from './runner-loss';
  * Uses repository_dispatch to a private workflows repository
  */
 
-import { createHmac } from 'node:crypto';
-import { dispatchRateLimitError } from './workflow-dispatch-rate-limit';
+import { createHash, createHmac } from 'node:crypto';
+import { dispatchRateLimitError, WorkflowDispatchUnconfirmedError } from './workflow-dispatch-rate-limit';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
 import { assertCuratedLicenceAccepted } from '@/lib/curated-catalog/licence';
@@ -24,6 +24,7 @@ import {
 import { assertPackagingContract } from './packaging-contract';
 import {
   normalizeQaWorkflowPackageInput,
+  canonicalQaJson,
 } from './qa/package-profile';
 import {
   resolveWingetPackageDependencies,
@@ -132,7 +133,8 @@ export interface TriggerResult {
 export async function triggerPackagingWorkflow(
   inputs: WorkflowInputs,
   config?: GitHubActionsConfig,
-  options?: { skipRunCapture?: boolean; requireQaPass?: boolean }
+  options?: { skipRunCapture?: boolean; requireQaPass?: boolean;
+    newJobAdmission?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
 ): Promise<TriggerResult> {
   const cfg = config || getGitHubActionsConfig();
 
@@ -312,17 +314,9 @@ export async function triggerPackagingWorkflow(
   // Use repository_dispatch to trigger workflow in private repo
   const url = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/dispatches`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    // GitHub repository_dispatch allows max 10 top-level properties in client_payload
-    // We consolidate into 4 groups: job, app, installer, config
-    body: JSON.stringify({
+  // Hash and send the same final payload. Credential-derived signatures are
+  // excluded from the stored identity; job and tenant bindings stay included.
+  const payload = {
       event_type: 'package-app',
       client_payload: {
         job: {
@@ -369,10 +363,28 @@ export async function triggerPackagingWorkflow(
           supersedenceType: inputs.supersedenceType || '',
         },
       },
-    }),
-  });
+  };
+  const dispatchIdentity = createHash('sha256').update(canonicalQaJson({
+    payload: { ...payload, client_payload: { ...payload.client_payload,
+      installer: { ...payload.client_payload.installer, dependencyBundleSignature: undefined } } },
+    packageProfileSha256: packageProfileSha256 ?? null,
+    curatedReleaseId: inputs.curatedReleaseId ?? null,
+  })).digest('hex');
+  await options?.beforeDispatch?.(dispatchIdentity);
+  const newAdmissionIdentity = options?.newJobAdmission && inputs.sourceType !== 'custom' ? dispatchIdentity : undefined;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    body: JSON.stringify(payload),
+  }).catch(() => { throw new WorkflowDispatchUnconfirmedError(null, Date.now(), newAdmissionIdentity); });
 
   if (!response.ok) {
+    if (response.status >= 500) throw new WorkflowDispatchUnconfirmedError(response.status, Date.now(), newAdmissionIdentity);
     const errorText = await response.text();
     const rateLimit = dispatchRateLimitError(response, errorText);
     if (rateLimit) throw rateLimit;
