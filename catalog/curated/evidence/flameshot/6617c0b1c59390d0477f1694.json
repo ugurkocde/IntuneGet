@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "42831266799",
+    "runAttempt": "1",
+    "websiteCommit": "3ae63abba47571e64f98f0dc4c73e5d62da1ab7e",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "20c5a110466def18016a71e6ddfacfbdb4df02b6",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml"
+  },
+  "candidate": {
+    "appId": "flameshot",
+    "version": "15.0.0",
+    "installerUrl": "https://github.com/flameshot-org/flameshot/releases/download/v15.0.0/Flameshot-15.0.0-win64.msi",
+    "vendorSha256": "69b8245ab4cb060e70716f493a7b2319e0421649d3e1b194a1b81503f3199a2d",
+    "releaseNotesUrl": "https://github.com/flameshot-org/flameshot/releases/tag/v15.0.0",
+    "discoveredAt": "2026-11-07T17:12:14.936Z",
+    "id": "6617c0b1c59390d0477f1694"
+  },
+  "previous": {
+    "appId": "flameshot",
+    "version": "14.0.0",
+    "installerUrl": "https://github.com/flameshot-org/flameshot/releases/download/v14.0.0/Flameshot-14.0.0-win64.msi",
+    "vendorSha256": "b3c38680c792410812e787d48ac1825c771fb044380d45789719b9e8373327ea",
+    "releaseNotesUrl": "https://github.com/flameshot-org/flameshot/releases/tag/v14.0.0",
+    "discoveredAt": "2026-10-08T13:29:07.209Z",
+    "id": "3bc24177f10e76080d5065ea"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "6617c0b1c59390d0477f1694",
+      "installerSha256": "69b8245ab4cb060e70716f493a7b2319e0421649d3e1b194a1b81503f3199a2d",
+      "sourceUrl": "https://github.com/flameshot-org/flameshot/releases/download/v15.0.0/Flameshot-15.0.0-win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "SignPath Foundation"
+      },
+      "security": {
+        "status": "clean",
+        "scanner": "defender",
+        "installerSha256": "69b8245ab4cb060e70716f493a7b2319e0421649d3e1b194a1b81503f3199a2d",
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "suspicious": 0,
+        "signatureVersion": "1.463.226.0",
+        "scannedAt": "2026-11-10T14:19:17.2586674Z"
+      }
+    },
+    "previous": {
+      "candidateId": "3bc24177f10e76080d5065ea",
+      "installerSha256": "b3c38680c792410812e787d48ac1825c771fb044380d45789719b9e8373327ea",
+      "sourceUrl": "https://github.com/flameshot-org/flameshot/releases/download/v14.0.0/Flameshot-14.0.0-win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "SignPath Foundation"
+      },
+      "security": {
+        "status": "clean",
+        "scanner": "defender",
+        "installerSha256": "b3c38680c792410812e787d48ac1825c771fb044380d45789719b9e8373327ea",
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "suspicious": 0,
+        "signatureVersion": "1.463.226.0",
+        "scannedAt": "2026-11-10T14:19:28.7466501Z"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "6617c0b1c59390d0477f1694",
+    "packageId": "IntuneGet.Curated.Flameshot",
+    "installerUrl": "https://github.com/flameshot-org/flameshot/releases/download/v15.0.0/Flameshot-15.0.0-win64.msi",
+    "installerSha256": "69b8245ab4cb060e70716f493a7b2319e0421649d3e1b194a1b81503f3199a2d",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Flameshot",
+      "displayName": "Flameshot",
+      "publisher": "Flameshot",
+      "version": "15.0.0",
+      "architecture": "x64",
+      "installerSha256": "69b8245ab4cb060e70716f493a7b2319e0421649d3e1b194a1b81503f3199a2d",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Flameshot",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Flameshot\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"15.0.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Flameshot\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"15.0.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "095CA74E82B467F397B2A1C3354EC9E2D10C3914C7D5AB114B357DCC6383DFE7",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Flameshot\",\"publisher\":\"IntuneGet QA\",\"version\":\"15.0.0\",\"wingetId\":\"IntuneGet.Curated.Flameshot\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"15.0.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Flameshot\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"E1657EEC3BE0F2423AA6C58CB106A12EB90E1C76F12A3F3CE6087118A5F927CC\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"69B8245AB4CB060E70716F493A7B2319E0421649D3E1B194A1B81503F3199A2D\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Flameshot\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"15.0.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Flameshot\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"EAC9B95CA3E150C4A2F368A9C23A9129C82494F8CC2DC50AD2AB8309A9A26F91\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "eac9b95ca3e150c4a2f368a9c23a9129c82494f8cc2dc50ad2ab8309a9a26f91",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "previousInstallerSha256": "b3c38680c792410812e787d48ac1825c771fb044380d45789719b9e8373327ea",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerVersion": "15.0.0",
+    "upgradeFromVersion": "14.0.0",
+    "installerSha256": "69b8245ab4cb060e70716f493a7b2319e0421649d3e1b194a1b81503f3199a2d",
+    "testedAt": "2026-11-10T14:21:13.7568567Z",
+    "candidateId": "6617c0b1c59390d0477f1694",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "executionProfileSha256": "095CA74E82B467F397B2A1C3354EC9E2D10C3914C7D5AB114B357DCC6383DFE7"
+  },
+  "verifiedAt": "2026-11-10T14:21:19.3506729Z",
+  "authenticatedArtifact": {
+    "id": 13772342527,
+    "sha256": "5a63e460eba94ce9ef66317b9fbbfee3bac417e1622b95448c8bf933d99c95e5"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-11T16:19:11.262Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "42824989016",
+    "websiteCommit": "3ae63abba47571e64f98f0dc4c73e5d62da1ab7e",
+    "workflowCommit": "20c5a110466def18016a71e6ddfacfbdb4df02b6",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "7zip",
+    "version": "26.06",
+    "installerUrl": "https://github.com/ip7z/7zip/releases/download/26.06/7z2606-x64.msi",
+    "vendorSha256": "6dc822569e777d9a3ecd5ffcbc22b55600af87e6c5d9810a64e8566cf5a4af9f",
+    "releaseNotesUrl": "https://github.com/ip7z/7zip/releases/tag/26.06",
+    "discoveredAt": "2026-11-07T12:18:34.008Z",
+    "id": "6d60ccda4fc128b527069878"
+  },
+  "previous": {
+    "appId": "7zip",
+    "version": "26.05",
+    "installerUrl": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.msi",
+    "vendorSha256": "3fe4ab99fa15629c652944309a2b2bc6e41fc933fc6b63f5df1ebcf3aea68263",
+    "releaseNotesUrl": "https://github.com/ip7z/7zip/releases/tag/26.05",
+    "discoveredAt": "2026-10-21T13:23:47.746Z",
+    "id": "fb1beee07a3dc25ae92271f1"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "6d60ccda4fc128b527069878",
+      "installerSha256": "6dc822569e777d9a3ecd5ffcbc22b55600af87e6c5d9810a64e8566cf5a4af9f",
+      "sourceUrl": "https://github.com/ip7z/7zip/releases/download/26.06/7z2606-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "scannedAt": "2026-11-10T13:39:04.7853757Z",
+        "malicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "6dc822569e777d9a3ecd5ffcbc22b55600af87e6c5d9810a64e8566cf5a4af9f",
+        "signatureVersion": "1.463.226.0",
+        "suspicious": 0,
+        "status": "clean",
+        "scanner": "defender"
+      }
+    },
+    "previous": {
+      "candidateId": "fb1beee07a3dc25ae92271f1",
+      "installerSha256": "3fe4ab99fa15629c652944309a2b2bc6e41fc933fc6b63f5df1ebcf3aea68263",
+      "sourceUrl": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "scannedAt": "2026-11-10T13:39:06.9353303Z",
+        "malicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "3fe4ab99fa15629c652944309a2b2bc6e41fc933fc6b63f5df1ebcf3aea68263",
+        "signatureVersion": "1.463.226.0",
+        "suspicious": 0,
+        "status": "clean",
+        "scanner": "defender"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "6d60ccda4fc128b527069878",
+    "packageId": "IntuneGet.Curated.7Zip",
+    "installerUrl": "https://github.com/ip7z/7zip/releases/download/26.06/7z2606-x64.msi",
+    "installerSha256": "6dc822569e777d9a3ecd5ffcbc22b55600af87e6c5d9810a64e8566cf5a4af9f",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.7Zip",
+      "displayName": "7-Zip",
+      "publisher": "Igor Pavlov",
+      "version": "26.06",
+      "architecture": "x64",
+      "installerSha256": "6dc822569e777d9a3ecd5ffcbc22b55600af87e6c5d9810a64e8566cf5a4af9f",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:7-Zip",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_7Zip\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.06\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_7Zip\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.06\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "351A06E9859F25D344553634F12FFA6D9BC7EE24DBE67BB2ABDD666D797D8416",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.7Zip\",\"publisher\":\"IntuneGet QA\",\"version\":\"26.06\",\"wingetId\":\"IntuneGet.Curated.7Zip\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.06\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_7Zip\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"E3D394844BC681F967E8025BD189D78CB5E93097333D991D0C14704AC5FC2504\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"6DC822569E777D9A3ECD5FFCBC22B55600AF87E6C5D9810A64E8566CF5A4AF9F\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:7-Zip\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.06\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_7Zip\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"F7FA657881194A61FAFBEFECEEE63EFDEB807A57017390EA11281CF9A7CDE1AC\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "f7fa657881194a61fafbefeceee63efdeb807a57017390ea11281cf9a7cde1ac",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testedAt": "2026-11-10T13:40:41.6517781Z",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "installerSha256": "6dc822569e777d9a3ecd5ffcbc22b55600af87e6c5d9810a64e8566cf5a4af9f",
+    "previousInstallerSha256": "3fe4ab99fa15629c652944309a2b2bc6e41fc933fc6b63f5df1ebcf3aea68263",
+    "architecture": "x64",
+    "installerVersion": "26.06",
+    "executionProfileSha256": "351A06E9859F25D344553634F12FFA6D9BC7EE24DBE67BB2ABDD666D797D8416",
+    "candidateId": "6d60ccda4fc128b527069878",
+    "upgradeFromVersion": "26.05",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409"
+  },
+  "verifiedAt": "2026-11-10T13:40:50.0890184Z",
+  "authenticatedArtifact": {
+    "id": 13769987520,
+    "sha256": "b5465c6eb453ec34cee58fe3714abf0e46f5ecca5ff4ea107971769e0c775164"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-11T16:19:11.262Z",
+    "unsignedException": "Igor Pavlov publishes 7-Zip installers without Authenticode signatures. Releases come only from the publisher's official GitHub repository, are pinned to the GitHub asset SHA256, and must pass a clean Defender scan and the full lifecycle test.",
+    "upgradeException": null
+  }
+}

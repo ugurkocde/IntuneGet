@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowCommit": "05e4f3d9aa82c014729116a5ea0d75356613c888",
+    "websiteCommit": "65b4be91079acbe75098a739691a2b0460eec07e",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "43023402679"
+  },
+  "candidate": {
+    "appId": "aws-cli",
+    "version": "2.40.0",
+    "installerUrl": "https://awscli.amazonaws.com/AWSCLIV2-2.40.0.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://aws.amazon.com/cli/",
+    "discoveredAt": "2026-11-10T19:40:46.967Z",
+    "id": "1213013d0d9c3e3b60e11d4f"
+  },
+  "previous": {
+    "appId": "aws-cli",
+    "version": "2.39.3",
+    "installerUrl": "https://awscli.amazonaws.com/AWSCLIV2-2.39.3.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://aws.amazon.com/cli/",
+    "discoveredAt": "2026-10-30T19:12:54.824Z",
+    "id": "16f992218ff7ab7d5309040f"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "1213013d0d9c3e3b60e11d4f",
+      "installerSha256": "2da0ece2673bcadc38fabf8f1cb6c4dc89c0f624ea7ce01ea44961387023de4d",
+      "sourceUrl": "https://awscli.amazonaws.com/AWSCLIV2-2.40.0.msi",
+      "finalOrigin": "https://awscli.amazonaws.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Amazon Web Services, Inc."
+      },
+      "security": {
+        "suspicious": 0,
+        "status": "clean",
+        "malicious": 0,
+        "signatureVersion": "1.463.242.0",
+        "scanner": "defender",
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "2da0ece2673bcadc38fabf8f1cb6c4dc89c0f624ea7ce01ea44961387023de4d",
+        "scannedAt": "2026-11-11T12:58:09.7269134Z"
+      }
+    },
+    "previous": {
+      "candidateId": "16f992218ff7ab7d5309040f",
+      "installerSha256": "421292ebfc0fb591f202b0b5644faf875966acbcffa4f543ec13fe709ec009f5",
+      "sourceUrl": "https://awscli.amazonaws.com/AWSCLIV2-2.39.3.msi",
+      "finalOrigin": "https://awscli.amazonaws.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Amazon Web Services, Inc."
+      },
+      "security": {
+        "suspicious": 0,
+        "status": "clean",
+        "malicious": 0,
+        "signatureVersion": "1.463.242.0",
+        "scanner": "defender",
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "421292ebfc0fb591f202b0b5644faf875966acbcffa4f543ec13fe709ec009f5",
+        "scannedAt": "2026-11-11T12:58:17.4269756Z"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "1213013d0d9c3e3b60e11d4f",
+    "packageId": "IntuneGet.Curated.AWSCLI",
+    "installerUrl": "https://awscli.amazonaws.com/AWSCLIV2-2.40.0.msi",
+    "installerSha256": "2da0ece2673bcadc38fabf8f1cb6c4dc89c0f624ea7ce01ea44961387023de4d",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.AWSCLI",
+      "displayName": "AWS Command Line Interface v2",
+      "publisher": "Amazon Web Services",
+      "version": "2.40.0",
+      "architecture": "x64",
+      "installerSha256": "2da0ece2673bcadc38fabf8f1cb6c4dc89c0f624ea7ce01ea44961387023de4d",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:AWS Command Line Interface v2",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AWSCLI\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.40.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AWSCLI\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.40.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "5794B62B19E0F012CA2693EC4699B6CAFBBBA086C64B041347E9E2F3DD37A94F",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.AWSCLI\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.40.0\",\"wingetId\":\"IntuneGet.Curated.AWSCLI\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.40.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AWSCLI\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"C783953CEC68DAC10A9EE9E972E57032A9752E396A37F601CAD217C7126C7479\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"2DA0ECE2673BCADC38FABF8F1CB6C4DC89C0F624EA7CE01EA44961387023DE4D\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:AWS Command Line Interface v2\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.40.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AWSCLI\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"DF924DB3EC8DBC291CF588D221530BFBDAC2E9DE96A8764C0614A584120D675F\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "df924db3ec8dbc291cf588d221530bfbdac2e9de96a8764c0614a584120d675f",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testLevel": "psadt-package",
+    "candidateId": "1213013d0d9c3e3b60e11d4f",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "previousInstallerSha256": "421292ebfc0fb591f202b0b5644faf875966acbcffa4f543ec13fe709ec009f5",
+    "testedAt": "2026-11-11T13:03:56.2383558Z",
+    "architecture": "x64",
+    "executionProfileSha256": "5794B62B19E0F012CA2693EC4699B6CAFBBBA086C64B041347E9E2F3DD37A94F",
+    "installerVersion": "2.40.0",
+    "upgradeFromVersion": "2.39.3",
+    "installerSha256": "2da0ece2673bcadc38fabf8f1cb6c4dc89c0f624ea7ce01ea44961387023de4d",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "executionContext": "LocalSystem"
+  },
+  "verifiedAt": "2026-11-11T13:04:04.9348538Z",
+  "authenticatedArtifact": {
+    "id": 13856997644,
+    "sha256": "e7403bcf679af95efe4f19aac8428cd911fb542ba5f42f2ad625f48784b27489"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-11T16:19:11.262Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
