@@ -1,0 +1,1 @@
+{"title":"Explain current deployment dependency blocks","summary":"Deployment history now names a currently unsupported dependency when the exact package is blocked, while preserving the original job result and existing security checks.","type":"improved"}
