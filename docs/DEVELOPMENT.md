@@ -19,6 +19,9 @@ cd IntuneGet
 # Install dependencies
 npm ci --ignore-scripts
 
+# Install git hooks
+npm run prepare
+
 # Copy environment template
 cp .env.example .env.local
 
@@ -192,7 +195,7 @@ To test deployment UI without the pipeline:
 ```bash
 # Clear cache and reinstall
 rm -rf node_modules .next
-npm install
+npm ci --ignore-scripts && npm run prepare
 ```
 
 **TypeScript errors after pulling:**
