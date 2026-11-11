@@ -622,6 +622,7 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     expect(body.updatesFound).toBe(600);
     expect(body.autoUpdates).toMatchObject({ triggered: 1, failed: 0 });
     expect(state.triggerAutoUpdate).toHaveBeenCalledOnce();
+    expect(state.triggerAutoUpdate.mock.calls[0][2]).toEqual({ admitViaQaResume: true });
     expect(state.triggerAutoUpdate.mock.calls[0][1]).toMatchObject({
       currentVersion: '1.0.0',
       currentIntuneAppId: 'intune-599',

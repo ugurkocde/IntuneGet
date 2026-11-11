@@ -166,6 +166,22 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
+  it.each([true, false])('routes passed cron work through QA resume while preserving the manual default: %s', async admitViaQaResume => {
+    const insert = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({
+      packaging_jobs: { insertSpy: insert, singleResult: { data: { id: 'synthetic-job' }, error: null } },
+    }));
+    await trigger['createPackagingJob'](makePolicy({ displayName: 'Synthetic App', architecture: 'x64' }), UPDATE_INFO, 'synthetic-history', {
+      state: 'passed', candidateId: null,
+      identity: { executionProfileSha256: 'A'.repeat(64), presentationProfileSha256: 'B'.repeat(64) },
+    }, admitViaQaResume);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      status: admitViaQaResume ? 'awaiting_qa' : 'queued',
+      status_message: 'Installation test passed; preparing deployment',
+      execution_profile_sha256: 'A'.repeat(64), is_auto_update: true,
+    }));
+    expect(insert.mock.calls[0][0].qa_completed_at).not.toBeNull();
+  });
   it('holds fixed rules before any database, QA or rate limit work, including manual bypass options', async () => {
     const supabase = createSupabaseMock({});
     const config = zoomConfigForTrigger();
@@ -641,9 +657,10 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       installerType: 'msi',
       nestedInstallerType: undefined,
       nestedInstallerPath: undefined,
-    }, { skipRateLimits: true });
+    }, { skipRateLimits: true, admitViaQaResume: true });
 
     expect(result).toMatchObject({ success: true, packagingJobId: 'job-camera-hub' });
+    expect(createPackagingJobSpy.mock.calls[0][4]).toBe(true);
     const qaInput = ensureQaDemandMock.mock.calls[0][1] as {
       psadtConfig: string;
     };
