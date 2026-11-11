@@ -179,8 +179,14 @@ it('explains the exact recorded ARM64 pre-candidate refusal without changing the
  expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:'ARCHITECTURE_UNAVAILABLE',message:'Automated deployment is not available for this app architecture.',nextEventAt:null});
  const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();expect(from).not.toHaveBeenCalled();
 });
+it.each(['ARM64','Arm64',' arm64 '])('recognizes the producer architecture normalization for %s',async architecture=>{
+ const input=unavailableLegacyJob({architecture,error_message:'This app is not currently available for deployment.'});
+ const [actual]=await enrichCustomerQaStatus([input]);
+ expect(actual.qa_status?.reasonCode).toBe('ARCHITECTURE_UNAVAILABLE');
+ const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();expect(from).not.toHaveBeenCalled();
+});
 it.each([
- {architecture:'x64'}, {architecture:'x86'}, {qa_candidate_id:id}, {qa_candidate_id:undefined},
+ {architecture:'x64'}, {architecture:'x86'}, {architecture:'arm64x'}, {qa_candidate_id:id}, {qa_candidate_id:undefined},
  {error_code:'OTHER'}, {status:'failed'}, {error_message:'This app is not currently available for deployment. '},
 ])('does not infer an architecture refusal from a lookalike %j',async patch=>{
  const input=unavailableLegacyJob({architecture:'arm64',error_message:'This app is not currently available for deployment.',...patch});

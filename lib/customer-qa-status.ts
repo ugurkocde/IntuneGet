@@ -32,7 +32,7 @@ function storedReputationHold(job: PackagingJob): CustomerQaStatus {
 function storedAvailabilityStatus(job: PackagingJob): CustomerQaStatus | null {
   if (job.status !== 'qa_failed' || job.error_code !== 'QA_FAILED_EXECUTION_PROFILE' || job.qa_candidate_id !== null) return null;
   // ensureQaDemand returns this exact refusal for ARM64 before creating a candidate.
-  if (job.architecture === 'arm64' && job.error_message === 'This app is not currently available for deployment.') {
+  if (job.architecture?.trim().toLowerCase() === 'arm64' && job.error_message === 'This app is not currently available for deployment.') {
     return { category: 'unavailable', reasonCode: 'ARCHITECTURE_UNAVAILABLE',
       message: 'Automated deployment is not available for this app architecture.', nextEventAt: null };
   }
