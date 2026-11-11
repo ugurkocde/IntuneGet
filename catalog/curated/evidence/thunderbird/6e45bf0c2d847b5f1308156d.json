@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "43017348762",
+    "websiteCommit": "2df043d2806686b09692924b07a6f7e89eaed92c",
+    "workflowCommit": "4cd663dfa17eee56a5e0eae53e6854055c5104cf",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "thunderbird",
+    "version": "160.0",
+    "installerUrl": "https://archive.mozilla.org/pub/thunderbird/releases/160.0/win64/en-US/Thunderbird%20Setup%20160.0.msi",
+    "vendorSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd",
+    "releaseNotesUrl": "https://www.thunderbird.net/",
+    "discoveredAt": "2026-11-10T19:12:49.834Z",
+    "id": "6e45bf0c2d847b5f1308156d"
+  },
+  "previous": {
+    "appId": "thunderbird",
+    "version": "159.0",
+    "installerUrl": "https://archive.mozilla.org/pub/thunderbird/releases/159.0/win64/en-US/Thunderbird%20Setup%20159.0.msi",
+    "vendorSha256": "18eac9be640e50dfac6a76344ab0095cbd300d38af26b80429ac5f70a9ada861",
+    "releaseNotesUrl": "https://www.thunderbird.net/",
+    "discoveredAt": "2026-10-27T18:20:19.639Z",
+    "id": "d1d17417287ffcfb507521f5"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "6e45bf0c2d847b5f1308156d",
+      "installerSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd",
+      "sourceUrl": "https://archive.mozilla.org/pub/thunderbird/releases/160.0/win64/en-US/Thunderbird%20Setup%20160.0.msi",
+      "finalOrigin": "https://archive.mozilla.org",
+      "signature": {
+        "publisher": "Mozilla Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "scanner": "defender",
+        "signatureVersion": "1.463.242.0",
+        "scannedAt": "2026-11-11T12:14:05.2893864Z",
+        "engineVersion": "1.1.26100.4",
+        "suspicious": 0,
+        "installerSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd",
+        "status": "clean"
+      }
+    },
+    "previous": {
+      "candidateId": "d1d17417287ffcfb507521f5",
+      "installerSha256": "18eac9be640e50dfac6a76344ab0095cbd300d38af26b80429ac5f70a9ada861",
+      "sourceUrl": "https://archive.mozilla.org/pub/thunderbird/releases/159.0/win64/en-US/Thunderbird%20Setup%20159.0.msi",
+      "finalOrigin": "https://archive.mozilla.org",
+      "signature": {
+        "publisher": "Mozilla Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "scanner": "defender",
+        "signatureVersion": "1.463.242.0",
+        "scannedAt": "2026-11-11T12:15:01.3640858Z",
+        "engineVersion": "1.1.26100.4",
+        "suspicious": 0,
+        "installerSha256": "18eac9be640e50dfac6a76344ab0095cbd300d38af26b80429ac5f70a9ada861",
+        "status": "clean"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "6e45bf0c2d847b5f1308156d",
+    "packageId": "IntuneGet.Curated.Thunderbird",
+    "installerUrl": "https://archive.mozilla.org/pub/thunderbird/releases/160.0/win64/en-US/Thunderbird%20Setup%20160.0.msi",
+    "installerSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Thunderbird",
+      "displayName": "Mozilla Thunderbird",
+      "publisher": "Mozilla Corporation",
+      "version": "160.0",
+      "architecture": "x64",
+      "installerSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Mozilla Thunderbird",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Thunderbird\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"160.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[\"/S\"],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Thunderbird\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"160.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "24A1C73DBF74C98EB3ACC015CBFAFF53E2AD7E8FBEFE56536E48BD854AF42798",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Thunderbird\",\"publisher\":\"IntuneGet QA\",\"version\":\"160.0\",\"wingetId\":\"IntuneGet.Curated.Thunderbird\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"160.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Thunderbird\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"02BDF1AEA68D3BB51037D52F2CFEA0D56C032CE4899744E6EB3FA186F085EEDD\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"59BE3D6ABBEC50270EB02BDD7639002F7E46EEC95E01C7F94E71C76ACD8E31BD\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Mozilla Thunderbird\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"160.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Thunderbird\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[\"/S\"],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"80FAE4CB04530B79B87357D5196B874BCA7CBDD25B229701832FEA38E82F5B65\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "80fae4cb04530b79b87357d5196b874bca7cbdd25b229701832fea38e82f5b65",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "installerVersion": "160.0",
+    "candidateId": "6e45bf0c2d847b5f1308156d",
+    "testedAt": "2026-11-11T12:16:57.5957546Z",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "upgradeFromVersion": "159.0",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionProfileSha256": "24A1C73DBF74C98EB3ACC015CBFAFF53E2AD7E8FBEFE56536E48BD854AF42798",
+    "executionContext": "LocalSystem",
+    "previousInstallerSha256": "18eac9be640e50dfac6a76344ab0095cbd300d38af26b80429ac5f70a9ada861",
+    "testLevel": "psadt-package",
+    "installerSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd"
+  },
+  "verifiedAt": "2026-11-11T12:17:06.6252594Z",
+  "authenticatedArtifact": {
+    "id": 13853259441,
+    "sha256": "4ea51d629fa1ddcf8ec2248506633a4775187985ced3b512ac61dd1ff4f4e7be"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-11T16:19:11.262Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
