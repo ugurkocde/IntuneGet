@@ -18,7 +18,7 @@ function engineMinimumMajor(packageJsonPath: string): number {
 }
 
 function documentedNodeMajors(text: string): number[] {
-  const pattern = /Node\.js (\d+)(?:\+| or (?:higher|later))/g;
+  const pattern = /Node\.js (\d+)(?:\.\d+){0,2}(?:\+| or (?:higher|later))/g;
   return Array.from(text.matchAll(pattern), (match) => Number(match[1]));
 }
 
@@ -35,6 +35,16 @@ const documents: Array<{ file: string; packageJson: string }> = [
 ];
 
 describe('Node.js prerequisites in documentation', () => {
+  it.each([
+    { text: 'Node.js 22 or later', majors: [22] },
+    { text: 'Node.js 22+', majors: [22] },
+    { text: 'Node.js 22.14.0 or later', majors: [22] },
+    { text: 'Node.js 23.6 or higher', majors: [23] },
+    { text: 'Node.js 20.19.0+', majors: [20] },
+  ])('recognizes prerequisites in $text', ({ text, majors }) => {
+    expect(documentedNodeMajors(text)).toEqual(majors);
+  });
+
   it.each(documents)('$file matches the $packageJson engines range', ({ file, packageJson }) => {
     const minimum = engineMinimumMajor(packageJson);
     const majors = documentedNodeMajors(read(file));
