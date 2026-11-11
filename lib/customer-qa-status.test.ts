@@ -2,7 +2,7 @@ import { enrichCustomerQaStatus } from './customer-qa-status';
 import type { PackagingJob } from '@/lib/db/types';
 import { describeQaGateError, QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 const { state, from, holds, retries } = vi.hoisted(() => ({
-  state: { configured: true, candidates: [] as Record<string, unknown>[], results: [] as Record<string, unknown>[], reputation: [] as Record<string, unknown>[], error: false },
+  state: { configured: true, candidates: [] as Record<string, unknown>[], results: [] as Record<string, unknown>[], reputation: [] as Record<string, unknown>[], blocks: [] as Record<string, unknown>[], blocksError: false, blocksThrow: false, error: false },
   from: vi.fn(), holds: vi.fn(), retries: vi.fn(),
 }));
 vi.mock('@/lib/supabase', () => ({ isSupabaseServerConfigured: () => state.configured, createServerClient: () => ({ from }) }));
@@ -15,9 +15,12 @@ const candidate = (patch = {}) => ({ id, winget_id: 'Example.App', version: '1.0
 const job = (patch = {}) => ({ id: 'job1', status: 'awaiting_qa', qa_candidate_id: id, winget_id: 'Example.App', version: '1.0', architecture: 'x64', installer_sha256: hash, ...patch }) as PackagingJob;
 beforeEach(() => {
   vi.clearAllMocks(); state.configured = true; state.error = false; state.candidates = [candidate()]; state.results = []; state.reputation = [];
+  state.blocks = []; state.blocksError = false; state.blocksThrow = false;
   holds.mockResolvedValue(new Map()); retries.mockResolvedValue(new Map());
   from.mockImplementation((table: string) => {
+    if (table === 'qa_package_blocks' && state.blocksThrow) throw Error('private block lookup error');
     const q = { select: vi.fn(() => q), in: vi.fn(() => q), limit: vi.fn(() => q), then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: table === 'qa_candidates' ? state.candidates : table === 'catalog_file_reputation' ? state.reputation : state.results, error: state.error ? { message: 'private engine RawEngine https://private.test?token=secret' } : null }).then(resolve) };
+    if (table === 'qa_package_blocks') q.then = resolve => Promise.resolve({ data: state.blocks, error: state.blocksError ? { message: 'private block error' } : null }).then(resolve);
     return q;
   });
 });
@@ -202,7 +205,8 @@ it('retains the recorded architecture display when unrelated waiting evidence is
 it.each([[versionUnavailableMessage,'VERSION_UNAVAILABLE'],[appUnavailableMessage,'PACKAGE_UNAVAILABLE']])('annotates only the exact unavailable cause %s',async(message,code)=>{
  const input=unavailableLegacyJob({error_message:message});const [actual]=await enrichCustomerQaStatus([input]);
  expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:code,message,nextEventAt:null});
- const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();expect(from).not.toHaveBeenCalled();expect(holds).not.toHaveBeenCalled();
+ const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status).toBeDefined();
+ if(code==='VERSION_UNAVAILABLE')expect(from).toHaveBeenCalledExactlyOnceWith('qa_package_blocks');else expect(from).not.toHaveBeenCalled();expect(holds).not.toHaveBeenCalled();
 });
 it.each([
  ['linked candidate',{qa_candidate_id:id}],['missing candidate',{qa_candidate_id:undefined}],
@@ -242,3 +246,37 @@ it('leaves legacy failures unannotated without querying above the 50 id bound', 
   expect(await enrichCustomerQaStatus(inputs)).toEqual(inputs);
   expect(from).not.toHaveBeenCalled();
 });
+
+const dependencyBlock = (patch = {}) => ({ winget_id: 'Example.App', version: '1.0', architecture: 'x64', installer_sha256: hash.toUpperCase(), block_code: 'unreviewed_dependency', detail: 'WinGet dependency Microsoft.EdgeWebView2Runtime is not in the reviewed redistribution allowlist.', ...patch });
+const currentDependencyMessage = 'This app version currently requires Microsoft.EdgeWebView2Runtime, which is not supported for automated deployment.';
+it('names only the current exact dependency while preserving the stored job', async () => {
+ state.blocks=[dependencyBlock()];const input=unavailableLegacyJob();const [actual]=await enrichCustomerQaStatus([input]);
+ expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:'VERSION_UNAVAILABLE',message:currentDependencyMessage,nextEventAt:null});
+ const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(qa_status?.message).not.toMatch(/yet|test ran|failed because/);
+ expect(from).toHaveBeenCalledExactlyOnceWith('qa_package_blocks');const q=from.mock.results[0].value;
+ expect(q.select).toHaveBeenCalledExactlyOnceWith('winget_id,version,architecture,installer_sha256,block_code,detail');expect(q.limit).toHaveBeenCalledWith(1000);
+ expect(q.in).toHaveBeenCalledWith('installer_sha256',[hash.toUpperCase()]);expect(q.select.mock.calls.flat().join()).not.toContain('observed_at');
+});
+it.each(['error','exception','cap','duplicate','missing','other code','invalid detail','trailing detail','long identifier','version','architecture','hash','winget'])('retains the exact prior display for dependency lookup %s', async kind=>{
+ state.blocks=[dependencyBlock()];if(kind==='error')state.blocksError=true;if(kind==='exception')state.blocksThrow=true;if(kind==='cap')state.blocks=Array.from({length:1000},()=>dependencyBlock());if(kind==='duplicate')state.blocks.push(dependencyBlock());if(kind==='missing')state.blocks=[];
+ if(kind==='other code')state.blocks=[dependencyBlock({block_code:'unsupported_dependency_shape'})];
+ if(kind==='invalid detail')state.blocks=[dependencyBlock({detail:'WinGet dependency https://private.test is not in the reviewed redistribution allowlist.'})];
+ if(kind==='trailing detail')state.blocks[0].detail+=' ';
+ if(kind==='long identifier')state.blocks=[dependencyBlock({detail:`WinGet dependency ${Array(5).fill('A'.repeat(26)).join('.')} is not in the reviewed redistribution allowlist.`})];
+ if(kind==='version')state.blocks=[dependencyBlock({version:'2'})];if(kind==='architecture')state.blocks=[dependencyBlock({architecture:'arm64'})];if(kind==='hash')state.blocks=[dependencyBlock({installer_sha256:'C'.repeat(64)})];if(kind==='winget')state.blocks=[dependencyBlock({winget_id:'Other.App'})];
+ const [actual]=await enrichCustomerQaStatus([unavailableLegacyJob()]);expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:'VERSION_UNAVAILABLE',message:versionUnavailableMessage,nextEventAt:null});
+});
+it.each([{architecture:null},{architecture:'arm64x'},{installer_sha256:'invalid'},{winget_id:' '},{version:' '}])('does not query dependency evidence for incomplete identity %j',async patch=>{
+ state.blocks=[dependencyBlock()];const input=unavailableLegacyJob(patch);const [actual]=await enrichCustomerQaStatus([input]);expect(actual.qa_status?.message).toBe(versionUnavailableMessage);expect(from).not.toHaveBeenCalled();
+});
+it('does not look up more than 50 eligible legacy rows',async()=>{state.blocks=[dependencyBlock()];const inputs=Array.from({length:51},(_,i)=>unavailableLegacyJob({id:`legacy-${i}`}));const actual=await enrichCustomerQaStatus(inputs);expect(actual.every(x=>x.qa_status?.message===versionUnavailableMessage)).toBe(true);expect(from).not.toHaveBeenCalled();});
+it('keeps waiting and security displays byte identical when the independent dependency lookup fails',async()=>{
+ setPretestHold();const waiting=job({id:'waiting'}),security=legacyHoldJob();const alone=await enrichCustomerQaStatus([waiting,security]);
+ state.blocksThrow=true;const actual=await enrichCustomerQaStatus([unavailableLegacyJob(),waiting,security]);expect(JSON.stringify(actual.slice(1))).toBe(JSON.stringify(alone));expect(actual[0].qa_status?.message).toBe(versionUnavailableMessage);
+});
+it('does not use matching dependency evidence to reinterpret package or architecture refusal',async()=>{
+ state.blocks=[dependencyBlock()];for(const input of [unavailableLegacyJob({error_message:appUnavailableMessage}),unavailableLegacyJob({architecture:'arm64',error_message:'This app is not currently available for deployment.'})]){const [actual]=await enrichCustomerQaStatus([input]);expect(actual.qa_status?.message).not.toBe(currentDependencyMessage);}expect(from).not.toHaveBeenCalled();
+});
+
+it('does not query current dependency evidence when the server is not configured',async()=>{state.configured=false;state.blocks=[dependencyBlock()];const [actual]=await enrichCustomerQaStatus([unavailableLegacyJob()]);expect(actual.qa_status?.message).toBe(versionUnavailableMessage);expect(from).not.toHaveBeenCalled();});
+it('annotates a bounded authorized batch independently for each exact tuple',async()=>{state.blocks=[dependencyBlock(),dependencyBlock({version:'2.0',detail:'WinGet dependency Microsoft.WindowsAppRuntime.2 is not in the reviewed redistribution allowlist.'})];const inputs=[unavailableLegacyJob(),unavailableLegacyJob({id:'second',version:'2.0'})];const actual=await enrichCustomerQaStatus(inputs);expect(actual[0].qa_status?.message).toBe(currentDependencyMessage);expect(actual[1].qa_status?.message).toBe('This app version currently requires Microsoft.WindowsAppRuntime.2, which is not supported for automated deployment.');expect(from).toHaveBeenCalledExactlyOnceWith('qa_package_blocks');});
