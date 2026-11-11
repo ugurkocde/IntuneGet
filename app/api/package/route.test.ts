@@ -16,6 +16,7 @@ const {
   checkStoredConsentMock,
   verifyTenantConsentMock,
   isGitHubActionsConfiguredMock,
+  getWorkflowRunMock,
   triggerPackagingWorkflowMock,
   getAppConfigMock,
   getFeatureFlagsMock,
@@ -44,6 +45,7 @@ const {
   checkStoredConsentMock: vi.fn(),
   verifyTenantConsentMock: vi.fn(),
   isGitHubActionsConfiguredMock: vi.fn(),
+  getWorkflowRunMock: vi.fn(),
   triggerPackagingWorkflowMock: vi.fn(),
   getAppConfigMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
@@ -83,7 +85,7 @@ vi.mock('@/lib/msp/consent-verification', () => ({
   verifyTenantConsent: verifyTenantConsentMock,
 }));
 
-vi.mock('@/lib/github-actions', async (original) => { actualDispatch.run = (await original<typeof import('@/lib/github-actions')>()).triggerPackagingWorkflow; return { isGitHubActionsConfigured: isGitHubActionsConfiguredMock, triggerPackagingWorkflow: triggerPackagingWorkflowMock }; });
+vi.mock('@/lib/github-actions', async (original) => { actualDispatch.run = (await original<typeof import('@/lib/github-actions')>()).triggerPackagingWorkflow; return { isGitHubActionsConfigured: isGitHubActionsConfiguredMock, getWorkflowRun: getWorkflowRunMock, triggerPackagingWorkflow: triggerPackagingWorkflowMock }; });
 vi.mock('@/lib/winget-dependencies', () => ({ resolveWingetPackageDependencies: vi.fn(async () => []) }));
 
 vi.mock('@/lib/config', () => ({
@@ -235,7 +237,7 @@ describe('GET /api/package (userId listing)', () => {
       error_message: STALE_JOB_ERROR_MESSAGE,
       completed_at: expect.any(String),
       updated_at: expect.any(String),
-    }, { status: staleJob.status, updated_at: staleJob.updated_at });
+    }, { status: staleJob.status, updated_at: staleJob.updated_at, callback_run_id: null });
     expect(body.jobs).toHaveLength(1);
     expect(body.jobs[0].status).toBe('failed');
     expect(body.jobs[0].error_message).toBe(STALE_JOB_ERROR_MESSAGE);
@@ -257,6 +259,30 @@ describe('GET /api/package (userId listing)', () => {
     expect(response.status).toBe(200);
     expect(updateMock).not.toHaveBeenCalled();
     expect(body.jobs[0].status).toBe('uploading');
+  });
+
+  it.each([null, '43'])('fences read-side stale failure against a callback owner change from %s', async owner => {
+    const staleJob = makeJob({ status: 'packaging', callback_run_id: owner,
+      updated_at: minutesAgo(STALE_JOB_TIMEOUT_MINUTES + 5) });
+    getByUserIdMock.mockResolvedValue([staleJob]);
+    updateMock.mockImplementation(async (_id, patch, conditions) =>
+      Object.hasOwn(conditions, 'callback_run_id') && conditions.callback_run_id !== '44' ? null : { ...staleJob, ...patch });
+    const response = await GET(new NextRequest('http://localhost/api/package'));
+    expect((await response.json()).jobs[0].status).toBe('packaging');
+    expect(updateMock).toHaveBeenCalledWith(staleJob.id, expect.any(Object),
+      { status: staleJob.status, updated_at: staleJob.updated_at, callback_run_id: owner });
+  });
+
+  it('does not heal a stale row while its authenticated owner is running', async () => {
+    const staleJob = makeJob({ status: 'packaging', github_run_id: '42', callback_run_id: '43',
+      updated_at: minutesAgo(STALE_JOB_TIMEOUT_MINUTES + 5) });
+    getByUserIdMock.mockResolvedValue([staleJob]);
+    isGitHubActionsConfiguredMock.mockReturnValueOnce(true);
+    getWorkflowRunMock.mockResolvedValueOnce({ status: 'in_progress' });
+    const response = await GET(new NextRequest('http://localhost/api/package'));
+    expect((await response.json()).jobs[0].status).toBe('packaging');
+    expect(getWorkflowRunMock).toHaveBeenCalledWith(43);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('does not touch terminal jobs regardless of age', async () => {

@@ -306,6 +306,11 @@ export const MIGRATIONS: SqliteMigration[] = [
       db.exec("ALTER TABLE app_update_policies ADD COLUMN auto_update_scope TEXT NOT NULL DEFAULT 'all' CHECK (auto_update_scope IN ('all', 'minor', 'major'));");
     },
   },
+  {
+    version: 9,
+    name: 'authenticated callback run ownership',
+    up: db => addColumnIfMissing(db, 'packaging_jobs', 'callback_run_id', 'TEXT'),
+  },
 ];
 
 export function getSqliteSchemaVersion(db: BetterSqlite3.Database): number {

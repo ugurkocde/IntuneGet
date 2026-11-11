@@ -15,6 +15,19 @@ function columnNames(db: Database.Database, table: string): string[] {
 }
 
 describe('sqlite migrations', () => {
+  it('leaves legacy jobs unowned and permits only one callback run to claim them', () => {
+    const db = new Database(':memory:');
+    for (const migration of MIGRATIONS.filter(migration => migration.version < 9)) migration.up(db);
+    db.pragma('user_version = 8');
+    db.exec("INSERT INTO packaging_jobs (id,user_id,winget_id,version,display_name,installer_type,installer_url,status,github_run_id) VALUES ('job','user','Fixture.App','1','Fixture','exe','https://example.test/app.exe','packaging','41')");
+    runSqliteMigrations(db);
+    expect(db.prepare('SELECT github_run_id,callback_run_id FROM packaging_jobs').get()).toEqual({ github_run_id: '41', callback_run_id: null });
+    const claim = db.prepare('UPDATE packaging_jobs SET callback_run_id = ? WHERE id = ? AND callback_run_id IS NULL');
+    expect(claim.run('43', 'job').changes).toBe(1);
+    expect(claim.run('44', 'job').changes).toBe(0);
+    expect(db.prepare('SELECT callback_run_id FROM packaging_jobs').get()).toEqual({ callback_run_id: '43' });
+    db.close();
+  });
   it('adds tenant mappings after version six without changing saved definitions', () => {
     const db = new Database(':memory:');
     for (const migration of MIGRATIONS.filter(migration => migration.version <= 6)) migration.up(db);

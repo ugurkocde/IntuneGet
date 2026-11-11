@@ -11,7 +11,7 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
   const deadline = started + 20_000;
   const cutoff = new Date(started - 10 * 60_000).toISOString();
   const { data, error } = await supabase.from('packaging_jobs')
-    .select('id,status,github_run_id,updated_at,packaging_started_at,infrastructure_retry_count,qa_candidate_id,execution_profile_sha256,package_config,intune_app_id,cancelled_at,archived_at,is_auto_update')
+    .select('id,status,github_run_id,callback_run_id,updated_at,packaging_started_at,infrastructure_retry_count,qa_candidate_id,execution_profile_sha256,package_config,intune_app_id,cancelled_at,archived_at,is_auto_update')
     .in('status', ['packaging', 'uploading']).not('github_run_id', 'is', null)
     .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null)
     .lt('updated_at', cutoff).order('updated_at', { ascending: true }).limit(5);
@@ -20,8 +20,9 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
   const expected = getGitHubActionsConfig();
   for (const raw of (data ?? []).slice(0, 5)) {
     if (Date.now() >= deadline) { result.deferred = true; break; }
-    const job = raw as RunnerLossJob & { updated_at: string; is_auto_update?: boolean };
+    const job = raw as RunnerLossJob & { updated_at: string; callback_run_id?: string | null; is_auto_update?: boolean };
     if (!/^[1-9]\d*$/.test(job.github_run_id ?? '') || !Number.isSafeInteger(Number(job.github_run_id))) continue;
+    if (job.callback_run_id != null && job.callback_run_id !== job.github_run_id) continue;
     const timeout = () => Math.max(1, Math.min(8_000, deadline - Date.now()));
     try {
       const run = await getWorkflowRun(Number(job.github_run_id), expected, timeout());
@@ -59,7 +60,7 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
       const now = new Date().toISOString();
       const patch = retry ? {
         status: 'awaiting_qa', status_message: message, infrastructure_retry_count: 1,
-        infrastructure_retry_run_id: job.github_run_id, github_run_id: null, github_run_url: null,
+        infrastructure_retry_run_id: job.github_run_id, github_run_id: null, github_run_url: null, callback_run_id: null,
         packaging_started_at: null, progress_percent: 0, progress_message: null,
         error_message: null, error_code: null, error_category: null, error_stage: null,
         error_details: null, completed_at: null, qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(), updated_at: now,
@@ -69,6 +70,9 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
       let update = supabase.from('packaging_jobs').update(patch).eq('id', job.id)
         .eq('status', job.status).eq('updated_at', job.updated_at).eq('github_run_id', job.github_run_id)
         .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null);
+      update = job.callback_run_id == null
+        ? update.is('callback_run_id', null)
+        : update.eq('callback_run_id', job.callback_run_id);
       if (retry) update = update.eq('qa_candidate_id', job.qa_candidate_id)
         .eq('execution_profile_sha256', job.execution_profile_sha256).eq('infrastructure_retry_count', 0);
       const { data: changed, error: writeError } = await update.select('id');

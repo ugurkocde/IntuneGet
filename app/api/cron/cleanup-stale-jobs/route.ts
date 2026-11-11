@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     // Find stale jobs (include auto-update fields for cleanup)
     const { data: staleJobs, error: fetchError } = await supabase
       .from('packaging_jobs')
-      .select('id, status, winget_id, tenant_id, updated_at, created_at, github_run_id, is_auto_update, auto_update_policy_id')
+      .select('id, status, winget_id, tenant_id, updated_at, created_at, github_run_id, callback_run_id, is_auto_update, auto_update_policy_id')
       .in('status', INTERMEDIATE_STATES)
       .lt('updated_at', cutoffTime);
 
@@ -101,29 +101,26 @@ export async function GET(request: Request) {
       });
     }
 
-    // Mark stale jobs as failed. The status and updated_at filters skip any
-    // job whose run started and reported progress after it was checked.
-    const jobIds = confirmedStaleJobs.map((job) => job.id);
-
-    const { data: failedRows, error: updateError } = await supabase
-      .from('packaging_jobs')
-      .update({
-        status: 'failed',
-        error_message: STALE_JOB_ERROR_MESSAGE,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .in('id', jobIds)
-      .in('status', INTERMEDIATE_STATES)
-      .lt('updated_at', cutoffTime)
-      .select('id');
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: 'Failed to update stale jobs', details: updateError.message },
-        { status: 500 }
-      );
-    }
+    // Preserve the legacy null-owner batch. Owned rows need separate owner
+    // predicates so a callback claim cannot be failed by an older snapshot.
+    const patch = {
+      status: 'failed',
+      error_message: STALE_JOB_ERROR_MESSAGE,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const unownedIds = confirmedStaleJobs.filter(job => job.callback_run_id == null).map(job => job.id);
+    const updates = await Promise.all([
+      ...(unownedIds.length ? [supabase.from('packaging_jobs').update(patch)
+        .in('id', unownedIds).in('status', INTERMEDIATE_STATES)
+        .lt('updated_at', cutoffTime).is('callback_run_id', null).select('id')] : []),
+      ...confirmedStaleJobs.filter(job => job.callback_run_id != null).map(job =>
+        supabase.from('packaging_jobs').update(patch).eq('id', job.id)
+          .eq('status', job.status).eq('updated_at', job.updated_at)
+          .eq('callback_run_id', job.callback_run_id).select('id')),
+    ]);
+    const updateError = updates.find(update => update.error)?.error;
+    const failedRows = updates.flatMap(update => update.data || []);
 
     const failedIds = new Set((failedRows || []).map((row) => row.id));
     const failedJobs = confirmedStaleJobs.filter((job) => failedIds.has(job.id));
@@ -147,6 +144,13 @@ export async function GET(request: Request) {
           );
         }
       }
+    }
+
+    if (updateError) {
+      return NextResponse.json(
+        { error: 'Failed to update stale jobs', details: updateError.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

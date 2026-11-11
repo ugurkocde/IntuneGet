@@ -13,10 +13,12 @@ import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies
 import { quarantineInstaller } from '@/lib/installer-preflight';
 import {
   packageCallbackSchema,
+  callbackRunIdentity,
   sanitizeErrorDetails,
   shouldApplyCallback,
   isRetiredRunCallback,
   terminalPackageStatuses,
+  type PackageJobStatus,
 } from '@/lib/package-callback';
 
 export async function POST(request: NextRequest) {
@@ -55,17 +57,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    if (isRetiredRunCallback(currentJob.infrastructure_retry_run_id, data.runId, data.attemptId)
-      || !shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
+    const incomingRun = callbackRunIdentity(data.runId, data.attemptId);
+    if (!incomingRun || (currentJob.callback_run_id && currentJob.callback_run_id !== incomingRun)
+      || isRetiredRunCallback(currentJob.infrastructure_retry_run_id, data.runId, data.attemptId)) {
+      return NextResponse.json({ success: false, ignored: true,
+        reason: currentJob.callback_run_id ? 'run_not_owner' : 'run_identity_missing', job: currentJob });
+    }
+    if (!shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
       return NextResponse.json({
-        success: true,
+        success: currentJob.callback_run_id === incomingRun,
         ignored: true,
-        reason: 'stale_or_terminal_callback',
+        reason: currentJob.callback_run_id === incomingRun ? 'stale_or_terminal_callback' : 'ownership_unconfirmed',
         job: currentJob,
       });
     }
 
     const updateData: Partial<typeof currentJob> = {
+      callback_run_id: incomingRun,
       status: data.status,
       status_message: data.message ?? currentJob.status_message,
     };
@@ -74,9 +82,7 @@ export async function POST(request: NextRequest) {
       updateData.progress_percent = data.progress;
     }
 
-    if (data.runId) {
-      updateData.github_run_id = String(data.runId);
-    }
+    updateData.github_run_id = incomingRun;
     if (data.runUrl) {
       updateData.github_run_url = data.runUrl;
     }
@@ -135,11 +141,52 @@ export async function POST(request: NextRequest) {
         category: data.errorCategory,
         code: data.errorCode,
       });
+    }
 
-      // Persist the quarantine before making the job terminal when the legacy
-      // job contains a complete trusted tuple. Dispatch preflight still fails
-      // closed if shared state is unavailable, so callback bookkeeping must not
-      // be held open by a transient storage problem.
+    // Optimistic status condition prevents a cancellation or another terminal
+    // callback from being overwritten between the read and the update.
+    let updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status, updated_at: currentJob.updated_at,
+      callback_run_id: currentJob.callback_run_id ?? null });
+
+    if (!updatedJob) {
+      let latestJob = await db.jobs.getById(data.jobId);
+      // Same-run progress can advance the status and database clock before a
+      // terminal callback lands. Recheck eligibility and fence the retry by
+      // the fresh owner and revision before running terminal side effects.
+      if (latestJob && (terminalPackageStatuses.has(data.status)
+        || (!currentJob.callback_run_id && !latestJob.callback_run_id))
+        && (latestJob.status === currentJob.status
+          || (terminalPackageStatuses.has(data.status) && latestJob.callback_run_id === incomingRun))
+        && ((latestJob.callback_run_id ?? null) === (currentJob.callback_run_id ?? null)
+          || (!currentJob.callback_run_id && latestJob.callback_run_id === incomingRun))
+        && (!currentJob.callback_run_id || latestJob.github_run_id === currentJob.github_run_id)
+        && latestJob.infrastructure_retry_run_id === currentJob.infrastructure_retry_run_id
+        && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
+        && shouldApplyCallback(latestJob.status, data.status, latestJob.updated_at)) {
+        updatedJob = await db.jobs.update(data.jobId, {
+          ...updateData,
+          status_message: data.message ?? latestJob.status_message,
+        }, { status: latestJob.status, updated_at: latestJob.updated_at, callback_run_id: latestJob.callback_run_id ?? null });
+        if (updatedJob) currentJob = latestJob;
+        else latestJob = await db.jobs.getById(data.jobId);
+      }
+      if (!updatedJob) {
+        return NextResponse.json({
+          success: latestJob?.callback_run_id === incomingRun
+            && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
+            && (!terminalPackageStatuses.has(data.status)
+              || terminalPackageStatuses.has(latestJob.status as PackageJobStatus)),
+          ignored: true,
+          reason: latestJob?.callback_run_id && latestJob.callback_run_id !== incomingRun
+            ? 'run_not_owner' : latestJob?.callback_run_id === incomingRun ? 'job_changed_during_callback' : 'ownership_unconfirmed',
+          job: latestJob,
+        });
+      }
+    }
+
+    if (data.status === 'failed') {
+      // Only the callback that won the owner and revision checks can quarantine
+      // the trusted installer tuple.
       if (data.errorCode === 'HASH_MISMATCH') {
         const packageConfig = currentJob.package_config && typeof currentJob.package_config === 'object'
           && !Array.isArray(currentJob.package_config)
@@ -162,37 +209,6 @@ export async function POST(request: NextRequest) {
         } catch (quarantineError) {
           console.error('Could not persist installer quarantine from callback:', quarantineError);
         }
-      }
-    }
-
-    // Optimistic status condition prevents a cancellation or another terminal
-    // callback from being overwritten between the read and the update.
-    let updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status, updated_at: currentJob.updated_at });
-
-    if (!updatedJob) {
-      const latestJob = await db.jobs.getById(data.jobId);
-      // A same-status write advances the database clock beyond the runner's
-      // heartbeat. Rescue only the unchanged execution state, then fence the
-      // second write by the fresh revision before running terminal side effects.
-      if (latestJob && terminalPackageStatuses.has(data.status)
-        && latestJob.status === currentJob.status
-        && latestJob.github_run_id === currentJob.github_run_id
-        && latestJob.infrastructure_retry_run_id === currentJob.infrastructure_retry_run_id
-        && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
-        && shouldApplyCallback(latestJob.status, data.status, latestJob.updated_at)) {
-        updatedJob = await db.jobs.update(data.jobId, {
-          ...updateData,
-          status_message: data.message ?? latestJob.status_message,
-        }, { status: latestJob.status, updated_at: latestJob.updated_at });
-        if (updatedJob) currentJob = latestJob;
-      }
-      if (!updatedJob) {
-        return NextResponse.json({
-          success: true,
-          ignored: true,
-          reason: 'job_changed_during_callback',
-          job: latestJob,
-        });
       }
     }
 
