@@ -5,6 +5,7 @@ type Filter = [string, ...unknown[]];
 const state = vi.hoisted(() => ({
   localPackager: false,
   changedRows: true,
+  callbackOwnerAtWrite: undefined as string | null | undefined,
   cleanup: vi.fn(),
   recentJobs: [] as Array<Record<string, unknown>>,
   missingJobs: [] as Array<Record<string, unknown>>,
@@ -45,6 +46,10 @@ vi.mock('@supabase/supabase-js', () => ({
         query.then = (resolve: (value: unknown) => unknown) => {
           if (kind === 'update') {
             if (!state.changedRows) return resolve({ data: [], error: null });
+            const ownerFence = entry.filters.find(([op, column]) => ['eq', 'is'].includes(op) && column === 'callback_run_id');
+            if (state.callbackOwnerAtWrite !== undefined && ownerFence && ownerFence[2] !== state.callbackOwnerAtWrite) {
+              return resolve({ data: [], error: null });
+            }
             const ids = entry.filters.find(([op, column]) => op === 'in' && column === 'id')?.[2] as string[];
             const single = entry.filters.find(([op, column]) => op === 'eq' && column === 'id')?.[2];
             return resolve({ data: ids ? ids.map((id) => ({ id })) : [{ id: single }], error: null });
@@ -288,12 +293,13 @@ describe('once-only runner recovery integration', () => {
     state.queries = [];
     state.localPackager = false;
     state.changedRows = true;
+    state.callbackOwnerAtWrite = undefined;
     state.cleanup.mockReset();
     state.cancelWorkflowRun.mockReset();
     state.staleJobs = [];
     state.executingJobs = [];
     state.recentJobs = [{ id: '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7', status: 'packaging', github_run_id: '42',
-      updated_at: started, packaging_started_at: started, infrastructure_retry_count: 0,
+      updated_at: started, packaging_started_at: started, infrastructure_retry_count: 0, callback_run_id: null,
       qa_candidate_id: 'candidate', execution_profile_sha256: 'a'.repeat(64), package_config: {},
       intune_app_id: null, cancelled_at: null, archived_at: null, is_auto_update: true }];
     state.getWorkflowRun.mockReset().mockResolvedValue({ id: 42, status: 'completed', conclusion: 'failure',
@@ -312,12 +318,32 @@ describe('once-only runner recovery integration', () => {
       github_run_id: null, github_run_url: null, callback_run_id: null, packaging_started_at: null, error_code: null, completed_at: null });
     for (const f of [['eq', 'status', 'packaging'], ['eq', 'updated_at', state.recentJobs[0].updated_at],
       ['eq', 'github_run_id', '42'], ['eq', 'qa_candidate_id', 'candidate'], ['eq', 'execution_profile_sha256', 'a'.repeat(64)],
-      ['eq', 'infrastructure_retry_count', 0], ['is', 'intune_app_id', null], ['is', 'cancelled_at', null], ['is', 'archived_at', null]]) {
+      ['eq', 'infrastructure_retry_count', 0], ['is', 'callback_run_id', null], ['is', 'intune_app_id', null], ['is', 'cancelled_at', null], ['is', 'archived_at', null]]) {
       expect(q.filters).toContainEqual(f);
     }
     expect(state.getCheckRunAnnotations).toHaveBeenCalledWith(101, expect.any(Object), expect.any(Number));
     expect(state.cleanup).not.toHaveBeenCalled();
     expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+  });
+  it.each([0, 1])('does not retire a captured run belonging to a different callback owner with retry count %s', async count => {
+    state.recentJobs[0].callback_run_id = '43';
+    state.recentJobs[0].infrastructure_retry_count = count;
+    expect(await (await call()).json()).toMatchObject({ reconciled: 0 });
+    expect(state.queries.some(q => q.kind === 'update')).toBe(false);
+    expect(state.cleanup).not.toHaveBeenCalled();
+  });
+  it('releases a matching authenticated owner only under that owner fence', async () => {
+    state.recentJobs[0].callback_run_id = '42';
+    expect(await (await call()).json()).toMatchObject({ reconciled: 1 });
+    const update = state.queries.find(q => q.kind === 'update')!;
+    expect(update.filters).toContainEqual(['eq', 'callback_run_id', '42']);
+    expect(update.data).toMatchObject({ callback_run_id: null, infrastructure_retry_run_id: '42' });
+  });
+  it.each([null, '42'])('loses the retirement CAS when callback owner changes from %s', async owner => {
+    state.recentJobs[0].callback_run_id = owner;
+    state.callbackOwnerAtWrite = '43';
+    expect(await (await call()).json()).toMatchObject({ reconciled: 0 });
+    expect(state.cleanup).not.toHaveBeenCalled();
   });
   it('fails honestly after the once-only budget is exhausted', async () => {
     state.recentJobs[0].infrastructure_retry_count = 1;
