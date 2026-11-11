@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Json } from '@/types/database';
-import { dispatchRateLimitError, dispatchRateLimitHold, WorkflowDispatchRateLimitError } from './workflow-dispatch-rate-limit';
+import { dispatchRateLimitError, dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from './workflow-dispatch-rate-limit';
 
 const now = Date.parse('2026-11-10T10:00:00Z');
 describe('explicit GitHub dispatch rejection', () => {
@@ -44,6 +44,17 @@ describe('explicit GitHub dispatch rejection', () => {
   it.each([-1, 0.5, '0', 999])('fails closed on invalid or exhausted metadata %s', count => {
     expect(dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(now).toISOString()),
       { workflow_dispatch_rate_limit_attempts: count }, now)).toBeNull();
+  });
+  it('shares one five attempt budget across ambiguous and explicit rejection responses', () => {
+    let details: Json | null = null;
+    for (let count = 0; count < 5; count++) {
+      const error = count % 2 === 0 ? new WorkflowDispatchUnconfirmedError(503, now)
+        : new WorkflowDispatchRateLimitError(429, new Date(now + 60_000).toISOString());
+      const held = dispatchRateLimitHold(error, details, now)!;
+      expect(held.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: count + 1 });
+      details = held.error_details;
+    }
+    expect(dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(null, now), details, now)).toBeNull();
   });
   it.each(['invalid', []])('does not reset malformed error metadata %j', details => {
     expect(dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(now).toISOString()), details, now)).toBeNull();

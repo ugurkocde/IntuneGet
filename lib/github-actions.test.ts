@@ -13,7 +13,7 @@ import {
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 import { QaCompatibilityGateError } from './qa/gate';
 import { generateUninstallCommand } from './detection-rules';
-import { WorkflowDispatchRateLimitError } from './workflow-dispatch-rate-limit';
+import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from './workflow-dispatch-rate-limit';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -208,7 +208,15 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   it('does not resend a dispatch whose network response is unknown', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('connection lost'));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true })).rejects.toThrow('connection lost');
+    await expect(triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true })).rejects.toBeInstanceOf(WorkflowDispatchUnconfirmedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([500, 502, 503, 504])('classifies only the fresh dispatch HTTP %s as unconfirmed without exposing its body', async status => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('private dispatch body', { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = triggerPackagingWorkflow(workflowInputs(), config, { skipRunCapture: true });
+    await expect(result).rejects.toBeInstanceOf(WorkflowDispatchUnconfirmedError);
+    await expect(result).rejects.not.toThrow('private dispatch body');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it('dispatches authored catalog detection rules with the matching QA identity', async () => {

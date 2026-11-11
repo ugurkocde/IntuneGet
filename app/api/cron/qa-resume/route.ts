@@ -3,7 +3,7 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
-import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 import { unsupportedDependencyMessage, knownUnavailableDisposition, isExactPretestCandidate } from '@/lib/unsupported-dependency';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
@@ -552,12 +552,13 @@ export async function GET(request: Request) {
           : 'Installation test passed; packaging started automatically',
         qa_completed_at: qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
-        ...(job.error_code === 'WORKFLOW_DISPATCH_RATE_LIMITED' ? {
+        ...(['WORKFLOW_DISPATCH_RATE_LIMITED', 'WORKFLOW_DISPATCH_UNCONFIRMED'].includes(job.error_code ?? '') ? {
           error_code: null, error_message: null, error_stage: null, error_category: null,
         } : {}),
       })
       .eq('id', job.id)
-      .eq('status', 'awaiting_qa'))
+      .eq('status', 'awaiting_qa')
+      .is('callback_run_id', null))
       .select('id')
       .maybeSingle();
     if (claimError) throw claimError;
@@ -629,14 +630,14 @@ export async function GET(request: Request) {
       resumed++;
     } catch (error) {
       const licenceRequired = error instanceof CuratedLicenceError;
-      const rateLimit = error instanceof WorkflowDispatchRateLimitError ? error : null;
+      const rateLimit = error instanceof WorkflowDispatchRateLimitError || error instanceof WorkflowDispatchUnconfirmedError ? error : null;
       const rateHold = rateLimit ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
       if (rateLimit) {
         const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
           .from('packaging_jobs')
           .update(rateHold ? { ...rateHold, qa_completed_at: job.qa_completed_at ?? null } : {
             status: 'failed',
-            status_message: 'GitHub capacity retries have stopped. No new deployment was started.',
+            status_message: 'Automatic packaging retries have stopped. Check deployment status before trying again.',
             error_code: rateLimit.code,
             error_stage: 'authenticate', error_category: 'network', error_message: rateLimit.message,
             completed_at: new Date().toISOString(),
@@ -644,6 +645,7 @@ export async function GET(request: Request) {
           .eq('id', job.id)
           .eq('status', 'packaging')
           .is('github_run_id', null)
+          .is('callback_run_id', null)
           .is('cancelled_at', null)
           .is('archived_at', null))
           .select('id')

@@ -7,7 +7,7 @@ import { isExactPackagingRun } from './runner-loss';
  */
 
 import { createHmac } from 'node:crypto';
-import { dispatchRateLimitError } from './workflow-dispatch-rate-limit';
+import { dispatchRateLimitError, WorkflowDispatchUnconfirmedError } from './workflow-dispatch-rate-limit';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
 import { assertCuratedLicenceAccepted } from '@/lib/curated-catalog/licence';
@@ -370,9 +370,10 @@ export async function triggerPackagingWorkflow(
         },
       },
     }),
-  });
+  }).catch(() => { throw new WorkflowDispatchUnconfirmedError(null); });
 
   if (!response.ok) {
+    if (response.status >= 500) throw new WorkflowDispatchUnconfirmedError(response.status);
     const errorText = await response.text();
     const rateLimit = dispatchRateLimitError(response, errorText);
     if (rateLimit) throw rateLimit;

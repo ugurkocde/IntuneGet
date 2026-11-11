@@ -65,7 +65,7 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 
 import { GET } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
-import { WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
@@ -1267,6 +1267,35 @@ describe('GET /api/cron/qa-resume', () => {
       return { store, run };
     }
 
+    it('holds a fresh unconfirmed dispatch and shares the existing bounded retry budget', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockRejectedValue(new WorkflowDispatchUnconfirmedError(503));
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
+        expect(store.row).toMatchObject({ status: 'awaiting_qa', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED',
+          error_details: { workflow_dispatch_rate_limit_attempts: attempt } });
+      }
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 1 });
+      expect(store.row).toMatchObject({ status: 'failed', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED' });
+    });
+    it.each([0, 5])('never overwrites a late callback owner when an unconfirmed hold budget is %s', async count => {
+      const { store, run } = setup();
+      store.row.error_details = { workflow_dispatch_rate_limit_attempts: count };
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        store.row.callback_run_id = '43';
+        throw new WorkflowDispatchUnconfirmedError(null);
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', callback_run_id: '43' });
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+    it('does not dispatch an awaiting row already owned by a late original run', async () => {
+      const { store, run } = setup();
+      store.row.callback_run_id = '43';
+      expect(await (await run()).json()).toMatchObject({ resumed: 0, failed: 0 });
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      expect(store.row.status).toBe('awaiting_qa');
+    });
     it('defers explicit rate limits five times then stops without resetting the persisted budget', async () => {
       const { store, run } = setup();
       const error = new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
@@ -1304,9 +1333,10 @@ describe('GET /api/cron/qa-resume', () => {
       expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123' });
       expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     });
-    it('runs upstream, QA and approval admission again before a rate limit retry', async () => {
+    it.each(['rate limit', 'unconfirmed'])('runs upstream, QA and approval admission again before a %s retry', async kind => {
       const { store, run } = setup();
-      triggerPackagingWorkflowMock.mockRejectedValue(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()));
+      triggerPackagingWorkflowMock.mockRejectedValue(kind === 'unconfirmed' ? new WorkflowDispatchUnconfirmedError(503)
+        : new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()));
       expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
       vi.mocked(holdCustomerUpstreamJob).mockResolvedValueOnce(true);
       expect(await (await run()).json()).toMatchObject({ held: 1 });

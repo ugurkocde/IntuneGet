@@ -5,6 +5,16 @@ const MAX_DELAY_MS = 65 * 60_000;
 const MAX_DEFERRALS = 5;
 const ATTEMPTS_KEY = 'workflow_dispatch_rate_limit_attempts';
 
+export class WorkflowDispatchUnconfirmedError extends Error {
+  readonly code = 'WORKFLOW_DISPATCH_UNCONFIRMED';
+  readonly retryAt: string;
+  constructor(readonly status: number | null, now = Date.now()) {
+    super('GitHub did not confirm that packaging started.');
+    this.name = 'WorkflowDispatchUnconfirmedError';
+    this.retryAt = new Date(now + MIN_DELAY_MS).toISOString();
+  }
+}
+
 export class WorkflowDispatchRateLimitError extends Error {
   readonly code = 'WORKFLOW_DISPATCH_RATE_LIMITED';
   constructor(readonly status: number, readonly retryAt: string) {
@@ -34,7 +44,7 @@ export function dispatchRateLimitError(response: Response, detail: string, now =
 }
 
 /** Persist the bounded budget in existing job error metadata on both databases. */
-export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError, details: Json | null, now = Date.now()) {
+export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError | WorkflowDispatchUnconfirmedError, details: Json | null, now = Date.now()) {
   if (details !== null && (typeof details !== 'object' || Array.isArray(details))) return null;
   const previous = details && typeof details === 'object' && !Array.isArray(details) ? details : {};
   const count = previous[ATTEMPTS_KEY] ?? 0;
@@ -44,7 +54,9 @@ export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError, det
   if (!Number.isFinite(due) || due > now + MAX_DELAY_MS) return null;
   return {
     status: 'awaiting_qa',
-    status_message: 'Waiting for GitHub capacity. Packaging will retry automatically.',
+    status_message: error instanceof WorkflowDispatchUnconfirmedError
+      ? 'GitHub did not confirm that packaging started. Packaging will retry automatically if it did not start.'
+      : 'Waiting for GitHub capacity. Packaging will retry automatically.',
     qa_resume_due_at: new Date(due).toISOString(),
     packaging_started_at: null,
     completed_at: null,

@@ -1,0 +1,5 @@
+{
+  "title": "Retry temporary packaging startup failures",
+  "summary": "Hosted packaging retries when GitHub does not confirm startup, with a shared attempt limit and protection for workflow runs that already own the deployment.",
+  "type": "fixed"
+}

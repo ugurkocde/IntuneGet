@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
-import { dispatchRateLimitHold, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
@@ -908,7 +908,7 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
-            const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError ? result.reason : null;
+            const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError || result.reason instanceof WorkflowDispatchUnconfirmedError ? result.reason : null;
             // The ordinary QA resume path rebuilds and revalidates hosted inputs.
             // Custom uploads do not use that path and must not be enqueued here.
             const rateHold = rateLimit && dispatch?.item.sourceType !== 'custom'
@@ -916,7 +916,7 @@ export async function POST(request: NextRequest) {
             if (rateHold && dispatch) {
               let retryWriteFailed = false;
               const held = await db.jobs.update(dispatch.jobId, rateHold, {
-                status: 'queued', github_run_id: null, cancelled_at: null, archived_at: null,
+                status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null,
               }).catch(() => {
                 retryWriteFailed = true;
                 console.error(`[Package] Could not schedule a capacity retry for job ${logValue(dispatch.jobId)}`);
@@ -941,7 +941,7 @@ export async function POST(request: NextRequest) {
               ? describeQaGateError(qaGateError)
               : result.reason instanceof Error ? result.reason.message : 'Unknown error';
             if (dispatch) {
-              await db.jobs.update(dispatch.jobId, {
+              const failurePatch: Partial<PackagingJob> = {
                 status: reputationHold ? 'awaiting_qa' : 'failed',
                 status_message: reputationHold ? dispatchError : null,
                 progress_percent: 0,
@@ -950,7 +950,13 @@ export async function POST(request: NextRequest) {
                 error_code: qaGateError ? qaGateError.code : rateLimit?.code ?? 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
                 completed_at: reputationHold ? null : new Date().toISOString(),
-              }).catch((updateError) => {
+              };
+              const failureUpdate = result.reason instanceof WorkflowDispatchUnconfirmedError
+                ? db.jobs.update(dispatch.jobId, failurePatch, {
+                  status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null,
+                })
+                : db.jobs.update(dispatch.jobId, failurePatch);
+              await failureUpdate.catch((updateError) => {
                 console.error(`Failed to mark dispatch ${dispatch.jobId} as failed:`, updateError);
               });
             }
