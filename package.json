@@ -65,7 +65,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",
-    "@tailwindcss/postcss": "^4.3.2",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
