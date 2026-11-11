@@ -15,11 +15,11 @@ env:
 
 jobs:
   prepare:
-    name: Validate and draft release
+    name: Validate release inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
@@ -58,25 +58,37 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "notes=$notes" >> "$GITHUB_OUTPUT"
 
-      - name: Create or preserve draft release
+      - name: Refuse an already published release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=${GITHUB_REF#refs/tags/}
-          notes=${{ steps.version.outputs.notes }}
-          if gh release view "$tag" >/dev/null 2>&1; then
-            is_draft=$(gh release view "$tag" --json isDraft --jq .isDraft)
-            if [[ "$is_draft" != "true" ]]; then
+          [[ "$GITHUB_REPOSITORY" == "ugurkocde/IntuneGet" ]] || { echo "Unexpected release repository" >&2; exit 1; }
+          tag="$TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "Invalid release tag" >&2; exit 1; }
+          error_file="$RUNNER_TEMP/release-guard-error"
+          output_file="$RUNNER_TEMP/release-guard-output"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft >"$output_file" 2>"$error_file"; then
+            [[ ! -s "$error_file" ]] || { cat "$error_file" >&2; exit 1; }
+            if printf 'false\n' | cmp -s - "$output_file"; then
               echo "Release $tag is already published; refusing to rebuild mutable artifacts for an immutable tag." >&2
               exit 1
+            elif printf 'true\n' | cmp -s - "$output_file"; then
+              echo "No published release observed for $tag; no release object will be changed."
+            else
+              echo "Unexpected release visibility response" >&2
+              exit 1
             fi
-            echo "Draft release $tag already exists; preserving its notes."
           else
-            args=(--title "IntuneGet $tag" --notes-file "$notes" --draft)
-            if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then args+=(--prerelease); fi
-            gh release create "$tag" "${args[@]}"
+            status=$?
+            if [[ "$status" == "1" && ! -s "$output_file" ]] && printf 'release not found\n' | cmp -s - "$error_file"; then
+              echo "No published release observed for $tag; no release object will be changed."
+            else
+              cat "$error_file" >&2
+              exit 1
+            fi
           fi
 
   docker:
@@ -327,28 +339,22 @@ jobs:
           docker buildx imagetools create --prefer-index=false \
             -t "$image:latest" -t "$image:$minor" -t "$image:$major" "$image@$RELEASE_DIGEST"
 
-  publish:
-    name: Publish GitHub release
-    needs: [prepare, secure, promote]
+  release-gates:
+    name: Confirm release artifact gates
+    needs: [prepare, merge, secure, promote]
     if: >-
       !cancelled() && needs.secure.result == 'success' &&
       (needs.promote.result == 'success' ||
        (needs.prepare.outputs.prerelease == 'true' && needs.promote.result == 'skipped'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    permissions:
-      contents: write
+    permissions: {}
     steps:
-      - name: Publish draft after all artifacts pass
+      - name: Report the verified image digest
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_DIGEST: ${{ needs.merge.outputs.digest }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=${GITHUB_REF#refs/tags/}
-          is_draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-          if [[ "$is_draft" == "true" ]]; then
-            args=(--draft=false)
-            if [[ "${{ needs.prepare.outputs.prerelease }}" != "true" ]]; then args+=(--latest); fi
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" "${args[@]}"
-          fi
+          [[ "$RELEASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Invalid release digest" >&2; exit 1; }
+          echo "RELEASE_DIGEST=$RELEASE_DIGEST"
