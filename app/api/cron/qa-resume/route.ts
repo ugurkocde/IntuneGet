@@ -626,7 +626,8 @@ export async function GET(request: Request) {
           github_run_url: trigger.runUrl || null,
         })
         .eq('id', job.id)
-        .eq('status', 'packaging');
+        .eq('status', 'packaging')
+        .is('callback_run_id', null);
       resumed++;
     } catch (error) {
       const licenceRequired = error instanceof CuratedLicenceError;

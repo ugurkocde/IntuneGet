@@ -1296,6 +1296,16 @@ describe('GET /api/cron/qa-resume', () => {
       expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
       expect(store.row.status).toBe('awaiting_qa');
     });
+    it('does not overwrite the original callback owner with a later dispatch capture', async () => {
+      const { store, run } = setup();
+      triggerPackagingWorkflowMock.mockImplementation(async () => {
+        store.row.callback_run_id = '43';
+        store.row.github_run_id = '43';
+        return { success: true, runId: 44 };
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', callback_run_id: '43', github_run_id: '43' });
+    });
     it('defers explicit rate limits five times then stops without resetting the persisted budget', async () => {
       const { store, run } = setup();
       const error = new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString());
