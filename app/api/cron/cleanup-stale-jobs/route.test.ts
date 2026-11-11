@@ -38,7 +38,7 @@ vi.mock('@supabase/supabase-js', () => ({
         const entry = { kind, filters: [] as Filter[], data };
         state.queries.push(entry);
         const query: Record<string, unknown> = {};
-        for (const op of ['in', 'lt', 'gte', 'eq', 'is', 'not', 'order', 'limit']) {
+        for (const op of ['in', 'lt', 'gte', 'eq', 'is', 'not', 'order', 'limit', 'range', 'abortSignal']) {
           query[op] = (...args: unknown[]) => { entry.filters.push([op, ...args]); return query; };
         }
         query.select = () => query;
@@ -49,7 +49,7 @@ vi.mock('@supabase/supabase-js', () => ({
             const single = entry.filters.find(([op, column]) => op === 'eq' && column === 'id')?.[2];
             return resolve({ data: ids ? ids.map((id) => ({ id })) : [{ id: single }], error: null });
           }
-          if (entry.filters.some(([op, column]) => op === 'is' && column === 'github_run_id')) return resolve({ data: state.missingJobs, error: null });
+          if (entry.filters.some(([op, column]) => op === 'is' && column === 'github_run_id')) return resolve({ data: state.missingJobs, count: state.missingJobs.length, error: null });
           if (entry.filters.some(([op, column]) => op === 'eq' && column === 'github_run_id')) return resolve({ data: state.recentJobs.filter(j => j.github_run_id === entry.filters.find(([op, column]) => op === 'eq' && column === 'github_run_id')?.[2]).map(j => ({ id: j.id })), error: null });
           if (entry.filters.some(([op, column]) => op === 'not' && column === 'github_run_id')) return resolve({ data: state.recentJobs, error: null });
           const isExecutingLookup = entry.filters.some(([op, column]) => op === 'in' && column === 'tenant_id');
@@ -125,6 +125,7 @@ describe('cleanup stale jobs cron', () => {
       // PostgreSQL descending order puts the null first. Apply the server
       // filter before LIMIT, so an eligible row behind it remains reachable.
       const rows = [store, eligible].filter(row => url.searchParams.get('packaging_started_at') !== 'not.is.null' || row.packaging_started_at !== null);
+      if (init?.method === 'HEAD') return new Response(null, { headers: { 'content-range': `0-0/${rows.length}` } });
       return Response.json(rows.slice(0, Number(url.searchParams.get('limit'))));
     };
     const client = createClient('https://example.supabase.co', 'fixture-only', {
@@ -137,6 +138,74 @@ describe('cleanup stale jobs cron', () => {
     expect(writes[0].filters.get('id')).toBe('eq.' + eligible.id);
     expect(writes[0].patch).toEqual({ github_run_id: '42', github_run_url: 'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/42' });
     expect(requests.find(url => url.searchParams.get('github_run_id') === 'is.null')?.searchParams.get('packaging_started_at')).toBe('not.is.null');
+  });
+
+  it('advances past unmatched jobs across five minute passes without resetting their stale clock', async () => {
+    const { createClient } = await vi.importActual<typeof import('@supabase/supabase-js')>('@supabase/supabase-js');
+    const { reconcileRunnerLosses } = await import('@/lib/runner-loss-reconciliation');
+    const tick = 300_000;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(tick * 1_000_002);
+    const jobs = Array.from({ length: 7 }, (_, index) => ({
+      id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`, status: 'packaging', github_run_id: null,
+      packaging_started_at: new Date(Date.now() - (15 + index) * 60_000).toISOString(),
+      updated_at: new Date(Date.now() - (15 + index) * 60_000).toISOString(),
+      infrastructure_retry_count: 0, infrastructure_retry_run_id: null,
+    }));
+    const original = structuredClone(jobs);
+    const writes: unknown[] = [];
+    const requests: URL[] = [];
+    const client = createClient('https://example.supabase.co', 'fixture-only', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        requests.push(url);
+        if (init?.method === 'PATCH') { writes.push(JSON.parse(String(init.body))); return Response.json([{ id: jobs[6].id }]); }
+        if (url.searchParams.get('github_run_id') !== 'is.null') return Response.json([]);
+        if (init?.method === 'HEAD') return new Response(null, { headers: { 'content-range': `0-0/${jobs.length}` } });
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        return Response.json(jobs.slice(offset, offset + Number(url.searchParams.get('limit'))));
+      } },
+    });
+    state.findPackagingWorkflowRun.mockImplementation(async (id: string) => id === jobs[6].id ? { id: 42 } : null);
+    try {
+      for (let pass = 0; pass < jobs.length; pass++) {
+        now.mockReturnValue(tick * (1_000_002 + pass));
+        const before = state.findPackagingWorkflowRun.mock.calls.length;
+        await reconcileRunnerLosses(client);
+        expect(state.findPackagingWorkflowRun.mock.calls.length - before).toBe(1);
+      }
+      expect(new Set(state.findPackagingWorkflowRun.mock.calls.map(([id]) => id))).toEqual(new Set(jobs.map(job => job.id)));
+      expect(writes).toEqual([{ github_run_id: '42', github_run_url: 'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/42' }]);
+      expect(jobs).toEqual(original);
+      expect(requests.filter(url => url.searchParams.has('order')).every(url => url.searchParams.get('order') === 'packaging_started_at.desc,id.asc' || url.searchParams.get('order') === 'updated_at.asc')).toBe(true);
+    } finally { now.mockRestore(); }
+  });
+
+  it.each(['count error', 'unknown count', 'empty selection', 'deadline'])('leaves missing identities untouched on %s', async reason => {
+    const { createClient } = await vi.importActual<typeof import('@supabase/supabase-js')>('@supabase/supabase-js');
+    const { reconcileRunnerLosses } = await import('@/lib/runner-loss-reconciliation');
+    const started = Date.now();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(started);
+    const writes: unknown[] = [];
+    const client = createClient('https://example.supabase.co', 'fixture-only', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        if (init?.method === 'PATCH') writes.push(init.body);
+        if (init?.method === 'HEAD') {
+          if (reason === 'deadline') now.mockReturnValue(started + 20_001);
+          return new Response(null, { status: reason === 'count error' ? 500 : 200,
+            headers: reason === 'unknown count' ? {} : { 'content-range': '0-0/2' } });
+        }
+        if (url.searchParams.get('github_run_id') === 'is.null') expect(reason).toBe('empty selection');
+        return Response.json([]);
+      } },
+    });
+    try {
+      expect(await reconcileRunnerLosses(client)).toMatchObject({ reconciled: 0 });
+      expect(state.findPackagingWorkflowRun).not.toHaveBeenCalled();
+      expect(writes).toEqual([]);
+    } finally { now.mockRestore(); }
   });
 
   it('binds one exact recovered identity without changing status or redispatching', async () => {

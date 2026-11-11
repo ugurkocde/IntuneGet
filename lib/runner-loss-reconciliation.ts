@@ -83,12 +83,20 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
   // Recover at most one uncaptured identity after the existing bound-run pass.
   // Binding alone never retries, completes or changes the customer job status.
   if (result.deferred || Date.now() >= deadline) return result;
-  const { data: missing, error: missingError } = await supabase.from('packaging_jobs')
-    .select('id,status,github_run_id,updated_at,packaging_started_at,infrastructure_retry_count,infrastructure_retry_run_id')
+  const missingQuery = (head = false) => supabase.from('packaging_jobs')
+    .select('id,status,github_run_id,updated_at,packaging_started_at,infrastructure_retry_count,infrastructure_retry_run_id', { head, count: head ? 'exact' : undefined })
     .in('status', ['packaging', 'uploading']).is('github_run_id', null)
     .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null)
-    .not('packaging_started_at', 'is', null)
-    .lt('updated_at', cutoff).order('packaging_started_at', { ascending: false }).limit(1);
+    .not('packaging_started_at', 'is', null).in('infrastructure_retry_count', [0, 1])
+    .lt('updated_at', cutoff).order('packaging_started_at', { ascending: false }).order('id', { ascending: true })
+    .abortSignal(AbortSignal.timeout(Math.max(1, deadline - Date.now())));
+  const { count, error: countError } = await missingQuery(true);
+  if (countError || !Number.isSafeInteger(count) || count == null || count <= 0 || Date.now() >= deadline) return result;
+  // The cron runs every five minutes. Rotate over the whole eligible set so
+  // an unmatched row cannot keep the only lookup slot on every pass. No job
+  // timestamp is written on a miss, preserving the existing stale timeout.
+  const offset = Math.floor(started / (5 * 60_000)) % count;
+  const { data: missing, error: missingError } = await missingQuery().range(offset, offset);
   if (missingError || !missing?.length || Date.now() >= deadline) return result;
   const job = missing[0];
   if (!job.packaging_started_at || ![0, 1].includes(job.infrastructure_retry_count)) return result;
