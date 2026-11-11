@@ -273,7 +273,7 @@ export async function GET(request: Request) {
       waiting++;
       continue;
     }
-    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T): T => {
+    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T, guardDueTime = false): T => {
       const identityFields = [
         ['qa_candidate_id', observed.qa_candidate_id],
         ['installer_sha256', observed.installer_sha256],
@@ -284,7 +284,10 @@ export async function GET(request: Request) {
       for (const [column, value] of identityFields) {
         query = value == null ? query.is(column, null) : query.eq(column, value);
       }
-      return query;
+      if (!guardDueTime) return query;
+      return job.qa_resume_due_at == null
+        ? query.is('qa_resume_due_at', null)
+        : query.eq('qa_resume_due_at', job.qa_resume_due_at);
     };
     if (compatibilityBlock) {
       const now = new Date().toISOString();
@@ -594,7 +597,7 @@ export async function GET(request: Request) {
           status_message: message, error_message: message, error_stage: 'validation', error_category: 'validation',
           completed_at: new Date().toISOString(),
         }).eq('id', job.id).eq('status', 'awaiting_qa').is('callback_run_id', null).is('github_run_id', null)
-          .is('cancelled_at', null).is('archived_at', null)).select('id').maybeSingle();
+          .is('cancelled_at', null).is('archived_at', null), true).select('id').maybeSingle();
         if (writeError) waiting++;
         if (changed) {
           failed++;
@@ -693,7 +696,7 @@ export async function GET(request: Request) {
           .is('github_run_id', null)
           .is('callback_run_id', null)
           .is('cancelled_at', null)
-          .is('archived_at', null))
+          .is('archived_at', null), !claimedPackaging)
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
@@ -717,7 +720,7 @@ export async function GET(request: Request) {
           })
           .eq('id', job.id)
           .eq('status', failureStatus)
-          .is('github_run_id', null).is('callback_run_id', null))
+          .is('github_run_id', null).is('callback_run_id', null), !claimedPackaging)
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
@@ -742,7 +745,7 @@ export async function GET(request: Request) {
         .eq('id', job.id)
         .eq('status', failureStatus)
         .is('github_run_id', null).is('callback_run_id', null)
-        .is('cancelled_at', null).is('archived_at', null))
+        .is('cancelled_at', null).is('archived_at', null), !claimedPackaging)
         .select('id')
         .maybeSingle();
       if (failedJob) {

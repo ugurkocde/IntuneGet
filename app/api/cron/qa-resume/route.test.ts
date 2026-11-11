@@ -1408,6 +1408,24 @@ describe('GET /api/cron/qa-resume', () => {
       });
       expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
     });
+    it.each(['preflight', 'generic', 'identity'])('preserves a newer hold when stale validation ends with %s before claiming', async kind => {
+      const { store, run } = setup();
+      store.row.qa_resume_due_at = '2026-01-01T00:00:00Z';
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      let newer!: Record<string, unknown>;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        expect(store.row.status).toBe('awaiting_qa');
+        store.row.qa_resume_due_at = new Date(Date.now() + 600_000).toISOString();
+        store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64), workflow_dispatch_rate_limit_attempts: 2 };
+        newer = structuredClone(store.row);
+        if (kind === 'identity') await options.beforeDispatch('B'.repeat(64));
+        if (kind === 'preflight') throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'synthetic unavailable', true);
+        throw new Error('synthetic validation failure');
+      });
+      expect(await (await run()).json()).toMatchObject({ held: 0, failed: 0, resumed: 0 });
+      expect(store.row).toEqual(newer);
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
     it.each([null, '43'])('stops a lost deferred claim without writing a failure over the winner with owner %s', async owner => {
       const { store, run } = setup();
       store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
