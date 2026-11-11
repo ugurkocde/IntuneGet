@@ -100,13 +100,12 @@ For other hosting providers or bare metal.
 Prerequisites:
 
 - **Node.js 22 or later is required.** An [LTS release](https://nodejs.org/en/about/previous-releases)
-  is recommended. The optional `better-sqlite3` dependency uses a prebuilt
-  binary when one is available for your Node.js version and platform.
-  Otherwise, it builds from source, which requires Python 3 and a C/C++
-  build toolchain (Visual Studio Build Tools on Windows).
-- If the optional `better-sqlite3` install fails, the app still runs in
-  Supabase mode, but `DATABASE_MODE=sqlite` will not work until
-  `better-sqlite3` is installed successfully.
+  is recommended. The optional `better-sqlite3` dependency ships prebuilt
+  Node API binaries for Windows, macOS and Linux with glibc or musl, on x64
+  and arm64. No native compilation is needed on these platforms.
+- For `DATABASE_MODE=sqlite`, use one of these supported platforms and
+  install `better-sqlite3`. Supabase mode can run without this optional
+  dependency.
 
 ```bash
 # Clone and install
