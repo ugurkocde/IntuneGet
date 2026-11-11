@@ -5,6 +5,7 @@ const {
   cancelStaleWaitingQaRunsMock,
   createServerClientMock,
   dispatchQaCandidateMock,
+  dispatchReaderStaticScanMock,
   getGitHubActionsHealthMock,
   isQaWorkflowRunCompletedMock,
   dispatchCuratedQueueMock,
@@ -14,6 +15,7 @@ const {
   cancelStaleWaitingQaRunsMock: vi.fn(),
   createServerClientMock: vi.fn(),
   dispatchQaCandidateMock: vi.fn(),
+  dispatchReaderStaticScanMock: vi.fn(),
   getGitHubActionsHealthMock: vi.fn(),
   isQaWorkflowRunCompletedMock: vi.fn(),
   dispatchCuratedQueueMock: vi.fn(async () => ({ handled: false, dispatched: false })),
@@ -22,7 +24,7 @@ const {
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
-vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
+vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock, dispatchReaderStaticScan: dispatchReaderStaticScanMock }));
 vi.mock('@/lib/qa/curated-queue', () => ({ dispatchCuratedQueue: dispatchCuratedQueueMock }));
 vi.mock('@/lib/qa/github-live-qa-inventory', () => ({ readLiveQaInventory: readLiveQaInventoryMock }));
 vi.mock('@/lib/qa/github-actions-health', () => ({
@@ -286,6 +288,7 @@ beforeEach(() => {
   getPackageCompatibilityBlockMock.mockReset().mockResolvedValue(null);
   process.env.CRON_SECRET = 'test-cron-secret';
   dispatchQaCandidateMock.mockResolvedValue(undefined);
+  dispatchReaderStaticScanMock.mockReset().mockResolvedValue(false);
   getGitHubActionsHealthMock.mockResolvedValue({ operational: true, status: 'operational' });
   cancelStaleWaitingQaRunsMock.mockResolvedValue([]);
   readLiveQaInventoryMock.mockResolvedValue({ state: 'complete', inventory: { total_count: 0, workflow_runs: [] } });
@@ -302,6 +305,44 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-dispatch', () => {
+  it('reaches the scan-only helper only after both fair queues and live inventory are empty', async () => {
+    const stub = createSupabaseStub([]); createServerClientMock.mockReturnValue(stub.client);
+    dispatchReaderStaticScanMock.mockResolvedValue(true);
+    const response = await GET(cronRequest());
+    expect(await response.json()).toMatchObject({ dispatched: true, reason: 'reader_static_scan_dispatched' });
+    expect(dispatchReaderStaticScanMock).toHaveBeenCalledWith(stub.client);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled(); expect(stub.claimAttemptIds).toEqual([]);
+  });
+
+  it('keeps ordinary work ahead of scan-only work', async () => {
+    const stub = createSupabaseStub([candidate('deployment-config')]); createServerClientMock.mockReturnValue(stub.client);
+    dispatchReaderStaticScanMock.mockResolvedValue(true);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ dispatched: true, candidateId: DEPLOYMENT_ID });
+    expect(dispatchReaderStaticScanMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps curated work ahead of scan-only work', async () => {
+    const stub = createSupabaseStub([]); createServerClientMock.mockReturnValue(stub.client);
+    dispatchCuratedQueueMock.mockResolvedValueOnce({ handled: true, dispatched: true });
+    await GET(cronRequest()); expect(dispatchReaderStaticScanMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reach scan-only work with a live workflow owner', async () => {
+    const stub = createSupabaseStub([]); createServerClientMock.mockReturnValue(stub.client);
+    readLiveQaInventoryMock.mockResolvedValue({ state: 'complete', inventory: { total_count: 1, workflow_runs: [
+      { id: 777, status: 'queued', event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/intune-qa.yml', created_at: new Date().toISOString() },
+    ] } });
+    await GET(cronRequest()); expect(dispatchReaderStaticScanMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reach scan-only work while an ordinary candidate is active', async () => {
+    const now = new Date().toISOString();
+    const active = { ...candidate('deployment-config'), status: 'running', started_at: now, dispatched_at: now, updated_at: now };
+    const stub = createSupabaseStub([], [], { activeCandidates: [active] }); createServerClientMock.mockReturnValue(stub.client);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'qa_active' });
+    expect(dispatchReaderStaticScanMock).not.toHaveBeenCalled();
+  });
+
   const vcppRequeueError = { code: 'P0001', message: 'Active VC++ authorization cannot be requeued' };
 
   it.each(['dispatched', 'running'])('retains a guarded %s VC++ run and dispatches the next fair queued app', async status => {

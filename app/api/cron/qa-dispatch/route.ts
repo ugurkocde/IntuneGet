@@ -2,7 +2,7 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { dispatchQaCandidate } from '@/lib/qa/dispatch';
+import { dispatchQaCandidate, dispatchReaderStaticScan } from '@/lib/qa/dispatch';
 import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
@@ -505,16 +505,21 @@ export async function GET(request: Request) {
     if (page.length < QUEUE_SCAN_PAGE_SIZE) break;
   }
 
-  return NextResponse.json({
-    success: true,
-    dispatched: false,
-    reason: lastInstallerQuarantine
+  const reason = lastInstallerQuarantine
       ? 'installer_quarantined'
       : lastInstallerUnavailable
         ? 'installer_unavailable'
       : scanned >= QUEUE_SCAN_PAGE_SIZE * MAX_QUEUE_SCAN_PAGES
         ? 'scan_limit'
-        : 'queue_empty',
+        : 'queue_empty';
+  if (reason !== 'scan_limit' && await dispatchReaderStaticScan(supabase)) {
+    return NextResponse.json({ success: true, dispatched: true,
+      reason: 'reader_static_scan_dispatched', reconciled, scanned, superseded });
+  }
+  return NextResponse.json({
+    success: true,
+    dispatched: false,
+    reason,
     ...(lastInstallerQuarantine || {}),
     ...(lastInstallerUnavailable || {}),
     reconciled,
