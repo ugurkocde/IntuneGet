@@ -870,7 +870,7 @@ export async function POST(request: NextRequest) {
             const triggerResult = await triggerPackagingWorkflow(
               workflowInputs,
               undefined,
-              { skipRunCapture: isBatch }
+              { skipRunCapture: isBatch, newJobAdmission: item.sourceType !== 'custom' }
             );
 
             const updateData: Record<string, unknown> = {

@@ -4,11 +4,19 @@ const MIN_DELAY_MS = 60_000;
 const MAX_DELAY_MS = 65 * 60_000;
 const MAX_DEFERRALS = 5;
 const ATTEMPTS_KEY = 'workflow_dispatch_rate_limit_attempts';
+export const DISPATCH_IDENTITY_KEY = 'workflow_dispatch_unconfirmed_identity';
+
+export class WorkflowDispatchRetryStopped extends Error {
+  constructor() {
+    super('Packaging retry state changed.');
+    this.name = 'WorkflowDispatchRetryStopped';
+  }
+}
 
 export class WorkflowDispatchUnconfirmedError extends Error {
   readonly code = 'WORKFLOW_DISPATCH_UNCONFIRMED';
   readonly retryAt: string;
-  constructor(readonly status: number | null, now = Date.now()) {
+  constructor(readonly status: number | null, now = Date.now(), readonly dispatchIdentity?: string) {
     super('GitHub did not confirm that packaging started.');
     this.name = 'WorkflowDispatchUnconfirmedError';
     this.retryAt = new Date(now + MIN_DELAY_MS).toISOString();
@@ -47,6 +55,13 @@ export function dispatchRateLimitError(response: Response, detail: string, now =
 export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError | WorkflowDispatchUnconfirmedError, details: Json | null, now = Date.now()) {
   if (details !== null && (typeof details !== 'object' || Array.isArray(details))) return null;
   const previous = details && typeof details === 'object' && !Array.isArray(details) ? details : {};
+  const existingIdentity = previous[DISPATCH_IDENTITY_KEY];
+  const newIdentity = error instanceof WorkflowDispatchUnconfirmedError ? error.dispatchIdentity : undefined;
+  const validIdentity = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
+  if (existingIdentity !== undefined && !validIdentity(existingIdentity)) return null;
+  if (newIdentity !== undefined && (!validIdentity(newIdentity) || (existingIdentity !== undefined && existingIdentity !== newIdentity))) return null;
+  const identity = existingIdentity ?? newIdentity;
+  if (error instanceof WorkflowDispatchUnconfirmedError && !validIdentity(identity)) return null;
   const count = previous[ATTEMPTS_KEY] ?? 0;
   if (typeof count !== 'number' || !Number.isInteger(count) || count < 0 || count >= MAX_DEFERRALS) return null;
   const requested = Date.parse(error.retryAt);
@@ -64,6 +79,7 @@ export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError | Wo
     error_stage: 'authenticate',
     error_category: 'network',
     error_message: error.message,
-    error_details: { ...previous, [ATTEMPTS_KEY]: count + 1 } as Json,
+    error_details: { ...previous, [ATTEMPTS_KEY]: count + 1,
+      ...(identity ? { [DISPATCH_IDENTITY_KEY]: identity } : {}) } as Json,
   };
 }

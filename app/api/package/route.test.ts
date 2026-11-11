@@ -962,16 +962,18 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
   });
   it('holds a fresh unconfirmed hosted dispatch with an owner null fence', async () => {
-    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503));
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503, Date.now(), 'A'.repeat(64)));
     const body = await (await postSingleItem()).json();
     expect(body.jobs).toEqual([expect.objectContaining({ status: 'awaiting_qa' })]);
     expect(body.errors).toBeUndefined();
     expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED' }),
       expect.objectContaining({ callback_run_id: null, github_run_id: null, status: 'queued' }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.any(Object), undefined,
+      expect.objectContaining({ newJobAdmission: true }));
   });
   it('does not fail or hold a fresh dispatch after its callback owner wins', async () => {
     updateMock.mockImplementationOnce(async (_id, _patch, conditions) => conditions.callback_run_id === null ? null : { status: 'awaiting_qa' });
-    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(null));
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(null, Date.now(), 'A'.repeat(64)));
     const body = await (await postSingleItem()).json();
     expect(body.jobs).toEqual([]);
     expect(updateMock).toHaveBeenCalledOnce();

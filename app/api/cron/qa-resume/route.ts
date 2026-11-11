@@ -3,7 +3,7 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
-import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, WorkflowDispatchRetryStopped, DISPATCH_IDENTITY_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import { unsupportedDependencyMessage, knownUnavailableDisposition, isExactPretestCandidate } from '@/lib/unsupported-dependency';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
@@ -543,7 +543,13 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString();
     const nextStatus = features.localPackager ? 'queued' : 'packaging';
-    const { data: claimed, error: claimError } = await guardObservedIdentity(supabase
+    const retryDetails = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
+      ? job.error_details : {};
+    const retryIdentity = retryDetails[DISPATCH_IDENTITY_KEY];
+    const deferredClaim = Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
+    let claimedPackaging = false;
+    const claimForDispatch = async () => {
+      const { data: claimed, error: claimError } = await guardObservedIdentity(supabase
       .from('packaging_jobs')
       .update({
         status: nextStatus,
@@ -558,18 +564,44 @@ export async function GET(request: Request) {
       })
       .eq('id', job.id)
       .eq('status', 'awaiting_qa')
-      .is('callback_run_id', null))
+      .is('callback_run_id', null).is('github_run_id', null)
+      .is('cancelled_at', null).is('archived_at', null))
       .select('id')
       .maybeSingle();
-    if (claimError) throw claimError;
-    if (!claimed) continue;
+      if (claimError) throw claimError;
+      if (!claimed) throw new WorkflowDispatchRetryStopped();
+      claimedPackaging = !features.localPackager;
+    };
+    if (!deferredClaim) {
+      try { await claimForDispatch(); }
+      catch (error) { if (error instanceof WorkflowDispatchRetryStopped) continue; throw error; }
+    }
 
-    if (features.localPackager) {
+    if (features.localPackager && !deferredClaim) {
       resumed++;
       continue;
     }
 
     try {
+      const rejectChangedRetry = async () => {
+        const message = 'Packaging inputs changed after GitHub did not confirm startup. Start a new deployment.';
+        const { data: changed, error: writeError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+          status: 'failed', error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED',
+          status_message: message, error_message: message, error_stage: 'validation', error_category: 'validation',
+          completed_at: new Date().toISOString(),
+        }).eq('id', job.id).eq('status', 'awaiting_qa').is('callback_run_id', null).is('github_run_id', null)
+          .is('cancelled_at', null).is('archived_at', null)).select('id').maybeSingle();
+        if (writeError) waiting++;
+        if (changed) {
+          failed++;
+          try { await handleAutoUpdateJobCompletion(job.id, 'failed', message); }
+          catch { console.error('[QA Resume] Could not finish auto update tracking after a changed retry payload.'); }
+        }
+        throw new WorkflowDispatchRetryStopped();
+      };
+      if (deferredClaim && (features.localPackager || typeof retryIdentity !== 'string' || !/^[a-f0-9]{64}$/i.test(retryIdentity))) {
+        await rejectChangedRetry();
+      }
       const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
       const autoUpdate = job.is_auto_update ? item as Win32CartItem & {
         sourceIntuneAppId?: string; autoSupersede?: boolean; supersedenceType?: string;
@@ -618,7 +650,12 @@ export async function GET(request: Request) {
         sourceType: item.sourceType,
         curatedReleaseId: item.curatedReleaseId,
       };
-      const trigger = await triggerPackagingWorkflow(workflowInputs);
+      const trigger = await triggerPackagingWorkflow(workflowInputs, undefined, deferredClaim ? {
+        beforeDispatch: async identity => {
+          if (identity !== retryIdentity) await rejectChangedRetry();
+          await claimForDispatch();
+        },
+      } : undefined);
       await supabase
         .from('packaging_jobs')
         .update({
@@ -630,6 +667,8 @@ export async function GET(request: Request) {
         .is('callback_run_id', null);
       resumed++;
     } catch (error) {
+      if (error instanceof WorkflowDispatchRetryStopped) continue;
+      const failureStatus = claimedPackaging ? 'packaging' : 'awaiting_qa';
       const licenceRequired = error instanceof CuratedLicenceError;
       const rateLimit = error instanceof WorkflowDispatchRateLimitError || error instanceof WorkflowDispatchUnconfirmedError ? error : null;
       const rateHold = rateLimit ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
@@ -644,7 +683,7 @@ export async function GET(request: Request) {
             completed_at: new Date().toISOString(),
           })
           .eq('id', job.id)
-          .eq('status', 'packaging')
+          .eq('status', failureStatus)
           .is('github_run_id', null)
           .is('callback_run_id', null)
           .is('cancelled_at', null)
@@ -659,8 +698,7 @@ export async function GET(request: Request) {
         }
         continue;
       }
-      // This typed failure is raised before dispatch. Ambiguous dispatch
-      // failures must retain the terminal path below rather than be replayed.
+      // Preflight failures can occur before a deferred retry claims the job.
       if (error instanceof InstallerPreflightError && error.retryable) {
         const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
           .from('packaging_jobs')
@@ -672,15 +710,15 @@ export async function GET(request: Request) {
             qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(),
           })
           .eq('id', job.id)
-          .eq('status', 'packaging')
-          .is('github_run_id', null))
+          .eq('status', failureStatus)
+          .is('github_run_id', null).is('callback_run_id', null))
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
         if (heldJob) held++;
         continue;
       }
-      const { data: failedJob } = await supabase
+      const { data: failedJob } = await guardObservedIdentity(supabase
         .from('packaging_jobs')
         .update({
           status: 'failed',
@@ -696,17 +734,19 @@ export async function GET(request: Request) {
           completed_at: new Date().toISOString(),
         })
         .eq('id', job.id)
-        .eq('status', 'packaging')
+        .eq('status', failureStatus)
+        .is('github_run_id', null).is('callback_run_id', null)
+        .is('cancelled_at', null).is('archived_at', null))
         .select('id')
         .maybeSingle();
       if (failedJob) {
+        failed++;
         await handleAutoUpdateJobCompletion(
           job.id,
           'failed',
           error instanceof Error ? error.message : 'Unknown resume error'
         );
       }
-      failed++;
     }
   }
 
