@@ -122,7 +122,7 @@ describe('approval holds and fair QA release', () => {
       detectionRules: JSON.stringify(explicitCartRules ? [] : row.detection_rules), sourceIntuneAppId: 'synthetic-previous-app',
       autoSupersede: true, supersedenceType: 'update', carryOverAssignments: true, removeAssignmentsFromPreviousApp: true,
       silentSwitches: '/S',
-    }));
+    }), undefined, undefined);
     expect(mocks.demand).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       detectionRules: JSON.stringify(explicitCartRules ? [] : row.detection_rules), silentSwitches: '/S',
     }));

@@ -14,6 +14,7 @@ import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 import { QaCompatibilityGateError } from './qa/gate';
 import { generateUninstallCommand } from './detection-rules';
 import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, WorkflowDispatchRetryStopped } from './workflow-dispatch-rate-limit';
+import { sanitizeAssignmentsForDispatch } from './assignment-intents';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -252,6 +253,24 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(error).toBeInstanceOf(WorkflowDispatchUnconfirmedError);
     expect(error.dispatchIdentity).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+  it('keeps the actual dispatch identity when stored forceCreate and normalized assignments are replayed', async () => {
+    const stored = { forceCreate: true, assignments: [{ type: 'allUsers' as const, intent: 'updateOnly' as const }],
+      requirementRules: [{ ruleType: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Fixture' }] };
+    const admission = workflowInputs({ sourceType: 'winget', wingetId: 'Example.App', installerSha256: 'A'.repeat(64),
+      hashValidationMode: 'strict', forceCreate: true, requirementRules: JSON.stringify(stored.requirementRules),
+      assignments: JSON.stringify([{ type: 'allUsers', intent: 'required' }]) });
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const failure = await triggerPackagingWorkflow(admission, config, { skipRunCapture: true, newJobAdmission: true }).catch(error => error);
+    expect(failure.dispatchIdentity).toMatch(/^[a-f0-9]{64}$/);
+    const check = vi.fn(async (identity: string) => { expect(identity).toBe(failure.dispatchIdentity); });
+    await triggerPackagingWorkflow({ ...admission, forceCreate: stored.forceCreate,
+      assignments: JSON.stringify(sanitizeAssignmentsForDispatch(stored.assignments, Boolean(stored.requirementRules.length))),
+    }, config, { skipRunCapture: true, beforeDispatch: check });
+    expect(check).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).client_payload).toEqual(JSON.parse(fetchMock.mock.calls[0][1].body).client_payload);
   });
   it('dispatches authored catalog detection rules with the matching QA identity', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));

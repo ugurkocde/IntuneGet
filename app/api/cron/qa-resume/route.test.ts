@@ -1370,6 +1370,44 @@ describe('GET /api/cron/qa-resume', () => {
       expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
       expect(store.row.error_details).toEqual({ workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) });
     });
+    it('does not let a stale worker claim again after another worker schedules a new hold', async () => {
+      const { store, run } = setup();
+      store.row.qa_resume_due_at = '2026-01-01T00:00:00Z';
+      store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      let release!: () => void;
+      let reached!: () => void;
+      const paused = new Promise<void>(resolve => { reached = resolve; });
+      const resume = new Promise<void>(resolve => { release = resolve; });
+      findPendingApprovalBlocksMock.mockImplementationOnce(async () => { reached(); await resume; return []; });
+      let posts = 0;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _config, options) => {
+        await options.beforeDispatch('A'.repeat(64));
+        posts++;
+        throw new WorkflowDispatchUnconfirmedError(503);
+      });
+      const stale = run();
+      await paused;
+      expect(await (await run()).json()).toMatchObject({ held: 1 });
+      const held = structuredClone(store.row);
+      release();
+      expect(await (await stale).json()).toMatchObject({ held: 0, failed: 0, resumed: 0 });
+      expect(posts).toBe(1);
+      expect(store.row).toEqual(held);
+      expect(store.row.error_details).toMatchObject({ workflow_dispatch_rate_limit_attempts: 1 });
+    });
+    it.each([true, false])('uses admission assignment sanitization only for pinned retries: %s', async pinned => {
+      const { store, run } = setup();
+      const assignments = [{ type: 'allUsers', intent: 'updateOnly' }];
+      store.row.package_config = { ...store.row.package_config as object, assignments,
+        requirementRules: [{ ruleType: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Fixture' }] };
+      if (pinned) store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
+      triggerPackagingWorkflowMock.mockImplementation(async (input, _config, options) => {
+        expect(JSON.parse(input.assignments)).toEqual([{ ...assignments[0], intent: pinned ? 'required' : 'updateOnly' }]);
+        if (pinned) await options.beforeDispatch('A'.repeat(64));
+        return { success: true };
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+    });
     it.each([null, '43'])('stops a lost deferred claim without writing a failure over the winner with owner %s', async owner => {
       const { store, run } = setup();
       store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };

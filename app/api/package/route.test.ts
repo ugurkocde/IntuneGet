@@ -979,6 +979,21 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(updateMock).toHaveBeenCalledOnce();
     expect(updateMock.mock.calls[0][1].status).toBe('awaiting_qa');
   });
+  it('persists request forceCreate only with a pinned unconfirmed hold', async () => {
+    const item = { ...makeWin32Item(), forceCreate: false };
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503, Date.now(), 'A'.repeat(64)));
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [item], forceCreate: true }),
+    }));
+    expect(await response.json()).toMatchObject({ jobs: [{ status: 'awaiting_qa' }] });
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ package_config: expect.objectContaining({ forceCreate: false }) }));
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0].forceCreate).toBe(true);
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      package_config: expect.objectContaining({ forceCreate: true }),
+      error_details: expect.objectContaining({ workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) }),
+    }), expect.objectContaining({ callback_run_id: null }));
+  });
   it('still reports other dispatched jobs when saving a capacity hold fails', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchRateLimitError(429,
       new Date(Date.now() + 120_000).toISOString()));

@@ -10,6 +10,7 @@ import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
 import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
@@ -549,7 +550,7 @@ export async function GET(request: Request) {
     const deferredClaim = Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
     let claimedPackaging = false;
     const claimForDispatch = async () => {
-      const { data: claimed, error: claimError } = await guardObservedIdentity(supabase
+      const claim = guardObservedIdentity(supabase
       .from('packaging_jobs')
       .update({
         status: nextStatus,
@@ -565,7 +566,10 @@ export async function GET(request: Request) {
       .eq('id', job.id)
       .eq('status', 'awaiting_qa')
       .is('callback_run_id', null).is('github_run_id', null)
-      .is('cancelled_at', null).is('archived_at', null))
+      .is('cancelled_at', null).is('archived_at', null));
+      const { data: claimed, error: claimError } = await (job.qa_resume_due_at == null
+        ? claim.is('qa_resume_due_at', null)
+        : claim.eq('qa_resume_due_at', job.qa_resume_due_at))
       .select('id')
       .maybeSingle();
       if (claimError) throw claimError;
@@ -636,7 +640,9 @@ export async function GET(request: Request) {
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
         detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
         requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
-        assignments: item.assignments ? JSON.stringify(item.assignments) : undefined,
+        assignments: item.assignments ? JSON.stringify(deferredClaim
+          ? sanitizeAssignmentsForDispatch(item.assignments, Boolean(item.requirementRules?.length))
+          : item.assignments) : undefined,
         categories: item.categories ? JSON.stringify(item.categories) : undefined,
         espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
         relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,

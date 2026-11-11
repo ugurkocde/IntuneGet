@@ -915,7 +915,12 @@ export async function POST(request: NextRequest) {
               ? dispatchRateLimitHold(rateLimit, null) : null;
             if (rateHold && dispatch) {
               let retryWriteFailed = false;
-              const held = await db.jobs.update(dispatch.jobId, rateHold, {
+              const held = await db.jobs.update(dispatch.jobId, {
+                ...rateHold,
+                ...(rateLimit instanceof WorkflowDispatchUnconfirmedError && forceCreate && !dispatch.item.forceCreate
+                  ? { package_config: { ...dispatch.item, forceCreate: true } as unknown as import('@/types/database').Json }
+                  : {}),
+              }, {
                 status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null,
               }).catch(() => {
                 retryWriteFailed = true;

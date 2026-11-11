@@ -37,7 +37,7 @@ function statement(source: string, pattern: RegExp) {
 // The shim translates only this route's query subset. PostgREST transport and
 // multi-connection locking are outside this local PostgreSQL contract test.
 function jobsQuery() {
-  const columns = new Set(['id', 'status', 'status_message', 'qa_candidate_id', 'installer_sha256', 'architecture', 'qa_completed_at', 'packaging_started_at', 'qa_resume_due_at', 'github_run_id', 'github_run_url', 'error_code', 'error_stage', 'error_category', 'error_message', 'completed_at']);
+  const columns = new Set(['id', 'status', 'status_message', 'qa_candidate_id', 'installer_sha256', 'architecture', 'qa_completed_at', 'packaging_started_at', 'qa_resume_due_at', 'github_run_id', 'github_run_url', 'error_code', 'error_stage', 'error_category', 'error_message', 'completed_at', 'callback_run_id', 'cancelled_at', 'archived_at']);
   const ident = (column: string) => {
     if (column === 'package_config->>installerSha256') return "package_config->>'installerSha256'";
     if (column === 'package_config->>architecture') return "package_config->>'architecture'";
@@ -99,6 +99,9 @@ describe('qa-resume PostgreSQL dispatch catch', () => {
     await pg.exec('create table qa_candidates(id uuid primary key); set timezone=\'UTC\';');
     await pg.exec(statement(base, /CREATE TABLE IF NOT EXISTS packaging_jobs \([\s\S]*?\n\);/));
     await pg.exec(statement(base, /CREATE OR REPLACE FUNCTION update_updated_at_column\(\)[\s\S]*?EXECUTE FUNCTION update_updated_at_column\(\);/));
+    await pg.exec(statement(migration('007_add_cancelled_status.sql'), /ALTER TABLE packaging_jobs[\s\S]*?;/));
+    await pg.exec(statement(migration('033_reliable_upload_history.sql'), /ALTER TABLE packaging_jobs[\s\S]*?;/));
+    await pg.exec(statement(migration('20261111100757_callback_run_ownership.sql'), /ALTER TABLE public\.packaging_jobs ADD COLUMN callback_run_id text NULL;/));
     const github = migration('002_add_tenant_and_github.sql');
     for (const name of ['tenant_id', 'github_run_id', 'github_run_url']) await pg.exec(statement(github, new RegExp(`ALTER TABLE packaging_jobs ADD COLUMN IF NOT EXISTS ${name} TEXT;`)));
     await pg.exec(statement(migration('015_enhanced_error_handling.sql'), /ALTER TABLE packaging_jobs[\s\S]*?;/));
