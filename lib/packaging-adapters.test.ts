@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { generateUninstallCommand } from '@/lib/detection-rules';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
@@ -8,6 +9,24 @@ import {
   resolveApplicationInstallerSelectionType,
   resolveApplicationUninstallCommand,
 } from './packaging-adapters';
+
+describe('LegendCTL registry capture identity', () => {
+  it('binds only the LegendCTL catalog marker to the vendor registration', () => {
+    const generated = generateUninstallCommand({
+      architecture: 'x64', type: 'inno', url: 'https://example.com/setup.exe',
+      sha256: 'a'.repeat(64), productCode: '{ZDUltimateLegend}_is1',
+    }, 'LegendCTL');
+    // Keep the existing pinned marker grammar; capture persists the exact key.
+    expect(generated).toBe('REGISTRY_UNINSTALL:LegendCTL');
+    expect(resolveApplicationUninstallCommand('EvilHumphrey.LegendCTL', generated))
+      .toBe('REGISTRY_UNINSTALL:ZD Ultimate Legend Wrapper');
+    for (const command of ['custom.exe /remove', 'REGISTRY_UNINSTALL:Other',
+      'REGISTRY_UNINSTALL_KEY:Other:LegendCTL']) {
+      expect(resolveApplicationUninstallCommand('EvilHumphrey.LegendCTL', command)).toBe(command);
+    }
+    expect(resolveApplicationUninstallCommand('Example.App', generated)).toBe(generated);
+  });
+});
 
 describe('OneKey exact registry identity', () => {
   const expected = 'REGISTRY_UNINSTALL_KEY:c63242f1-2b62-5725-b853-31b79889ccf8:OneKey';
