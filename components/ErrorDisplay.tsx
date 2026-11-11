@@ -159,9 +159,10 @@ export function ErrorDisplay({
   const blockedBeforeTest = qaFailed && securityBlocked;
   const displayErrorMessage = blockedBeforeTest
     ? 'A security check stopped this deployment before the installation test ran.' : errorMessage;
-  const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE';
+  const architectureUnavailable = errorCode === 'ARCHITECTURE_UNAVAILABLE';
+  const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE' || architectureUnavailable;
   const unsupportedDependency = errorCode === 'DEPENDENCY_NOT_SUPPORTED';
-  const stage = unavailable ? { ...stageConfig.validation, label: 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
+  const stage = unavailable ? { ...stageConfig.validation, label: architectureUnavailable ? <T>Architecture not available</T> : 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
     : qaFailed ? { ...stageConfig.validation, label: blockedBeforeTest ? 'Security check' : <T>Deployment validation</T> } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
@@ -176,7 +177,9 @@ export function ErrorDisplay({
   } : unsupportedDependency ? {
     message: 'This dependency is not supported for automated deployment yet.', showReVerify: false,
   } : unavailable ? {
-    message: errorCode === 'PACKAGE_UNAVAILABLE'
+    message: architectureUnavailable
+      ? <T>Automated deployment is not available for this architecture. This request did not run an installation test.</T>
+      : errorCode === 'PACKAGE_UNAVAILABLE'
       ? 'This app is not available for automated deployment. This request did not run an installation test.'
       : 'Select an available app version. This request did not run an installation test.',
     showReVerify: false,
