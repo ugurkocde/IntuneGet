@@ -2,7 +2,7 @@ vi.mock('@/lib/customer-upstream-recovery', () => ({ holdCustomerUpstreamJob: vi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ client: vi.fn(), guard: vi.fn(), flags: vi.fn(),
-  dispatch: vi.fn(), licence: vi.fn(), completion: vi.fn() }));
+  dispatch: vi.fn(), licence: vi.fn(), completion: vi.fn(), demand: vi.fn(), reconcile: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ createServerClient: mocks.client }));
 vi.mock('@/lib/db', () => ({ getDatabase: () => ({}) }));
 vi.mock('@/lib/intune-approval-guard', () => ({ findPendingApprovalBlocks: mocks.guard }));
@@ -13,8 +13,8 @@ vi.mock('@/lib/qa/gate', () => ({ enforceQaGate: vi.fn(async () => undefined) })
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: mocks.completion }));
 vi.mock('@/lib/curated-catalog/licence', () => ({ assertCuratedLicenceAccepted: mocks.licence,
   CuratedLicenceError: class extends Error {} }));
-vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: vi.fn() }));
-vi.mock('@/lib/catalog-installer-reconciliation', () => ({ reconcileCatalogInstaller: vi.fn() }));
+vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: mocks.demand }));
+vi.mock('@/lib/catalog-installer-reconciliation', () => ({ reconcileCatalogInstaller: mocks.reconcile }));
 import { GET } from './route';
 import * as packageEligibility from '@/lib/package-eligibility';
 
@@ -86,6 +86,7 @@ const blocked = (reason = 'retained_app_present') => [{ wingetId: 'Vendor.App',
 
 beforeEach(() => {
   vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime(epoch);
+  mocks.demand.mockReset(); mocks.reconcile.mockReset();
   process.env.CRON_SECRET = 'test-secret';
   delete process.env.QA_MAINTENANCE_MODE; delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
   mocks.flags.mockReturnValue({ localPackager: true }); mocks.guard.mockResolvedValue([]);
@@ -95,6 +96,50 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks();
   delete process.env.QA_MAINTENANCE_MODE; delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL; });
 
 describe('approval holds and fair QA release', () => {
+  it.each([false, true])('dispatches a cron-admitted auto-update once while preserving an explicit cart detection choice: %s', async explicitCartRules => {
+    mocks.flags.mockReturnValue({ localPackager: false });
+    const row = job(1, { id: '00000000-0000-4000-8000-000000001787', status: 'awaiting_qa', is_auto_update: true,
+      updated_at: new Date(epoch - 60_000).toISOString(), qa_candidate_id: null, qa_completed_at: new Date(epoch - 60_000).toISOString(),
+      github_run_id: null, packager_id: null, claimed_at: null, packaging_started_at: null, intune_app_id: null, cancelled_at: null, archived_at: null,
+      architecture: 'x64', installer_type: 'exe', installer_url: 'https://example.test/installer.exe', installer_sha256: 'A'.repeat(64),
+      install_command: '"installer.exe" /S', install_scope: 'machine',
+      detection_rules: [{ type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Synthetic', valueName: 'Version', detectionValue: '1.0' }],
+      package_config: { sourceType: 'winget', psadtConfig: { verifyInstall: true }, assignments: [{ target: { groupId: 'synthetic-group' } }],
+        ...(explicitCartRules ? { detectionRules: [] } : {}),
+        sourceIntuneAppId: 'synthetic-previous-app', autoSupersede: true, supersedenceType: 'update',
+        assignmentMigration: { carryOverAssignments: true, removeAssignmentsFromPreviousApp: true } },
+    });
+    mocks.demand.mockResolvedValue({ state: 'passed', candidateId: null,
+      identity: { executionProfileSha256: 'profile', presentationProfileSha256: 'presentation' } });
+    mocks.reconcile.mockImplementation(async item => ({ item, trustedInstallers: [] }));
+    vi.spyOn(packageEligibility, 'getPackageCompatibilityBlock').mockResolvedValue(null);
+    database([row]);
+    const results = await Promise.all([cycle(), cycle()]);
+    expect(results.reduce((n, result) => n + result.resumed, 0)).toBe(1);
+    expect(mocks.dispatch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      jobId: row.id, wingetId: 'Vendor.App', version: '1.0', installerSha256: 'A'.repeat(64),
+      assignments: JSON.stringify([{ target: { groupId: 'synthetic-group' } }]),
+      detectionRules: JSON.stringify(explicitCartRules ? [] : row.detection_rules), sourceIntuneAppId: 'synthetic-previous-app',
+      autoSupersede: true, supersedenceType: 'update', carryOverAssignments: true, removeAssignmentsFromPreviousApp: true,
+      silentSwitches: '/S',
+    }));
+    expect(mocks.demand).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      detectionRules: JSON.stringify(explicitCartRules ? [] : row.detection_rules), silentSwitches: '/S',
+    }));
+    expect(mocks.guard).toHaveBeenCalled();
+    expect(row.status).toBe('packaging');
+    expect(row.github_run_id).toBe('123');
+  });
+
+  it('leaves legacy queued auto-updates untouched because a missing run identity is not proof of no dispatch', async () => {
+    mocks.flags.mockReturnValue({ localPackager: false });
+    const row = job(1, { status: 'queued', is_auto_update: true, github_run_id: null,
+      updated_at: new Date(epoch - 60_000).toISOString(), packager_id: null, claimed_at: null });
+    const before = structuredClone(row), writes = database([row]);
+    expect(await cycle()).toMatchObject({ scanned: 0, resumed: 0 });
+    expect(row).toEqual(before); expect(writes).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
   it('rotates 25 pending publication jobs so the next eligible job progresses', async () => {
     const rows = [...Array.from({ length: 25 }, (_, i) => job(i)), job(26, { qa_candidate_id: 'ready' })];
     vi.spyOn(packageEligibility, 'getPackageCompatibilityBlock').mockResolvedValue(null);

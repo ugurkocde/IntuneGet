@@ -1,0 +1,5 @@
+{
+  "title": "Restore scheduled automatic update admission",
+  "summary": "Scheduled automatic updates whose installation test already passed now enter the normal deployment path. Saved detection rules, assignment settings and update relationships stay with the job.",
+  "type": "fixed"
+}

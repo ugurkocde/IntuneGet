@@ -221,7 +221,7 @@ export class AutoUpdateTrigger {
   async triggerAutoUpdate(
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
-    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean }
+    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean; admitViaQaResume?: boolean }
   ): Promise<TriggerResult> {
     try {
       // Safety check 1: Verify policy allows auto-update
@@ -434,7 +434,8 @@ export class AutoUpdateTrigger {
         policy,
         updateInfo,
         historyRecord.id,
-        qaDemand
+        qaDemand,
+        options?.admitViaQaResume === true
       );
 
       // Update history with job reference
@@ -822,7 +823,8 @@ export class AutoUpdateTrigger {
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
     historyId: string,
-    qaDemand?: QaDemandResult
+    qaDemand?: QaDemandResult,
+    admitViaQaResume = false
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
     const assignments = normalizeAssignments(config);
@@ -900,7 +902,7 @@ export class AutoUpdateTrigger {
         autoUpdateHistoryId: historyId,
       },
       status: !qaDemand || qaDemand.state === 'passed'
-        ? 'queued'
+        ? admitViaQaResume ? 'awaiting_qa' : 'queued'
         : qaDemand.state === 'waiting'
           ? 'awaiting_qa'
           : 'qa_failed',
