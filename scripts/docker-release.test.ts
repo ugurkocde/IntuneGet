@@ -132,16 +132,106 @@ describe('release gates', () => {
     expect(jobs.promote.steps.at(-1).run).toContain('"$image@$RELEASE_DIGEST"')
   })
   it('allows publication only after security and either stable promotion or an explicitly skipped prerelease promotion', () => {
-    expect(jobs.publish.needs).toContain('promote')
-    expect(jobs.publish.if).toContain("needs.secure.result == 'success'")
-    expect(jobs.publish.if).toContain("needs.prepare.outputs.prerelease == 'true' && needs.promote.result == 'skipped'")
+    expect(jobs['release-gates'].needs).toEqual(['prepare', 'merge', 'secure', 'promote'])
+    expect(jobs['release-gates'].if).toContain("needs.secure.result == 'success'")
+    expect(jobs['release-gates'].if).toContain("needs.prepare.outputs.prerelease == 'true' && needs.promote.result == 'skipped'")
+    expect(jobs['release-gates'].permissions).toEqual({})
+    expect(jobs['release-gates'].steps.at(-1).run).toContain('RELEASE_DIGEST=')
+  })
+  it('leaves release writes to the existing App path without adding workflow token permissions', () => {
+    const workflow = parse(readFileSync('.github/workflows/release.yml', 'utf8'))
+    expect(workflow.on).toEqual({ push: { tags: ['v*'] } })
+    expect(jobs.prepare.permissions).toEqual({ contents: 'read' })
+    const guard = jobs.prepare.steps.find((row: { run?: string }) => row.run?.includes('gh release view'))
+    expect(guard.env).toEqual({ GH_TOKEN: '${{ github.token }}', TAG: '${{ github.ref_name }}' })
+    for (const [name, job] of Object.entries(jobs) as [string, { permissions?: Record<string, string> }][]) {
+      expect(job.permissions?.contents).not.toBe('write')
+      if (job.permissions?.['id-token'] === 'write') expect(name).toBe('secure')
+    }
+    expect(readFileSync('.github/workflows/release.yml', 'utf8')).not.toMatch(/gh release (?:create|edit|upload)\b/)
   })
   it('keeps release package versions and maintained release notes consistent', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
     const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'))
-    expect(pkg.version).toBe('0.8.5')
+    expect(pkg.version).toBe('0.8.6')
     expect(lock.version).toBe(pkg.version)
     expect(lock.packages[''].version).toBe(pkg.version)
-    expect(readFileSync(`release-notes/v${pkg.version}.md`, 'utf8')).toContain('Windows Docker Desktop confirmation')
+    expect(readFileSync(`release-notes/v${pkg.version}.md`, 'utf8')).toContain('SQLite automatic update detection')
+  })
+})
+
+function releaseGuard(scenario: string, ref = 'refs/tags/v0.8.6', repository = 'ugurkocde/IntuneGet') {
+  const workflow = parse(readFileSync('.github/workflows/release.yml', 'utf8'))
+  const step = workflow.jobs.prepare.steps.find((row: { run?: string }) => row.run?.includes('gh release view'))
+  const directory = mkdtempSync(join(tmpdir(), 'intuneget-release-probe-'))
+  fixtures.push(directory)
+  const log = join(directory, 'commands.log')
+  writeFileSync(join(directory, 'gh'), `#!/usr/bin/env bash
+set -eu
+printf '%s\\n' "$*" >> "$MOCK_LOG"
+[[ "$1 $2" == 'release view' ]] || { echo WRITE_ATTEMPT >&2; exit 99; }
+case "$SCENARIO" in
+  draft) echo true;;
+  published) echo false;;
+  missing) echo 'release not found' >&2; exit 1;;
+  denied) echo 'HTTP 403: Forbidden' >&2; exit 1;;
+  auth_not_found) echo 'release not found' >&2; exit 4;;
+  mixed_not_found) printf 'HTTP 403: Forbidden\nrelease not found\n' >&2; exit 1;;
+  generic_404) echo 'HTTP 404: Not Found' >&2; exit 1;;
+  network) echo 'network unavailable' >&2; exit 1;;
+  server) echo 'HTTP 503: Service Unavailable' >&2; exit 1;;
+  limited) echo 'HTTP 429: Too Many Requests' >&2; exit 1;;
+  malformed) echo null;;
+  warning) echo true; echo 'unexpected warning' >&2;;
+  extra_blank) printf 'true\n\n';;
+  missing_extra_blank) printf 'release not found\n\n' >&2; exit 1;;
+  missing_output) echo true; echo 'release not found' >&2; exit 1;;
+esac
+`)
+  const guard = step.run
+    .replaceAll('${{ steps.version.outputs.notes }}', 'synthetic-notes.md')
+    .replaceAll('${{ steps.version.outputs.prerelease }}', 'false')
+  writeFileSync(join(directory, 'guard.sh'), guard)
+  const result = spawnSync(bash, ['-c', 'chmod +x "$MOCK_BIN/gh"; export PATH="$MOCK_BIN:$PATH"; bash "$MOCK_BIN/guard.sh"'], {
+    encoding: 'utf8',
+    env: { ...process.env, MOCK_BIN: shellPath(directory), MOCK_LOG: shellPath(log),
+      RUNNER_TEMP: shellPath(directory), SCENARIO: scenario, GH_TOKEN: 'fixture-only',
+      GITHUB_REF: ref, TAG: ref.replace(/^refs\/tags\//, ''), GITHUB_REPOSITORY: repository },
+  })
+  return { status: result.status, output: result.stdout + result.stderr,
+    log: existsSync(log) ? readFileSync(log, 'utf8') : '' }
+}
+
+describe('published release guard', () => {
+  it.each(['draft', 'missing'])('permits %s without a release write or repeated read', scenario => {
+    const result = releaseGuard(scenario)
+    expect(result.status, result.output).toBe(0)
+    expect(result.log.trim().split('\n')).toHaveLength(1)
+    expect(result.output).not.toContain('WRITE_ATTEMPT')
+  })
+  it('refuses to rebuild an already published release', () => {
+    const result = releaseGuard('published')
+    expect(result.status, result.output).not.toBe(0)
+    expect(result.output).toContain('already published; refusing to rebuild')
+    expect(result.output).not.toContain('WRITE_ATTEMPT')
+  })
+  it('stops on access errors without trying a release write', () => {
+    const result = releaseGuard('denied')
+    expect(result.status).not.toBe(0)
+    expect(result.output).not.toContain('WRITE_ATTEMPT')
+  })
+  it.each(['auth_not_found', 'mixed_not_found', 'generic_404', 'network', 'server', 'limited', 'malformed', 'warning', 'extra_blank', 'missing_extra_blank', 'missing_output'])('fails closed on %s', scenario => {
+    const result = releaseGuard(scenario)
+    expect(result.status, result.output).not.toBe(0)
+    expect(result.output).not.toContain('WRITE_ATTEMPT')
+  })
+  it.each([
+    ['refs/heads/main', 'ugurkocde/IntuneGet'],
+    ['refs/tags/v0.8.6;echo unexpected', 'ugurkocde/IntuneGet'],
+    ['refs/tags/v0.8.6', 'example/Other'],
+  ])('rejects unbound repository or tag before the read', (ref, repository) => {
+    const result = releaseGuard('draft', ref, repository)
+    expect(result.status, result.output).not.toBe(0)
+    expect(result.log).toBe('')
   })
 })
