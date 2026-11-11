@@ -424,6 +424,28 @@ def contracts():
     sql(no_upload)
     sql((ROOT/'supabase/tests/qa_vt_upload_url_recovery.sql').read_text())
     print('PASS PG17 Defender pilot upload refusal, zero quota/evidence mutation, auth/hash/lease guards, hash lookup and unrelated upload recovery')
+    static_scan = (ROOT/'supabase/tests/qa_reader_static_scan_reservation.sql').read_text()
+    before = sql(static_scan, check=False)
+    assert before.returncode != 0 and 'Reader scan-only reservation unavailable' in before.stderr
+    static_patch = migration('20261111044500_qa_reader_static_scan_reservation')
+    for signature, production_pin in (
+        ('reserve_qa_vt_candidate_request(text,uuid,text,text,uuid)',
+         'd82f5cd1df5c869f330f267988052c6c9d0bd2f82a705d4430fcb41b3d19455c'),
+        ('report_qa_vt_candidate_rate_limit(text,uuid,uuid,timestamptz)',
+         'ffaaf313f296124c509c6e0bd38c2827df2a54a3a403488eb723ca296bb89e7f'),
+    ):
+        assert static_patch.count(production_pin) == 1
+        fixture_pin = value("select encode(extensions.digest(pg_get_functiondef(" +
+                            literal('public.' + signature) + "::regprocedure),'sha256'),'hex')")
+        static_patch = static_patch.replace(production_pin, fixture_pin)
+    sql(static_patch)
+    sql(static_scan)
+    # Replacing an already changed source must fail, including atomically.
+    repeated = sql(static_patch, check=False)
+    assert repeated.returncode != 0 and 'Reader scan-only source pin mismatch' in repeated.stderr
+    sql(no_upload)
+    sql((ROOT/'supabase/tests/qa_vt_upload_url_recovery.sql').read_text())
+    print('PASS PG17 Reader one-shot scan reservation, deadline/binding/hold/cache refusals, shared429 backoff, immutable candidate/hold/ACL and unchanged ordinary upload guards')
     sql(migration('20261018011340_qa_vt_result_record_refresh'))
     refresh = (ROOT/'supabase/tests/qa_vt_analysis_record_refresh.sql').read_text()
     before = sql(refresh, check=False)
