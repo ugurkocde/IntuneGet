@@ -104,6 +104,41 @@ describe('cleanup stale jobs cron', () => {
     state.getWorkflowRun.mockResolvedValue({ status: 'queued' });
   });
 
+  it('recovers an eligible job ahead of a null-start Store upload using the real query builder', async () => {
+    const { createClient } = await vi.importActual<typeof import('@supabase/supabase-js')>('@supabase/supabase-js');
+    const { reconcileRunnerLosses } = await import('@/lib/runner-loss-reconciliation');
+    const started = new Date(Date.now() - 15 * 60_000).toISOString();
+    const eligible = { id: '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7', status: 'packaging', github_run_id: null,
+      packaging_started_at: started, updated_at: started, infrastructure_retry_count: 0, infrastructure_retry_run_id: null };
+    const store = { ...eligible, id: '11111111-1111-4111-8111-111111111111', status: 'uploading', packaging_started_at: null };
+    const writes: Array<{ filters: URLSearchParams; patch: unknown }> = [];
+    const requests: URL[] = [];
+    const fixtureFetch: typeof fetch = async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      requests.push(url);
+      if (init?.method === 'PATCH') {
+        writes.push({ filters: url.searchParams, patch: JSON.parse(String(init.body)) });
+        return Response.json([{ id: eligible.id }]);
+      }
+      const runFilter = url.searchParams.get('github_run_id');
+      if (runFilter === 'not.is.null' || runFilter === 'eq.42') return Response.json([]);
+      // PostgreSQL descending order puts the null first. Apply the server
+      // filter before LIMIT, so an eligible row behind it remains reachable.
+      const rows = [store, eligible].filter(row => url.searchParams.get('packaging_started_at') !== 'not.is.null' || row.packaging_started_at !== null);
+      return Response.json(rows.slice(0, Number(url.searchParams.get('limit'))));
+    };
+    const client = createClient('https://example.supabase.co', 'fixture-only', {
+      global: { fetch: fixtureFetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    state.findPackagingWorkflowRun.mockResolvedValue({ id: 42 });
+    expect(await reconcileRunnerLosses(client)).toMatchObject({ reconciled: 1, deferred: false });
+    expect(state.findPackagingWorkflowRun).toHaveBeenCalledWith(eligible.id, started, expect.any(Object), expect.any(Number));
+    expect(writes).toHaveLength(1);
+    expect(writes[0].filters.get('id')).toBe('eq.' + eligible.id);
+    expect(writes[0].patch).toEqual({ github_run_id: '42', github_run_url: 'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/42' });
+    expect(requests.find(url => url.searchParams.get('github_run_id') === 'is.null')?.searchParams.get('packaging_started_at')).toBe('not.is.null');
+  });
+
   it('binds one exact recovered identity without changing status or redispatching', async () => {
     state.staleJobs = [];
     const started = new Date(Date.now() - 15 * 60_000).toISOString();

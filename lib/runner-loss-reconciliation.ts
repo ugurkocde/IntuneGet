@@ -87,6 +87,7 @@ export async function reconcileRunnerLosses(supabase: SupabaseClient): Promise<{
     .select('id,status,github_run_id,updated_at,packaging_started_at,infrastructure_retry_count,infrastructure_retry_run_id')
     .in('status', ['packaging', 'uploading']).is('github_run_id', null)
     .is('intune_app_id', null).is('cancelled_at', null).is('archived_at', null)
+    .not('packaging_started_at', 'is', null)
     .lt('updated_at', cutoff).order('packaging_started_at', { ascending: false }).limit(1);
   if (missingError || !missing?.length || Date.now() >= deadline) return result;
   const job = missing[0];
