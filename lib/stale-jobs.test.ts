@@ -39,6 +39,29 @@ describe('keepActuallyStaleJobs', () => {
     expect(await keepActuallyStaleJobs([job()])).toHaveLength(1);
   });
 
+  it('checks the authenticated owner instead of a different captured run', async () => {
+    github.getWorkflowRun.mockImplementation(async (id: number) => ({ status: id === 43 ? 'in_progress' : 'completed' }));
+    expect(await keepActuallyStaleJobs([job({ callback_run_id: '43' })])).toEqual([]);
+    expect(github.getWorkflowRun).toHaveBeenCalledWith(43);
+    expect(github.cancelWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it.each([80, 160])('never cancels a mismatched owner waiting for %s minutes', async minutes => {
+    github.getWorkflowRun.mockResolvedValue({ status: 'queued' });
+    const result = await keepActuallyStaleJobs([job({ callback_run_id: '43',
+      updated_at: new Date(Date.now() - minutes * 60_000).toISOString() })], { tenantsWithExecutingJobs: new Set() });
+    expect(result).toHaveLength(minutes >= 150 ? 1 : 0);
+    expect(github.getWorkflowRun).toHaveBeenCalledWith(43);
+    expect(github.cancelWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it('permits failure of a completed authenticated owner with a different capture', async () => {
+    github.getWorkflowRun.mockResolvedValue({ status: 'completed' });
+    expect(await keepActuallyStaleJobs([job({ callback_run_id: '43' })])).toHaveLength(1);
+    expect(github.getWorkflowRun).toHaveBeenCalledWith(43);
+    expect(github.cancelWorkflowRun).not.toHaveBeenCalled();
+  });
+
   it('leaves queued runs alone when the caller cannot tell whether they wait legitimately', async () => {
     github.getWorkflowRun.mockResolvedValue({ status: 'queued' });
     expect(await keepActuallyStaleJobs([job()])).toEqual([]);

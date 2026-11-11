@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   staleJobs: [] as Array<Record<string, unknown>>,
   executingJobs: [] as Array<Record<string, unknown>>,
   queries: [] as Array<{ kind: 'select' | 'update'; filters: Filter[]; data?: Record<string, unknown> }>,
+  updateErrorOwner: undefined as string | undefined,
   getWorkflowRun: vi.fn(),
   cancelWorkflowRun: vi.fn(),
 }));
@@ -47,6 +48,9 @@ vi.mock('@supabase/supabase-js', () => ({
           if (kind === 'update') {
             if (!state.changedRows) return resolve({ data: [], error: null });
             const ownerFence = entry.filters.find(([op, column]) => ['eq', 'is'].includes(op) && column === 'callback_run_id');
+            if (state.updateErrorOwner !== undefined && ownerFence?.[2] === state.updateErrorOwner) {
+              return resolve({ data: null, error: { message: 'fixture write failure' } });
+            }
             if (state.callbackOwnerAtWrite !== undefined && ownerFence && ownerFence[2] !== state.callbackOwnerAtWrite) {
               return resolve({ data: [], error: null });
             }
@@ -86,6 +90,8 @@ describe('cleanup stale jobs cron', () => {
     state.queries = [];
     state.localPackager = false;
     state.changedRows = true;
+    state.updateErrorOwner = undefined;
+    state.callbackOwnerAtWrite = undefined;
     state.cleanup.mockReset();
     state.recentJobs = [];
     state.missingJobs = [];
@@ -275,6 +281,50 @@ describe('cleanup stale jobs cron', () => {
     const update = state.queries.find((query) => query.kind === 'update');
     expect(update?.data).toMatchObject({ status: 'failed' });
     expect(update?.filters).toContainEqual(['lt', 'updated_at', expect.any(String)]);
+    expect(update?.filters).toContainEqual(['is', 'callback_run_id', null]);
+  });
+
+  it('does not fail a stale row based on a different captured run while its callback owner is active', async () => {
+    state.staleJobs[0].callback_run_id = '43';
+    state.staleJobs[0].is_auto_update = true;
+    state.getWorkflowRun.mockImplementation(async (id: number) => ({ status: id === 43 ? 'in_progress' : 'completed' }));
+    expect(await (await call()).json()).toMatchObject({ cleaned: 0 });
+    expect(state.getWorkflowRun).not.toHaveBeenCalledWith(37642391824);
+    expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+    expect(state.cleanup).not.toHaveBeenCalled();
+    expect(state.queries.some(query => query.kind === 'update')).toBe(false);
+  });
+
+  it.each([null, '42'])('does not fail a stale row when its observed callback owner %s changes without a clock change', async owner => {
+    state.staleJobs[0].callback_run_id = owner;
+    state.staleJobs[0].is_auto_update = true;
+    state.callbackOwnerAtWrite = '43';
+    state.getWorkflowRun.mockResolvedValue({ status: 'completed' });
+    expect(await (await call()).json()).toMatchObject({ cleaned: 0 });
+    expect(state.cleanup).not.toHaveBeenCalled();
+  });
+
+  it('fails a completed callback owner only with that owner and revision still current', async () => {
+    state.staleJobs[0].callback_run_id = '43';
+    state.staleJobs[0].is_auto_update = true;
+    state.getWorkflowRun.mockResolvedValue({ status: 'completed' });
+    expect(await (await call()).json()).toMatchObject({ cleaned: 1 });
+    const update = state.queries.find(query => query.kind === 'update')!;
+    expect(update.filters).toContainEqual(['eq', 'callback_run_id', '43']);
+    expect(update.filters).toContainEqual(['eq', 'updated_at', state.staleJobs[0].updated_at]);
+    expect(state.getWorkflowRun).toHaveBeenCalledWith(43);
+    expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+    expect(state.cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up successfully failed rows even if another owner update returns an error', async () => {
+    state.staleJobs[0].is_auto_update = true;
+    state.staleJobs.push({ ...state.staleJobs[0], id: 'owned', callback_run_id: '43' });
+    state.updateErrorOwner = '43';
+    state.getWorkflowRun.mockResolvedValue({ status: 'completed' });
+    expect((await call()).status).toBe(500);
+    expect(state.cleanup).toHaveBeenCalledTimes(1);
+    expect(state.cleanup).toHaveBeenCalledWith('stuck', 'failed', expect.any(String));
   });
 
   it('keeps a queued run waiting behind a tenant job that is making progress', async () => {
@@ -295,6 +345,7 @@ describe('once-only runner recovery integration', () => {
     state.changedRows = true;
     state.callbackOwnerAtWrite = undefined;
     state.cleanup.mockReset();
+    state.updateErrorOwner = undefined;
     state.cancelWorkflowRun.mockReset();
     state.staleJobs = [];
     state.executingJobs = [];

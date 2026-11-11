@@ -164,6 +164,18 @@ describe('retired customer run callback fences', () => {
       { status: 'packaging', updated_at: fresh.updated_at, callback_run_id: '43' });
     expect(state.history).toHaveBeenCalledTimes(1);
   });
+  it.each(['deployed', 'failed', 'duplicate_skipped'])('applies %s after same-run progress advances to uploading', async status => {
+    const fresh = { ...state.job, status: 'uploading', updated_at: '2026-11-10T10:00:01Z' };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh);
+    state.update.mockResolvedValueOnce(null).mockImplementationOnce(async (_id, patch) => ({ ...fresh, ...patch }));
+    expect(await (await send('43', '43-1', status, { intuneAppId: 'fixture-app' })).json())
+      .toMatchObject({ success: true, job: { status } });
+    expect(state.update).toHaveBeenLastCalledWith(jobId, expect.objectContaining({ status }),
+      { status: 'uploading', updated_at: fresh.updated_at, callback_run_id: '43' });
+    expect(state.completed).toHaveBeenCalledTimes(1);
+    expect(state.cleanup).toHaveBeenCalledTimes(1);
+    expect(state.history).toHaveBeenCalledTimes(status === 'deployed' ? 1 : 0);
+  });
   it('does not acknowledge an unapplied terminal callback after two lost writes', async () => {
     state.job.callback_run_id = null;
     const fresh = { ...state.job, callback_run_id: '43', updated_at: '2026-11-10T10:00:01Z' };
@@ -214,13 +226,24 @@ describe('retired customer run callback fences', () => {
     expect(state.history).toHaveBeenCalledTimes(status === 'deployed' ? 1 : 0);
   });
   it.each([
-    { status: 'uploading' },
+    { status: 'uploading', callback_run_id: '44' },
+    { status: 'uploading', infrastructure_retry_run_id: '43' },
+    { status: 'uploading', infrastructure_retry_run_id: '44' },
     { github_run_id: '44' },
     { infrastructure_retry_run_id: '44' },
   ])('does not rescue a terminal callback after execution state changes: %j', async change => {
     state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce({ ...state.job, ...change, updated_at: '2026-11-10T10:00:11Z' });
     state.update.mockResolvedValueOnce(null);
     expect(await (await send('43', '43-1', 'deployed', { heartbeatAt: '2026-11-10T10:00:10Z' })).json()).toMatchObject({ ignored: true });
+    expect(state.update).toHaveBeenCalledTimes(1);
+    expect(state.history).not.toHaveBeenCalled();
+    expect(state.completed).not.toHaveBeenCalled();
+  });
+  it('does not rescue changed progress without a confirmed callback owner', async () => {
+    state.job.callback_run_id = null;
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce({ ...state.job, status: 'uploading' });
+    state.update.mockResolvedValueOnce(null);
+    expect(await (await send('43', '43-1', 'deployed')).json()).toMatchObject({ success: false, ignored: true });
     expect(state.update).toHaveBeenCalledTimes(1);
     expect(state.history).not.toHaveBeenCalled();
     expect(state.completed).not.toHaveBeenCalled();

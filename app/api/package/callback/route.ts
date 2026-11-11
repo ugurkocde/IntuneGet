@@ -150,12 +150,13 @@ export async function POST(request: NextRequest) {
 
     if (!updatedJob) {
       let latestJob = await db.jobs.getById(data.jobId);
-      // A same-status write advances the database clock beyond the runner's
-      // heartbeat. Rescue only the unchanged execution state, then fence the
-      // second write by the fresh revision before running terminal side effects.
+      // Same-run progress can advance the status and database clock before a
+      // terminal callback lands. Recheck eligibility and fence the retry by
+      // the fresh owner and revision before running terminal side effects.
       if (latestJob && (terminalPackageStatuses.has(data.status)
         || (!currentJob.callback_run_id && !latestJob.callback_run_id))
-        && latestJob.status === currentJob.status
+        && (latestJob.status === currentJob.status
+          || (terminalPackageStatuses.has(data.status) && latestJob.callback_run_id === incomingRun))
         && ((latestJob.callback_run_id ?? null) === (currentJob.callback_run_id ?? null)
           || (!currentJob.callback_run_id && latestJob.callback_run_id === incomingRun))
         && (!currentJob.callback_run_id || latestJob.github_run_id === currentJob.github_run_id)

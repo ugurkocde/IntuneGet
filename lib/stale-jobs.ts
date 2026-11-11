@@ -21,6 +21,7 @@ export const STALE_JOB_ERROR_MESSAGE = `Job timed out after ${STALE_JOB_TIMEOUT_
 
 interface ReconciliableJob {
   github_run_id?: string | null;
+  callback_run_id?: string | null;
   tenant_id?: string | null;
   updated_at: string;
 }
@@ -54,21 +55,27 @@ export async function keepActuallyStaleJobs<T extends ReconciliableJob>(
   const now = Date.now();
   const doubleTimeoutMs = STALE_JOB_TIMEOUT_MINUTES * 2 * 60 * 1000;
   const results = await Promise.all(jobs.map(async (job) => {
-    if (!job.github_run_id) return job;
+    const owner = job.callback_run_id ?? null;
+    const runId = owner ?? job.github_run_id;
+    if (!runId) return job;
+    const mismatchedCapture = owner !== null && owner !== job.github_run_id;
     try {
-      const run = await getWorkflowRun(Number(job.github_run_id));
+      const run = await getWorkflowRun(Number(runId));
       if (run.status === 'in_progress') return null;
       if (!UNSTARTED_WORKFLOW_RUN_STATUSES.includes(run.status)) return job;
+      // The signed callback identifies the owner, but does not prove where a
+      // different captured run came from. Never cancel either run on mismatch.
+      if (mismatchedCapture) return now - Date.parse(job.updated_at) >= doubleTimeoutMs ? job : null;
 
       const executing = options.tenantsWithExecutingJobs;
       if (!executing || !job.tenant_id || executing.has(job.tenant_id)) return null;
-      const result = await cancelWorkflowRun(job.github_run_id);
+      const result = await cancelWorkflowRun(runId);
       if (result.status === 'error') {
-        console.warn(`Could not cancel stuck workflow run ${job.github_run_id}: ${result.message}`);
+        console.warn(`Could not cancel stuck workflow run ${runId}: ${result.message}`);
       }
       return job;
     } catch (error) {
-      console.warn(`Could not reconcile workflow run ${job.github_run_id}:`, error);
+      console.warn(`Could not reconcile workflow run ${runId}:`, error);
       return now - new Date(job.updated_at).getTime() >= doubleTimeoutMs ? job : null;
     }
   }));
