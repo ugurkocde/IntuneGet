@@ -3,7 +3,7 @@ import { COMPATIBILITY_BATCH_LIMIT } from '@/lib/package-eligibility';
 const mocks = vi.hoisted(() => ({ client: vi.fn(), dispatch: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase', () => ({ createServerClient: mocks.client }));
-vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: mocks.dispatch }));
+vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: mocks.dispatch, dispatchReaderStaticScan: async () => false }));
 vi.mock('@/lib/qa/curated-queue', () => ({ dispatchCuratedQueue: async () => ({ handled: false }) }));
 vi.mock('@/lib/qa/live-session-data', () => ({ loadQaLiveCuratedSnapshot: async () => null }));
 vi.mock('@/lib/qa/github-actions-health', () => ({ getGitHubActionsHealth: async () => ({ operational: true }) }));
