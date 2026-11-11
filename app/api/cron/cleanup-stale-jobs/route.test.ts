@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   changedRows: true,
   cleanup: vi.fn(),
   recentJobs: [] as Array<Record<string, unknown>>,
+  missingJobs: [] as Array<Record<string, unknown>>,
+  findPackagingWorkflowRun: vi.fn(),
   getWorkflowRunAttemptJobs: vi.fn(),
   getCheckRunAnnotations: vi.fn(),
   staleJobs: [] as Array<Record<string, unknown>>,
@@ -21,6 +23,7 @@ vi.mock('@/lib/github-actions', () => ({
   WorkflowReadRateLimitError: class extends Error {},
   isGitHubActionsConfigured: () => true,
   getWorkflowRun: state.getWorkflowRun,
+  findPackagingWorkflowRun: state.findPackagingWorkflowRun,
   getWorkflowRunAttemptJobs: state.getWorkflowRunAttemptJobs,
   getCheckRunAnnotations: state.getCheckRunAnnotations,
   getGitHubActionsConfig: () => ({ owner: 'ugurkocde', workflowsRepo: 'IntuneGet-Workflows', workflowFile: 'package-intunewin.yml', ref: 'main' }),
@@ -46,7 +49,8 @@ vi.mock('@supabase/supabase-js', () => ({
             const single = entry.filters.find(([op, column]) => op === 'eq' && column === 'id')?.[2];
             return resolve({ data: ids ? ids.map((id) => ({ id })) : [{ id: single }], error: null });
           }
-          if (entry.filters.some(([op, column]) => op === 'eq' && column === 'github_run_id')) return resolve({ data: state.recentJobs.map(j => ({ id: j.id })), error: null });
+          if (entry.filters.some(([op, column]) => op === 'is' && column === 'github_run_id')) return resolve({ data: state.missingJobs, error: null });
+          if (entry.filters.some(([op, column]) => op === 'eq' && column === 'github_run_id')) return resolve({ data: state.recentJobs.filter(j => j.github_run_id === entry.filters.find(([op, column]) => op === 'eq' && column === 'github_run_id')?.[2]).map(j => ({ id: j.id })), error: null });
           if (entry.filters.some(([op, column]) => op === 'not' && column === 'github_run_id')) return resolve({ data: state.recentJobs, error: null });
           const isExecutingLookup = entry.filters.some(([op, column]) => op === 'in' && column === 'tenant_id');
           return resolve({ data: isExecutingLookup ? state.executingJobs : state.staleJobs, error: null });
@@ -79,6 +83,8 @@ describe('cleanup stale jobs cron', () => {
     state.changedRows = true;
     state.cleanup.mockReset();
     state.recentJobs = [];
+    state.missingJobs = [];
+    state.findPackagingWorkflowRun.mockReset().mockResolvedValue(null);
     state.getWorkflowRunAttemptJobs.mockReset();
     state.getCheckRunAnnotations.mockReset();
     state.executingJobs = [];
@@ -96,6 +102,39 @@ describe('cleanup stale jobs cron', () => {
       is_auto_update: false,
     }];
     state.getWorkflowRun.mockResolvedValue({ status: 'queued' });
+  });
+
+  it('binds one exact recovered identity without changing status or redispatching', async () => {
+    state.staleJobs = [];
+    const started = new Date(Date.now() - 15 * 60_000).toISOString();
+    state.missingJobs = [{ id: '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7', status: 'packaging',
+      github_run_id: null, packaging_started_at: started, updated_at: started,
+      infrastructure_retry_count: 0, infrastructure_retry_run_id: null }];
+    state.findPackagingWorkflowRun.mockResolvedValue({ id: 42 });
+    expect(await (await call()).json()).toMatchObject({ reconciled: 1 });
+    const update = state.queries.find(q => q.kind === 'update');
+    expect(update?.data).toEqual({ github_run_id: '42', github_run_url: 'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/42' });
+    expect(update?.filters).toEqual(expect.arrayContaining([
+      ['is', 'github_run_id', null], ['eq', 'status', 'packaging'], ['eq', 'updated_at', started],
+      ['eq', 'packaging_started_at', started], ['eq', 'infrastructure_retry_count', 0], ['is', 'infrastructure_retry_run_id', null],
+    ]));
+    expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+    expect(state.cleanup).not.toHaveBeenCalled();
+  });
+
+  it.each(['retired', 'shared', 'lost revision', 'not found', 'quota'])('does not bind an unsafe missing identity: %s', async reason => {
+    state.staleJobs = [];
+    const started = new Date(Date.now() - 15 * 60_000).toISOString();
+    state.missingJobs = [{ id: '4a4f09e2-cc56-4ad2-a264-38b8f91e79c7', status: 'packaging', github_run_id: null,
+      packaging_started_at: started, updated_at: started, infrastructure_retry_count: 1,
+      infrastructure_retry_run_id: reason === 'retired' ? '42' : '41' }];
+    state.findPackagingWorkflowRun.mockResolvedValue(reason === 'not found' ? null : { id: 42 });
+    if (reason === 'shared') state.recentJobs = [{ id: 'another-job', github_run_id: '42' }];
+    if (reason === 'lost revision') state.changedRows = false;
+    if (reason === 'quota') state.findPackagingWorkflowRun.mockRejectedValue(new WorkflowReadRateLimitError('60', null));
+    expect(await (await call()).json()).toMatchObject({ reconciled: 0, deferred: reason === 'quota' });
+    expect(state.queries.filter(q => q.kind === 'update')).toHaveLength(reason === 'lost revision' ? 1 : 0);
+    expect(state.cleanup).not.toHaveBeenCalled();
   });
 
   it('reports an exact terminal run before the 75 minute stale window', async () => {
