@@ -1,4 +1,5 @@
-import { knownUnavailableDisposition } from '@/lib/unsupported-dependency';
+import { knownUnavailableDisposition, unsupportedDependencyIdentifier } from '@/lib/unsupported-dependency';
+import { COMPATIBILITY_BATCH_LIMIT, PACKAGE_VERSION_UNAVAILABLE_MESSAGE, packageCompatibilityKey } from '@/lib/package-eligibility';
 import type { PackagingJob } from '@/lib/db/types';
 import type { CustomerQaStatus } from '@/types/customer-qa';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
@@ -43,7 +44,7 @@ function storedAvailabilityStatus(job: PackagingJob): CustomerQaStatus | null {
 
 // Called only with jobs already authorized by the package GET route. These
 // SELECTs supply display evidence; none of their results decide a write.
-export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
+async function enrichExistingCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
   jobs = jobs.map(job => {
     if (job.status === 'blocked_upstream') return { ...job, qa_status: customerUpstreamStatus(job.error_code) };
     const availability = storedAvailabilityStatus(job);
@@ -118,4 +119,47 @@ export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]):
     // Never fail the authorized job list or expose raw database/provider errors.
     return fallback();
   }
+}
+
+/** Current availability only: this lookup never attributes an old failure to a dependency. */
+async function annotateCurrentDependency<T extends PackagingJob>(jobs: Array<T & { qa_status?: CustomerQaStatus }>) {
+  const eligible = jobs.filter(job => job.status === 'qa_failed' && job.error_code === 'QA_FAILED_EXECUTION_PROFILE'
+    && job.qa_candidate_id === null && job.error_message === PACKAGE_VERSION_UNAVAILABLE_MESSAGE
+    && job.qa_status?.category === 'unavailable' && job.qa_status.reasonCode === 'VERSION_UNAVAILABLE'
+    && job.winget_id.trim() && job.version.trim() && typeof job.architecture === 'string'
+    && ['x64', 'x86', 'arm64'].includes(job.architecture.trim().toLowerCase())
+    && digest.test(job.installer_sha256 ?? ''));
+  if (!eligible.length || eligible.length > 50 || !isSupabaseServerConfigured()) return jobs;
+  const tuple = (job: PackagingJob) => ({ wingetId: job.winget_id, version: job.version,
+    architecture: job.architecture!, installerSha256: job.installer_sha256! });
+  try {
+    const unique = (values: string[]) => [...new Set(values)];
+    const blocks = await createServerClient().from('qa_package_blocks')
+      .select('winget_id,version,architecture,installer_sha256,block_code,detail')
+      .in('winget_id', unique(eligible.map(job => job.winget_id.trim())))
+      .in('version', unique(eligible.map(job => job.version.trim())))
+      .in('architecture', unique(eligible.map(job => job.architecture!.trim().toLowerCase())) as Array<'x64' | 'x86' | 'arm64'>)
+      .in('installer_sha256', unique(eligible.map(job => job.installer_sha256!.toUpperCase())))
+      .limit(COMPATIBILITY_BATCH_LIMIT);
+    if (blocks.error || (blocks.data?.length ?? 0) >= COMPATIBILITY_BATCH_LIMIT) return jobs;
+    const byKey = new Map<string, NonNullable<typeof blocks.data>[number] | null>();
+    for (const block of blocks.data ?? []) {
+      const key = packageCompatibilityKey({ wingetId: block.winget_id, version: block.version,
+        architecture: block.architecture, installerSha256: block.installer_sha256 });
+      byKey.set(key, byKey.has(key) ? null : block);
+    }
+    return jobs.map(job => {
+      if (!eligible.includes(job)) return job;
+      const block = byKey.get(packageCompatibilityKey(tuple(job)));
+      const identifier = block && unsupportedDependencyIdentifier({ code: block.block_code, detail: block.detail });
+      return identifier ? { ...job, qa_status: { category: 'unavailable' as const, reasonCode: 'VERSION_UNAVAILABLE' as const,
+        message: `This app version currently requires ${identifier}, which is not supported for automated deployment.`, nextEventAt: null } } : job;
+    });
+  } catch {
+    return jobs;
+  }
+}
+
+export async function enrichCustomerQaStatus<T extends PackagingJob>(jobs: T[]): Promise<Array<T & { qa_status?: CustomerQaStatus }>> {
+  return annotateCurrentDependency(await enrichExistingCustomerQaStatus(jobs));
 }
