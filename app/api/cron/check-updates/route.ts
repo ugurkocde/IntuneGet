@@ -217,10 +217,12 @@ async function processAutoUpdates(
       installerInfo.currentIntuneAppId =
         latestUploadForCron?.intune_app_id || update.intune_app_id;
 
-      // Trigger the auto-update
+      // Scheduled work enters the normal guarded resume path. The manual
+      // trigger keeps its existing inline dispatch and default queue state.
       const triggerResult = await autoUpdateTrigger.triggerAutoUpdate(
         policy,
-        installerInfo
+        installerInfo,
+        { admitViaQaResume: true }
       );
 
       if (triggerResult.success) {

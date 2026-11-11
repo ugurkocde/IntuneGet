@@ -81,6 +81,11 @@ export async function GET(request: Request) {
     }
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = job.package_config as unknown as Win32CartItem;
+    // Automatic updates store detection rules on the job, while cart jobs
+    // carry them inside package_config. Preserve an explicit cart choice.
+    if (job.is_auto_update && item && item.detectionRules == null && job.detection_rules != null) {
+      item = { ...item, detectionRules: job.detection_rules as unknown as Win32CartItem['detectionRules'] };
+    }
     let observed = {
       qa_candidate_id: job.qa_candidate_id,
       installer_sha256: job.installer_sha256,
@@ -565,6 +570,9 @@ export async function GET(request: Request) {
 
     try {
       const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
+      const autoUpdate = job.is_auto_update ? item as Win32CartItem & {
+        sourceIntuneAppId?: string; autoSupersede?: boolean; supersedenceType?: string;
+      } : undefined;
       const workflowInputs: WorkflowInputs = {
         qaOverride: skipCustomerQa,
         jobId: job.id,
@@ -601,6 +609,11 @@ export async function GET(request: Request) {
         relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
         installScope: (item.installScope || job.install_scope) === 'user' ? 'user' : 'machine',
         forceCreate: item.forceCreate,
+        sourceIntuneAppId: autoUpdate?.sourceIntuneAppId,
+        carryOverAssignments: autoUpdate?.assignmentMigration?.carryOverAssignments,
+        removeAssignmentsFromPreviousApp: autoUpdate?.assignmentMigration?.removeAssignmentsFromPreviousApp,
+        autoSupersede: autoUpdate?.autoSupersede,
+        supersedenceType: autoUpdate?.supersedenceType,
         sourceType: item.sourceType,
         curatedReleaseId: item.curatedReleaseId,
       };
