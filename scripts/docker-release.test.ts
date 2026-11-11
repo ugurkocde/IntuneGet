@@ -142,6 +142,8 @@ describe('release gates', () => {
     const workflow = parse(readFileSync('.github/workflows/release.yml', 'utf8'))
     expect(workflow.on).toEqual({ push: { tags: ['v*'] } })
     expect(jobs.prepare.permissions).toEqual({ contents: 'read' })
+    const guard = jobs.prepare.steps.find((row: { run?: string }) => row.run?.includes('gh release view'))
+    expect(guard.env).toEqual({ GH_TOKEN: '${{ github.token }}', TAG: '${{ github.ref_name }}' })
     for (const [name, job] of Object.entries(jobs) as [string, { permissions?: Record<string, string> }][]) {
       expect(job.permissions?.contents).not.toBe('write')
       if (job.permissions?.['id-token'] === 'write') expect(name).toBe('secure')
@@ -158,7 +160,7 @@ describe('release gates', () => {
   })
 })
 
-function releaseGuard(scenario: string) {
+function releaseGuard(scenario: string, ref = 'refs/tags/v0.8.6', repository = 'ugurkocde/IntuneGet') {
   const workflow = parse(readFileSync('.github/workflows/release.yml', 'utf8'))
   const step = workflow.jobs.prepare.steps.find((row: { run?: string }) => row.run?.includes('gh release view'))
   const directory = mkdtempSync(join(tmpdir(), 'intuneget-release-probe-'))
@@ -173,6 +175,17 @@ case "$SCENARIO" in
   published) echo false;;
   missing) echo 'release not found' >&2; exit 1;;
   denied) echo 'HTTP 403: Forbidden' >&2; exit 1;;
+  auth_not_found) echo 'release not found' >&2; exit 4;;
+  mixed_not_found) printf 'HTTP 403: Forbidden\nrelease not found\n' >&2; exit 1;;
+  generic_404) echo 'HTTP 404: Not Found' >&2; exit 1;;
+  network) echo 'network unavailable' >&2; exit 1;;
+  server) echo 'HTTP 503: Service Unavailable' >&2; exit 1;;
+  limited) echo 'HTTP 429: Too Many Requests' >&2; exit 1;;
+  malformed) echo null;;
+  warning) echo true; echo 'unexpected warning' >&2;;
+  extra_blank) printf 'true\n\n';;
+  missing_extra_blank) printf 'release not found\n\n' >&2; exit 1;;
+  missing_output) echo true; echo 'release not found' >&2; exit 1;;
 esac
 `)
   const guard = step.run
@@ -183,7 +196,7 @@ esac
     encoding: 'utf8',
     env: { ...process.env, MOCK_BIN: shellPath(directory), MOCK_LOG: shellPath(log),
       RUNNER_TEMP: shellPath(directory), SCENARIO: scenario, GH_TOKEN: 'fixture-only',
-      GITHUB_REF: 'refs/tags/v0.8.6', GITHUB_REPOSITORY: 'ugurkocde/IntuneGet' },
+      GITHUB_REF: ref, TAG: ref.replace(/^refs\/tags\//, ''), GITHUB_REPOSITORY: repository },
   })
   return { status: result.status, output: result.stdout + result.stderr,
     log: existsSync(log) ? readFileSync(log, 'utf8') : '' }
@@ -206,5 +219,19 @@ describe('published release guard', () => {
     const result = releaseGuard('denied')
     expect(result.status).not.toBe(0)
     expect(result.output).not.toContain('WRITE_ATTEMPT')
+  })
+  it.each(['auth_not_found', 'mixed_not_found', 'generic_404', 'network', 'server', 'limited', 'malformed', 'warning', 'extra_blank', 'missing_extra_blank', 'missing_output'])('fails closed on %s', scenario => {
+    const result = releaseGuard(scenario)
+    expect(result.status, result.output).not.toBe(0)
+    expect(result.output).not.toContain('WRITE_ATTEMPT')
+  })
+  it.each([
+    ['refs/heads/main', 'ugurkocde/IntuneGet'],
+    ['refs/tags/v0.8.6;echo unexpected', 'ugurkocde/IntuneGet'],
+    ['refs/tags/v0.8.6', 'example/Other'],
+  ])('rejects unbound repository or tag before the read', (ref, repository) => {
+    const result = releaseGuard('draft', ref, repository)
+    expect(result.status, result.output).not.toBe(0)
+    expect(result.log).toBe('')
   })
 })
