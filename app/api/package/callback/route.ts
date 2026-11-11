@@ -18,6 +18,7 @@ import {
   shouldApplyCallback,
   isRetiredRunCallback,
   terminalPackageStatuses,
+  type PackageJobStatus,
 } from '@/lib/package-callback';
 
 export async function POST(request: NextRequest) {
@@ -152,9 +153,11 @@ export async function POST(request: NextRequest) {
       // A same-status write advances the database clock beyond the runner's
       // heartbeat. Rescue only the unchanged execution state, then fence the
       // second write by the fresh revision before running terminal side effects.
-      if (latestJob && (terminalPackageStatuses.has(data.status) || !currentJob.callback_run_id)
+      if (latestJob && (terminalPackageStatuses.has(data.status)
+        || (!currentJob.callback_run_id && !latestJob.callback_run_id))
         && latestJob.status === currentJob.status
-        && (latestJob.callback_run_id ?? null) === (currentJob.callback_run_id ?? null)
+        && ((latestJob.callback_run_id ?? null) === (currentJob.callback_run_id ?? null)
+          || (!currentJob.callback_run_id && latestJob.callback_run_id === incomingRun))
         && (!currentJob.callback_run_id || latestJob.github_run_id === currentJob.github_run_id)
         && latestJob.infrastructure_retry_run_id === currentJob.infrastructure_retry_run_id
         && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
@@ -169,7 +172,9 @@ export async function POST(request: NextRequest) {
       if (!updatedJob) {
         return NextResponse.json({
           success: latestJob?.callback_run_id === incomingRun
-            && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId),
+            && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
+            && (!terminalPackageStatuses.has(data.status)
+              || terminalPackageStatuses.has(latestJob.status as PackageJobStatus)),
           ignored: true,
           reason: latestJob?.callback_run_id && latestJob.callback_run_id !== incomingRun
             ? 'run_not_owner' : latestJob?.callback_run_id === incomingRun ? 'job_changed_during_callback' : 'ownership_unconfirmed',

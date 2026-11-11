@@ -153,6 +153,27 @@ describe('retired customer run callback fences', () => {
     expect(state.update).toHaveBeenCalledTimes(1);
     expect(state.completed).not.toHaveBeenCalled();
   });
+  it('applies a terminal callback after a concurrent progress callback claimed the same run', async () => {
+    state.job.callback_run_id = null;
+    const fresh = { ...state.job, callback_run_id: '43', updated_at: '2026-11-10T10:00:01Z' };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh);
+    state.update.mockResolvedValueOnce(null).mockImplementationOnce(async (_id, patch) => ({ ...fresh, ...patch }));
+    expect(await (await send('43', '43-1', 'deployed', { intuneAppId: 'fixture-app' })).json())
+      .toMatchObject({ success: true, job: { status: 'deployed' } });
+    expect(state.update).toHaveBeenLastCalledWith(jobId, expect.objectContaining({ status: 'deployed' }),
+      { status: 'packaging', updated_at: fresh.updated_at, callback_run_id: '43' });
+    expect(state.history).toHaveBeenCalledTimes(1);
+  });
+  it('does not acknowledge an unapplied terminal callback after two lost writes', async () => {
+    state.job.callback_run_id = null;
+    const fresh = { ...state.job, callback_run_id: '43', updated_at: '2026-11-10T10:00:01Z' };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh).mockResolvedValueOnce(fresh);
+    state.update.mockResolvedValue(null);
+    expect(await (await send('43', '43-1', 'deployed', { intuneAppId: 'fixture-app' })).json())
+      .toMatchObject({ success: false, job: { status: 'packaging' } });
+    expect(state.history).not.toHaveBeenCalled();
+    expect(state.completed).not.toHaveBeenCalled();
+  });
   it.each(['deployed', 'failed', 'duplicate_skipped'])('retries one eligible %s transition against a freshly read revision', async status => {
     const fresh = { ...state.job, updated_at: '2026-11-10T10:00:05Z' };
     state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh);
