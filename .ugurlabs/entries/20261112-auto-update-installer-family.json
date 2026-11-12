@@ -1,0 +1,5 @@
+{
+  "title": "Use matching installer switches for automatic updates",
+  "summary": "Automatic updates now keep installer arguments with the selected installer type when an app publishes multiple installer formats, preventing invalid installation commands.",
+  "type": "fixed"
+}

@@ -1214,6 +1214,11 @@ export async function getLatestInstallerInfo(
     };
   }
 
+  const rowType = versionInfo.installer_type?.trim().toLowerCase();
+  const selectedType = selectedManifestInstaller?.InstallerType?.trim().toLowerCase();
+  const rowSwitchesApply = !selectedType || rowType === selectedType ||
+    (!!rowType && ['msi', 'wix'].includes(selectedType) && ['msi', 'wix'].includes(rowType));
+
   const manifestInstaller = {
     ...(selectedManifestInstaller || {}),
     Architecture: (selectedManifestInstaller?.Architecture || architecture || 'x64'),
@@ -1224,11 +1229,11 @@ export async function getLatestInstallerInfo(
     NestedInstallerFiles: selectedManifestInstaller?.NestedInstallerFiles ||
       (nestedInstallerPath ? [{ RelativeFilePath: nestedInstallerPath }] : undefined),
     Scope: selectedManifestInstaller?.Scope || versionInfo.installer_scope || undefined,
-    // Current snapshots keep the manifest-level Silent value in silent_args
-    // and installer-level overrides (for example Custom) in each installer.
-    // Merge them per field just like a freshly fetched WinGet manifest.
+    // The flattened row describes one installer, not manifest-wide defaults.
+    // Only inherit its silent switch within the selected installer's family;
+    // installer-specific switches remain authoritative.
     InstallerSwitches: {
-      ...(versionInfo.silent_args ? { Silent: versionInfo.silent_args } : {}),
+      ...(versionInfo.silent_args && rowSwitchesApply ? { Silent: versionInfo.silent_args } : {}),
       ...(selectedManifestInstaller?.InstallerSwitches || {}),
     },
   } as WingetInstaller;
