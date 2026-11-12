@@ -456,7 +456,7 @@ describe('managed uninstall bounded diagnostics', () => {
 });
 
 function generateRegistryUninstallPackage(
-  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft' | 'msi' | 'zip',
+  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft' | 'msi' | 'wix' | 'zip',
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
   psadtConfig: unknown = {},
@@ -2583,6 +2583,54 @@ ${merge}
       expect(generated).not.toContain(
         "-ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'"
       );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'uses manifest MSI switches when a reviewed override belongs to an EXE',
+    () => {
+      for (const installerType of ['msi', 'wix'] as const) {
+        const generated = generateRegistryUninstallPackage(
+          installerType, 'Dropbox', [],
+          { reviewedInstallArgumentsOverride: '/NOLAUNCH', reviewedUninstallArguments: ['/S'] },
+          [], 'Dropbox.Dropbox', 'Dropbox', '270.3.3200',
+          'msiexec /x "{7E425BFB-1DEB-499F-8F3F-3522A6E98754}" /qn /norestart',
+          '/qn /norestart ALLUSERS=1'
+        );
+        expect(generated).toContain("Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=1'");
+        expect(generated).not.toMatch(/AdditionalArgumentList '[^']*NOLAUNCH/);
+      }
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'preserves a reviewed EXE override when its installer family remains executable',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe', 'Dropbox', [], { reviewedInstallArgumentsOverride: '/NOLAUNCH' }
+      );
+      expect(generated).toContain("-ArgumentList '/NOLAUNCH'");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'preserves reviewed MSI properties and supported quiet options',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'msi', 'MSI property contract', [],
+        { reviewedInstallArgumentsOverride: '/qb /norestart ALLUSERS=1 DESKTOPSHORTCUT=0' }
+      );
+      expect(generated).toContain("-AdditionalArgumentList '/norestart ALLUSERS=1 DESKTOPSHORTCUT=0'");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'refuses mixed MSI properties and unsupported reviewed arguments',
+    () => {
+      expect(() => generateRegistryUninstallPackage(
+        'msi', 'MSI property contract', [],
+        { reviewedInstallArgumentsOverride: 'ALLUSERS=2 /NOLAUNCH' }
+      )).toThrow(/reviewed Windows Installer argument override/);
     }
   );
 
