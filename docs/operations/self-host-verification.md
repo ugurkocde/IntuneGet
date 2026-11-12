@@ -1,5 +1,7 @@
 # Self-host verification runbook
 
+For publishing a server version, also complete the [Docker release completion checklist](docker-release-completion.md). A verified image alone does not complete GitHub Release publication.
+
 Use this to verify a self-hosted deployment end to end. It covers the Docker path and the
 SQLite mode, and records what was confirmed and what still needs a Docker daemon.
 
