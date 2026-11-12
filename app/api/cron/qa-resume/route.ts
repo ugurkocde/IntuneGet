@@ -345,6 +345,7 @@ export async function GET(request: Request) {
     }
 
 
+    let pretestSecurityRefusal: string | null = null;
     if (!skipCustomerQa && isExactPretestCandidate(candidate, {
       candidateId: observed.qa_candidate_id, wingetId: job.winget_id, version: job.version,
       architecture: observedConfig?.architecture || observed.architecture || 'x64',
@@ -353,27 +354,45 @@ export async function GET(request: Request) {
       try {
         const holds = await loadInstallerSecurityHolds(supabase, [candidate.installer_sha256!]);
         const hold = holds.get(candidate.installer_sha256!.toLowerCase());
-        if (hold && [installerSecurityReason(0), installerSecurityReason(1)].includes(hold.reason)) {
+        if (hold && [installerSecurityReason(0), installerSecurityReason(1), installerSecurityReason(2)].includes(hold.reason)) {
           const { data: failedResult, error: failedError } = await supabase.from('qa_package_results').select('outcome')
             .eq('package_profile_sha256', candidate.package_profile_sha256!).eq('winget_id', job.winget_id)
             .eq('tested_version', job.version).eq('architecture', candidate.architecture!)
             .eq('installer_sha256', candidate.installer_sha256!).eq('outcome', 'Failed').limit(1).maybeSingle();
           if (failedError) throw new Error('Security hold evidence unavailable');
           if (!failedResult) {
-            const now = Date.now();
-            const next = Date.parse(hold.nextCheckAt);
-            if (!Number.isFinite(next)) throw new Error('Security hold schedule unavailable');
-            const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
-              status_message: hold.reason, qa_resume_due_at: new Date(Math.max(now + 60_000, Math.min(next, now + 86_400_000))).toISOString(),
-            }).eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
-            if (holdError) throw new Error('Could not defer security-held deployment');
-            if (heldJob) held++;
-            continue;
+            if (hold.reason === installerSecurityReason(2)) {
+              pretestSecurityRefusal = hold.reason;
+            } else {
+              const now = Date.now();
+              const next = Date.parse(hold.nextCheckAt);
+              if (!Number.isFinite(next)) throw new Error('Security hold schedule unavailable');
+              const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+                status_message: hold.reason, qa_resume_due_at: new Date(Math.max(now + 60_000, Math.min(next, now + 86_400_000))).toISOString(),
+              }).eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
+              if (holdError) throw new Error('Could not defer security-held deployment');
+              if (heldJob) held++;
+              continue;
+            }
           }
         }
       } catch {
         waitingIds.push(job.id); waiting++; continue;
       }
+    }
+
+    if (pretestSecurityRefusal) {
+      const { data: refusedJob, error: refusalError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+        status: 'failed', status_message: pretestSecurityRefusal, error_message: pretestSecurityRefusal,
+        error_code: 'QA_SECURITY_FLAGGED_CURRENT_VERSION', error_stage: 'validation', error_category: 'installer',
+        qa_completed_at: null, completed_at: new Date().toISOString(),
+      }).eq('id', job.id).eq('status', 'awaiting_qa')).select('id').maybeSingle();
+      if (refusalError) { waitingIds.push(job.id); waiting++; }
+      else if (refusedJob) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', pretestSecurityRefusal);
+      }
+      continue;
     }
 
     if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
@@ -460,7 +479,7 @@ export async function GET(request: Request) {
         : error instanceof QaGateError || error instanceof QaCompatibilityGateError || error instanceof QaGateNotPassedError
           ? describeQaGateError(error) : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
       const patch = terminal ? {
-        status: 'qa_failed', status_message: message, error_message: message,
+        status: error instanceof QaSecurityGateError && error.details.malicious >= 2 ? 'failed' : 'qa_failed', status_message: message, error_message: message,
         error_code: error.code, error_stage: 'validation', error_category: error instanceof CuratedEvidenceMismatchError ? 'validation' : 'installer',
         completed_at: new Date().toISOString(),
       } : { status_message: message };

@@ -309,7 +309,13 @@ describe('GET /api/cron/qa-resume', () => {
       const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
       const terminal = kind !== 'one flag' && kind !== 'curated pending' && kind !== 'curated withdrawn' && !kind.includes('changed identity');
       expect(await response.json()).toMatchObject({ resumed: 0, failed: terminal ? 1 : 0 });
-      expect(store.row.status).toBe(terminal ? 'qa_failed' : 'awaiting_qa');
+      expect(store.row.status).toBe(terminal ? (kind === 'two flags' ? 'failed' : 'qa_failed') : 'awaiting_qa');
+      if (kind === 'two flags') {
+        expect(store.row.error_code).toBe('QA_SECURITY_FLAGGED_CURRENT_VERSION');
+        expect(store.row.error_stage).toBe('validation');
+        expect(store.row.completed_at).toEqual(expect.any(String));
+        expect(store.row).not.toHaveProperty('qa_completed_at');
+      }
       if (kind === 'one flag') expect(store.row.status_message).toBe('VirusTotal: 1 engine flagged, rechecking daily');
       else if (kind === 'two flags') expect(store.row.status_message).toBe('VirusTotal refused execution for this installer hash.');
       else if (kind === 'curated pending' || kind === 'curated withdrawn') expect(store.row.status_message).toBe('Curated release verification is pending. Packaging remains on hold.');
@@ -1748,7 +1754,7 @@ describe('GET /api/cron/qa-resume', () => {
     expect(failedUpdate.update).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }));
     expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id, 'failed', licenceError.message);
   });
-  it.each([{malicious:0,mode:'hold'},{malicious:1,mode:'hold'},{malicious:0,mode:'failed-result'},{malicious:0,mode:'read-error'},{malicious:0,mode:'wrong-profile'}])('classifies pretest hold only with exact evidence %j', async ({malicious,mode}) => {
+  it.each([{malicious:0,mode:'hold'},{malicious:1,mode:'hold'},{malicious:2,mode:'hold'},{malicious:0,mode:'failed-result'},{malicious:2,mode:'failed-result'},{malicious:0,mode:'read-error'},{malicious:2,mode:'read-error'},{malicious:0,mode:'wrong-profile'},{malicious:2,mode:'wrong-profile'},{malicious:2,mode:'changed-identity'}])('classifies pretest hold only with exact evidence %j', async ({malicious,mode}) => {
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     const hash = 'A'.repeat(64), profile = 'B'.repeat(64);
     const job = { id: 'security-job', status: 'awaiting_qa', tenant_id: 'tenant-1', winget_id: 'Example.App', version: '1.0',
@@ -1760,7 +1766,10 @@ describe('GET /api/cron/qa-resume', () => {
       architecture: job.architecture, installer_sha256: hash, package_profile_sha256: profile };
     if(mode === 'wrong-profile') candidate.package_profile_sha256 = 'C'.repeat(64);
     const store = jobStore(job); let calls = 0;
-    securityHoldsMock.mockResolvedValue(new Map([[hash.toLowerCase(), { reason: malicious ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal: awaiting engine coverage, rechecking daily', nextCheckAt: new Date(Date.now() + 3600_000).toISOString() }]]));
+    securityHoldsMock.mockImplementation(async () => {
+      if (mode === 'changed-identity') store.row.installer_sha256 = 'D'.repeat(64);
+      return new Map([[hash.toLowerCase(), { reason: malicious >= 2 ? 'VirusTotal refused execution for this installer hash.' : malicious ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal: awaiting engine coverage, rechecking daily', nextCheckAt: new Date(Date.now() + 3600_000).toISOString() }]]);
+    });
     const from = vi.fn((table: string) => {
       if (table === 'packaging_jobs') return ++calls === 1 ? chain({ data: [structuredClone(store.row)], error: null }) : store.updateQuery();
       if (table === 'qa_candidates') return candidateQuery([candidate]);
@@ -1770,7 +1779,24 @@ describe('GET /api/cron/qa-resume', () => {
     createServerClientMock.mockReturnValue({ from });
     const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
     const result = await response.json();
-    if(mode === 'hold') {
+    if(mode === 'hold' && malicious >= 2) {
+      expect(result).toMatchObject({ failed: 1, resumed: 0, held: 0 });
+      expect(store.row.status).toBe('failed');
+      expect(store.row.error_code).toBe('QA_SECURITY_FLAGGED_CURRENT_VERSION');
+      expect(store.row.error_stage).toBe('validation');
+      expect(store.row.error_category).toBe('installer');
+      expect(store.row.qa_completed_at).toBeNull();
+      expect(store.row.completed_at).toEqual(expect.any(String));
+      expect(store.row.status_message).toBe('VirusTotal refused execution for this installer hash.');
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledTimes(1);
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id, 'failed', store.row.status_message);
+    } else if(mode === 'changed-identity') {
+      expect(result).toMatchObject({ failed: 0, resumed: 0, held: 0 });
+      expect(store.row.status).toBe('awaiting_qa');
+      expect(store.row.error_code).toBeNull();
+      expect(store.row.installer_sha256).toBe('D'.repeat(64));
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    } else if(mode === 'hold') {
       expect(result).toMatchObject({ failed: 0, resumed: 0, held: 1 });
       expect(store.row.status).toBe('awaiting_qa');
       expect(store.row.error_code).toBeNull();

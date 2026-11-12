@@ -1,0 +1,5 @@
+{
+  "title": "Distinguish installer security refusals from failed installation tests",
+  "summary": "Deployments refused by an installer security verdict now report a failed deployment rather than a failed installation test. Security checks and refusal thresholds remain unchanged.",
+  "type": "fixed"
+}
