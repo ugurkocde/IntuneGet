@@ -114,7 +114,8 @@ ${timeout}
 @{ outcome = $outcome; captures = @(Read-Captures); seconds = $watch.Elapsed.TotalSeconds; rootStopped = $launched[0].WaitForExit(1000) } | ConvertTo-Json -Depth 8
 `);
     expect(value.outcome).toEqual({ ExitCode: -1, TimedOut: true, Output: 'Timed out after 1 seconds' });
-    expect(value.captures).toHaveLength(1);
+    const diagnostic = JSON.stringify({ seconds: value.seconds, rootStopped: value.rootStopped });
+    expect(value.captures, diagnostic).toHaveLength(1);
     expect(value.captures[0].captured).toBe(false);
     expect(value.captures[0].capture_error).toBe(true);
     expect(value.rootStopped).toBe(true);
@@ -166,9 +167,11 @@ if ($seen) {
 @{ outcome=$outcome; markerSeen=$seen; workerStopped=$workerStopped; childStopped=$childStopped; rootStopped=$launched[0].WaitForExit(1000); seconds=$watch.Elapsed.TotalSeconds; captures=@(Read-Captures) } | ConvertTo-Json -Depth 8
 `);
     expect(value.outcome).toEqual({ ExitCode: -1, TimedOut: true, Output: 'Timed out after 1 seconds' });
-    expect(value.markerSeen).toBe(true);
-    expect(value.workerStopped).toBe(true);
-    expect(value.childStopped).toBe(true);
+    const diagnostic = JSON.stringify({ seconds: value.seconds, markerSeen: value.markerSeen,
+      workerStopped: value.workerStopped, childStopped: value.childStopped, rootStopped: value.rootStopped });
+    expect(value.markerSeen, diagnostic).toBe(true);
+    expect(value.workerStopped, diagnostic).toBe(true);
+    expect(value.childStopped, diagnostic).toBe(true);
     expect(value.rootStopped).toBe(true);
     expect(value.seconds).toBeLessThan(7);
     expect(value.captures).toEqual([]);
