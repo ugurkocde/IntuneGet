@@ -1616,6 +1616,27 @@ $registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip' -and
     $installerTypeLower
 }
 
+# Reviewed executable switches must not replace MSI properties after extension
+# or archive normalization selects Windows Installer. Keep supported MSI-form
+# overrides (including BlueJ and PDFsam), and never silently drop properties.
+$msiReviewedOverridePattern = '^(?:\s*(?:/(?:quiet|passive|norestart|promptrestart|forcerestart|q[nbrfu]?[+!-]?)|[A-Za-z_][A-Za-z0-9_.]*=(?:"[^"]*"|[^\s"]*)))+\s*$'
+if ($reviewedInstallArgumentsOverride -and
+    $registeredInstallerTypeLower -in @('msi', 'wix') -and
+    $reviewedInstallArgumentsOverride -notmatch $msiReviewedOverridePattern) {
+    if ($reviewedInstallArgumentsOverride -match '[A-Za-z_][A-Za-z0-9_.]*=') {
+        throw 'The reviewed Windows Installer argument override contains unsupported syntax; correct it rather than dropping its MSI properties.'
+    }
+    Write-Host 'WARNING: The reviewed install argument override is not a Windows Installer command line; using the manifest MSI switches.'
+    $effectiveSilentSwitches = $SilentSwitches.Trim()
+    foreach ($reviewedInstallArgument in $reviewedInstallArguments) {
+        if (-not [string]::IsNullOrWhiteSpace($effectiveSilentSwitches)) {
+            $effectiveSilentSwitches += ' '
+        }
+        $effectiveSilentSwitches += $reviewedInstallArgument
+    }
+    $silentSwitchesEscaped = ConvertTo-PSSingleQuotedContent $effectiveSilentSwitches
+}
+
 $isNestedPortable = $installerTypeLower -eq 'zip' -and
     -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
     $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable' -and
