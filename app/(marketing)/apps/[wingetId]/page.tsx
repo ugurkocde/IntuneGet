@@ -106,8 +106,11 @@ export default async function AppDetailPage({ params }: PageProps) {
   const details = await resolveApp(wingetId);
   const { app, versions } = details;
   const source = getCatalogSource();
-  const [qa, changelog, installer, relatedResult] = await Promise.all([
-    source.getQaResult(app.winget_id).catch(() => null),
+  const [qaRead, changelog, installer, relatedResult] = await Promise.all([
+    source.getQaResult(app.winget_id).then(
+      (qa) => ({ qa, unavailable: false }),
+      () => ({ qa: null, unavailable: true }),
+    ),
     source.getInstallationChangelog(app.winget_id).catch(() => null),
     app.latest_version
       ? source.getVersionInstallerInfo(app.winget_id, app.latest_version).catch(() => null)
@@ -116,6 +119,7 @@ export default async function AppDetailPage({ params }: PageProps) {
       ? source.getPopularApps({ limit: 7, offset: 0, category: app.category, sort: 'popular' }).catch(() => null)
       : Promise.resolve(null),
   ]);
+  const qa = qaRead.qa;
   const related = (relatedResult?.data ?? []).filter((item) => item.winget_id !== app.winget_id).slice(0, 6);
   const category = app.category || null;
   const categoryName = category ? categoryDisplayName(category) : null;
@@ -246,7 +250,7 @@ export default async function AppDetailPage({ params }: PageProps) {
           </div>
         </section>
 
-        {deploymentRows.length > 0 && <section className="space-y-5"><h2 className="text-2xl font-semibold text-text-primary"><T>Deployment details</T></h2><dl className="divide-y divide-overlay/10 rounded-2xl border border-overlay/10 bg-bg-elevated px-6">{deploymentRows.map((row, index) => <div key={index} className="grid gap-1 py-4 sm:grid-cols-3"><dt className="text-text-muted">{row.label}</dt><dd className="sm:col-span-2 text-text-primary">{row.code ? <code className="rounded bg-bg-deepest px-2 py-1 text-sm"><Var>{row.value}</Var></code> : <Var>{row.value}</Var>}</dd></div>)}</dl>{qaVerified ? <p className="flex items-center gap-2 text-sm text-text-muted"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" /><T>Commands and arguments were captured during an automated QA install of version <Var>{qa.tested_version}</Var> in an isolated Windows VM.</T></p> : <p className="text-sm text-text-muted">{qa ? <T>Values come from the WinGet community manifest.</T> : <T>Values come from the WinGet community manifest. This app has not completed an IntuneGet QA run yet.</T>}</p>}{changelog?.install_path && <p className="text-sm text-text-muted"><T>Observed install path: <Var>{changelog.install_path}</Var></T></p>}</section>}
+        {deploymentRows.length > 0 && <section className="space-y-5"><h2 className="text-2xl font-semibold text-text-primary"><T>Deployment details</T></h2><dl className="divide-y divide-overlay/10 rounded-2xl border border-overlay/10 bg-bg-elevated px-6">{deploymentRows.map((row, index) => <div key={index} className="grid gap-1 py-4 sm:grid-cols-3"><dt className="text-text-muted">{row.label}</dt><dd className="sm:col-span-2 text-text-primary">{row.code ? <code className="rounded bg-bg-deepest px-2 py-1 text-sm"><Var>{row.value}</Var></code> : <Var>{row.value}</Var>}</dd></div>)}</dl>{qaVerified ? <p className="flex items-center gap-2 text-sm text-text-muted"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" /><T>Commands and arguments were captured during an automated QA install of version <Var>{qa.tested_version}</Var> in an isolated Windows VM.</T></p> : <p className="text-sm text-text-muted">{qa ? <T>Values come from the WinGet community manifest.</T> : qaRead.unavailable ? <T>Values come from the WinGet community manifest. QA results are temporarily unavailable.</T> : <T>Values come from the WinGet community manifest. This app has not completed an IntuneGet QA run yet.</T>}</p>}{changelog?.install_path && <p className="text-sm text-text-muted"><T>Observed install path: <Var>{changelog.install_path}</Var></T></p>}</section>}
 
         {qa && (
           <section className="space-y-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-6">
