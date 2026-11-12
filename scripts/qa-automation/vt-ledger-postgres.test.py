@@ -168,8 +168,11 @@ def transaction(text, application, role="service_role"):
         yield session
     finally:
         if session.poll() is None:
-            session.stdin.write("rollback;\n\\q\n")
-            session.stdin.flush()
+            try:
+                session.stdin.write("rollback;\n\\q\n")
+                session.stdin.flush()
+            except OSError:
+                pass  # The reader may exit first; communicate still drains and reaps.
         try:
             session.communicate(timeout=15)
         except subprocess.TimeoutExpired:
