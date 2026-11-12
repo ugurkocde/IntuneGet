@@ -231,15 +231,13 @@ function Invoke-Winget {
     param(
         [Parameter(Mandatory = $true)][string[]]$Arguments,
         [Parameter(Mandatory = $true)][int]$TimeoutSeconds,
-        [switch]$CaptureOnTimeout,
-        [string]$FilePath
+        [switch]$CaptureOnTimeout
     )
 
     $stdout = Join-Path $env:TEMP "winget-$([Guid]::NewGuid()).out"
     $stderr = Join-Path $env:TEMP "winget-$([Guid]::NewGuid()).err"
     try {
-        $executable = if ($FilePath) { $FilePath } else { (Get-Command winget).Source }
-        $process = Start-Process -FilePath $executable -ArgumentList $Arguments `
+        $process = Start-Process -FilePath (Get-Command winget).Source -ArgumentList $Arguments `
             -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         $startedUtcTicks = 0L
         if ($CaptureOnTimeout) { try { $startedUtcTicks = $process.StartTime.ToUniversalTime().Ticks } catch { } }
@@ -255,30 +253,6 @@ function Invoke-Winget {
         return @{ ExitCode = $process.ExitCode; TimedOut = $false; Output = $output.Trim() }
     } finally {
         Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Get-ScannerCleanupInvocation {
-    param([string]$WingetId, $Result, [bool]$InstalledByScan)
-
-    $invocation = @{ Arguments = @('uninstall', '--id', $WingetId, '--exact', '--silent', '--accept-source-agreements', '--disable-interactivity') }
-    $edition = [regex]::Match($WingetId, '\AMicrosoft\.VisualStudio\.2022\.(Enterprise|Community)\z', 'IgnoreCase,CultureInvariant')
-    if (-not $InstalledByScan -or -not $edition.Success -or
-        $Result.registry_changes.app_registry_entry.detection_method -cne 'new_key' -or
-        $null -ne $Result.quiet_uninstall_string -or
-        -not ${env:ProgramFiles(x86)} -or -not $env:ProgramFiles) { return $invocation }
-
-    # WinGet can use this interactive ARP command even with --silent. Accept
-    # only the exact instance installed by this scan; never execute ARP text.
-    $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\setup.exe'
-    $installPath = Join-Path $env:ProgramFiles ('Microsoft Visual Studio\2022\' + $edition.Groups[1].Value)
-    if (-not [string]::Equals($Result.install_path, $installPath, [StringComparison]::OrdinalIgnoreCase)) { return $invocation }
-    $expected = '"' + $installer + '" uninstall --installPath "' + $installPath + '"'
-    if (-not [string]::Equals($Result.uninstall_string, $expected, [StringComparison]::OrdinalIgnoreCase)) { return $invocation }
-
-    return @{
-        FilePath = $installer
-        Arguments = @('uninstall', '--installPath', ('"' + $installPath + '"'), '--quiet', '--norestart')
     }
 }
 
@@ -327,17 +301,7 @@ try {
     Write-Warning $result.error
 } finally {
     if ($installedByScan) {
-        $cleanup = Get-ScannerCleanupInvocation -WingetId $WingetId -Result $result -InstalledByScan $installedByScan
-        $uninstall = Invoke-Winget @cleanup -TimeoutSeconds 300 -CaptureOnTimeout
-        if ($cleanup.FilePath -and $uninstall.ExitCode -eq 0) {
-            $remaining = Invoke-Winget -Arguments @('list', '--id', $WingetId, '--exact', '--accept-source-agreements', '--disable-interactivity') -TimeoutSeconds 90
-            # 0x8A150014 is WinGet's NO_APPLICATIONS_FOUND. Other failures,
-            # timeout, or an instance still listed never establish removal.
-            if ($remaining.TimedOut -or $remaining.ExitCode -notin @(0, -1978335212) -or
-                $remaining.Output -notmatch '(?m)^No installed package found matching input criteria\.\s*$') {
-                $uninstall = @{ ExitCode = -1; Output = 'Removal could not be verified for the scanned instance' }
-            }
-        }
+        $uninstall = Invoke-Winget -Arguments @('uninstall', '--id', $WingetId, '--exact', '--silent', '--accept-source-agreements', '--disable-interactivity') -TimeoutSeconds 300 -CaptureOnTimeout
         if ($uninstall.ExitCode -ne 0) {
             $cleanupMessage = "Cleanup failed with exit code $($uninstall.ExitCode): $($uninstall.Output)"
             if ($result.status -eq 'completed') {
