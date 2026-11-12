@@ -11,6 +11,20 @@ import type { EspProfileSummary } from '@/types/esp';
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
 
+export class EspProfileListError extends Error {
+  constructor(public readonly status: number, message = `Failed to list device enrollment configurations (${status})`) {
+    super(message);
+    this.name = 'EspProfileListError';
+  }
+}
+
+export class EspProfilePermissionError extends EspProfileListError {
+  constructor() {
+    super(403, "Intune denied access to Enrollment Status Page profiles. Check that IntuneGet's existing DeviceManagementServiceConfig.ReadWrite.All admin consent is still in place and that the tenant has an active Intune license.");
+    this.name = 'EspProfilePermissionError';
+  }
+}
+
 interface EspProfileConfig {
   '@odata.type': string;
   id: string;
@@ -66,9 +80,8 @@ export async function listEspProfiles(
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const graphMsg = (errorBody as Record<string, Record<string, string>>)?.error?.message || response.statusText;
-    throw new Error(`Failed to list device enrollment configurations (${response.status}): ${graphMsg}`);
+    if (response.status === 403) throw new EspProfilePermissionError();
+    throw new EspProfileListError(response.status);
   }
 
   const data: GraphApiListResponse<DeviceEnrollmentConfiguration> =

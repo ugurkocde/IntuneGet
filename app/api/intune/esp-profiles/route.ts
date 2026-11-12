@@ -8,7 +8,7 @@ import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { acquireGraphToken } from '@/lib/graph-token';
-import { listEspProfiles } from '@/lib/esp-api';
+import { EspProfileListError, EspProfilePermissionError, listEspProfiles } from '@/lib/esp-api';
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,9 +71,16 @@ export async function GET(request: NextRequest) {
       count: profiles.length,
     });
   } catch (err) {
-    console.error('[ESP Profiles] Error:', err instanceof Error ? err.message : err);
+    if (err instanceof EspProfilePermissionError) {
+      console.warn('[ESP Profiles] list denied', { status: 403 });
+      return NextResponse.json(
+        { error: err.message, code: 'esp_graph_forbidden' },
+        { status: 403 }
+      );
+    }
+    console.error('[ESP Profiles] list failed', { status: err instanceof EspProfileListError ? err.status : 500 });
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to fetch ESP profiles' },
+      { error: 'Failed to fetch ESP profiles' },
       { status: 500 }
     );
   }
