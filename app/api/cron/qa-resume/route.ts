@@ -460,7 +460,7 @@ export async function GET(request: Request) {
         : error instanceof QaGateError || error instanceof QaCompatibilityGateError || error instanceof QaGateNotPassedError
           ? describeQaGateError(error) : 'Installer security verification is temporarily unavailable. Packaging remains on hold.';
       const patch = terminal ? {
-        status: 'qa_failed', status_message: message, error_message: message,
+        status: error instanceof QaSecurityGateError && error.details.malicious >= 2 ? 'failed' : 'qa_failed', status_message: message, error_message: message,
         error_code: error.code, error_stage: 'validation', error_category: error instanceof CuratedEvidenceMismatchError ? 'validation' : 'installer',
         completed_at: new Date().toISOString(),
       } : { status_message: message };

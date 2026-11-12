@@ -309,7 +309,13 @@ describe('GET /api/cron/qa-resume', () => {
       const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
       const terminal = kind !== 'one flag' && kind !== 'curated pending' && kind !== 'curated withdrawn' && !kind.includes('changed identity');
       expect(await response.json()).toMatchObject({ resumed: 0, failed: terminal ? 1 : 0 });
-      expect(store.row.status).toBe(terminal ? 'qa_failed' : 'awaiting_qa');
+      expect(store.row.status).toBe(terminal ? (kind === 'two flags' ? 'failed' : 'qa_failed') : 'awaiting_qa');
+      if (kind === 'two flags') {
+        expect(store.row.error_code).toBe('QA_SECURITY_FLAGGED_CURRENT_VERSION');
+        expect(store.row.error_stage).toBe('validation');
+        expect(store.row.completed_at).toEqual(expect.any(String));
+        expect(store.row).not.toHaveProperty('qa_completed_at');
+      }
       if (kind === 'one flag') expect(store.row.status_message).toBe('VirusTotal: 1 engine flagged, rechecking daily');
       else if (kind === 'two flags') expect(store.row.status_message).toBe('VirusTotal refused execution for this installer hash.');
       else if (kind === 'curated pending' || kind === 'curated withdrawn') expect(store.row.status_message).toBe('Curated release verification is pending. Packaging remains on hold.');
