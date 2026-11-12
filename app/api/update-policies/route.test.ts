@@ -249,6 +249,39 @@ describe('POST /api/update-policies', () => {
     expect(body.created).toBe(true);
   });
 
+  it('does not save another installer family silent switch in a catalog default policy', async () => {
+    const { supabase, insertPayloads } = createSupabaseMock({
+      update_check_results: { current_version: '1.0.0', latest_version: '2.0.0' },
+    });
+    createServerClientMock.mockReturnValue(supabase);
+    getCatalogSourceMock.mockReturnValue({
+      getAppNamePublisher: vi.fn(async () => ({ name: 'Mixed Installer App', publisher: 'Example' })),
+      getVersionInstallerInfo: vi.fn(async () => ({
+        installer_url: 'https://example.invalid/setup.exe',
+        installer_sha256: 'a'.repeat(64),
+        installer_type: 'nullsoft',
+        silent_args: '/S',
+        installers: [
+          { Architecture: 'x64', InstallerType: 'nullsoft', InstallerUrl: 'https://example.invalid/setup.exe', InstallerSha256: 'a'.repeat(64) },
+          { Architecture: 'x64', Scope: 'machine', InstallerType: 'wix', InstallerUrl: 'https://example.invalid/setup.msi', InstallerSha256: 'b'.repeat(64), InstallerSwitches: { InstallLocation: 'INSTALLDIR="<INSTALLPATH>"' } },
+        ],
+      })),
+    });
+
+    const response = await POST(makeRequest({
+      winget_id: 'Example.MixedInstaller',
+      tenant_id: 'tenant-1',
+      policy_type: 'auto_update',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(insertPayloads).toHaveLength(1);
+    const config = insertPayloads[0].deployment_config as Record<string, unknown>;
+    expect(config.installerType).toBe('wix');
+    expect(config.installCommand).toContain('/qn /norestart ALLUSERS=1');
+    expect(config.installCommand).not.toMatch(/(^|\s)\/S(\s|$)/i);
+  });
+
   it('returns 400 for auto_update with no prior deployment and not in catalog', async () => {
     const { supabase } = createSupabaseMock({
       update_check_results: { current_version: '1.0.0', latest_version: '2.0.0' },

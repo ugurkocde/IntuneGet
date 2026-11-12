@@ -310,11 +310,16 @@ export async function buildDefaultDeploymentConfig(
     undefined,
     wingetId,
   ) as WingetInstaller | null;
+  const rowType = versionInfo.installer_type?.trim().toLowerCase();
+  const selectedType = selectedManifestInstaller?.InstallerType?.trim().toLowerCase();
+  const rowSwitchesApply = !selectedType || rowType === selectedType ||
+    (!!rowType && ['msi', 'wix'].includes(selectedType) && ['msi', 'wix'].includes(rowType));
   const normalizedInstaller: NormalizedInstaller = selectedManifestInstaller
     ? normalizeInstaller({
         ...selectedManifestInstaller,
         InstallerSwitches: {
-          ...(versionInfo.silent_args ? { Silent: versionInfo.silent_args } : {}),
+          // The flattened row describes one installer, not every installer family.
+          ...(versionInfo.silent_args && rowSwitchesApply ? { Silent: versionInfo.silent_args } : {}),
           ...(selectedManifestInstaller.InstallerSwitches || {}),
         },
       })

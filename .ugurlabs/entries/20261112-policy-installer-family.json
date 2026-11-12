@@ -1,0 +1,5 @@
+{
+  "title": "Use matching installer switches in update policy defaults",
+  "summary": "Default deployment configurations now keep cached silent switches within the selected installer family for catalogs offering multiple installer formats.",
+  "type": "fixed"
+}
