@@ -1,0 +1,5 @@
+{
+  "title": "Explain denied ESP profile access",
+  "summary": "When Intune denies access to enrollment status profiles, deployment shows an actionable access message instead of a server error. Upstream error details are kept out of responses and logs.",
+  "type": "fixed"
+}
