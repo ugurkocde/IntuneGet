@@ -1,0 +1,5 @@
+{
+  "title": "Keep QA lookup failure messages accurate",
+  "summary": "App pages now say QA results are temporarily unavailable when the lookup fails, instead of saying the app has not been tested.",
+  "type": "fixed"
+}
