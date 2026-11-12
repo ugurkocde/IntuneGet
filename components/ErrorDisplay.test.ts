@@ -14,6 +14,17 @@ vi.mock('gt-next', () => ({
 beforeEach(() => { translation.messages = []; translation.localized = false; });
 
 describe('ErrorDisplay QA failure stage', () => {
+  it.each(['MANIFEST_UNAVAILABLE', 'INSTALLER_TYPE_UNAVAILABLE', 'INSTALL_SCOPE_UNAVAILABLE', 'SILENT_INSTALL_UNAVAILABLE'])('explains a terminal manifest validation failure without claiming a downloaded file failed: %s', errorCode => {
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, {
+      errorCode, errorStage: 'validation', errorCategory: 'validation',
+      errorMessage: 'The selected package could not be validated. Review your selection before trying again.',
+    }));
+    expect(html).toContain('The selected package or installation settings could not be validated.');
+    expect(html).toContain('Refresh the app catalog and review your selection before trying again.');
+    expect(html).not.toContain('downloaded file');
+    expect(html).not.toContain('unsupported installer format');
+  });
+
   it('names an unsupported dependency without QA or installer failure guidance', () => {
     const html = renderToStaticMarkup(createElement(ErrorDisplay, {
       errorCode: 'DEPENDENCY_NOT_SUPPORTED', errorStage: 'validation', errorCategory: 'validation',
