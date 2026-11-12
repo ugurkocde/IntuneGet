@@ -535,6 +535,12 @@ def contracts():
     sql(migration('20261029000852_qa_vcpp_single_attempt_authorizations'))
     sql(reservation, role=None)
     print('PASS VC++ reservation ACL, lifetime uniqueness, full-profile identity, customer/sibling/pin guards and unchanged original lifecycle')
+    prefilters = (ROOT/'supabase/tests/qa_vt_admission_prefilters.sql').read_text()
+    before = sql(prefilters, check=False)
+    assert before.returncode != 0 and 'Opaque identity predicate reached decoys' in before.stderr, before.stderr
+    sql(migration('20261112153855_qa_vt_admission_prefilters'))
+    sql(prefilters)
+    print('PASS admission prefilters: original predicate-call regression fails, identical customer-first batches drain 100/100/99/0 without decoy calls or budget reset')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 

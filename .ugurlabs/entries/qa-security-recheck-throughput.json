@@ -1,0 +1,5 @@
+{
+  "title": "Improve QA security recheck throughput",
+  "summary": "Reduce repeated candidate validation during security recheck batch admission while preserving eligibility checks and customer priority.",
+  "type": "improved"
+}
