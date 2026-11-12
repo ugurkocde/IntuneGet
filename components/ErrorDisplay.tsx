@@ -187,6 +187,9 @@ export function ErrorDisplay({
   } : terminalManifestFailure ? {
     message: <T>The selected package or installation settings could not be validated. Refresh the app catalog and review your selection before trying again.</T>,
     showReVerify: false,
+  } : errorCode === 'QA_SECURITY_FLAGGED_CURRENT_VERSION' ? {
+    message: <T>Installer security checks stopped this deployment. Review the security status before trying again.</T>,
+    showReVerify: false,
   } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
   const details = errorDetails as ErrorDetails | null;

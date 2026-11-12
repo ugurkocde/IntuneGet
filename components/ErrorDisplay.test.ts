@@ -14,6 +14,25 @@ vi.mock('gt-next', () => ({
 beforeEach(() => { translation.messages = []; translation.localized = false; });
 
 describe('ErrorDisplay QA failure stage', () => {
+  it.each(['installer', null])('explains an installer security refusal without package creation guidance: %s', errorCategory => {
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, {
+      errorCode: 'QA_SECURITY_FLAGGED_CURRENT_VERSION', errorStage: 'validation', errorCategory,
+      errorMessage: 'VirusTotal refused execution for this installer hash.',
+    }));
+    expect(html).toContain('Installer security checks stopped this deployment. Review the security status before trying again.');
+    expect(html).toContain('VirusTotal refused execution for this installer hash.');
+    expect(html).not.toContain('unsupported installer format');
+    expect(html).not.toContain('issue creating');
+  });
+
+  it('translates the installer security guidance', () => {
+    translation.localized = true;
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, {
+      errorCode: 'QA_SECURITY_FLAGGED_CURRENT_VERSION', errorCategory: 'installer',
+    }));
+    expect(html).toContain('translated: Installer security checks stopped this deployment. Review the security status before trying again.');
+  });
+
   it.each(['MANIFEST_UNAVAILABLE', 'INSTALLER_TYPE_UNAVAILABLE', 'INSTALL_SCOPE_UNAVAILABLE', 'SILENT_INSTALL_UNAVAILABLE'])('explains a terminal manifest validation failure without claiming a downloaded file failed: %s', errorCode => {
     const html = renderToStaticMarkup(createElement(ErrorDisplay, {
       errorCode, errorStage: 'validation', errorCategory: 'validation',
