@@ -340,6 +340,40 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     });
   });
 
+  it('does not inherit another installer family silent switch for a machine MSI', async () => {
+    getAppForInstallerMock.mockResolvedValue({ latest_version: '1.0', name: 'Mixed Installer' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.invalid/setup.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'nullsoft',
+      silent_args: '/S',
+      installers: [
+        {
+          Architecture: 'x64',
+          InstallerType: 'nullsoft',
+          InstallerUrl: 'https://example.invalid/setup.exe',
+          InstallerSha256: 'A'.repeat(64),
+        },
+        {
+          Architecture: 'x64',
+          InstallerType: 'wix',
+          Scope: 'machine',
+          InstallerUrl: 'https://example.invalid/setup.msi',
+          InstallerSha256: 'B'.repeat(64),
+          InstallerSwitches: { InstallLocation: 'INSTALLDIR="<INSTALLPATH>"' },
+        },
+      ],
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Example.MixedInstaller', 'x64', 'machine');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected machine MSI resolution');
+    expect(result.info.installerType).toBe('wix');
+    expect(result.info.silentSwitches).toBe('/qn /norestart ALLUSERS=1');
+    expect(result.info.installCommand).not.toMatch(/(^|\s)\/S(\s|$)/i);
+  });
+
   it('selects the stored deployment scope when a release has user and machine variants', async () => {
     getAppForInstallerMock.mockResolvedValue({
       latest_version: '134.0.5954.46',
