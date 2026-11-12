@@ -199,7 +199,10 @@ describe('GET /api/cron/qa-resume', () => {
     expect(JSON.stringify(store.row)).not.toContain('private.invalid');
     expect(JSON.stringify(body)).not.toContain('tenant-private');
     if (kind === 'removed') {
-      expect(store.row.status).toBe('qa_failed');
+      expect(store.row.status).toBe('failed');
+      expect(store.row.error_code).toBe('MANIFEST_UNAVAILABLE');
+      expect(store.row.error_category).toBe('validation');
+      expect(store.row.qa_completed_at).toBeUndefined();
       expect(store.row.error_message).toBe('The selected package could not be validated. Review your selection before trying again.');
       expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledOnce();
     } else {
