@@ -149,9 +149,9 @@ export async function GET(request: Request) {
           // Fail only this unchanged execution input. Never expose producer text,
           // or overwrite a cancellation, relink, or concurrently dispatched job.
           let update = supabase.from('packaging_jobs').update({
-            status: 'qa_failed', status_message: MANIFEST_FAILURE_MESSAGE,
+            status: 'failed', status_message: MANIFEST_FAILURE_MESSAGE,
             error_message: MANIFEST_FAILURE_MESSAGE, error_code: error.code,
-            error_stage: 'validation', error_category: 'installer',
+            error_stage: 'validation', error_category: 'validation',
             completed_at: new Date().toISOString(),
           }).eq('id', job.id).eq('status', 'awaiting_qa')
             .eq('updated_at', job.updated_at).eq('winget_id', job.winget_id).eq('version', job.version)

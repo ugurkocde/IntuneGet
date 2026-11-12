@@ -1,0 +1,5 @@
+{
+  "title": "Distinguish unavailable packages from failed installation tests",
+  "summary": "Deployments stopped by terminal package validation now report a validation failure instead of a failed installation test, while keeping the package validation checks in place.",
+  "type": "fixed"
+}

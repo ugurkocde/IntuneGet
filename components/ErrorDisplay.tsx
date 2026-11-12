@@ -162,6 +162,7 @@ export function ErrorDisplay({
   const architectureUnavailable = errorCode === 'ARCHITECTURE_UNAVAILABLE';
   const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE' || architectureUnavailable;
   const unsupportedDependency = errorCode === 'DEPENDENCY_NOT_SUPPORTED';
+  const terminalManifestFailure = ['MANIFEST_UNAVAILABLE', 'INSTALLER_TYPE_UNAVAILABLE', 'INSTALL_SCOPE_UNAVAILABLE', 'SILENT_INSTALL_UNAVAILABLE'].includes(errorCode || '');
   const stage = unavailable ? { ...stageConfig.validation, label: architectureUnavailable ? <T>Architecture not available</T> : 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
     : qaFailed ? { ...stageConfig.validation, label: blockedBeforeTest ? 'Security check' : <T>Deployment validation</T> } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
@@ -182,6 +183,9 @@ export function ErrorDisplay({
       : errorCode === 'PACKAGE_UNAVAILABLE'
       ? 'This app is not available for automated deployment. This request did not run an installation test.'
       : 'Select an available app version. This request did not run an installation test.',
+    showReVerify: false,
+  } : terminalManifestFailure ? {
+    message: <T>The selected package or installation settings could not be validated. Refresh the app catalog and review your selection before trying again.</T>,
     showReVerify: false,
   } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
