@@ -1,0 +1,5 @@
+{
+  "title": "Speed up recent QA result reads",
+  "summary": "The live QA dashboard can read the newest results through an ordered index instead of scanning and sorting the full result history.",
+  "type": "improved"
+}
