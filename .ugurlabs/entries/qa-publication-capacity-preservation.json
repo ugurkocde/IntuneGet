@@ -1,0 +1,5 @@
+{
+  "title": "Preserve application verification history",
+  "summary": "Application verification publishing can retain an additional configuration result while continuing to check every result against current security holds.",
+  "type": "fixed"
+}
