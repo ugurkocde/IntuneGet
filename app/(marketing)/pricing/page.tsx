@@ -179,7 +179,7 @@ export default function PricingPage() {
                 "Unlimited users / seats",
                 "Self-hosting with Docker",
                 "Microsoft Entra ID authentication",
-                "AI-powered app discovery",
+                "Discovery of unmanaged apps on your devices",
                 "PSADT v4 support",
                 "Community support via GitHub",
                 "Fully open source - modify freely",

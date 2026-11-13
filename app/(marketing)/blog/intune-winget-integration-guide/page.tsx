@@ -496,11 +496,9 @@ winget upgrade --all --silent`}</code>
               <p className="text-text-secondary leading-relaxed">
                 <T>IntuneGet indexes the full Winget repository, not just the curated
                 subset available in the Intune portal. Search any application by
-                name, publisher, or Winget package ID. For applications that are
-                difficult to locate by name, IntuneGet includes AI-powered app
-                discovery that matches natural language queries to the correct
-                package -- type &quot;remote desktop tool&quot; and it will surface the
-                relevant Winget packages.</T>
+                name, publisher, or Winget package ID. Partial names work too, and
+                category filters help when you do not know what an application is
+                called.</T>
               </p>
 
               <h3 className="text-xl font-semibold text-text-primary mt-8 mb-3">
@@ -588,7 +586,7 @@ winget upgrade --all --silent`}</code>
                   sign in with your Microsoft Entra ID
                 </Link>{" "}
                 to start deploying immediately. IntuneGet is free, open source
-                under the MIT license, and has no seat limits or premium tiers.</T>
+                under the AGPL-3.0 license, and has no seat limits or premium tiers.</T>
               </p>
 
               {/* Best Practices */}
