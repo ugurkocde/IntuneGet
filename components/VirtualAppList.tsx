@@ -3,6 +3,26 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { defaultRangeExtractor, useWindowVirtualizer } from '@tanstack/react-virtual';
 
+const GRID_GAP = 16;
+/** Narrowest card that still leaves a readable line for the app name beside its icon. */
+const MIN_CARD_WIDTH = 264;
+const MAX_GRID_COLUMNS = 3;
+
+/**
+ * Columns that fit the list's own width. The window width is the wrong input:
+ * the sidebar and the catalog filter panel take a varying share of it, which
+ * left three 128 px cards on a 1024 px screen.
+ */
+export function gridColumnsForWidth(width: number): number {
+  if (!Number.isFinite(width) || width <= 0) return 1;
+  const fit = Math.floor((width + GRID_GAP) / (MIN_CARD_WIDTH + GRID_GAP));
+  return Math.max(1, Math.min(MAX_GRID_COLUMNS, fit));
+}
+
+/** The same rule in CSS, for placeholders that render before the list measures itself. */
+export const APP_GRID_TEMPLATE_COLUMNS =
+  `repeat(auto-fill, minmax(min(100%, max(${MIN_CARD_WIDTH}px, calc((100% - ${(MAX_GRID_COLUMNS - 1) * GRID_GAP}px) / ${MAX_GRID_COLUMNS} - 0.5px))), 1fr))`;
+
 interface VirtualAppListProps<T> {
   items: T[];
   itemKey: (item: T) => string;
@@ -38,7 +58,7 @@ export function VirtualAppList<T>({ items, itemKey, renderItem, grid, onVisibleI
     const node = container.current;
     if (!node) return;
     const measure = () => {
-      setColumns(grid ? window.innerWidth >= 1024 ? 3 : window.innerWidth >= 768 ? 2 : 1 : 1);
+      setColumns(grid ? gridColumnsForWidth(node.getBoundingClientRect().width) : 1);
       setScrollMargin(node.getBoundingClientRect().top + window.scrollY);
     };
     measure();
@@ -67,7 +87,7 @@ export function VirtualAppList<T>({ items, itemKey, renderItem, grid, onVisibleI
         <div key={row.key} data-index={row.index} ref={virtualizer.measureElement}
           onFocusCapture={() => setFocusedRow(row.index)}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${row.start - scrollMargin}px)`, paddingBottom: grid ? 16 : 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: GRID_GAP }}>
             {items.slice(row.index * columns, (row.index + 1) * columns).map(item => <div key={itemKey(item)}>{renderItem(item)}</div>)}
           </div>
         </div>

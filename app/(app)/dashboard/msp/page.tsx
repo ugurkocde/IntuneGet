@@ -112,9 +112,11 @@ export default function MspDashboardPage() {
       </motion.div>
 
       {/* Main Content Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Stacked below lg: side by side at tablet widths the jobs table only
+          got half the screen. min-w-0 keeps the table's scroll inside its card. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tenants Section */}
-        <motion.div variants={itemVariants} className="lg:col-span-1 space-y-4">
+        <motion.div variants={itemVariants} className="min-w-0 lg:col-span-1 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium text-text-primary"><T>Managed Tenants</T></h2>
             <Link
@@ -194,7 +196,7 @@ export default function MspDashboardPage() {
         </motion.div>
 
         {/* Jobs Section */}
-        <motion.div variants={itemVariants} className="lg:col-span-2">
+        <motion.div variants={itemVariants} className="min-w-0 lg:col-span-2">
           <CrossTenantJobsTable />
         </motion.div>
       </div>

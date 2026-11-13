@@ -1,0 +1,5 @@
+{
+  "title": "Portal works on phones, tablets and smaller laptops",
+  "summary": "The portal menu button can be tapped again on screens narrower than 1024 px, and the App Catalog no longer runs off the side of the screen. Catalog cards now show the full app name on laptop screens, and the jobs table on the MSP dashboard keeps readable columns.",
+  "type": "fixed"
+}

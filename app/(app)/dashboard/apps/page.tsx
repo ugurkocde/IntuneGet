@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppSearch } from '@/components/AppSearch';
-import { VirtualAppList } from '@/components/VirtualAppList';
+import { APP_GRID_TEMPLATE_COLUMNS, VirtualAppList } from '@/components/VirtualAppList';
 import { useNearViewport } from '@/hooks/use-near-viewport';
 import { AppCard } from '@/components/AppCard';
 import { AppListItem } from '@/components/AppListItem';
@@ -505,7 +505,7 @@ export default function AppCatalogPage() {
   };
 
   const renderLoadingSkeletons = () => (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4" style={{ gridTemplateColumns: APP_GRID_TEMPLATE_COLUMNS }}>
       {[...Array(6)].map((_, i) => (
         <div key={i} className="rounded-xl border border-overlay/10 bg-bg-elevated p-5">
           <div className="flex items-start gap-4">
@@ -848,12 +848,12 @@ export default function AppCatalogPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
             <aside className="hidden lg:block lg:sticky lg:top-[5.25rem] self-start">
               {renderFilterPanel()}
             </aside>
 
-            <div className="space-y-10">
+            <div className="min-w-0 space-y-10">
               <section ref={resultsSectionRef} className="space-y-4">
                 {/* Category breadcrumb */}
                 {showCategoryResults && (
@@ -1080,11 +1080,11 @@ export default function AppCatalogPage() {
 
       {/* Floating bulk action bar */}
       {isBulkSelectMode && selectedPackageIds.size > 0 && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 rounded-2xl bg-bg-elevated/95 backdrop-blur-md border border-overlay/10 shadow-2xl">
+        <div className="fixed bottom-20 inset-x-3 z-40 mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5 rounded-2xl bg-bg-elevated/95 backdrop-blur-md border border-overlay/10 shadow-2xl">
           <span className="text-sm font-medium text-text-primary whitespace-nowrap">
             {selectedPackageIds.size} <T>selected</T>
           </span>
-          <div className="w-px h-5 bg-overlay/10" />
+          <div className="hidden sm:block w-px h-5 bg-overlay/10" />
           <button
             onClick={handleSelectAllVisible}
             className="text-sm text-text-secondary hover:text-accent-cyan transition-colors whitespace-nowrap"
@@ -1097,7 +1097,7 @@ export default function AppCatalogPage() {
           >
             <T>Clear</T>
           </button>
-          <div className="w-px h-5 bg-overlay/10" />
+          <div className="hidden sm:block w-px h-5 bg-overlay/10" />
           <button
             onClick={handleBulkQuickAdd}
             disabled={isBulkAdding}
