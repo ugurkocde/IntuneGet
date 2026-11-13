@@ -961,6 +961,18 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(updateMock).toHaveBeenCalledOnce();
     expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
   });
+  it('preserves the uncertainty code for a custom app dispatch without a confirmed response', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503));
+    const response = await POST(new NextRequest('http://localhost/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom' })] }),
+    }));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.jobs).toEqual([]);
+    expect(body.errors[0].code).toBe('WORKFLOW_DISPATCH_UNCONFIRMED');
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
+  });
   it('holds a fresh unconfirmed hosted dispatch with an owner null fence', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503, Date.now(), 'A'.repeat(64)));
     const body = await (await postSingleItem()).json();
@@ -976,6 +988,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(null, Date.now(), 'A'.repeat(64)));
     const body = await (await postSingleItem()).json();
     expect(body.jobs).toEqual([]);
+    expect(body.errors[0].code).toBe('WORKFLOW_DISPATCH_UNCONFIRMED');
     expect(updateMock).toHaveBeenCalledOnce();
     expect(updateMock.mock.calls[0][1].status).toBe('awaiting_qa');
   });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { isIntuneApprovalFailure } from '@/lib/intune-approval';
 import { T, Var } from "gt-next";
 import Link from 'next/link';
@@ -109,6 +109,9 @@ function formatRelativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+const PROGRESS_JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ACTIVE_JOB_STATUSES: readonly string[] = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'];
+
 export default function UploadsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -126,7 +129,8 @@ export default function UploadsPage() {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   // Get job IDs and status filter from URL params
-  const highlightedJobIds = searchParams.get('jobs')?.split(',') || [];
+  const highlightedJobsParam = useMemo(() => searchParams.get('jobs') || '', [searchParams]);
+  const highlightedJobIds = highlightedJobsParam.split(',').filter(Boolean);
   const urlStatus = searchParams.get('status');
   const initialFilter = (['all', 'active', 'completed', 'failed', 'pending'] as const).includes(
     urlStatus as 'all' | 'active' | 'completed' | 'failed' | 'pending'
@@ -144,10 +148,12 @@ export default function UploadsPage() {
   const waitOptionsContext: CustomerJobSnapshot = { scope: jobScope, snapshotKey: jobsSnapshotKey, isLoading, error, sessionExpired };
 
   const jobsRequest = useRef<AbortController | null>(null);
-  useEffect(() => () => { jobsRequest.current?.abort(); jobsRequest.current = null; }, [viewScope, isMspUser, selectedTenantId, user?.id, user?.tenantId]);
+  const progressJobs = useRef(new Map<string, { job: PackagingJob | null; fetchedAt: number; retryable?: boolean }>());
+  useEffect(() => () => { jobsRequest.current?.abort(); jobsRequest.current = null; progressJobs.current.clear(); }, [viewScope, isMspUser, selectedTenantId, user?.id, user?.tenantId, highlightedJobsParam]);
 
   const fetchJobs = useCallback(async (showRefreshing = false) => {
-    if (!user?.id || jobsRequest.current) return;
+    const requestUserId = user?.id;
+    if (!requestUserId || jobsRequest.current) return;
     const controller = new AbortController();
     jobsRequest.current = controller;
     const requestSnapshotKey = customerJobSnapshotKey({ viewScope, isMspUser, selectedTenantId, userId: user?.id, userTenantId: user?.tenantId });
@@ -193,7 +199,35 @@ export default function UploadsPage() {
 
       const data = await response.json();
       if (controller.signal.aborted) return;
-      setJobs(data.jobs || []);
+      const listedJobs: PackagingJob[] = Array.isArray(data.jobs) ? data.jobs : [];
+      const merged = new Map(listedJobs.map(job => [job.id, job]));
+      if (viewScope === 'mine') {
+        const requested = [...new Set(highlightedJobsParam.split(',').filter(id => PROGRESS_JOB_ID.test(id)))];
+        const cache = progressJobs.current;
+        const pending = requested.filter(id => !merged.has(id) && (!cache.has(id) || cache.get(id)?.retryable || (cache.get(id)?.job && ACTIVE_JOB_STATUSES.includes(cache.get(id)!.job!.status))))
+          .sort((a, b) => Number(cache.has(a)) - Number(cache.has(b)) || (cache.get(a)?.fetchedAt ?? 0) - (cache.get(b)?.fetchedAt ?? 0)).slice(0, 4);
+        await Promise.all(pending.map(async id => {
+          try {
+            const extra = await fetch(`/api/package?jobId=${encodeURIComponent(id)}`, { signal: controller.signal, headers: { Authorization: `Bearer ${accessToken}` } });
+            if (!extra.ok) {
+              if (!controller.signal.aborted) cache.set(id, { job: cache.get(id)?.job ?? null, fetchedAt: Date.now(), retryable: extra.status !== 404 });
+              return;
+            }
+            const detail = await extra.json();
+            if (controller.signal.aborted) return;
+            const job = detail?.job as (PackagingJob & { archived_at?: string | null }) | undefined;
+            cache.set(id, { job: job && job.id === id && job.user_id === requestUserId && !job.archived_at ? job : null, fetchedAt: Date.now() });
+          } catch {
+            if (!controller.signal.aborted) cache.set(id, { job: cache.get(id)?.job ?? null, fetchedAt: Date.now(), retryable: true });
+          }
+        }));
+        if (controller.signal.aborted) return;
+        for (const id of requested) {
+          const job = cache.get(id)?.job;
+          if (job && !merged.has(id)) merged.set(id, job);
+        }
+      }
+      setJobs([...merged.values()]);
       setJobsSnapshotKey(requestSnapshotKey);
       setError(null);
       setSessionExpired(false);
@@ -208,7 +242,7 @@ export default function UploadsPage() {
         setIsRefreshing(false);
       }
     }
-  }, [user?.id, user?.tenantId, getAccessToken, viewScope, isMspUser, selectedTenantId]);
+  }, [user?.id, user?.tenantId, getAccessToken, viewScope, isMspUser, selectedTenantId, highlightedJobsParam]);
 
   // Initial load
   useEffect(() => {
@@ -219,10 +253,11 @@ export default function UploadsPage() {
   // background poll less often and a manual refresh remains available.
   useEffect(() => {
     const hasActiveJobs = jobs.some((job) =>
-      ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status)
+      ACTIVE_JOB_STATUSES.includes(job.status)
     );
 
-    if (!hasActiveJobs || sessionExpired) return;
+    const unresolvedProgress = viewScope === 'mine' && highlightedJobsParam.split(',').some(id => PROGRESS_JOB_ID.test(id) && !jobs.some(job => job.id === id) && (!progressJobs.current.has(id) || progressJobs.current.get(id)?.retryable));
+    if ((!hasActiveJobs && !unresolvedProgress) || sessionExpired) return;
 
     let interval: ReturnType<typeof setInterval>;
     const schedule = () => {
@@ -232,7 +267,7 @@ export default function UploadsPage() {
     schedule();
     document.addEventListener('visibilitychange', schedule);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', schedule); };
-  }, [jobs, fetchJobs, sessionExpired]);
+  }, [jobs, fetchJobs, sessionExpired, viewScope, highlightedJobsParam]);
 
   const handleSignInAgain = async () => {
     try {
@@ -288,6 +323,7 @@ export default function UploadsPage() {
         throw new Error(`Failed to cancel job (${response.status})`);
       }
 
+      if (dismiss) progressJobs.current.delete(jobId);
       // Silently sync with server to pick up any fields set by the backend
       fetchJobs();
     } catch (err) {
@@ -322,6 +358,7 @@ export default function UploadsPage() {
         throw new Error(`Failed to clear history (${response.status})`);
       }
 
+      progressJobs.current.clear();
       await fetchJobs();
     } catch (err) {
       console.error('Failed to clear history:', err);
