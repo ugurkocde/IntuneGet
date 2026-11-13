@@ -58,6 +58,15 @@ function getRequest(query = ''): NextRequest {
 }
 
 describe('update policies route in SQLite mode', () => {
+  it('resets an exhausted automatic policy only when the owner resumes it', async () => {
+    const body = { winget_id: 'Vendor.App', tenant_id: 't1', policy_type: 'auto_update', deployment_config: { displayName: 'Fixture app' } };
+    const created = await (await route.POST(postRequest(body))).json();
+    const { sqliteDb } = await import('@/lib/db/sqlite');
+    await sqliteDb.updatePolicies.update(created.policy.id, 'u1', { consecutive_failures: 3, is_enabled: false });
+    const response = await route.POST(postRequest(body));
+    expect(response.status).toBe(200);
+    expect((await response.json()).policy).toMatchObject({ consecutive_failures: 0, is_enabled: true });
+  });
   it('derives a pinned version from the local deployment history', async () => {
     const { sqliteDb } = await import('@/lib/db/sqlite');
     await sqliteDb.uploadHistory.create({

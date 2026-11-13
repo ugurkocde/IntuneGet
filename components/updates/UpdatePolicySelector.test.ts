@@ -31,3 +31,11 @@ it('shows the security warning for major scope and hides scope choices for notif
   await act(async () => root.render(createElement(UpdatePolicySelector, { currentPolicy: 'notify', onPolicyChange: change })));
   expect(document.body.textContent).not.toContain('Automatic update scope');
 });
+it('allows selecting automatic updates again when the policy is paused', async () => {
+  const change = vi.fn(async () => {});
+  const props = { currentPolicy: 'auto_update' as const, paused: true, onPolicyChange: change };
+  await act(async () => root.render(createElement(UpdatePolicySelector, props)));
+  const button = [...document.querySelectorAll('button')].find(b => b.textContent?.includes('Deploy new versions automatically'));
+  await act(async () => button!.click());
+  expect(change).toHaveBeenCalledWith('auto_update');
+});
