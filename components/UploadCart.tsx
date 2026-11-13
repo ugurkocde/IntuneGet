@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
-import { useCartStore } from '@/stores/cart-store';
+import { useCartStore, selectScopedItems } from '@/stores/cart-store';
 import { describeDeploymentFailure } from '@/lib/deployment-failure-message';
 import dynamic from 'next/dynamic';
 const CartItemConfig = dynamic(() => import('@/components/CartItemConfig').then(m => m.CartItemConfig));
@@ -98,7 +98,8 @@ function hasFailedQaForItem(item: CartItem, status: QaStatus | null | undefined)
 
 export function UploadCart() {
   const router = useRouter();
-  const items = useCartStore((state) => state.items);
+  const items = useCartStore(selectScopedItems);
+  const activeScope = useCartStore(state => state.activeScope);
   const isOpen = useCartStore((state) => state.isOpen);
   const toggleCart = useCartStore((state) => state.toggleCart);
   const closeCart = useCartStore((state) => state.closeCart);
@@ -124,8 +125,19 @@ export function UploadCart() {
   // warn before a teammate's app is deployed a second time.
   const [tenantDeployedBy, setTenantDeployedBy] = useState<Map<string, string | null>>(new Map());
 
-  const { isAuthenticated, getAccessToken, signIn, requestAdminConsent } = useMicrosoftAuth();
-  const { isMspUser, selectedTenantId } = useMspOptional();
+  const { isAuthenticated, user, getAccessToken, signIn, requestAdminConsent } = useMicrosoftAuth();
+  const { isMspUser, selectedTenantId, selectedTenant } = useMspOptional();
+  const destinationLabel = isMspUser && selectedTenantId
+    ? selectedTenant?.display_name || 'the selected customer tenant'
+    : user?.email ? 'your organization (' + user.email + ')' : 'your organization';
+  useEffect(() => {
+    setEditingItem(null); setRecovery(null); setQaDetailsTarget(null); setError(null); setShowLargeDeployConfirm(false);
+  }, [activeScope]);
+  useEffect(() => {
+    if (editingItem && !items.some(item => item.id === editingItem.id)) setEditingItem(null);
+    if (recovery && !items.some(item => item.id === recovery.item.id)) setRecovery(null);
+    if (qaDetailsTarget && !items.some(item => item.wingetId === qaDetailsTarget.wingetId && item.version === qaDetailsTarget.version)) setQaDetailsTarget(null);
+  }, [items, editingItem, recovery, qaDetailsTarget]);
   const curatedSettings = useCuratedSettings(items, isOpen || isDeploying);
   const awaitingCuratedSettings = isAuthenticated && !curatedSettings.ready;
   const {
@@ -214,10 +226,19 @@ export function UploadCart() {
   const handleDeploy = async () => {
     if (items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
 
+    const start = useCartStore.getState().activeScope;
+    const scopeIsCurrent = () => {
+      const state = useCartStore.getState();
+      if (start && state.scope === start && state.activeScope === start) return true;
+      setError({ title: 'Account or tenant changed', message: 'Review the current cart and check Deployments for requests already sent.', retryable: false });
+      return false;
+    };
+    if (!scopeIsCurrent()) return;
     setError(null);
 
     if (!isAuthenticated) {
       const signedIn = await signIn();
+      if (!scopeIsCurrent()) return;
       if (!signedIn) {
         setError({
           title: 'Microsoft sign-in required',
@@ -229,6 +250,7 @@ export function UploadCart() {
     }
 
     const accessToken = await getAccessToken();
+    if (!scopeIsCurrent()) return;
     if (!accessToken) {
       setError({
         title: 'Microsoft sign-in expired',
@@ -245,6 +267,7 @@ export function UploadCart() {
       // server independently authorizes the exact profile again in /api/package.
       if (curatedSettings.curatedItems.length > 0) {
         const verification = await curatedSettings.refetch();
+        if (!scopeIsCurrent()) return;
         if (verification.isError || !verification.data || curatedSettings.curatedItems.some(item =>
           !verification.data.items.some(status => status.itemId === item.id && status.status === 'ready'))) return;
       }
@@ -253,15 +276,17 @@ export function UploadCart() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
-          ...(isMspUser && selectedTenantId ? { 'X-MSP-Tenant-Id': selectedTenantId } : {}),
+          ...(isMspUser ? { 'X-MSP-Tenant-Id': start!.slice(start!.lastIndexOf('|') + 1) } : {}),
         },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items: useCartStore.getState().items }),
       });
 
+      if (!scopeIsCurrent()) return;
       if (!response.ok) {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
           const errorData = await response.json() as PackageApiErrorResponse;
+          if (!scopeIsCurrent()) return;
           if (errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED' || errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED') {
             await curatedSettings.refetch();
             return;
@@ -292,6 +317,7 @@ export function UploadCart() {
       }
 
       const data: PackageApiResponse = await response.json();
+      if (!scopeIsCurrent()) return;
 
       if (!data.success || !data.jobs || data.jobs.length === 0) {
         throw new Error(describeDeploymentFailure(data, items));
@@ -367,6 +393,7 @@ export function UploadCart() {
                 <h2 id="cart-title" className="text-lg font-semibold text-text-primary">
                   Selected Apps
                 </h2>
+                  <p className="text-sm text-text-secondary">Destination: {destinationLabel}</p>
                 <span className="px-2 py-0.5 bg-gradient-to-r from-accent-cyan/20 to-accent-violet/20 text-accent-cyan text-sm font-medium rounded border border-accent-cyan/20">
                   {items.length}
                 </span>
@@ -714,7 +741,7 @@ export function UploadCart() {
               onClose={() => setRecovery(null)}
             />
           )}
-          {editingItem && (
+          {editingItem && items.some(item => item.id === editingItem.id) && (
             <CartItemConfig
               item={editingItem}
               onClose={() => setEditingItem(null)}
@@ -725,10 +752,10 @@ export function UploadCart() {
           <AlertDialog open={showLargeDeployConfirm} onOpenChange={setShowLargeDeployConfirm}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Deploy {items.length} apps to Intune?</AlertDialogTitle>
+                <AlertDialogTitle>Deploy {items.length} apps to {destinationLabel}?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This will queue {items.length} packaging jobs and create {items.length} apps
-                  in your Intune tenant. Review your selection before continuing.
+                  in {destinationLabel}. Review your selection before continuing.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -747,7 +774,7 @@ export function UploadCart() {
           </AlertDialog>
         </div>
       )}
-      {qaDetailsTarget && (
+      {qaDetailsTarget && items.some(item => item.wingetId === qaDetailsTarget.wingetId && item.version === qaDetailsTarget.version) && (
         <QaDetailsDialog
           wingetId={qaDetailsTarget.wingetId}
           catalogVersion={qaDetailsTarget.version}

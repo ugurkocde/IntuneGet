@@ -15,11 +15,15 @@ import { normalizeMarkerPath, rewriteMarkerKeyPath } from '@/lib/registry-marker
 
 interface CartState {
   items: CartItem[];
+  scope: string | null;
+  activeScope: string | null;
   isOpen: boolean;
   autoOpenOnAdd: boolean;
 }
 
 interface CartActions {
+  syncScope: (scope: string | null) => void;
+  resetForSignOut: () => void;
   addItem: (item: NewCartItem) => void;
   addItemSilent: (item: NewCartItem) => void;
   setAutoOpenOnAdd: (enabled: boolean) => void;
@@ -41,6 +45,9 @@ interface CartActions {
 }
 
 type CartStore = CartState & CartActions;
+const EMPTY_ITEMS: CartItem[] = [];
+export const selectScopedItems = (state: CartState): CartItem[] =>
+  state.scope !== null && state.scope === state.activeScope ? state.items : EMPTY_ITEMS;
 
 /**
  * Rewrite the registry marker detection rules of a Win32 cart item to match
@@ -99,8 +106,22 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      scope: null,
+      activeScope: null,
       isOpen: false,
       autoOpenOnAdd: true,
+
+      syncScope: (active) => {
+        const state = get();
+        if (active === null) {
+          if (state.activeScope !== null) set({ activeScope: null });
+        } else if (active !== state.scope) {
+          set({ items: [], scope: active, activeScope: active, isOpen: false });
+        } else if (state.activeScope !== active) {
+          set({ activeScope: active });
+        }
+      },
+      resetForSignOut: () => set({ items: [], scope: null, activeScope: null, isOpen: false }),
 
       addItem: (item) => {
         const id = generateCartItemId(item);
@@ -213,23 +234,15 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: 'intuneget-cart',
-      version: 1,
+      version: 2,
       partialize: (state) => ({
         items: state.items,
+        scope: state.scope,
         autoOpenOnAdd: state.autoOpenOnAdd,
       }),
-      migrate: (persistedState: unknown, version: number) => {
-        const state = persistedState as { items?: CartItem[]; autoOpenOnAdd?: boolean };
-        if (version === 0 && state.items) {
-          // Backfill appSource: 'win32' for items persisted before store app support
-          state.items = state.items.map((item) => {
-            if (!item.appSource) {
-              return Object.assign({}, item, { appSource: 'win32' as const }) as CartItem;
-            }
-            return item;
-          });
-        }
-        return state;
+      migrate: (persistedState: unknown) => {
+        const state = persistedState as { autoOpenOnAdd?: boolean };
+        return { items: [], scope: null, autoOpenOnAdd: state?.autoOpenOnAdd ?? true };
       },
     }
   )

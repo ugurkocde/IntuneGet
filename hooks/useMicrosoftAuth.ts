@@ -6,6 +6,8 @@ import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
 import { useCallback, useRef, useState } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
 
+import { useCartStore } from "@/stores/cart-store";
+
 const BLOCKED_POPUP_ERRORS = new Set(["popup_window_error", "empty_window_error"]);
 
 /** True when MSAL could not open its sign-in popup (blocked or unsupported). */
@@ -21,6 +23,7 @@ export function isBlockedPopupError(error: unknown): boolean {
 export function useMicrosoftAuth() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
+  const active = instance.getActiveAccount() ?? accounts[0] ?? null;
 
   // Track sign-out in progress to prevent auth guard redirects
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -33,10 +36,10 @@ export function useMicrosoftAuth() {
    * Force refresh the token, bypassing cache
    */
   const refreshToken = useCallback(async (): Promise<string | null> => {
-    if (accounts.length === 0) {
+    if (!active) {
       return null;
     }
-    const account = instance.getActiveAccount() ?? accounts[0];
+    const account = active;
 
     try {
       const tokenResponse = await instance.acquireTokenSilent({
@@ -67,16 +70,16 @@ export function useMicrosoftAuth() {
       }
       return null;
     }
-  }, [instance, accounts]);
+  }, [instance, active]);
 
   /**
    * Get access token, with automatic refresh if expiring soon
    */
   const getAccessToken = useCallback(async (): Promise<string | null> => {
-    if (accounts.length === 0) {
+    if (!active) {
       return null;
     }
-    const account = instance.getActiveAccount() ?? accounts[0];
+    const account = active;
 
     // Check if we have a cached token that's expiring soon (< 5 minutes)
     if (
@@ -115,7 +118,7 @@ export function useMicrosoftAuth() {
       }
       return null;
     }
-  }, [instance, accounts, refreshToken]);
+  }, [instance, active, refreshToken]);
 
   /**
    * Check if the current token is expiring soon
@@ -187,6 +190,7 @@ export function useMicrosoftAuth() {
     try {
       // Signal sign-out in progress to prevent auth guard redirects
       setIsSigningOut(true);
+      useCartStore.getState().resetForSignOut();
 
       // Clear auth hint cookie so middleware blocks dashboard access
       document.cookie = 'msal-auth-hint=; path=/; SameSite=Lax; max-age=0';
@@ -213,7 +217,7 @@ export function useMicrosoftAuth() {
    * Get user information from the current account
    */
   const getUserInfo = useCallback(() => {
-    const account = accounts[0];
+    const account = active;
     if (!account) return null;
 
     return {
@@ -222,7 +226,7 @@ export function useMicrosoftAuth() {
       email: account.username || null,
       tenantId: account.tenantId,
     };
-  }, [accounts]);
+  }, [active]);
 
   /**
    * Redirect to admin consent page
@@ -248,7 +252,7 @@ export function useMicrosoftAuth() {
     isInitializing: inProgress === InteractionStatus.Startup || inProgress === InteractionStatus.HandleRedirect,
     isAuthenticated,
     isSigningOut,
-    account: accounts[0] || null,
+    account: active,
     user: getUserInfo(),
     getAccessToken,
     refreshToken,

@@ -1,0 +1,5 @@
+{
+  "title": "Deployment carts stay with their account and tenant",
+  "summary": "The cart names its destination and clears when you switch accounts or tenants. Signing out removes saved cart items, and deployments stop using a cart when its account or tenant changes.",
+  "type": "fixed"
+}

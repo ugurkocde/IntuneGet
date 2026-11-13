@@ -13,7 +13,8 @@ import {
 import { T } from 'gt-next';
 import { Button } from '@/components/ui/button';
 import { Toaster } from 'sonner';
-import { useCartStore } from '@/stores/cart-store';
+import { useCartScopeSync } from '@/hooks/useCartScopeSync';
+import { useCartStore, selectScopedItems } from '@/stores/cart-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
@@ -34,6 +35,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  useCartScopeSync();
   const { isAuthenticated, isInitializing, isSigningOut, user, signOut, getAccessToken } = useMicrosoftAuth();
   const {
     isOnboardingComplete,
@@ -55,7 +57,7 @@ export default function DashboardLayout({
   const isCartOpen = useCartStore((state) => state.isOpen);
   const [cartLoaded, setCartLoaded] = useState(false);
   useEffect(() => { if (isCartOpen) setCartLoaded(true); }, [isCartOpen]);
-  const cartItemCount = useCartStore((state) => state.getItemCount());
+  const cartItemCount = useCartStore(selectScopedItems).length;
   const toggleCart = useCartStore((state) => state.toggleCart);
   const { hostedServices } = getClientFeatureFlags();
 
