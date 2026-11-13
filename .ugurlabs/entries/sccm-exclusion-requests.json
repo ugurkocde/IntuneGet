@@ -1,0 +1,5 @@
+{
+  "title": "SCCM exclusion actions now take effect",
+  "summary": "Excluding an application during SCCM migration now marks it as excluded and records the correct history event.",
+  "type": "fixed"
+}

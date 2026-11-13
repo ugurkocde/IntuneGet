@@ -283,7 +283,8 @@ export async function PATCH(request: NextRequest) {
       updates.partial_matches = [];
     }
 
-    if (body.matchStatus === 'excluded') {
+    const excluded = body.matchStatus === 'excluded' || body.action === 'exclude';
+    if (excluded) {
       updates.match_status = 'excluded';
     }
 
@@ -309,7 +310,7 @@ export async function PATCH(request: NextRequest) {
         app.migration_id,
         auth.userId,
         auth.tenantId,
-        body.matchStatus === 'excluded' ? 'app_excluded' : 'app_matched_manual',
+        excluded ? 'app_excluded' : 'app_matched_manual',
         app.id,
         app.display_name,
         previousValue,
