@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { isIntuneApprovalFailure } from '@/lib/intune-approval';
 import { T, Var } from "gt-next";
 import Link from 'next/link';
@@ -140,7 +140,7 @@ export default function UploadsPage() {
   const [jobsSnapshotKey, setJobsSnapshotKey] = useState<string | null>(null);
   const jobScope = { viewScope, isMspUser, selectedTenantId, userId: user?.id, userTenantId: user?.tenantId };
   const redeployScope = useRef(jobScope);
-  redeployScope.current = jobScope;
+  useLayoutEffect(() => { redeployScope.current = jobScope; });
   const waitOptionsContext: CustomerJobSnapshot = { scope: jobScope, snapshotKey: jobsSnapshotKey, isLoading, error, sessionExpired };
 
   const jobsRequest = useRef<AbortController | null>(null);
