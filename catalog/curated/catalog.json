@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-13T15:42:16.324Z",
-    "expiresAt": "2026-11-20T15:42:16.324Z",
+    "generatedAt": "2026-11-13T17:15:05.447Z",
+    "expiresAt": "2026-11-20T17:15:05.447Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -12590,6 +12590,94 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winscp/1418cbae1430219b1706dd76.json"
           }
         }
+      },
+      {
+        "id": "nodejs-lts:3fb8a8ff779e7dbf192ff19c",
+        "candidate": {
+          "appId": "nodejs-lts",
+          "version": "24.22.3",
+          "installerUrl": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-x64.msi",
+          "vendorSha256": "4a1ab5bdec5434bae58efae6c3e5077a011f6f1e76d2b47b7b10af043f7db545",
+          "releaseNotesUrl": "https://nodejs.org/en/blog/release/v24.22.3",
+          "discoveredAt": "2026-11-11T17:15:05.79Z",
+          "id": "3fb8a8ff779e7dbf192ff19c"
+        },
+        "installerSha256": "4a1ab5bdec5434bae58efae6c3e5077a011f6f1e76d2b47b7b10af043f7db545",
+        "executionProfileSha256": "0362EFCE8C11BE0B6B7D2DC11EA4C0AB303A1FBEA66F353EF542E02D9A4A613A",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-13T17:15:05.447Z",
+        "evidence": {
+          "verifiedAt": "2026-11-13T16:45:44.1292639Z",
+          "installerSha256": "4a1ab5bdec5434bae58efae6c3e5077a011f6f1e76d2b47b7b10af043f7db545",
+          "installerVersion": "24.22.3",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/nodejs-lts/3fb8a8ff779e7dbf192ff19c.json",
+          "signature": {
+            "publisher": "OpenJS Foundation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "f490f28d73605eee269cbe4b36de865015318829",
+            "websiteCommit": "70ef8bd5e0aaee872c157974ab890b3d7cd95339",
+            "runId": "43463408869",
+            "runAttempt": 1,
+            "artifactId": "14058522193",
+            "artifactSha256": "32ce5fbacf714abdf3225e085d21654be6a284252dc5504ec31db633850ee350"
+          },
+          "security": {
+            "status": "clean",
+            "signatureVersion": "1.463.283.0",
+            "installerSha256": "4a1ab5bdec5434bae58efae6c3e5077a011f6f1e76d2b47b7b10af043f7db545",
+            "scannedAt": "2026-11-13T16:42:37.127305Z",
+            "scanner": "defender",
+            "engineVersion": "1.1.26100.4",
+            "malicious": 0,
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/nodejs-lts/3fb8a8ff779e7dbf192ff19c.json"
+          },
+          "qa": {
+            "installerVersion": "24.22.3",
+            "upgradeFromVersion": "24.22.2",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "testLevel": "psadt-package",
+            "architecture": "x64",
+            "executionProfileSha256": "0362EFCE8C11BE0B6B7D2DC11EA4C0AB303A1FBEA66F353EF542E02D9A4A613A",
+            "candidateId": "3fb8a8ff779e7dbf192ff19c",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "previousInstallerSha256": "9231bf64d19bef391dd5ee8af65411d3799c3c44a842d2320849cc1da60b6b6d",
+            "executionContext": "LocalSystem",
+            "installerSha256": "4a1ab5bdec5434bae58efae6c3e5077a011f6f1e76d2b47b7b10af043f7db545",
+            "testedAt": "2026-11-13T16:45:37.236324Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/nodejs-lts/3fb8a8ff779e7dbf192ff19c.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": [
@@ -12598,5 +12686,5 @@
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "dRTS3YTZbaBv6cEJrYaJ5q/ZzQZYwhWU9Sy4ZQQhID9EdVcYOoscFR7X9a++aIG6Vq4IaZQuh/Rvm0eLpF7vBA=="
+  "signature": "Jh81xao/WpyuSerLyoXwtqq/EqO4/W1XVurW/OcewyQ1s3vUfInsUc3LrL70Xy2tiEFK1S3t0fAF8mZKMrsRBg=="
 }
