@@ -1,0 +1,5 @@
+{
+  "title": "App Updates shows when a check could not complete",
+  "summary": "Missing sessions and failed refreshes now show a retryable error instead of claiming every app is up to date. The last successful check stays visible when a later refresh fails.",
+  "type": "fixed"
+}
