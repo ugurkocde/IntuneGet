@@ -69,3 +69,16 @@ it('keeps retry reads bounded while giving unread jobs a turn', async () => {
  await act(async()=>vi.advanceTimersByTimeAsync(5000));
  expect(extraCalls()).toHaveLength(8); expect(extraCalls().some(([url])=>String(url).endsWith(id(5)))).toBe(true);
 });
+
+it('keeps a dismissed highlighted job out of the next refreshed list', async () => {
+ f.ids=id(51); let dismissed=false;
+ f.fetch.mockImplementation(async(url:string) => {
+  if(url==='/api/package/cancel'){dismissed=true;return Response.json({success:true});}
+  if(url.includes('?jobId='))return dismissed?Response.json({error:'Not found'},{status:404}):Response.json({job:job(51,'Dismiss fixture')});
+  return Response.json({jobs:[]});
+ });
+ await render(); expect(document.body.textContent).toContain('Dismiss fixture');
+ await act(async()=>[...document.querySelectorAll('button')].find(b=>b.textContent?.trim()==='Dismiss')!.click());
+ await act(async()=>[...document.querySelectorAll('button')].filter(b=>b.textContent?.trim()==='Dismiss').at(-1)!.click());
+ expect(dismissed).toBe(true); expect(document.body.textContent).not.toContain('Dismiss fixture');
+});

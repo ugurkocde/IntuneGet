@@ -323,6 +323,7 @@ export default function UploadsPage() {
         throw new Error(`Failed to cancel job (${response.status})`);
       }
 
+      if (dismiss) progressJobs.current.delete(jobId);
       // Silently sync with server to pick up any fields set by the backend
       fetchJobs();
     } catch (err) {
