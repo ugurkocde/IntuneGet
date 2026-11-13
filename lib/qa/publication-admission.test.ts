@@ -5,6 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { beforeAll, beforeEach, afterAll, expect, it } from 'vitest';
 
 let db: PGlite;
+let capacityMigration:string;
+let beforeCapacity:Record<string,unknown>;
 const canonical=JSON.stringify({toolchain:{packagerCommit:'a'.repeat(40)}});
 const profile=createHash('sha256').update(canonical).digest('hex').toUpperCase();
 const row={winget_id:'Example.App',version:'1.0',architecture:'x64',sha256:'b'.repeat(64),profile_sha256:profile,
@@ -22,6 +24,11 @@ beforeAll(async()=>{
  create table curated_excluded_apps(winget_id text,reason text);
  create table catalog_file_reputation(sha256 text,status text,malicious int,suspicious int,engine_count_version int,total_engines int);`);
  if(!process.env.QA_PUBLICATION_BASELINE)await db.exec(await readFile(new URL('../../supabase/migrations/20261113032500_qa_publication_allrow_admission.sql',import.meta.url),'utf8'));
+ beforeCapacity=(await db.query<Record<string,unknown>>("select pg_get_functiondef(oid) definition,proowner,proacl::text,prosecdef,proconfig,provolatile from pg_proc where oid='check_qa_result_publication_admission(text,jsonb)'::regprocedure")).rows[0];
+ capacityMigration=await readFile(new URL('../../supabase/migrations/20261113112519_qa_publication_capacity_preservation.sql',import.meta.url),'utf8');
+ // Only the disposable fixture normalizes pg_get_functiondef formatting for its PG build.
+ capacityMigration=capacityMigration.replace('3cead78d722323655ace7a1d803977285bc93cc38322c03e81246656e293aa51',createHash('sha256').update(String(beforeCapacity.definition)).digest('hex'));
+ if(!process.env.QA_PUBLICATION_CAPACITY_BASELINE)await db.exec(capacityMigration);
 },30000);
 beforeEach(async()=>{
  await db.exec('truncate qa_candidates,qa_installer_security_holds,package_eligibility_blocks,qa_package_blocks,curated_excluded_apps,catalog_file_reputation');
@@ -29,9 +36,9 @@ beforeEach(async()=>{
  await db.query("insert into catalog_file_reputation values($1,'found',0,0,2,50)",[row.sha256]);
 });
 afterAll(async()=>db?.close());
-it('admits a fully bound clean own result and twenty already-main carried rows without truncation',async()=>{
- const rows=[row,...Array.from({length:20},(_,i)=>({...row,own:false,carried:true,run_id:String(i+1000),profile_sha256:i.toString(16).toUpperCase().padStart(64,'0'),vt_status:'not_found',malicious:null,engines:null}))];
- expect(await call(rows)).toMatchObject({admitted:true});expect((await call(rows)).rows).toHaveLength(21);
+it('admits a fully bound clean own result and twenty-one already-main carried rows without truncation',async()=>{
+ const rows=[row,...Array.from({length:21},(_,i)=>({...row,own:false,carried:true,run_id:String(i+1000),profile_sha256:i.toString(16).toUpperCase().padStart(64,'0'),vt_status:'not_found',malicious:null,engines:null}))];
+ expect(await call(rows)).toMatchObject({admitted:true});expect((await call(rows)).rows).toHaveLength(22);
  await expect(call([...rows,{...rows[1]}])).rejects.toThrow(/bound/);
 });
 it.each(['hash','app','tuple','excluded'])('denies every carried or own row with an active %s hold',async kind=>{
@@ -61,4 +68,19 @@ it('authenticates before inspecting rows and exposes no caller table privileges'
  await expect(call([], 'wrong')).rejects.toThrow(/authentication/);
  expect((await db.query<{v:boolean}>("select has_function_privilege('anon','check_qa_result_publication_admission(text,jsonb)','EXECUTE') v")).rows[0].v).toBe(true);
  expect((await db.query<{v:boolean}>("select has_table_privilege('anon','qa_candidates','SELECT') v")).rows[0].v).toBe(false);
+});
+
+it('capacity migration preserves every function property and the complete body except its row limit',async()=>{
+ const after=(await db.query<Record<string,unknown>>("select pg_get_functiondef(oid) definition,proowner,proacl::text,prosecdef,proconfig,provolatile from pg_proc where oid='check_qa_result_publication_admission(text,jsonb)'::regprocedure")).rows[0];
+ expect(after).toEqual({...beforeCapacity,definition:String(beforeCapacity.definition).replace('pg_catalog.jsonb_array_length(p_rows) not between 1 and 21','pg_catalog.jsonb_array_length(p_rows) not between 1 and 22')});
+ await expect(db.exec(capacityMigration)).rejects.toThrow(/source drift/);
+});
+it('capacity migration refuses function property drift without changing the function',async()=>{
+ const original=String((await db.query<{definition:string}>("select pg_get_functiondef('check_qa_result_publication_admission(text,jsonb)'::regprocedure) definition")).rows[0].definition);
+ try{
+  await db.exec(original.replace('between 1 and 22','between 1 and 21').replace("SET search_path TO ''","SET search_path TO 'public'"));
+  const before=(await db.query<{definition:string}>("select pg_get_functiondef('check_qa_result_publication_admission(text,jsonb)'::regprocedure) definition")).rows[0].definition;
+  await expect(db.exec(capacityMigration)).rejects.toThrow(/source drift/);
+  expect((await db.query<{definition:string}>("select pg_get_functiondef('check_qa_result_publication_admission(text,jsonb)'::regprocedure) definition")).rows[0].definition).toBe(before);
+ }finally{await db.exec(original);}
 });

@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
     }
 
     const jobs: PackagingJobRecord[] = [];
-    const errors: { wingetId: string; error: string }[] = [];
+    const errors: { wingetId: string; error: string; code?: string }[] = [];
 
     // ========================================================================
     // Handle Store apps - deploy synchronously via Graph API (no packaging)
@@ -909,6 +909,7 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
+            const uncertainCode = result.reason instanceof WorkflowDispatchUnconfirmedError ? result.reason.code : undefined;
             const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError || result.reason instanceof WorkflowDispatchUnconfirmedError ? result.reason : null;
             // The ordinary QA resume path rebuilds and revalidates hosted inputs.
             // Custom uploads do not use that path and must not be enqueued here.
@@ -932,7 +933,7 @@ export async function POST(request: NextRequest) {
                 winget_id: dispatch.item.wingetId, version: dispatch.item.version,
                 display_name: dispatch.item.displayName, publisher: dispatch.item.publisher,
                 status: 'awaiting_qa', package_config: dispatch.item, created_at: dispatch.createdAt });
-              else errors.push({ wingetId: dispatch.item.wingetId,
+              else errors.push({ wingetId: dispatch.item.wingetId, ...(uncertainCode ? { code: uncertainCode } : {}),
                 error: retryWriteFailed
                   ? 'Packaging could not schedule its automatic retry. Refresh the deployment status.'
                   : 'Packaging status changed before the retry could be scheduled. Refresh the deployment status.' });
@@ -976,6 +977,7 @@ export async function POST(request: NextRequest) {
             errors.push({
               wingetId: dispatch?.item.wingetId || 'unknown',
               error: dispatchError,
+              ...(uncertainCode ? { code: uncertainCode } : {}),
             });
           }
         }

@@ -12,7 +12,7 @@ vi.hoisted(() => {
     removeItem: (key: string) => values.delete(key),
   } });
 });
-const mocks = vi.hoisted(() => ({ push: vi.fn(), success: vi.fn(), error: vi.fn() }));
+const mocks = vi.hoisted(() => ({ push: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() }));
 const auth = vi.hoisted(() => ({
   isAuthenticated: true, user: { id: 'test-user', tenantId: 'test-tenant' },
   getAccessToken: vi.fn().mockResolvedValue('test-token'),
@@ -22,7 +22,7 @@ const msp = vi.hoisted(() => ({ isMspUser: false, selectedTenantId: null as stri
 vi.mock('@/hooks/useMspOptional', () => ({ useMspOptional: () => msp }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
-vi.mock('sonner', () => ({ toast: { success: mocks.success, error: mocks.error } }));
+vi.mock('sonner', () => ({ toast: { success: mocks.success, warning: mocks.warning, error: mocks.error } }));
 vi.mock('@/components/AdminConsentBanner', () => ({ clearConsentPending: vi.fn(), isConsentPending: () => false }));
 import { UploadCart } from './UploadCart';
 import { useCartStore } from '@/stores/cart-store';
@@ -106,16 +106,17 @@ it('rejects an old completion after switching away and back to a new cart', asyn
  expect(useCartStore.getState().items.map(value => value.id)).toEqual(['new-cart-item']);
  expect(mocks.success).not.toHaveBeenCalled();
 });
-it('does not submit apps added while token acquisition is pending', async () => {
- const b = await mountCart(Response.json({ success: true, jobs: [{ id: 'job' }] }));
+it('submits only the reviewed selection and preserves apps added during token acquisition', async () => {
+ const b = await mountCart(Response.json({ success: true, jobs: [{ id: 'job', package_config: item }] }));
  let resolve!: (value: string) => void; auth.getAccessToken.mockImplementationOnce(() => new Promise<string>(r => { resolve = r; }));
  await act(async () => b.click());
  await act(async () => useCartStore.setState({ items: [...useCartStore.getState().items, { ...item, id: 'not-reviewed' }] }));
  await act(async () => resolve('fixture-token'));
- expect(vi.mocked(fetch).mock.calls.filter(([url, opts]) => url === '/api/package' && opts?.method === 'POST')).toHaveLength(0);
- expect(useCartStore.getState().items.map(value => value.id)).toEqual(['test-app', 'not-reviewed']);
+ const calls = vi.mocked(fetch).mock.calls.filter(([url, opts]) => url === '/api/package' && opts?.method === 'POST');
+ expect(calls).toHaveLength(1);
+ expect(JSON.parse(String(calls[0][1]?.body)).items.map((value: Win32CartItem) => value.id)).toEqual(['test-app']);
+ expect(useCartStore.getState().items.map(value => value.id)).toEqual(['not-reviewed']);
 });
-
 it('does not show a previous tenant request error on the new cart', async () => {
  let reject!: (reason: Error) => void;
  const b = await mountCart(new Promise<Response>((_resolve, r) => { reject = r; }));
