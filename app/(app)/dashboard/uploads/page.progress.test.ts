@@ -49,3 +49,23 @@ it('does not fetch highlighted jobs individually in tenant view', async () => {
  await render(); f.fetch.mockClear(); const button=[...document.querySelectorAll('button')].find(b=>b.textContent?.trim()==='All in tenant')!;
  await act(async()=>button.click()); expect(extraCalls()).toHaveLength(0); expect(f.fetch.mock.calls.some(([url])=>url==='/api/package?scope=tenant')).toBe(true);
 });
+
+it.each(['network', 'server'])('retries a transient %s progress lookup on the existing refresh', async (failure) => {
+ vi.useFakeTimers(); f.ids=id(51); let attempts=0;
+ f.fetch.mockImplementation(async (url:string) => {
+  if (!url.includes('?jobId=')) return Response.json({jobs:[]});
+  if (attempts++ === 0) { if(failure === 'network') throw new Error('Synthetic network failure'); return Response.json({error:'Synthetic unavailable'}, {status:503}); }
+  return Response.json({job:job(51,'Recovered requested app')});
+ });
+ await render(); expect(extraCalls()).toHaveLength(1);
+ await act(async()=>vi.advanceTimersByTimeAsync(5000));
+ expect(extraCalls()).toHaveLength(2); expect(document.body.textContent).toContain('Recovered requested app');
+});
+
+it('keeps retry reads bounded while giving unread jobs a turn', async () => {
+ vi.useFakeTimers(); f.ids=[1,2,3,4,5].map(id).join(',');
+ f.fetch.mockImplementation(async(url:string)=>url.includes('?jobId=') ? Response.json({error:'Synthetic unavailable'},{status:503}) : Response.json({jobs:[]}));
+ await render(); expect(extraCalls()).toHaveLength(4);
+ await act(async()=>vi.advanceTimersByTimeAsync(5000));
+ expect(extraCalls()).toHaveLength(8); expect(extraCalls().some(([url])=>String(url).endsWith(id(5)))).toBe(true);
+});

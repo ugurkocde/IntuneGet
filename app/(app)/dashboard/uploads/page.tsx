@@ -148,7 +148,7 @@ export default function UploadsPage() {
   const waitOptionsContext: CustomerJobSnapshot = { scope: jobScope, snapshotKey: jobsSnapshotKey, isLoading, error, sessionExpired };
 
   const jobsRequest = useRef<AbortController | null>(null);
-  const progressJobs = useRef(new Map<string, { job: PackagingJob | null; fetchedAt: number }>());
+  const progressJobs = useRef(new Map<string, { job: PackagingJob | null; fetchedAt: number; retryable?: boolean }>());
   useEffect(() => () => { jobsRequest.current?.abort(); jobsRequest.current = null; progressJobs.current.clear(); }, [viewScope, isMspUser, selectedTenantId, user?.id, user?.tenantId, highlightedJobsParam]);
 
   const fetchJobs = useCallback(async (showRefreshing = false) => {
@@ -204,17 +204,21 @@ export default function UploadsPage() {
       if (viewScope === 'mine') {
         const requested = [...new Set(highlightedJobsParam.split(',').filter(id => PROGRESS_JOB_ID.test(id)))];
         const cache = progressJobs.current;
-        const pending = requested.filter(id => !merged.has(id) && (!cache.has(id) || (cache.get(id)?.job && ACTIVE_JOB_STATUSES.includes(cache.get(id)!.job!.status))))
+        const pending = requested.filter(id => !merged.has(id) && (!cache.has(id) || cache.get(id)?.retryable || (cache.get(id)?.job && ACTIVE_JOB_STATUSES.includes(cache.get(id)!.job!.status))))
           .sort((a, b) => Number(cache.has(a)) - Number(cache.has(b)) || (cache.get(a)?.fetchedAt ?? 0) - (cache.get(b)?.fetchedAt ?? 0)).slice(0, 4);
         await Promise.all(pending.map(async id => {
           try {
             const extra = await fetch(`/api/package?jobId=${encodeURIComponent(id)}`, { signal: controller.signal, headers: { Authorization: `Bearer ${accessToken}` } });
-            const detail = extra.ok ? await extra.json() : null;
+            if (!extra.ok) {
+              if (!controller.signal.aborted) cache.set(id, { job: cache.get(id)?.job ?? null, fetchedAt: Date.now(), retryable: extra.status !== 404 });
+              return;
+            }
+            const detail = await extra.json();
             if (controller.signal.aborted) return;
             const job = detail?.job as (PackagingJob & { archived_at?: string | null }) | undefined;
             cache.set(id, { job: job && job.id === id && job.user_id === requestUserId && !job.archived_at ? job : null, fetchedAt: Date.now() });
           } catch {
-            if (!controller.signal.aborted) cache.set(id, { job: null, fetchedAt: Date.now() });
+            if (!controller.signal.aborted) cache.set(id, { job: cache.get(id)?.job ?? null, fetchedAt: Date.now(), retryable: true });
           }
         }));
         if (controller.signal.aborted) return;
@@ -252,7 +256,7 @@ export default function UploadsPage() {
       ACTIVE_JOB_STATUSES.includes(job.status)
     );
 
-    const unresolvedProgress = viewScope === 'mine' && highlightedJobsParam.split(',').some(id => PROGRESS_JOB_ID.test(id) && !jobs.some(job => job.id === id) && !progressJobs.current.has(id));
+    const unresolvedProgress = viewScope === 'mine' && highlightedJobsParam.split(',').some(id => PROGRESS_JOB_ID.test(id) && !jobs.some(job => job.id === id) && (!progressJobs.current.has(id) || progressJobs.current.get(id)?.retryable));
     if ((!hasActiveJobs && !unresolvedProgress) || sessionExpired) return;
 
     let interval: ReturnType<typeof setInterval>;
