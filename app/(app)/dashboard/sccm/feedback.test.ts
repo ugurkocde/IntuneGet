@@ -103,3 +103,27 @@ it.each([
   expect(node.textContent).toContain(expected);
   expect(node.querySelector('img')).toBeNull();
 });
+
+it('clears previous row errors when an import retry fails before receiving a response', async () => {
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(response({ error: 'Invalid rows', errors: [{ row: 2, message: 'Old row failure' }] }, 400))
+    .mockRejectedValueOnce(new Error('Fixture network failure'));
+  vi.stubGlobal('fetch', fetchMock);
+  await act(async () => root.render(createElement(ImportPage)));
+  const input = node.querySelector('input[type="file"]') as HTMLInputElement;
+  Object.defineProperty(input, 'files', { configurable: true,
+    value: [new File(['DisplayName\nFixture'], 'fixture.csv', { type: 'text/csv' })] });
+  await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+  const click = async (text: string) => {
+    const button = [...node.querySelectorAll('button')].find(b => b.textContent?.includes(text));
+    expect(button).toBeDefined();
+    await act(async () => button!.click());
+  };
+  await click('Import Applications');
+  expect(node.querySelector('ul[aria-label="Import errors"]')).not.toBeNull();
+  await click('Try Again');
+  await click('Import Applications');
+  expect(node.textContent).toContain('Fixture network failure');
+  expect(node.querySelector('ul[aria-label="Import errors"]')).toBeNull();
+  expect(node.textContent).not.toContain('Old row failure');
+});

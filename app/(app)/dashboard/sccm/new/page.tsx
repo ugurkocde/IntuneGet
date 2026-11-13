@@ -142,7 +142,7 @@ export default function NewMigrationPage() {
       return;
     }
 
-    setState(prev => ({ ...prev, step: 'importing', error: null }));
+    setState(prev => ({ ...prev, step: 'importing', error: null, result: null }));
 
     try {
       const accessToken = await getAccessToken();
