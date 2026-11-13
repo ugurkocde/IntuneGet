@@ -1,0 +1,5 @@
+{
+  "title": "Pages load again for returning users",
+  "summary": "Opening IntuneGet in a browser that still held a session could show \"Something Went Wrong\" until you pressed Try Again. Pages now load directly.",
+  "type": "fixed"
+}

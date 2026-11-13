@@ -1,7 +1,12 @@
 "use client";
 
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionRequiredAuthError, InteractionStatus } from "@azure/msal-browser";
+import {
+  InteractionRequiredAuthError,
+  InteractionStatus,
+  type AccountInfo,
+  type IPublicClientApplication,
+} from "@azure/msal-browser";
 import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
@@ -17,16 +22,38 @@ export function isBlockedPopupError(error: unknown): boolean {
 }
 
 /**
+ * The active account, or null while MSAL is still starting.
+ *
+ * MSAL throws when its storage is read before initialization has finished.
+ * This hook renders before that point on every page load, and a browser that
+ * already holds a session has an active account to look up, so an unguarded
+ * read crashed the page for returning users.
+ */
+function readActiveAccount(
+  instance: IPublicClientApplication,
+  accounts: AccountInfo[],
+  isStarting: boolean
+): AccountInfo | null {
+  if (isStarting) return null;
+  try {
+    return instance.getActiveAccount() ?? accounts[0] ?? null;
+  } catch {
+    return accounts[0] ?? null;
+  }
+}
+
+/**
  * Hook to manage Microsoft authentication and access tokens
  * Provides sign-in, sign-out, and token management functionality
  */
 export function useMicrosoftAuth() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
-  const rawActive = instance.getActiveAccount() ?? accounts[0] ?? null;
+  const isStarting = inProgress === InteractionStatus.Startup;
+  const rawActive = readActiveAccount(instance, accounts, isStarting);
   const activeKey = rawActive ? JSON.stringify([rawActive.homeAccountId, rawActive.localAccountId, rawActive.tenantId]) : null;
   // MSAL can return a new object for the same account on every lookup.
-  const active = useMemo(() => instance.getActiveAccount() ?? accounts[0] ?? null, [instance, accounts, activeKey]);
+  const active = useMemo(() => readActiveAccount(instance, accounts, isStarting), [instance, accounts, activeKey, isStarting]);
 
   // Track sign-out in progress to prevent auth guard redirects
   const [isSigningOut, setIsSigningOut] = useState(false);
