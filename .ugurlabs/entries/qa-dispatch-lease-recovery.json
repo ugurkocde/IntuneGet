@@ -1,0 +1,5 @@
+{
+  "title": "Preserve QA dispatch lease identity for recovery",
+  "summary": "QA dispatches now carry their exact lease timestamp so recovery can distinguish a failed start from a later attempt. A guarded recovery function can return an unstarted lease to the queue without resetting its retry budget.",
+  "type": "fixed"
+}

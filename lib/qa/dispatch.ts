@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface QaDispatchCandidate {
   id: string;
+  dispatched_at: string | null;
   winget_id: string;
   definition_path: string | null;
   version: string;
@@ -149,6 +150,7 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
         app_definition: candidate.definition_path || '',
         candidate_payload: JSON.stringify({
           id: candidate.id,
+          dispatchedAt: candidate.dispatched_at,
           wingetId: candidate.winget_id,
           version: candidate.version,
           architecture: candidate.architecture,
