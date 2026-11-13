@@ -165,10 +165,14 @@ export default function NewMigrationPage() {
         }),
       });
 
-      const data: SccmImportResponse = await response.json();
+      const data: SccmImportResponse & { error?: unknown } = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.errors?.[0]?.message || 'Failed to import applications');
+        setState(prev => ({ ...prev, result: data }));
+        throw new Error(
+          (typeof data.error === 'string' ? data.error : '') ||
+          data.errors?.[0]?.message || 'Failed to import applications'
+        );
       }
 
       toast.success(`Successfully imported ${data.validApps} applications`);
@@ -416,6 +420,16 @@ export default function NewMigrationPage() {
     </div>
   );
 
+  const renderImportErrors = () => state.result?.errors?.length ? (
+    <ul aria-label="Import errors" className="mb-6 space-y-2 text-left text-sm text-text-secondary">
+      {state.result.errors.map((error, index) => (
+        <li key={index}>
+          {error.row !== undefined && <T>Row {error.row}: </T>}{error.message}
+        </li>
+      ))}
+    </ul>
+  ) : null;
+
   const renderCompleteStep = () => (
     <div className="max-w-md mx-auto text-center">
       <div className="w-20 h-20 mx-auto bg-status-success/10 rounded-xl flex items-center justify-center mb-6">
@@ -431,6 +445,7 @@ export default function NewMigrationPage() {
         )}
       </p>
 
+      {renderImportErrors()}
       <div className="flex items-center justify-center gap-4">
         <Button
           variant="outline"
@@ -457,6 +472,7 @@ export default function NewMigrationPage() {
       </div>
       <h2 className="text-xl font-semibold text-text-primary mb-2"><T>Import Failed</T></h2>
       <p className="text-status-error mb-6">{state.error}</p>
+      {renderImportErrors()}
 
       <div className="flex items-center justify-center gap-4">
         <Button
