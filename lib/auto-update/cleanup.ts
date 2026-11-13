@@ -131,12 +131,13 @@ export async function handleAutoUpdateJobCompletion(
     // and increment consecutive_failures for circuit breaker
     const { data: policy } = await supabase
       .from('app_update_policies')
-      .select('consecutive_failures')
+      .select('consecutive_failures, policy_type')
       .eq('id', policyId)
       .single();
 
     const newFailureCount = (policy?.consecutive_failures ?? 0) + 1;
-    const shouldDisable = newFailureCount >= DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures;
+    const shouldDisable = policy?.policy_type === 'auto_update' &&
+      newFailureCount >= DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures;
 
     const updates: Record<string, unknown> = {
       last_auto_update_version: null,

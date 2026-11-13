@@ -966,12 +966,13 @@ export class AutoUpdateTrigger {
     // Get current failure count
     const { data: policy } = await this.supabase
       .from('app_update_policies')
-      .select('consecutive_failures')
+      .select('consecutive_failures, policy_type')
       .eq('id', policyId)
       .single();
 
     const newCount = (policy?.consecutive_failures || 0) + 1;
-    const shouldDisable = newCount >= this.safetyConfig.maxConsecutiveFailures;
+    const shouldDisable = policy?.policy_type === 'auto_update' &&
+      newCount >= this.safetyConfig.maxConsecutiveFailures;
 
     const updates: Record<string, unknown> = {
       consecutive_failures: newCount,
