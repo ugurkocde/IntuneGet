@@ -3,7 +3,8 @@
 import type { AutoUpdateScope } from '@/types/update-policies';
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { T, Var } from "gt-next";
+import { T, Var, useLocale } from "gt-next";
+import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -71,6 +72,8 @@ const sortLabels: Record<SortOption, string> = {
 
 export default function UpdatesPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const { user } = useMicrosoftAuth();
   const [search, setSearch] = useState('');
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
   const [showUnmanaged, setShowUnmanaged] = useState(false);
@@ -93,6 +96,14 @@ export default function UpdatesPage() {
   const { settings: userSettings } = useUserSettings();
   const { isMspUser, selectedTenantId, managedTenants } = useMspOptional();
   const tenantId = isMspUser ? selectedTenantId || undefined : undefined;
+  const refreshScope = JSON.stringify([user?.id ?? null, user?.tenantId ?? null, tenantId ?? null]);
+  const [checks, setChecks] = useState<Record<string, { checkedAt?: number; error?: Error; pending?: boolean }>>({});
+  const currentRefreshScope = useRef(refreshScope);
+  const activeRefreshes = useRef(new Set<string>());
+  useEffect(() => { currentRefreshScope.current = refreshScope; }, [refreshScope]);
+  const lastCheckedAt = checks[refreshScope]?.checkedAt;
+  const refreshError = checks[refreshScope]?.error;
+  const refreshPending = checks[refreshScope]?.pending === true;
   const hasGrantedManagedTenants = managedTenants.some(
     (tenant) => tenant.is_active && tenant.consent_status === 'granted' && Boolean(tenant.tenant_id)
   );
@@ -116,6 +127,8 @@ export default function UpdatesPage() {
     isLoading: isLoadingHistory,
     fetchMore: fetchMoreHistory,
     hasMore: hasMoreHistory,
+    error: historyError,
+    refetch: refetchHistory,
   } = useAutoUpdateHistory({ tenantId });
 
   const { refreshUpdates, isRefreshing } = useRefreshAvailableUpdates({ tenantId });
@@ -125,6 +138,9 @@ export default function UpdatesPage() {
 
   const updates = updatesData?.updates || [];
   const history = historyData?.history || [];
+  const isCheckingUpdates = isLoadingUpdates || isRefreshing || refreshPending || (
+    !updatesError && !refreshError && (!updatesData || (updates.length === 0 && lastCheckedAt === undefined))
+  );
 
   // Filter and sort updates
   const filteredUpdates = useMemo(() => {
@@ -349,25 +365,49 @@ export default function UpdatesPage() {
     }
   }, [eligibleForBulkUpdate, triggerUpdate]);
 
+  const hasTriggeredAutoRefresh = useRef(new Set<string>());
   const handleRefresh = useCallback(async () => {
-    await refreshUpdates();
-    await refetchUpdates();
-  }, [refreshUpdates, refetchUpdates]);
+    if (activeRefreshes.current.has(refreshScope)) return;
+    activeRefreshes.current.add(refreshScope);
+    const updateCheck = (patch: { checkedAt?: number; error?: Error; pending?: boolean }) => {
+      setChecks(previous => ({ ...previous, [refreshScope]: { ...previous[refreshScope], ...patch } }));
+    };
+    updateCheck({ error: undefined, pending: true });
+    const scopeWasAbandoned = () => {
+      if (currentRefreshScope.current === refreshScope) return false;
+      if (lastCheckedAt === undefined) hasTriggeredAutoRefresh.current.delete(refreshScope);
+      return true;
+    };
+    try {
+      await refreshUpdates();
+      // The query observer follows the current account and tenant.
+      if (scopeWasAbandoned()) return;
+      const result = await refetchUpdates();
+      if (scopeWasAbandoned()) return;
+      if (result.error) throw result.error;
+      updateCheck({ checkedAt: Date.now(), error: undefined });
+    } catch (error) {
+      updateCheck({ error: error instanceof Error ? error : new Error('Failed to check for updates. Please try again.') });
+    } finally {
+      activeRefreshes.current.delete(refreshScope);
+      updateCheck({ pending: false });
+    }
+  }, [refreshUpdates, refetchUpdates, refreshScope, lastCheckedAt]);
 
   // Auto-refresh when initial load returns empty results
-  const hasTriggeredAutoRefresh = useRef(false);
   useEffect(() => {
     if (
       !isLoadingUpdates &&
       !isRefreshing &&
-      !hasTriggeredAutoRefresh.current &&
+      !hasTriggeredAutoRefresh.current.has(refreshScope) &&
+      !updatesError && updatesData !== undefined &&
       !mspTenantSelectionRequired &&
       updates.length === 0
     ) {
-      hasTriggeredAutoRefresh.current = true;
+      hasTriggeredAutoRefresh.current.add(refreshScope);
       void handleRefresh();
     }
-  }, [isLoadingUpdates, isRefreshing, mspTenantSelectionRequired, updates.length, handleRefresh]);
+  }, [isLoadingUpdates, isRefreshing, mspTenantSelectionRequired, updates.length, handleRefresh, refreshScope, updatesError, updatesData]);
 
   // Check if any filters are active
   const hasActiveFilters = search.trim() !== '' || showCriticalOnly || updateTypeFilter !== null;
@@ -383,7 +423,9 @@ export default function UpdatesPage() {
       {/* Header */}
       <PageHeader
         title={<T>App Updates</T>}
-        description={<T>Manage app updates and auto-update policies</T>}
+        description={<><T>Manage app updates and auto-update policies</T>{lastCheckedAt !== undefined && (
+          <span className="block text-xs mt-1"><T>Last successful check</T>: <time dateTime={new Date(lastCheckedAt).toISOString()}>{new Date(lastCheckedAt).toLocaleString(locale)}</time></span>
+        )}</>}
         gradient
         gradientColors="cyan"
         actions={
@@ -393,13 +435,13 @@ export default function UpdatesPage() {
               onClick={() => {
                 void handleRefresh();
               }}
-              disabled={isFetchingUpdates || isRefreshing}
+              disabled={isFetchingUpdates || isRefreshing || refreshPending}
               className="text-text-secondary hover:text-text-primary"
             >
               <RefreshCw
                 className={cn(
                   'w-4 h-4 mr-2',
-                  (isFetchingUpdates || isRefreshing) && 'animate-spin'
+                  (isFetchingUpdates || isRefreshing || refreshPending) && 'animate-spin'
                 )}
               />
               <T>Refresh</T>
@@ -747,7 +789,7 @@ export default function UpdatesPage() {
           icon={Package}
           color="cyan"
           delay={0}
-          loading={isLoadingUpdates}
+          loading={isCheckingUpdates}
           onClick={() => {
             setActiveTab('available');
             setShowCriticalOnly(false);
@@ -759,7 +801,7 @@ export default function UpdatesPage() {
           icon={AlertTriangle}
           color={criticalCount > 0 ? 'warning' : 'neutral'}
           delay={0.1}
-          loading={isLoadingUpdates}
+          loading={isCheckingUpdates}
           description={oldestCriticalAge || undefined}
           onClick={() => {
             setActiveTab('available');
@@ -979,17 +1021,17 @@ export default function UpdatesPage() {
               color="neutral"
               showOrbs={false}
             />
-          ) : isLoadingUpdates ? (
+          ) : isCheckingUpdates ? (
             <UpdateCardSkeleton count={6} />
-          ) : updatesError ? (
+          ) : updatesError || refreshError ? (
             <AnimatedEmptyState
               icon={XCircle}
               title={<T>Failed to load updates</T>}
-              description={updatesError.message}
+              description={(refreshError || updatesError)?.message}
               color="neutral"
               action={{
                 label: <T>Try Again</T>,
-                onClick: () => refetchUpdates(),
+                onClick: () => { void handleRefresh(); },
                 variant: 'secondary',
               }}
             />
@@ -1042,6 +1084,14 @@ export default function UpdatesPage() {
               description={<T>Auto-update history is shown per tenant to avoid mixing deployment timelines.</T>}
               color="neutral"
               showOrbs={false}
+            />
+          ) : historyError ? (
+            <AnimatedEmptyState
+              icon={XCircle}
+              title={<T>Failed to load update history</T>}
+              description={historyError.message}
+              color="neutral"
+              action={{ label: <T>Try Again</T>, onClick: () => { void refetchHistory(); }, variant: 'secondary' }}
             />
           ) : (
             <AutoUpdateHistory
