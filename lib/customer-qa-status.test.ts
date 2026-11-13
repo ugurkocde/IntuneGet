@@ -10,6 +10,12 @@ vi.mock('@/lib/qa/installer-security-holds', () => ({ loadInstallerSecurityHolds
 vi.mock('@/lib/qa/source-backoff', () => ({ qaSourceKey: (row: { id: string }) => row.id, qaSourceRetryAtMany: retries }));
 const id = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
+it.each(['2026-11-10T00:00:00.123456+00:00', '2026-11-10T00:00:00.000Z'])('preserves existing provider request and creation timestamps during display enrichment: %s', async timestamp => {
+  const input = job({ created_at: timestamp, qa_requested_at: timestamp });
+  const [result] = await enrichCustomerQaStatus([input]);
+  expect(result.created_at).toBe(timestamp);
+  expect(result.qa_requested_at).toBe(timestamp);
+});
 const hash = 'a'.repeat(64), profile = 'b'.repeat(64);
 const candidate = (patch = {}) => ({ id, winget_id: 'Example.App', version: '1.0', architecture: 'x64', installer_url: 'https://example.test/file.exe', installer_sha256: hash, package_profile_sha256: profile, status: 'queued', phase: null, next_retry_at: '-infinity', ...patch });
 const job = (patch = {}) => ({ id: 'job1', status: 'awaiting_qa', qa_candidate_id: id, winget_id: 'Example.App', version: '1.0', architecture: 'x64', installer_sha256: hash, ...patch }) as PackagingJob;
