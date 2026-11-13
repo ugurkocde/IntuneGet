@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { hasPermission, type MspRole } from '@/lib/msp-permissions';
+import { CSV_UTF8_BOM, encodeCsvRow } from '@/lib/csv';
 
 /**
  * GET /api/msp/reports/export
@@ -56,6 +57,14 @@ export async function GET(request: NextRequest) {
     if (format !== 'csv') {
       return NextResponse.json(
         { error: 'Only CSV format is currently supported' },
+        { status: 400 }
+      );
+    }
+
+    // The dates end up in a query filter and in the download filename.
+    if (!isIsoDate(startDate) || !isIsoDate(endDate)) {
+      return NextResponse.json(
+        { error: 'start_date and end_date must use the YYYY-MM-DD format' },
         { status: 400 }
       );
     }
@@ -149,26 +158,20 @@ export async function GET(request: NextRequest) {
       job.error_message || '',
     ]);
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row: string[]) =>
-        row.map((cell: string) => {
-          // Escape cells that contain commas, quotes, or newlines
-          const str = String(cell);
-          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return `"${str.replace(/"/g, '""')}"`;
-          }
-          return str;
-        }).join(',')
-      ),
+    // Every cell is quoted and formulas are neutralised. The byte order mark
+    // lets Excel read non-ASCII names as UTF-8.
+    const csvContent = CSV_UTF8_BOM + [
+      encodeCsvRow(headers),
+      ...rows.map((row: string[]) => encodeCsvRow(row)),
     ].join('\n');
 
+    // Both dates were validated as YYYY-MM-DD above.
     const filename = `msp-deployments-${startDate}-to-${endDate}.csv`;
 
     return new Response(csvContent, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
@@ -178,6 +181,13 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** True for a real calendar date written as YYYY-MM-DD. */
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function getDefaultStartDate(): string {

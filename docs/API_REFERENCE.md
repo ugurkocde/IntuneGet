@@ -10,6 +10,8 @@ Most endpoints require:
 Authorization: Bearer <microsoft-access-token>
 ```
 
+The token is the Microsoft Graph access token the portal obtains at sign-in, issued to this deployment's app registration. A Graph token issued to another application (Graph Explorer, the Azure CLI, your own app registration) is rejected with `401`. To let a script of your own call the API, list the client id of its app registration in `ALLOWED_TOKEN_CLIENT_IDS` (comma separated) on your deployment.
+
 Some endpoints support optional auth (public reads), and callback endpoints use HMAC signatures.
 
 ## Rate Limiting
@@ -119,7 +121,9 @@ Policy types:
 |---|---|---|---|
 | `GET/POST` | `/api/msp/organization` | Bearer | Organization bootstrap/read |
 | `GET/POST` | `/api/msp/tenants` | Bearer | Tenant management |
-| `GET` | `/api/msp/tenants/[id]/consent-url` | Bearer | Build admin consent URL |
+| `POST` | `/api/msp/tenants/[id]/consent-url` | Bearer (Owner or Admin) | Build admin consent URL |
+| `GET` | `/api/msp/tenants/consent-callback` | none | Receives the Microsoft consent redirect and forwards to the approval page. Never links a tenant |
+| `GET/POST` | `/api/msp/tenants/consent-approval` | Bearer (administrator of the customer tenant) | Describe and approve an MSP link request |
 | `GET/POST` | `/api/msp/members` | Bearer | Team member management |
 | `PATCH/DELETE` | `/api/msp/members/[id]` | Bearer | Role changes/remove member |
 | `GET/POST` | `/api/msp/batch-deployments` | Bearer | Batch deployment orchestration |

@@ -25,6 +25,18 @@ vi.mock('@/lib/catalog', () => ({
   getCatalogSource: getCatalogSourceMock,
 }));
 
+// Tenant authorization has its own tests in lib/msp/tenant-resolution.test.ts.
+// Here it allows the requested tenant unless a test says otherwise.
+const { resolveTargetTenantIdMock } = vi.hoisted(() => ({ resolveTargetTenantIdMock: vi.fn() }));
+vi.mock('@/lib/msp/tenant-resolution', () => ({
+  resolveTargetTenantId: resolveTargetTenantIdMock,
+}));
+const allowRequestedTenant = async ({ requestedTenantId }: { requestedTenantId: string }) => ({
+  tenantId: requestedTenantId,
+  errorResponse: null,
+});
+
+import { NextResponse } from 'next/server';
 import { POST } from '@/app/api/update-policies/route';
 
 interface TableData {
@@ -152,6 +164,7 @@ describe('POST /api/update-policies', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resolveTargetTenantIdMock.mockImplementation(allowRequestedTenant);
     parseAccessTokenMock.mockResolvedValue({
       userId: 'user-1',
       userEmail: 'user@example.com',
@@ -162,6 +175,37 @@ describe('POST /api/update-policies', () => {
     getCatalogSourceMock.mockReturnValue({
       getAppForInstaller: getAppForInstallerMock,
     });
+  });
+
+  it('asks for the manage_policies permission on the tenant named in the body', async () => {
+    const { supabase } = createSupabaseMock({ existing_policy: null });
+    createServerClientMock.mockReturnValue(supabase);
+
+    await POST(makeRequest({ winget_id: 'Vendor.App', tenant_id: 'tenant-1', policy_type: 'notify' }));
+
+    expect(resolveTargetTenantIdMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        tokenTenantId: 'home-tenant',
+        requestedTenantId: 'tenant-1',
+        requiredPermission: 'manage_policies',
+      })
+    );
+  });
+
+  it('writes nothing when the caller may not act in that tenant', async () => {
+    const { supabase, insertPayloads, updatePayloads } = createSupabaseMock({ existing_policy: { id: 'policy-1' } });
+    createServerClientMock.mockReturnValue(supabase);
+    resolveTargetTenantIdMock.mockResolvedValue({
+      tenantId: 'home-tenant',
+      errorResponse: NextResponse.json({ error: 'Not authorized to access other tenants' }, { status: 403 }),
+    });
+
+    const response = await POST(makeRequest({ winget_id: 'Vendor.App', tenant_id: 'someone-elses-tenant', policy_type: 'auto_update' }));
+
+    expect(response.status).toBe(403);
+    expect(insertPayloads).toHaveLength(0);
+    expect(updatePayloads).toHaveLength(0);
   });
 
   it('derives the current version for pin_version when client omits it', async () => {

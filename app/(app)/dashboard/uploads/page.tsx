@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { isIntuneApprovalFailure } from '@/lib/intune-approval';
 import { T, Var } from "gt-next";
 import Link from 'next/link';
@@ -54,6 +54,7 @@ interface PackagingJob {
   qa_status?: CustomerQaStatus;
   id: string;
   user_id: string;
+  tenant_id?: string;
   user_email?: string | null;
   winget_id: string;
   version: string;
@@ -112,7 +113,7 @@ export default function UploadsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, getAccessToken, signIn } = useMicrosoftAuth();
-  const { isMspUser, selectedTenantId } = useMspOptional();
+  const { isMspUser, selectedTenantId, managedTenants } = useMspOptional();
   const prefersReducedMotion = useReducedMotion();
 
   const [jobs, setJobs] = useState<PackagingJob[]>([]);
@@ -138,6 +139,8 @@ export default function UploadsPage() {
   const [viewScope, setViewScope] = useState<'mine' | 'tenant'>('mine');
   const [jobsSnapshotKey, setJobsSnapshotKey] = useState<string | null>(null);
   const jobScope = { viewScope, isMspUser, selectedTenantId, userId: user?.id, userTenantId: user?.tenantId };
+  const redeployScope = useRef(jobScope);
+  useLayoutEffect(() => { redeployScope.current = jobScope; });
   const waitOptionsContext: CustomerJobSnapshot = { scope: jobScope, snapshotKey: jobsSnapshotKey, isLoading, error, sessionExpired };
 
   const jobsRequest = useRef<AbortController | null>(null);
@@ -329,8 +332,24 @@ export default function UploadsPage() {
   };
 
   const handleRedeploy = async (job: PackagingJob, forceCreate = false) => {
+    const requestScopeKey = customerJobSnapshotKey(redeployScope.current);
+    const matchesOriginalTenant = () => {
+      const scope = redeployScope.current;
+      const targetTenant = scope.isMspUser && scope.selectedTenantId ? scope.selectedTenantId : scope.userTenantId;
+      return Boolean(job.tenant_id && job.user_id === scope.userId && job.tenant_id === targetTenant
+        && requestScopeKey && requestScopeKey === customerJobSnapshotKey(scope));
+    };
+    if (!matchesOriginalTenant()) {
+      setError('Select the original tenant and account before retrying this deployment.');
+      return;
+    }
     const accessToken = await getAccessToken();
     if (!accessToken) return;
+    // Authentication can outlive an account or tenant selection change.
+    if (!matchesOriginalTenant()) {
+      setError('Select the original tenant and account before retrying this deployment.');
+      return;
+    }
     if (!job.package_config) {
       setError('The original package configuration is unavailable. Create a new deployment from the catalog.');
       return;
@@ -343,6 +362,7 @@ export default function UploadsPage() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
+          ...(isMspUser ? { 'X-MSP-Tenant-Id': job.tenant_id! } : {}),
         },
         body: JSON.stringify({
           items: [job.package_config],
@@ -660,6 +680,7 @@ export default function UploadsPage() {
                 onRedeploy={handleRedeploy}
                 isRedeploying={redeployingJobId === job.id}
                 showOwner={viewScope === 'tenant'}
+                tenantLabel={managedTenants?.find(tenant => tenant.tenant_id === job.tenant_id)?.display_name || job.tenant_id || null}
                 waitOptionsContext={waitOptionsContext}
               />
             ))}
@@ -680,6 +701,7 @@ function UploadJobCard({
   isRedeploying,
   showOwner,
   waitOptionsContext,
+  tenantLabel,
 }: {
   job: PackagingJob;
   index: number;
@@ -690,6 +712,7 @@ function UploadJobCard({
   isRedeploying?: boolean;
   showOwner?: boolean;
   waitOptionsContext: CustomerJobSnapshot;
+  tenantLabel: string | null;
 }) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -850,6 +873,9 @@ function UploadJobCard({
                   <><span className="text-overlay/20"> | </span>v{job.version}</>
                 )}
                 <span className="text-overlay/20"> | </span>{job.architecture}
+              </p>
+              <p className="text-text-muted text-xs mt-0.5">
+                {tenantLabel ? <T>Tenant: <Var>{tenantLabel}</Var></T> : <T>Destination tenant unavailable</T>}
               </p>
               {showOwner && job.user_email && (
                 <p className="text-text-muted text-xs mt-0.5">

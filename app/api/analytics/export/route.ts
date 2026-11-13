@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { CSV_UTF8_BOM, encodeCsvRow } from '@/lib/csv';
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,25 +82,16 @@ export async function GET(request: NextRequest) {
       job.installer_type || '',
       job.status,
       job.intune_app_id || '',
-      // escapeCSV below handles quote-doubling uniformly for every column.
+      // encodeCsvRow below quotes every column and neutralises formulas.
       job.error_message || '',
       job.created_at,
       job.completed_at || '',
     ]);
 
-    // Escape CSV values
-    const escapeCSV = (value: string): string => {
-      const str = String(value);
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        // RFC 4180: wrap in quotes and double any embedded quotes.
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-
-    const csvContent = [
-      headers.map(escapeCSV).join(','),
-      ...rows.map((row: string[]) => row.map(escapeCSV).join(',')),
+    // The byte order mark lets Excel read non-ASCII names as UTF-8.
+    const csvContent = CSV_UTF8_BOM + [
+      encodeCsvRow(headers),
+      ...rows.map((row: string[]) => encodeCsvRow(row)),
     ].join('\n');
 
     // Return CSV response
@@ -108,7 +100,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });

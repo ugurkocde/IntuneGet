@@ -629,6 +629,71 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     });
   });
 
+  describe('access is checked again before an auto-update runs', () => {
+    const policy = {
+      id: 'policy-1',
+      user_id: 'user-1',
+      tenant_id: 'tenant-1',
+      winget_id: 'Own.Outdated',
+      policy_type: 'auto_update',
+      is_enabled: true,
+      deployment_config: {},
+    };
+    const membership = {
+      user_id: 'user-1',
+      msp_organization_id: 'org-1',
+      user_tenant_id: 'msp-home-tenant',
+      msp_organizations: { primary_tenant_id: 'msp-home-tenant' },
+    };
+    const link = (isActive: boolean, status = 'granted') => ({
+      msp_organization_id: 'org-1',
+      tenant_id: 'tenant-1',
+      consent_status: status,
+      is_active: isActive,
+    });
+
+    beforeEach(() => {
+      state.tables.app_update_policies = [policy];
+      state.getLatestInstallerInfo.mockResolvedValue({ ok: true, info: { version: '2.0.0' } });
+      state.triggerAutoUpdate.mockResolvedValue({ success: true });
+    });
+
+    it('runs for a user who is not an MSP member', async () => {
+      const body = await runCron();
+      expect(body.autoUpdates).toMatchObject({ triggered: 1 });
+    });
+
+    it('runs for an MSP member while the link to the customer tenant is active and granted', async () => {
+      state.tables.msp_user_memberships = [membership];
+      state.tables.msp_managed_tenants = [link(true)];
+      const body = await runCron();
+      expect(body.autoUpdates).toMatchObject({ triggered: 1 });
+    });
+
+    it.each([
+      ['was deactivated', [link(false)]],
+      ['is no longer granted', [link(true, 'revoked')]],
+      ['does not exist', []],
+      ['belongs to another organization', [{ ...link(true), msp_organization_id: 'org-2' }]],
+    ])('skips the policy of an MSP member when the link %s', async (_name, links) => {
+      state.tables.msp_user_memberships = [membership];
+      state.tables.msp_managed_tenants = links;
+
+      const body = await runCron();
+
+      expect(state.triggerAutoUpdate).not.toHaveBeenCalled();
+      expect(body.autoUpdates).toMatchObject({ triggered: 0, failed: 0 });
+      // The policy itself is left alone: it resumes if access comes back.
+      expect(state.tables.app_update_policies[0].is_enabled).toBe(true);
+    });
+
+    it("runs for an MSP member in the organization's own tenant without any link", async () => {
+      state.tables.msp_user_memberships = [{ ...membership, user_tenant_id: 'tenant-1' }];
+      const body = await runCron();
+      expect(body.autoUpdates).toMatchObject({ triggered: 1 });
+    });
+  });
+
   it('keeps its own row when the teammate copy is older than its deployment', async () => {
     state.tables.update_check_results = [
       updateRow('teammate-copy', 'Own.Outdated', 'intune-teammate-copy', { current_version: '0.5.0' }),

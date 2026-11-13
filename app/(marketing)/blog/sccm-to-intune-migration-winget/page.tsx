@@ -140,7 +140,7 @@ const faqJsonLd = {
       name: "Is IntuneGet free for SCCM to Intune migration?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. IntuneGet is completely free and open source under the MIT license. There are no seat limits, no per-device fees, and no premium tiers. You can use it to migrate and deploy as many Winget-available applications to Intune as needed at zero cost. This makes it particularly valuable for large-scale SCCM migrations where re-packaging hundreds of applications manually would require significant time investment.",
+        text: "Yes. IntuneGet is completely free and open source under the AGPL-3.0 license. There are no seat limits, no per-device fees, and no premium tiers. You can use it to migrate and deploy as many Winget-available applications to Intune as needed at zero cost. This makes it particularly valuable for large-scale SCCM migrations where re-packaging hundreds of applications manually would require significant time investment.",
       },
     },
   ],
@@ -619,8 +619,8 @@ Write-Host "Results saved to C:\\Migration\\WingetMatchResults.csv"`}</code>
                 >
                   sign in and start deploying
                 </Link>{" "}
-                immediately -- IntuneGet is free and open source under the MIT
-                license with no seat limits or usage restrictions.</T>
+                immediately. IntuneGet is free and open source under the AGPL-3.0
+                license with no seat limits.</T>
               </p>
 
               {/* Handling Apps Not in Winget */}
@@ -847,7 +847,7 @@ Write-Host "Results saved to C:\\Migration\\WingetMatchResults.csv"`}</code>
                   </h3>
                   <p className="text-text-secondary leading-relaxed">
                     <T>Yes. IntuneGet is completely free and open source under the
-                    MIT license. There are no seat limits, no per-device fees,
+                    AGPL-3.0 license. There are no seat limits, no per-device fees,
                     and no premium tiers. You can use it to migrate and deploy as
                     many Winget-available applications to Intune as needed at
                     zero cost. This makes it particularly valuable for
