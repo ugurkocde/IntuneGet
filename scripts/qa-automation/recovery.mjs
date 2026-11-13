@@ -67,6 +67,46 @@ export async function recoverStalledPublication({ candidate: c, github, patch, n
   return { action: 'publication_cancel_requested' };
 }
 
+async function publicationScope(candidate, rows, now) {
+  const held = await rows('qa_candidates', { select: 'winget_id', status: 'eq.error',
+    failure_summary: `eq.${PUBLICATION_FAILURE}`, next_retry_at: 'eq.infinity',
+    winget_id: `neq.${candidate.winget_id}`, updated_at: `gte.${new Date(now - 24 * 60 * 60_000).toISOString()}`, limit: '100' });
+  if (held.length >= 100 || new Set(held.map(row => row.winget_id.toLowerCase())).size >= 2) {
+    return { action: 'repair_required', repairRequired: true, repairKey: 'qa-publication-systemic',
+      candidateId: candidate.id, repairReason: 'Publication failures affect at least three distinct applications; inspect shared publisher infrastructure.' };
+  }
+  return null;
+}
+
+/** Isolate publication-only stalls only after complete terminal VM evidence. */
+export async function holdStalledPublication({ candidate: c, github, patch, rows, now = Date.now() }) {
+  if (c.status !== 'running' || c.phase !== 'publishing' || !/^[1-9][0-9]*$/.test(c.github_run_id || '')) return null;
+  const runId = c.github_run_id;
+  const run = await github(`/actions/runs/${runId}`);
+  if (!run || String(run.id) !== runId || run.path !== '.github/workflows/intune-qa.yml' ||
+      run.head_branch !== 'main' || run.event !== 'workflow_dispatch') return null;
+  if (!Number.isInteger(run.run_attempt) || run.run_attempt < 1) return null;
+  const history = Array.isArray(c.recovery_history) ? c.recovery_history : [];
+  let prior = history.length - 1;
+  while (prior >= 0 && history[prior].kind === 'publication_queue_cancel' &&
+      history[prior].previousRunId === runId && history[prior].runAttempt === run.run_attempt) prior--;
+  if (run.run_attempt > 1 && !(history[prior]?.kind === 'publication' && history[prior]?.previousRunId === runId)) return null;
+  const payload = await github(`/actions/runs/${runId}/jobs?filter=all&per_page=100`);
+  if (!payload || !Array.isArray(payload.jobs) || !Number.isInteger(payload.total_count) ||
+      payload.total_count !== payload.jobs.length || payload.total_count > 100) return null;
+  const qa = payload.jobs.filter(job => job.name === 'qa');
+  const publishers = payload.jobs.filter(job => job.name === 'Publish compact app JSON');
+  if (!qa.length || !publishers.length || payload.jobs.some(job => job.status === 'in_progress') ||
+      qa.some(job => job.status !== 'completed' || !['success', 'failure'].includes(job.conclusion)) ||
+      payload.jobs.some(job => job.name !== 'Publish compact app JSON' && job.status !== 'completed')) return null;
+  const systemic = await publicationScope(c, rows, now);
+  if (systemic) return systemic;
+  const changed = await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.running', phase: 'eq.publishing',
+    github_run_id: `eq.${runId}` }, { status: 'error', failure_summary: PUBLICATION_FAILURE,
+    finished_at: new Date(now).toISOString(), next_retry_at: 'infinity', updated_at: new Date(now).toISOString() });
+  return { action: changed.length === 1 ? 'publication_candidate_held' : 'recovery_claim_lost', candidateId: c.id };
+}
+
 /** No arbitrary workflow IDs or repository URLs from the candidate are followed. */
 export async function publicationJob(runId, github) {
   if (!/^[1-9][0-9]*$/.test(runId || '')) throw new Error('Invalid QA workflow run ID');
@@ -169,6 +209,15 @@ export async function recoverInfrastructure({ rows, patch, github, now = Date.no
         });
         continue;
       }
+    }
+    if (!dryRun && recoveryAttempts >= 5 && kind === 'publication' && job?.jobId) {
+      const systemic = await publicationScope(c, rows, now);
+      if (systemic) return systemic;
+      const changed = await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error',
+        recovery_attempts: `eq.${recoveryAttempts}`, github_run_id: `eq.${c.github_run_id}` }, {
+        next_retry_at: 'infinity', updated_at: new Date(now).toISOString(),
+      });
+      return { action: changed.length === 1 ? 'publication_candidate_held' : 'recovery_claim_lost', candidateId: c.id };
     }
     if (recoveryAttempts >= 5 && kind !== 'source') return { action: 'recovery_exhausted', candidateId: c.id, repairRequired: true };
     if (dryRun) return { action: 'would_recover_infrastructure', candidateId: c.id, kind };

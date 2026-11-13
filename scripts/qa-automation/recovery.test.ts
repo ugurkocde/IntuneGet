@@ -262,8 +262,8 @@ describe('durable infrastructure recovery', () => {
     expect(d.github).not.toHaveBeenCalled();
     expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
   });
-  it('escalates an exhausted retry budget and rejects an untrusted workflow', async () => {
-    expect(await recoverInfrastructure(deps({ ...c, recovery_attempts: 5 }))).toMatchObject({ action: 'recovery_exhausted', repairRequired: true });
+  it('holds exhausted publication retries and rejects an untrusted workflow', async () => {
+    expect(await recoverInfrastructure(deps({ ...c, recovery_attempts: 5 }))).toMatchObject({ action: 'publication_candidate_held', candidateId: c.id });
     await expect(publicationJob('123', async () => ({ id: 123, event: 'push', path: 'wrong.yml' }))).rejects.toThrow('identity mismatch');
   });
   it('rejects empty successful GET responses as incomplete evidence', async () => {
