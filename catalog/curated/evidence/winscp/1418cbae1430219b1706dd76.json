@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "43449242349",
+    "workflowCommit": "5c317759bd052a9b00c2bd52a6b9cbb27dff5263",
+    "runAttempt": "1",
+    "websiteCommit": "bdce7a7138a059e19040495011e187b7ce223f7e"
+  },
+  "candidate": {
+    "appId": "winscp",
+    "version": "6.7.1",
+    "installerUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.7.1/WinSCP-6.7.1-Setup.exe",
+    "vendorSha256": "95ea85587c30ac6dd0c4b8148e16971f7854a6eee9e68298bf007566ebbe7603",
+    "releaseNotesUrl": "https://winscp.net/",
+    "discoveredAt": "2026-11-11T14:40:17.996Z",
+    "id": "1418cbae1430219b1706dd76"
+  },
+  "previous": {
+    "appId": "winscp",
+    "version": "6.5.7",
+    "installerUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe",
+    "vendorSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+    "releaseNotesUrl": "https://winscp.net/",
+    "discoveredAt": "2026-10-05T08:20:48.87Z",
+    "id": "1d3c95281570016ff4e86dbf"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "1418cbae1430219b1706dd76",
+      "installerSha256": "95ea85587c30ac6dd0c4b8148e16971f7854a6eee9e68298bf007566ebbe7603",
+      "sourceUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.7.1/WinSCP-6.7.1-Setup.exe",
+      "finalOrigin": "https://unlimited.dl.sourceforge.net",
+      "signature": {
+        "status": "valid",
+        "publisher": "Martin Přikryl"
+      },
+      "security": {
+        "scannedAt": "2026-11-13T15:17:57.7377068Z",
+        "scanner": "defender",
+        "status": "clean",
+        "signatureVersion": "1.463.283.0",
+        "malicious": 0,
+        "suspicious": 0,
+        "installerSha256": "95ea85587c30ac6dd0c4b8148e16971f7854a6eee9e68298bf007566ebbe7603",
+        "engineVersion": "1.1.26100.4"
+      }
+    },
+    "previous": {
+      "candidateId": "1d3c95281570016ff4e86dbf",
+      "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+      "sourceUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe",
+      "finalOrigin": "https://sf-eu-introserv-1.dl.sourceforge.net",
+      "signature": {
+        "status": "valid",
+        "publisher": "Martin Přikryl"
+      },
+      "security": {
+        "scannedAt": "2026-11-13T15:18:13.912681Z",
+        "scanner": "defender",
+        "status": "clean",
+        "signatureVersion": "1.463.283.0",
+        "malicious": 0,
+        "suspicious": 0,
+        "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+        "engineVersion": "1.1.26100.4"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "1418cbae1430219b1706dd76",
+    "packageId": "IntuneGet.Curated.WinSCP",
+    "installerUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.7.1/WinSCP-6.7.1-Setup.exe",
+    "installerSha256": "95ea85587c30ac6dd0c4b8148e16971f7854a6eee9e68298bf007566ebbe7603",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.WinSCP",
+      "displayName": "WinSCP",
+      "publisher": "Martin Prikryl",
+      "version": "6.7.1",
+      "architecture": "x86",
+      "installerSha256": "95ea85587c30ac6dd0c4b8148e16971f7854a6eee9e68298bf007566ebbe7603",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:winscp3_is1:WinSCP",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.7.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.7.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "08F9A03D23E92EEEA4D02AF4DDB4DB61ECC5D16A056AED504D53319AD5685F8B",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x86\",\"displayName\":\"IntuneGet.Curated.WinSCP\",\"publisher\":\"IntuneGet QA\",\"version\":\"6.7.1\",\"wingetId\":\"IntuneGet.Curated.WinSCP\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.7.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"599F0F8BC9F7CB35847646A8C68F2B57FEA122730E421A6719F1C274234193C2\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"95EA85587C30AC6DD0C4B8148E16971F7854A6EEE9E68298BF007566EBBE7603\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:winscp3_is1:WinSCP\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.7.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinSCP\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"494726EB8E8ACF8D69FFDACA23692AD8580BBED10BC93A621BFED906551F89B6\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "494726eb8e8acf8d69ffdaca23692ad8580bbed10bc93a621bfed906551f89b6",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testedAt": "2026-11-13T15:20:01.2987404Z",
+    "previousInstallerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+    "architecture": "x86",
+    "testLevel": "psadt-package",
+    "installerSha256": "95ea85587c30ac6dd0c4b8148e16971f7854a6eee9e68298bf007566ebbe7603",
+    "upgradeFromVersion": "6.5.7",
+    "installerVersion": "6.7.1",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "executionContext": "LocalSystem",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionProfileSha256": "08F9A03D23E92EEEA4D02AF4DDB4DB61ECC5D16A056AED504D53319AD5685F8B",
+    "candidateId": "1418cbae1430219b1706dd76"
+  },
+  "verifiedAt": "2026-11-13T15:20:11.2383518Z",
+  "authenticatedArtifact": {
+    "id": 14049798446,
+    "sha256": "9dde81f6339f64b17f9c5d393911c34a34d00a252f8c8baf536550edb147d9da"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-13T15:42:16.324Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
