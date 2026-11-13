@@ -15,12 +15,19 @@ export function activeHealth(candidate, now = Date.now()) {
 }
 
 /** Recheck real execution after reconciliation; HTTP 200/qa_active is not health. */
-export async function reconcileActive({ candidate, invokeCron, snapshot, recoverPublication, dryRun = false, now = Date.now() }) {
+export async function reconcileActive({ candidate, invokeCron, snapshot, recoverPublication, holdPublication, dryRun = false, now = Date.now() }) {
   const health = activeHealth(candidate, now);
   if (!health.stale) return health;
   if (dryRun) return { action: 'would_reconcile_active', stale: true };
   const publication = await recoverPublication?.(candidate);
-  if (publication) return { ...publication, snapshot: await snapshot() };
+  if (publication) {
+    const current = await snapshot();
+    if (publication.repairRequired && current.active[0]?.id === candidate.id) {
+      const held = await holdPublication?.(current.active[0]);
+      if (held) return { ...held, snapshot: await snapshot() };
+    }
+    return { ...publication, snapshot: current };
+  }
   const reconciled = await invokeCron('/api/cron/qa-dispatch');
   const current = await snapshot();
   const active = current.active[0];
@@ -31,6 +38,10 @@ export async function reconcileActive({ candidate, invokeCron, snapshot, recover
   }
   if (reconciled.body?.reason === 'github_actions_unavailable') {
     return { action: 'github_actions_unavailable', snapshot: current, reconciled };
+  }
+  if (active?.id === candidate.id) {
+    const held = await holdPublication?.(active);
+    if (held) return { ...held, snapshot: await snapshot(), reconciled };
   }
   return { action: 'repair_required', snapshot: current, reconciled,
     repairRequired: true, repairKey: 'qa-execution-stalled',

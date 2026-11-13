@@ -1,5 +1,5 @@
 import { writeFile, rename } from 'node:fs/promises';
-import { recoverInfrastructure, recoverStalledPublication, rateLimitUntil } from './recovery.mjs';
+import { recoverInfrastructure, recoverStalledPublication, holdStalledPublication, rateLimitUntil } from './recovery.mjs';
 import { reconcileActive } from './active-health.mjs';
 import { decideDiskAction, diskGuardActor, lowDiskReason, parseHostFreeGb } from './host-disk-guard.mjs';
 
@@ -389,6 +389,9 @@ try {
           updated_at: new Date().toISOString(),
         });
       }
+      if (recovery.action === 'publication_candidate_held') {
+        requireRepair('Publication evidence is held for this candidate; the queue keeps running without VM replay.', `publication-hold:${recovery.candidateId}`);
+      }
       if (recovery.repairRequired) {
         if (!isDryRun) await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
           paused: true, reason: `QA infrastructure recovery requires review for candidate ${recovery.candidateId}.`,
@@ -415,10 +418,15 @@ try {
       }
     } else if (currentActive) {
       const health = await reconcileActive({ candidate: currentActive, invokeCron, snapshot, dryRun: isDryRun,
-        recoverPublication: candidate => recoverStalledPublication({ candidate, github, patch }) });
+        recoverPublication: candidate => recoverStalledPublication({ candidate, github, patch }),
+        holdPublication: candidate => holdStalledPublication({ candidate, github, patch, rows }) });
       result.action = health.action;
       if (health.snapshot) result.snapshot = health.snapshot;
       if (health.reconciled) result.actions.push({ type: 'active_reconcile', ...health.reconciled });
+      if (health.action === 'publication_candidate_held') {
+        requireRepair('Publication evidence is held for this candidate; the queue keeps running without VM replay.', `publication-hold:${health.candidateId}`);
+        result.action = health.action;
+      }
       if (health.repairRequired) {
         await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
           paused: true, reason: 'QA infrastructure recovery in progress.',
