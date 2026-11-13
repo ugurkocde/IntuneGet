@@ -193,22 +193,32 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       {/* Jobs table */}
       {jobs.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] md:min-w-0">
+          {/* Fixed layout with explicit widths: with automatic layout a long
+              package name took the whole row and squeezed the other columns
+              to one character per line. Below 640 px the wrapper scrolls. */}
+          <table className="w-full min-w-[640px] table-fixed">
+            <colgroup>
+              <col className="w-[28%]" />
+              <col className="w-[18%]" />
+              <col className="w-[28%]" />
+              <col className="w-[12%]" />
+              <col className="w-[14%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-overlay/5">
-                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap px-4 py-3">
                   Package
                 </th>
-                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap px-4 py-3">
                   Tenant
                 </th>
-                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap px-4 py-3">
                   Status
                 </th>
-                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap px-2 py-3">
                   Time
                 </th>
-                <th className="text-right text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
+                <th className="text-right text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap px-4 py-3">
                   Actions
                 </th>
               </tr>
@@ -222,19 +232,19 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                         <Package className="w-4 h-4 text-accent-cyan" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-text-primary truncate">
+                        <p className="text-sm font-medium text-text-primary truncate" title={job.display_name}>
                           {job.display_name}
                         </p>
-                        <p className="text-xs text-text-muted truncate">
+                        <p className="text-xs text-text-muted truncate" title={`${job.winget_id} v${job.version}`}>
                           {job.winget_id} v{job.version}
                         </p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-text-muted" />
-                      <span className="text-sm text-text-secondary">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Building2 className="w-4 h-4 text-text-muted flex-shrink-0" />
+                      <span className="text-sm text-text-secondary truncate" title={job.tenant_display_name}>
                         {job.tenant_display_name}
                       </span>
                     </div>
@@ -254,20 +264,20 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                       </span>
                     </div>
                     {job.status === 'blocked_upstream' && (
-                      <p className="text-xs text-text-muted mt-1 max-w-[200px]">{customerUpstreamStatus(job.error_code ?? null).message}</p>
+                      <p className="text-xs text-text-muted mt-1">{customerUpstreamStatus(job.error_code ?? null).message}</p>
                     )}
                     {job.status !== 'blocked_upstream' && job.error_message && (
-                      <p className="text-xs text-red-400 mt-1 truncate max-w-[200px]">
+                      <p className="text-xs text-red-400 mt-1 truncate" title={job.error_message}>
                         {job.error_message}
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-3">
                     <span className="text-sm text-text-muted">
                       {formatDate(job.created_at)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="py-3 pl-2 pr-4 text-right">
                     {job.intune_app_url && (
                       <a
                         href={job.intune_app_url}

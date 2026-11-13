@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Package,
   Rocket,
-  Menu,
   X,
   Server,
   BarChart3,
@@ -88,10 +87,13 @@ interface SidebarProps {
 
 export function Sidebar({ user, onSignOut }: SidebarProps) {
   const { isCollapsed, toggleCollapse } = useSidebarStore();
+  // The drawer is opened by the menu button in the dashboard top bar, so the
+  // open state lives in the store instead of in this component.
+  const mobileOpen = useSidebarStore((state) => state.isMobileOpen);
+  const closeMobile = useSidebarStore((state) => state.closeMobile);
   const { setSidebarCollapsed } = useUserSettings();
   const { isMspUser } = useMspOptional();
   const prefersReducedMotion = useReducedMotion();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const handleToggleCollapse = useCallback(() => {
     const next = !isCollapsed;
@@ -102,8 +104,6 @@ export function Sidebar({ user, onSignOut }: SidebarProps) {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const closeMobile = () => setMobileOpen(false);
 
   // NEXT_PUBLIC_DISABLE_SCCM=true hides the SCCM Migration nav item
   const { sccm: sccmEnabled, hostedServices } = getClientFeatureFlags();
@@ -252,15 +252,6 @@ export function Sidebar({ user, onSignOut }: SidebarProps) {
 
   return (
     <TooltipProvider delayDuration={0}>
-      {/* Mobile hamburger */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-30 lg:hidden text-text-secondary hover:text-text-primary transition-colors"
-        aria-label="Open sidebar"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
       {/* Mobile backdrop */}
       <AnimatePresence>
         {mobileOpen && (

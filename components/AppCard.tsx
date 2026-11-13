@@ -125,24 +125,21 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDe
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-text-primary font-semibold text-base truncate group-hover:text-accent-cyan transition-colors">
-                {cleanPackageName(pkg.name)}
-              </h3>
-              <p className="text-text-secondary text-sm truncate">{pkg.publisher}</p>
-              {pkg.id && (
-                <p className="text-[11px] text-text-muted font-mono truncate mt-1">
-                  {pkg.id}
-                </p>
-              )}
-            </div>
-            {pkg.appSource !== 'store' && (
-              <span className="text-xs text-text-secondary bg-bg-surface px-2.5 py-1 rounded-md flex-shrink-0 border border-overlay/10">
-                v{pkg.version}
-              </span>
-            )}
-          </div>
+          {/* The name gets the full row. The version sits with the badges
+              below, because a long version beside the name left room for a
+              single letter of it on three-column layouts. */}
+          <h3
+            title={cleanPackageName(pkg.name)}
+            className="text-text-primary font-semibold text-base leading-snug line-clamp-2 group-hover:text-accent-cyan transition-colors"
+          >
+            {cleanPackageName(pkg.name)}
+          </h3>
+          <p className="text-text-secondary text-sm truncate">{pkg.publisher}</p>
+          {pkg.id && (
+            <p className="text-[11px] text-text-muted font-mono truncate mt-1">
+              {pkg.id}
+            </p>
+          )}
 
           {pkg.description && (
             <p className="text-text-secondary text-sm mt-3 line-clamp-2 leading-relaxed min-h-[2.75rem]">
@@ -151,6 +148,11 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDe
           )}
 
           <div className="flex items-center flex-wrap gap-1.5 mt-3">
+            {pkg.appSource !== 'store' && (
+              <span className="max-w-full truncate text-xs text-text-secondary bg-bg-surface px-2 py-0.5 rounded-full border border-overlay/10">
+                v{pkg.version}
+              </span>
+            )}
             {pkg.appSource === 'store' && (
               <span className="text-xs font-medium text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">
                 Store
