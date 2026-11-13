@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all jobs in date range
-    const jobs = (await database.jobs.getByUserId(user.userId)).filter(
+    const jobs = (await database.jobs.getAnalyticsJobs({ userId: user.userId })).filter(
       (job) => new Date(job.created_at) >= startDate
     );
 

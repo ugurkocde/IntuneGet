@@ -14,5 +14,6 @@ describe('real SQLite analytics reads', () => {
     expect(tenant.some(row => row.id === 'analytics-bob')).toBe(true);
     expect(tenant.some(row => row.id === 'analytics-0')).toBe(false);
     expect(personal[0]).not.toHaveProperty('installer_url');
+    expect(personal[0]).toMatchObject({ version: '1', installer_type: 'exe', publisher: null, error_message: null, intune_app_id: null });
   });
 });
