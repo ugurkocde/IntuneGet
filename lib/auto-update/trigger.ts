@@ -4,6 +4,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { notifyAutoUpdatePaused } from '@/lib/notification-service';
 import { supabaseDb } from '@/lib/db/supabase-adapter';
 import {
   AppUpdatePolicy,
@@ -223,6 +224,7 @@ export class AutoUpdateTrigger {
     updateInfo: UpdateInfo,
     options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean; admitViaQaResume?: boolean }
   ): Promise<TriggerResult> {
+    let historyId: string | undefined;
     try {
       // Safety check 1: Verify policy allows auto-update
       if (!canAutoUpdate(policy)) {
@@ -428,6 +430,7 @@ export class AutoUpdateTrigger {
 
       // Create auto-update history record
       const historyRecord = await this.createHistoryRecord(policy.id, updateInfo, updateType);
+      historyId = historyRecord.id;
 
       // Create packaging job
       const packagingJob = await this.createPackagingJob(
@@ -460,8 +463,13 @@ export class AutoUpdateTrigger {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
+      if (historyId) {
+        try { await this.markUpdateFailed(historyId, errorMessage); } catch {
+          // Preserve the original failure even when its history cannot be saved.
+        }
+      }
       // Increment failure counter
-      await this.incrementFailureCount(policy.id);
+      await this.incrementFailureCount(policy.id, errorMessage);
 
       return {
         success: false,
@@ -962,11 +970,11 @@ export class AutoUpdateTrigger {
   /**
    * Increment failure count for circuit breaker
    */
-  private async incrementFailureCount(policyId: string): Promise<void> {
+  private async incrementFailureCount(policyId: string, lastError?: string): Promise<void> {
     // Get current failure count
     const { data: policy } = await this.supabase
       .from('app_update_policies')
-      .select('consecutive_failures, policy_type')
+      .select('consecutive_failures, policy_type, is_enabled, user_id, winget_id, tenant_id')
       .eq('id', policyId)
       .single();
 
@@ -992,6 +1000,8 @@ export class AutoUpdateTrigger {
 
     if (error) {
       console.error('Failed to update failure count:', error);
+    } else if (policy?.is_enabled && shouldDisable) {
+      await notifyAutoUpdatePaused({ userId: policy.user_id, policyId, wingetId: policy.winget_id, tenantId: policy.tenant_id, failures: newCount, lastError });
     }
   }
 

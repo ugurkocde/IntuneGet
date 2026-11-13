@@ -328,3 +328,30 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
     console.error('Error marking all notifications as read:', error);
   }
 }
+
+
+/** Tell only the policy owner when its automatic updates become paused. */
+export async function notifyAutoUpdatePaused(input: {
+  userId: string;
+  policyId: string;
+  wingetId: string;
+  tenantId: string;
+  failures: number;
+  lastError?: string;
+}): Promise<void> {
+  try {
+    const { data: profile, error } = await createServerClient()
+      .from('user_profiles').select('email').eq('id', input.userId).maybeSingle();
+    if (error || !profile?.email) return;
+    await createNotification({
+      user_id: input.userId,
+      user_email: profile.email,
+      type: 'update_available',
+      title: `Automatic updates paused: ${input.wingetId}`,
+      message: input.lastError || `Automatic updates paused after ${input.failures} failed attempts. Resume them from Updates when ready.`,
+      data: { kind: 'auto_update_paused', policy_id: input.policyId, winget_id: input.wingetId, tenant_id: input.tenantId, failures: input.failures },
+    });
+  } catch {
+    // An optional notice must not interrupt the existing failure cleanup.
+  }
+}
