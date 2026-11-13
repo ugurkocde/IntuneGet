@@ -1,0 +1,5 @@
+{
+  "title": "SCCM migration reports failed actions accurately",
+  "summary": "Bulk exclusion reports successful and failed applications and keeps failed rows selected for retry. Import shows the API error and all numbered row errors.",
+  "type": "fixed"
+}
