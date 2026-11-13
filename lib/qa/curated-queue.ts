@@ -8,7 +8,7 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 const WORKFLOW = 'curated-catalog-verification.yml';
 const LOST_DISPATCH_MS = 3 * 60 * 60 * 1000;
 type QueueRow = Database['public']['Tables']['curated_verification_queue']['Row'];
-type Run = { id: number; display_title: string; status: string; created_at: string; event: string; head_branch: string; path: string };
+type Run = { id: number; display_title: string; status: string; created_at: string; event: string; head_branch: string; path: string; conclusion: string | null; run_attempt: number };
 
 export function curatedQueueInputs(row: QueueRow): Record<string, string> {
   const inputs = row.inputs as Record<string, string>;
@@ -57,6 +57,9 @@ export async function dispatchCuratedQueue(supabase: SupabaseClient<Database>, n
       Date.parse(run.created_at) >= dispatchedAt - 5000 && run.event === 'workflow_dispatch' &&
       run.head_branch === config.ref && run.path.split('@')[0] === `.github/workflows/${WORKFLOW}`);
     if (run && (!Number.isSafeInteger(run.id) || run.id <= 0)) throw new Error('Invalid curated workflow run identity.');
+    const conclusions = new Set(['success','failure','cancelled','timed_out','action_required','startup_failure','stale','neutral','skipped']);
+    if (run?.status === 'completed' && (!Number.isSafeInteger(run.run_attempt) || run.run_attempt <= 0 ||
+      !run.conclusion || !conclusions.has(run.conclusion))) throw new Error('Invalid completed curated workflow outcome.');
     if (run && run.status !== 'completed') return { handled: true, dispatched: false, reason: 'qa_active' };
     if (!run) {
       if (now.getTime() - dispatchedAt < LOST_DISPATCH_MS) return { handled: true, dispatched: false, reason: 'qa_active' };
@@ -64,10 +67,16 @@ export async function dispatchCuratedQueue(supabase: SupabaseClient<Database>, n
       const oldest = Math.min(...payload.workflow_runs.map((item: Run) => Date.parse(item.created_at)));
       if (payload.total_count > payload.workflow_runs.length && oldest > dispatchedAt - 5000) throw new Error('Curated dispatch inventory is incomplete.');
     }
-    const { error } = await supabase.from('curated_verification_queue').update({ status: run ? 'completed' : 'queued',
+    const failedConfig = run?.status === 'completed' && run.conclusion !== 'success' && active.kind === 'config';
+    const hold = failedConfig ? { schemaVersion: 2, holdType: 'failed_config_requires_classification',
+      runId: String(run.id), attempt: run.run_attempt, configVerificationId: active.verification_key.slice('config:'.length),
+      conclusion: run.conclusion, reason: `GitHub run concluded ${run.conclusion}; classification required before another verification.` } : null;
+    const { error } = await supabase.from('curated_verification_queue').update({ status: failedConfig ? 'held' : run ? 'completed' : 'queued',
+      ...(hold ? { hold } : {}),
       github_run_id: run ? String(run.id) : null, finished_at: run ? now.toISOString() : null,
       dispatched_at: run ? active.dispatched_at : null, updated_at: now.toISOString() }).eq('id', active.id).eq('status', 'dispatched');
     if (error) throw new Error('Could not reconcile the curated QA claim.');
+    if (failedConfig) return { handled: false, dispatched: false, reason: 'failed_config_requires_classification' };
   }
   const { data: nextData, error: queueError } = await supabase.rpc('next_qa_curated_security_eligible', {});
   const next = nextData as QueueRow | null;
