@@ -35,11 +35,12 @@ function buildSoftwareApplicationJsonLd(appCountLabel: string) {
     url: "https://www.intuneget.com",
     downloadUrl: "https://github.com/ugurkocde/IntuneGet",
     softwareVersion: packageJson.version,
-    datePublished: "2024-01-01",
+    // First public release, v0.1.
+    datePublished: "2026-01-24",
     description:
       "IntuneGet is a free, open-source tool for deploying Winget applications to Microsoft Intune. No scripting required, about 5 minutes per app, self-hostable, AGPL-3.0 licensed.",
     isAccessibleForFree: true,
-    license: "https://opensource.org/licenses",
+    license: "https://www.gnu.org/licenses/agpl-3.0.html",
     author: {
       "@type": "Person",
       name: "Ugur Koc",
@@ -60,7 +61,7 @@ function buildSoftwareApplicationJsonLd(appCountLabel: string) {
       "No Scripting Required",
       "Self-Hosting Support via Docker",
       "Microsoft Entra ID Authentication",
-      "AI-Powered App Discovery",
+      "Discovery of Unmanaged Apps on Devices",
       "PSADT v4 Support",
     ],
     screenshot: "https://www.intuneget.com/og-image.png",

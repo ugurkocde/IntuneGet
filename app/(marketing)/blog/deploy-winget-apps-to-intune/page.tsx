@@ -147,7 +147,7 @@ const faqJsonLd = {
       name: "Is IntuneGet free to use for Winget app deployment?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. IntuneGet is completely free and open source under the MIT license. There are no seat limits, no hidden fees, and no premium tiers. You can deploy as many Winget apps to Intune as you need at zero cost.",
+        text: "Yes. IntuneGet is completely free and open source under the AGPL-3.0 license. There are no seat limits, no hidden fees, and no premium tiers. You can deploy as many Winget apps to Intune as you need at zero cost.",
       },
     },
     {
@@ -171,7 +171,7 @@ const faqJsonLd = {
       name: "What is the difference between IntuneGet and Intune's built-in Winget catalog?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Intune's built-in Winget catalog provides a subset of Winget apps through the Intune portal. IntuneGet offers access to the full 13,000+ Winget repository, provides automatic IntuneWin packaging, generates detection rules, supports automated updates, and includes AI-powered app discovery. IntuneGet gives IT admins more control over the packaging and deployment process.",
+        text: "Intune's built-in Winget catalog provides a subset of Winget apps through the Intune portal. IntuneGet offers access to the full 13,000+ Winget repository, provides automatic IntuneWin packaging, generates detection rules, and supports automated updates. IntuneGet gives IT admins more control over the packaging and deployment process.",
       },
     },
     {
@@ -379,11 +379,9 @@ export default function DeployWingetAppsToIntunePage() {
               </h3>
               <p className="text-text-secondary leading-relaxed">
                 <T>Use the search bar to find applications from the full Winget repository
-                of 13,000+ packages. IntuneGet supports partial and fuzzy search -- type
-                &quot;chr&quot; to find Google Chrome, or &quot;code&quot; to find Visual Studio Code. For
-                applications that are difficult to find by name, IntuneGet includes
-                AI-powered app discovery that uses OpenAI to match your search query to
-                the correct Winget package ID.</T>
+                of 13,000+ packages. IntuneGet matches partial names: type
+                &quot;chr&quot; to find Google Chrome, or &quot;code&quot; to find Visual Studio Code. You
+                can also search by publisher or by Winget package ID.</T>
               </p>
               <p className="text-text-secondary leading-relaxed">
                 <T>Select one or multiple applications to deploy. You can review the
@@ -604,7 +602,7 @@ IntuneWinAppUtil.exe -c C:\\IntunePackaging\\Chrome -s ChromeSetup.msi -o C:\\In
                   <tbody className="text-text-secondary">
                     <tr className="border-b border-overlay/[0.06]">
                       <td className="p-3 font-medium text-text-primary"><T>Cost</T></td>
-                      <td className="p-3"><T>Free (MIT license)</T></td>
+                      <td className="p-3"><T>Free (AGPL-3.0 license)</T></td>
                       <td className="p-3"><T>Free (your time)</T></td>
                       <td className="p-3"><T>Included with Intune license</T></td>
                     </tr>
@@ -750,7 +748,7 @@ IntuneWinAppUtil.exe -c C:\\IntunePackaging\\Chrome -s ChromeSetup.msi -o C:\\In
                     <T>Is IntuneGet free to use for Winget app deployment?</T>
                   </h3>
                   <p className="text-text-secondary leading-relaxed">
-                    <T>Yes. IntuneGet is completely free and open source under the MIT
+                    <T>Yes. IntuneGet is completely free and open source under the AGPL-3.0
                     license. There are no seat limits, no hidden fees, and no premium
                     tiers. You can deploy as many Winget apps to Intune as you need at
                     zero cost.</T>
@@ -790,9 +788,9 @@ IntuneWinAppUtil.exe -c C:\\IntunePackaging\\Chrome -s ChromeSetup.msi -o C:\\In
                     <T>Intune&apos;s built-in Winget catalog provides a subset of Winget apps
                     through the Intune portal. IntuneGet offers access to the full
                     13,000+ Winget repository, provides automatic IntuneWin packaging,
-                    generates detection rules, supports automated updates, and includes
-                    AI-powered app discovery. IntuneGet gives IT admins more control
-                    over the packaging and deployment process.</T>
+                    generates detection rules, and supports automated updates.
+                    IntuneGet gives IT admins more control over the packaging and
+                    deployment process.</T>
                   </p>
                 </div>
 
