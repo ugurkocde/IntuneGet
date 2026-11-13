@@ -12,6 +12,7 @@ import {
   Sparkles,
   Bell,
   ArrowUpCircle,
+  Clock,
 } from 'lucide-react';
 
 interface NotificationItemProps {
@@ -23,6 +24,7 @@ interface NotificationItemProps {
 const notificationIcons: Record<NotificationType, React.ComponentType<{ className?: string }>> = {
   deployment_complete: CheckCircle2,
   deployment_failed: XCircle,
+  deployment_waiting: Clock,
   consent_expired: AlertTriangle,
   consent_revoked: AlertTriangle,
   suggestion_approved: ThumbsUp,
@@ -36,6 +38,7 @@ const notificationIcons: Record<NotificationType, React.ComponentType<{ classNam
 const notificationColors: Record<NotificationType, string> = {
   deployment_complete: 'text-emerald-400',
   deployment_failed: 'text-red-400',
+  deployment_waiting: 'text-amber-400',
   consent_expired: 'text-amber-400',
   consent_revoked: 'text-amber-400',
   suggestion_approved: 'text-accent-cyan',

@@ -33,6 +33,9 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
     const data = notification.data || {};
 
     switch (notification.type) {
+      case 'deployment_waiting':
+        router.push('/dashboard/uploads');
+        break;
       case 'deployment_complete':
       case 'deployment_failed':
         if (data.intune_app_id) {
