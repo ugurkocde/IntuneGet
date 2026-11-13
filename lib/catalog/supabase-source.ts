@@ -129,6 +129,12 @@ export class SupabaseCatalogSource implements CatalogSource {
         const budgetExpired = signal.aborted && signal.reason?.name === 'TimeoutError';
         console.warn('Catalog history RPC timing', {
           entryMs: 0, dispatchMs, headersMs, settledMs, category, budgetExpired, status,
+          filterShape: {
+            app: Boolean(filters.app), query: Boolean(filters.query), month: Boolean(filters.month),
+            from: Boolean(filters.from), to: Boolean(filters.to), architecture: Boolean(filters.architecture),
+            kind: filters.kind === 'all' || filters.kind === 'first' || filters.kind === 'updated' ? filters.kind : 'other',
+            laterPage: filters.page > 1,
+          },
         });
       }
     }

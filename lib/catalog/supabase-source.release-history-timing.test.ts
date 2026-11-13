@@ -30,7 +30,8 @@ function check(category: string, budgetExpired: boolean, status: number | null, 
   expect(warn.mock.calls[0][0]).toBe('Catalog history RPC timing');
   const timing = warn.mock.calls[0][1];
   expect(timing).toEqual({ entryMs: 0, dispatchMs: expect.any(Number), headersMs: headers ? expect.any(Number) : null,
-    settledMs: expect.any(Number), category, budgetExpired, status });
+    settledMs: expect.any(Number), category, budgetExpired, status,
+    filterShape: { app: true, query: false, month: false, from: false, to: false, architecture: false, kind: 'other', laterPage: false } });
   expect(timing.dispatchMs).toBeGreaterThanOrEqual(0);
   expect(timing.settledMs).toBeGreaterThanOrEqual(timing.dispatchMs);
   if (headers) expect(timing.headersMs).toBeLessThanOrEqual(timing.settledMs);
@@ -41,7 +42,7 @@ function check(category: string, budgetExpired: boolean, status: number | null, 
   expect(new Headers(init.headers).get('apikey')).toBe('private-service-key');
   expect(init.signal).toBe(controller.signal);
   expect(timer).toHaveBeenCalledWith(15_000);
-  expect(JSON.stringify(warn.mock.calls)).not.toMatch(/private|https|apikey|authorization|cause|url|filter/i);
+  expect(JSON.stringify(warn.mock.calls)).not.toMatch(/private|https|apikey|authorization|cause|url/i);
 }
 const run = () => new SupabaseCatalogSource().countReleaseHistory(filters);
 
@@ -91,6 +92,38 @@ describe('release history RPC diagnostics', () => {
   });
   it('does not log fast successful requests', async () => {
     fetchMock.mockResolvedValue(Response.json(result));
+    await expect(run()).resolves.toBe(7);
+    expect(warn).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it('reports only the filter shape on failures, never filter values', async () => {
+    fetchMock.mockResolvedValue(Response.json({ message: 'Private failure body' }, { status: 500 }));
+    const privateFilters: ReleaseHistoryFilters = {
+      app: 'Private.Application', query: 'Private.Search', month: '2044-03',
+      from: '2044-03-01', to: '2044-03-21', architecture: 'arm64', kind: 'updated', page: 9876,
+    };
+    await expect(new SupabaseCatalogSource().countReleaseHistory(privateFilters)).rejects.toThrow('Catalog history unavailable');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][1].filterShape).toEqual({
+      app: true, query: true, month: true, from: true, to: true, architecture: true,
+      kind: 'updated', laterPage: true,
+    });
+    const logged = JSON.stringify(warn.mock.calls);
+    for (const value of ['Private.Application', 'Private.Search', '2044-03', '2044-03-01', '2044-03-21', 'arm64', '9876']) {
+      expect(logged).not.toContain(value);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it('does not expose an unsupported runtime kind as a diagnostic value', async () => {
+    fetchMock.mockResolvedValue(Response.json({ message: 'Private failure body' }, { status: 500 }));
+    await expect(new SupabaseCatalogSource().countReleaseHistory({ ...filters, kind: 'Private.Kind' } as unknown as ReleaseHistoryFilters))
+      .rejects.toThrow('Catalog history unavailable');
+    expect(warn.mock.calls[0][1].filterShape?.kind).toBe('other');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Private.Kind');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a successful request silent at the five second boundary', async () => {
+    fetchMock.mockImplementation(async () => { clock = 5000; return Response.json(result); });
     await expect(run()).resolves.toBe(7);
     expect(warn).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
