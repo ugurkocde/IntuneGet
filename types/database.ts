@@ -481,18 +481,21 @@ export interface Database {
         Row: {
           id: string; verification_key: string; app_id: string; version: string;
           kind: 'release' | 'config'; inputs: Json; priority: number;
-          status: 'queued' | 'dispatched' | 'completed' | 'superseded';
+          status: 'queued' | 'dispatched' | 'completed' | 'superseded' | 'held';
+          hold: Json | null;
           enqueued_at: string; dispatched_at: string | null; finished_at: string | null;
           github_run_id: string | null; updated_at: string;
         };
         Insert: {
           id?: string; verification_key: string; app_id: string; version: string;
           kind: 'release' | 'config'; inputs: Json; priority?: number; status?: string;
+          hold?: Json | null;
           enqueued_at?: string; dispatched_at?: string | null; finished_at?: string | null;
           github_run_id?: string | null; updated_at?: string;
         };
         Update: {
-          status?: 'queued' | 'dispatched' | 'completed' | 'superseded';
+          status?: 'queued' | 'dispatched' | 'completed' | 'superseded' | 'held';
+          hold?: Json | null;
           github_run_id?: string | null; dispatched_at?: string | null;
           finished_at?: string | null; updated_at?: string;
         };
@@ -616,6 +619,7 @@ export interface Database {
       qa_pipeline_control: {
         Row: {
           id: string;
+          last_dispatch_kind: 'ordinary' | 'curated' | null;
           paused: boolean;
           reason: string | null;
           required_packager_commit: string | null;
@@ -627,6 +631,7 @@ export interface Database {
         Insert: {
           id: string;
           paused?: boolean;
+          last_dispatch_kind?: 'ordinary' | 'curated' | null;
           reason?: string | null;
           required_packager_commit?: string | null;
           scheduler_packager_commit?: string | null;
