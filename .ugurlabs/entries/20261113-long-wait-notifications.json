@@ -1,0 +1,5 @@
+{
+  "title": "Get a notice when validation takes longer",
+  "summary": "Requests waiting for validation for at least 72 hours now receive one notification with a link to review their options in Uploads. Reading the notice keeps it read.",
+  "type": "improved"
+}

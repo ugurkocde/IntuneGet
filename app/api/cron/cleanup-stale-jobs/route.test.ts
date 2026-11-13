@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type Filter = [string, ...unknown[]];
 
 const state = vi.hoisted(() => ({
+  waitingNotices: vi.fn(),
   localPackager: false,
   changedRows: true,
   callbackOwnerAtWrite: undefined as string | null | undefined,
@@ -21,6 +22,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/features', () => ({ getFeatureFlags: () => ({ localPackager: state.localPackager }) }));
+vi.mock('@/lib/deployment-waiting-notices', () => ({ sendDeploymentWaitingNotices: state.waitingNotices }));
 vi.mock('@/lib/github-actions', () => ({
   WorkflowReadRateLimitError: class extends Error {},
   isGitHubActionsConfigured: () => true,
@@ -87,6 +89,7 @@ const call = () => GET(new Request('http://localhost/api/cron/cleanup-stale-jobs
 
 describe('cleanup stale jobs cron', () => {
   beforeEach(() => {
+    state.waitingNotices.mockReset().mockResolvedValue({ inserted: 0, errors: [], truncated: false });
     state.queries = [];
     state.localPackager = false;
     state.changedRows = true;
@@ -113,6 +116,27 @@ describe('cleanup stale jobs cron', () => {
       is_auto_update: false,
     }];
     state.getWorkflowRun.mockResolvedValue({ status: 'queued' });
+  });
+
+  it.each([false, true])('runs notices after cleanup when the stale collection is empty: %s', async empty => {
+    state.localPackager = true;
+    state.staleJobs = empty ? [] : [{ id: 'fixture-stale', status: 'packaging', tenant_id: null,
+      updated_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', github_run_id: null }];
+    state.waitingNotices.mockResolvedValue({ inserted: 2, errors: [], truncated: false });
+    const response = await call();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ cleaned: empty ? 0 : 1, deploymentWaiting: { inserted: 2 } });
+    expect(state.waitingNotices).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])('preserves cleanup success when notices throw and stale collection is empty: %s', async empty => {
+    state.localPackager = true;
+    state.staleJobs = empty ? [] : [{ id: 'fixture-stale', status: 'packaging', tenant_id: null,
+      updated_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', github_run_id: null }];
+    state.waitingNotices.mockRejectedValue(new Error('synthetic notification exception'));
+    const response = await call();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ cleaned: empty ? 0 : 1, deploymentWaiting: { error: expect.any(String) } });
   });
 
   it('recovers an eligible job ahead of a null-start Store upload using the real query builder', async () => {

@@ -33,12 +33,20 @@ function timestamp(value: string | null | undefined): number {
     || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return NaN;
   return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}.${(fraction || '').slice(0, 3).padEnd(3, '0')}${zone}`);
 }
+export const CUSTOMER_WAIT_MS = 72 * 60 * 60 * 1000;
+
+export function customerWaitSince(job: WaitingCustomerJob, now: number): { fromCreation: boolean; startedAt: string } | null {
+  if (!['awaiting_qa', 'blocked_upstream'].includes(job.status) || !Number.isFinite(now)) return null;
+  const fromCreation = job.qa_requested_at === null || job.qa_requested_at === undefined;
+  const start = timestamp(fromCreation ? job.created_at : job.qa_requested_at);
+  return Number.isFinite(start) && now - start >= CUSTOMER_WAIT_MS
+    ? { fromCreation, startedAt: new Date(start).toISOString() } : null;
+}
+
 export function customerWaitOptions(job: WaitingCustomerJob, context: CustomerJobSnapshot, now: number): { fromCreation: boolean } | null {
   const key = customerJobSnapshotKey(context.scope);
   if (!key || context.snapshotKey !== key || context.isLoading || context.error || context.sessionExpired
-    || context.scope.viewScope !== 'mine' || job.user_id !== context.scope.userId
-    || !['awaiting_qa', 'blocked_upstream'].includes(job.status) || !Number.isFinite(now)) return null;
-  const fromCreation = job.qa_requested_at === null || job.qa_requested_at === undefined;
-  const start = timestamp(fromCreation ? job.created_at : job.qa_requested_at);
-  return Number.isFinite(start) && now - start >= 72 * 60 * 60 * 1000 ? { fromCreation } : null;
+    || context.scope.viewScope !== 'mine' || job.user_id !== context.scope.userId) return null;
+  const wait = customerWaitSince(job, now);
+  return wait ? { fromCreation: wait.fromCreation } : null;
 }

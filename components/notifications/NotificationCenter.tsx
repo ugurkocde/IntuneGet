@@ -33,6 +33,12 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
     const data = notification.data || {};
 
     switch (notification.type) {
+      case 'deployment_waiting': {
+        const jobId = typeof data.job_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.job_id)
+          ? data.job_id : null;
+        router.push(jobId ? `/dashboard/uploads?jobs=${encodeURIComponent(jobId)}` : '/dashboard/uploads');
+        break;
+      }
       case 'deployment_complete':
       case 'deployment_failed':
         if (data.intune_app_id) {
