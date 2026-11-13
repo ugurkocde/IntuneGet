@@ -34,6 +34,7 @@ describe('dispatchQaCandidate', () => {
     vi.stubGlobal('fetch', fetchMock);
     await dispatchQaCandidate({
       id: '11111111-1111-4111-8111-111111111111',
+      dispatched_at: '2026-11-13T05:11:12.345678+00:00',
       winget_id: 'Example.App',
       definition_path: 'qa/apps/example.app.json',
       version: '2.0.0',
@@ -62,6 +63,7 @@ describe('dispatchQaCandidate', () => {
     expect(JSON.parse(body.inputs.candidate_payload)).toMatchObject({
       version: '2.0.0',
       wingetId: 'Example.App',
+      dispatchedAt: '2026-11-13T05:11:12.345678+00:00',
       architecture: 'x64',
       installerSha256: 'A'.repeat(64),
       testLevel: 'psadt-package',
@@ -97,6 +99,7 @@ describe('dispatchQaCandidate', () => {
     // preflight rejects the trusted installer as MANIFEST_CHANGED.
     await dispatchQaCandidate({
       id: '55555555-5555-4555-8555-555555555555',
+      dispatched_at: null,
       winget_id: 'Anthropic.Claude',
       definition_path: null,
       version: '2.19675.1',
@@ -135,6 +138,7 @@ describe('dispatchQaCandidate', () => {
 
     await dispatchQaCandidate({
       id: '66666666-6666-4666-8666-666666666666',
+      dispatched_at: null,
       winget_id: 'Example.App',
       definition_path: null,
       version: '2.0.0',
@@ -168,6 +172,7 @@ describe('dispatchQaCandidate', () => {
 
     await dispatchQaCandidate({
       id: '22222222-2222-4222-8222-222222222222',
+      dispatched_at: null,
       winget_id: 'BlenderFoundation.Blender.LTS.4.2',
       definition_path: null,
       version: '4.2.16',
@@ -201,6 +206,7 @@ describe('dispatchQaCandidate', () => {
 
     await dispatchQaCandidate({
       id: '44444444-4444-4444-8444-444444444444',
+      dispatched_at: null,
       winget_id: 'Webroot.SecureAnywhere',
       definition_path: null,
       version: '9.0.45.63',
@@ -239,6 +245,7 @@ describe('dispatchQaCandidate', () => {
 
     await dispatchQaCandidate({
       id: '33333333-3333-4333-8333-333333333333',
+      dispatched_at: null,
       winget_id: 'DuongDieuPhap.ImageGlass',
       definition_path: null,
       version: '10.0.4.819',
@@ -271,6 +278,7 @@ describe('dispatchQaCandidate', () => {
     await expect(
       dispatchQaCandidate({
         id: '11111111-1111-4111-8111-111111111111',
+      dispatched_at: null,
         winget_id: 'Example.App',
         definition_path: 'qa/apps/example.app.json',
         version: '2.0.0',
