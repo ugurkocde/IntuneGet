@@ -242,9 +242,11 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Building2 className="w-4 h-4 text-text-muted flex-shrink-0" />
-                      <span className="text-sm text-text-secondary truncate" title={job.tenant_display_name}>
+                    {/* The name wraps instead of being cut: tenants with the
+                        same prefix must stay distinguishable without hover. */}
+                    <div className="flex items-start gap-2 min-w-0">
+                      <Building2 className="w-4 h-4 mt-0.5 text-text-muted flex-shrink-0" />
+                      <span className="min-w-0 text-sm text-text-secondary break-words" title={job.tenant_display_name}>
                         {job.tenant_display_name}
                       </span>
                     </div>
