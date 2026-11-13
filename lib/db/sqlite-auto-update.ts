@@ -27,7 +27,7 @@ export function syncSqliteAutoUpdate(database: Database.Database, jobId: string)
   } else {
     database.prepare(`UPDATE app_update_policies SET last_auto_update_version = NULL,
       consecutive_failures = consecutive_failures + 1,
-      is_enabled = CASE WHEN consecutive_failures + 1 >= ? THEN 0 ELSE is_enabled END,
+      is_enabled = CASE WHEN policy_type = 'auto_update' AND consecutive_failures + 1 >= ? THEN 0 ELSE is_enabled END,
       updated_at = ? WHERE id = ?`).run(DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures, now, row.policy_id);
   }
 }

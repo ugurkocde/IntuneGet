@@ -1,0 +1,5 @@
+{
+  "title": "Try an update while automatic updates stay paused",
+  "summary": "A manual update can now run once after repeated failures without enabling the automatic policy. Failed manual attempts also preserve notification and pinned policy choices.",
+  "type": "fixed"
+}

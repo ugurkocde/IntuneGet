@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
+import { canAutoUpdate } from '@/types/update-policies';
 
 const {
   parseAccessTokenMock,
@@ -116,7 +117,7 @@ function createTriggerSupabaseMocks(
 
       if (table === 'app_update_policies') {
         return {
-          select: vi.fn(() => createSingleResultChain(policy)),
+          select: vi.fn(() => createSingleResultChain({ ...policy })),
           update: vi.fn((payload: Record<string, unknown>) => {
             policyUpdatePayloads.push(payload);
             return {
@@ -222,7 +223,7 @@ describe('POST /api/updates/trigger', () => {
     );
   });
 
-  it('restores original policy fields when installer lookup fails', async () => {
+  it('leaves stored policy fields untouched when installer lookup fails', async () => {
     const policy: AppUpdatePolicy = {
       id: 'policy-1',
       user_id: 'user-1',
@@ -270,13 +271,10 @@ describe('POST /api/updates/trigger', () => {
     expect(body.success).toBe(false);
     expect(body.failed).toBe(1);
     expect(body.results[0].error).toBe(failureMessage);
-    expect(policyUpdatePayloads).toEqual([
-      { policy_type: 'auto_update', is_enabled: true },
-      { policy_type: 'notify', is_enabled: false },
-    ]);
+    expect(policyUpdatePayloads).toEqual([]);
   });
 
-  it('restores original policy fields when trigger throws', async () => {
+  it('leaves stored policy fields untouched when trigger throws', async () => {
     const policy: AppUpdatePolicy = {
       id: 'policy-1',
       user_id: 'user-1',
@@ -321,13 +319,10 @@ describe('POST /api/updates/trigger', () => {
     expect(body.success).toBe(false);
     expect(body.failed).toBe(1);
     expect(body.results[0].error).toContain('trigger crashed');
-    expect(policyUpdatePayloads).toEqual([
-      { policy_type: 'auto_update', is_enabled: true },
-      { policy_type: 'notify', is_enabled: false },
-    ]);
+    expect(policyUpdatePayloads).toEqual([]);
   });
 
-  it('restores temporary manual policy settings and never dispatches when fixed rules hold the update', async () => {
+  it('preserves stored manual policy settings and never dispatches when fixed rules hold the update', async () => {
     const policy = {id:'policy-1',user_id:'user-1',tenant_id:'tenant-1',winget_id:'Microsoft.Edge',policy_type:'notify',is_enabled:false,consecutive_failures:0,deployment_config:{architecture:'x64',psadtConfig:{customDetection:true}},original_upload_history_id:null} as AppUpdatePolicy;
     const {supabase,policyUpdatePayloads}=createTriggerSupabaseMocks(policy);
     createServerClientMock.mockReturnValue(supabase);
@@ -335,8 +330,35 @@ describe('POST /api/updates/trigger', () => {
     triggerAutoUpdateMock.mockResolvedValue({success:false,skipped:true,skipReason:'Custom detection rules are fixed. Deploy 2.0.0 from the catalog with updated rules.'});
     const response=await POST(new NextRequest('http://localhost:3000/api/updates/trigger',{method:'POST',headers:{Authorization:'Bearer test-token','Content-Type':'application/json'},body:JSON.stringify({winget_id:'Microsoft.Edge',tenant_id:'tenant-1'})}));
     expect((await response.json()).results[0]).toMatchObject({success:false,skipped:true});
-    expect(policyUpdatePayloads).toEqual([{policy_type:'auto_update',is_enabled:true},{policy_type:'notify',is_enabled:false}]);
+    expect(policyUpdatePayloads).toEqual([]);
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('runs a paused automatic policy once without enabling stored state, trigger failure: %s', async fails => {
+    const policy = { id: 'policy-1', user_id: 'user-1', tenant_id: 'tenant-1',
+      winget_id: 'Microsoft.Edge', policy_type: 'auto_update', is_enabled: false,
+      consecutive_failures: 3, deployment_config: { architecture: 'x64' },
+      original_upload_history_id: null } as AppUpdatePolicy;
+    const { supabase, policyUpdatePayloads } = createTriggerSupabaseMocks(policy);
+    createServerClientMock.mockReturnValue(supabase);
+    getLatestInstallerInfoMock.mockResolvedValue({ ok: true, info: {
+      wingetId: 'Microsoft.Edge', currentVersion: '', latestVersion: '2.0.0' } });
+    triggerAutoUpdateMock.mockImplementation(async (attempt: AppUpdatePolicy) => {
+      expect(canAutoUpdate(attempt)).toBe(true);
+      expect(attempt.consecutive_failures).toBe(0);
+      if (fails) throw new Error('synthetic trigger failure');
+      return { success: true, packagingJobId: 'manual-job' };
+    });
+    getFeatureFlagsMock.mockReturnValue({ localPackager: true });
+    const response = await POST(new NextRequest('http://localhost:3000/api/updates/trigger', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }),
+    }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).triggered).toBe(fails ? 0 : 1);
+    expect(triggerAutoUpdateMock).toHaveBeenCalledOnce();
+    expect(policyUpdatePayloads).toEqual([]);
+    expect(policy).toMatchObject({ policy_type: 'auto_update', is_enabled: false, consecutive_failures: 3 });
   });
 
   it('returns an explicit skipped result when auto-update is blocked by current QA', async () => {
