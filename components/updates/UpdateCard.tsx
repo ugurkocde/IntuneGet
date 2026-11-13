@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
 import { UpdatePolicySelector } from './UpdatePolicySelector';
 import { cn } from '@/lib/utils';
-import { autoUpdateScopeReason, classifyUpdateType } from '@/types/update-policies';
+import { autoUpdateScopeReason, classifyUpdateType, isAutoUpdatePaused } from '@/types/update-policies';
 import { fadeUp, springPresets } from '@/lib/animations/variants';
 import type { AvailableUpdate, UpdatePolicyType } from '@/types/update-policies';
 
@@ -95,8 +95,7 @@ export function UpdateCard({
   };
 
   const policyStatus = update.policy;
-  const isPaused = policyStatus?.policy_type === 'auto_update' &&
-    (!policyStatus.is_enabled || policyStatus.consecutive_failures >= 3);
+  const isPaused = isAutoUpdatePaused(policyStatus);
   const isAutoUpdateEnabled =
     policyStatus?.policy_type === 'auto_update' && policyStatus?.is_enabled && !isPaused;
   const scopeReason = isAutoUpdateEnabled ? autoUpdateScopeReason(policyStatus?.auto_update_scope, update.current_version, update.latest_version) : null;
@@ -258,6 +257,13 @@ export function UpdateCard({
             </span>
           )}
         </div>
+
+        {isPaused && (
+          <p className="mb-3 text-xs text-status-warning" role="status">
+            <T>Automatic updates are paused.</T>{' '}
+            {policyStatus?.last_error || <T>No recent failure detail is available.</T>}
+          </p>
+        )}
 
         {/* Action row */}
         <div className="flex items-center justify-between pt-3 border-t border-black/[0.06]">

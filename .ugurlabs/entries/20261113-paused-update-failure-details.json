@@ -1,0 +1,5 @@
+{
+  "title": "See why automatic updates paused",
+  "summary": "Paused automatic update cards now show a recent recorded failure, with an explicit message when no recent detail is available. Hosted and self-hosted installations keep the existing Resume action and safety threshold.",
+  "type": "fixed"
+}

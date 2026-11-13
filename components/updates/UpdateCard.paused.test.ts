@@ -25,3 +25,15 @@ it('shows a paused policy and forwards the selector recovery action', async () =
     expect(change).toHaveBeenCalledWith(update, 'auto_update', undefined);
   } finally { await act(async () => root.unmount()); node.remove(); }
 });
+
+
+it.each(['A fixture upload failed', '<img src=x onerror=alert(1)>', null])('shows the paused failure detail or an honest fallback: %s', async (lastError) => {
+  const node = document.createElement('div'); document.body.append(node); const root = createRoot(node);
+  const update = { id: 'fixture-update', winget_id: 'Fixture.App', display_name: 'Fixture app', current_version: '1.0', latest_version: '1.1', detected_at: '2026-11-13T12:00:00Z', is_managed: true, has_prior_deployment: true,
+    policy: { id: 'fixture-policy', policy_type: 'auto_update', is_enabled: false, consecutive_failures: 3, last_error: lastError } } as AvailableUpdate;
+  try {
+    await act(async () => root.render(createElement(UpdateCard, { update, onPolicyChange: vi.fn(), onTriggerUpdate: vi.fn() })));
+    expect(node.textContent).toContain(lastError ?? 'No recent failure detail is available.');
+    expect(node.querySelector('img')).toBeNull();
+  } finally { await act(async () => root.unmount()); node.remove(); }
+});

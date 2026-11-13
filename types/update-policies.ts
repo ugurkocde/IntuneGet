@@ -190,6 +190,7 @@ export interface AvailableUpdate {
     last_auto_update_at: string | null;
     last_auto_update_version: string | null;
     consecutive_failures: number;
+    last_error?: string | null;
   } | null;
 }
 
@@ -355,4 +356,11 @@ export function shouldSkipUpdate(
   }
 
   return false;
+}
+
+
+/** A disabled automatic policy stays paused until its owner resumes it. */
+export function isAutoUpdatePaused(policy: AvailableUpdate['policy']): boolean {
+  return policy?.policy_type === 'auto_update' &&
+    (!policy.is_enabled || policy.consecutive_failures >= DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures);
 }
