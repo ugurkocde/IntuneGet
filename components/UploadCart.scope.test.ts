@@ -115,3 +115,14 @@ it('does not submit apps added while token acquisition is pending', async () => 
  expect(vi.mocked(fetch).mock.calls.filter(([url, opts]) => url === '/api/package' && opts?.method === 'POST')).toHaveLength(0);
  expect(useCartStore.getState().items.map(value => value.id)).toEqual(['test-app', 'not-reviewed']);
 });
+
+it('does not show a previous tenant request error on the new cart', async () => {
+ let reject!: (reason: Error) => void;
+ const b = await mountCart(new Promise<Response>((_resolve, r) => { reject = r; }));
+ await act(async () => b.click());
+ await act(async () => useCartStore.setState({ items: [{ ...item, id: 'new-tenant-item' }], scope: 'account|other-tenant', activeScope: 'account|other-tenant' }));
+ await act(async () => reject(new Error('previous-tenant-request-error')));
+ expect(document.body.textContent).not.toContain('previous-tenant-request-error');
+ expect(document.body.textContent).not.toContain('Deployment could not be started');
+ expect(useCartStore.getState().items.map(value => value.id)).toEqual(['new-tenant-item']);
+});

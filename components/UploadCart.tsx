@@ -336,6 +336,7 @@ export function UploadCart() {
       });
       router.push(`/dashboard/uploads?jobs=${jobIds}`);
     } catch (err) {
+      if (!scopeIsCurrent()) return;
       console.error('Deploy error:', err);
       setError({
         title: 'Deployment could not be started',
