@@ -238,7 +238,7 @@ export const supabaseDb: DatabaseAdapter = {
       return collectAnalyticsJobs(async offset => {
         const readPage = () => {
           let query = supabase.from('packaging_jobs')
-            .select('id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url', { count: 'exact' })
+            .select('id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url, publisher, error_message, version, architecture, installer_type, intune_app_id', { count: 'exact' })
             .eq(key, identity);
           if (archiveSupported) query = query.is('archived_at', null);
           return query.order('created_at', { ascending: false }).order('id', { ascending: false })
