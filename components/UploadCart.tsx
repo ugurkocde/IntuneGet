@@ -226,11 +226,12 @@ export function UploadCart() {
   const handleDeploy = async () => {
     if (items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
 
+    const reviewedItems = items;
     const start = useCartStore.getState().activeScope;
     const scopeIsCurrent = () => {
       const state = useCartStore.getState();
-      if (start && state.scope === start && state.activeScope === start) return true;
-      setError({ title: 'Account or tenant changed', message: 'Review the current cart and check Deployments for requests already sent.', retryable: false });
+      if (start && state.scope === start && state.activeScope === start && state.items === reviewedItems) return true;
+      setError({ title: 'Cart changed', message: 'Review the current cart and check Deployments for requests already sent.', retryable: false });
       return false;
     };
     if (!scopeIsCurrent()) return;
@@ -278,7 +279,7 @@ export function UploadCart() {
           Authorization: `Bearer ${accessToken}`,
           ...(isMspUser ? { 'X-MSP-Tenant-Id': start!.slice(start!.lastIndexOf('|') + 1) } : {}),
         },
-        body: JSON.stringify({ items: useCartStore.getState().items }),
+        body: JSON.stringify({ items: reviewedItems }),
       });
 
       if (!scopeIsCurrent()) return;

@@ -96,3 +96,22 @@ it('names the MSP destination in the heading and large cart confirmation', async
  expect(document.body.textContent).toContain('Destination: Customer Fixture'); await act(async()=>b.click());
  expect(document.body.textContent).toContain('Deploy 10 apps to Customer Fixture?');
 });
+
+it('rejects an old completion after switching away and back to a new cart', async () => {
+ let resolve!: (response: Response) => void;
+ const b = await mountCart(new Promise<Response>(r => { resolve = r; }));
+ await act(async () => b.click());
+ await act(async () => { useCartStore.getState().syncScope('account|other-tenant'); useCartStore.getState().syncScope('account|test-tenant'); useCartStore.setState({ items: [{ ...item, id: 'new-cart-item' }] }); });
+ await act(async () => resolve(Response.json({ success: true, jobs: [{ id: 'old-job' }] })));
+ expect(useCartStore.getState().items.map(value => value.id)).toEqual(['new-cart-item']);
+ expect(mocks.success).not.toHaveBeenCalled();
+});
+it('does not submit apps added while token acquisition is pending', async () => {
+ const b = await mountCart(Response.json({ success: true, jobs: [{ id: 'job' }] }));
+ let resolve!: (value: string) => void; auth.getAccessToken.mockImplementationOnce(() => new Promise<string>(r => { resolve = r; }));
+ await act(async () => b.click());
+ await act(async () => useCartStore.setState({ items: [...useCartStore.getState().items, { ...item, id: 'not-reviewed' }] }));
+ await act(async () => resolve('fixture-token'));
+ expect(vi.mocked(fetch).mock.calls.filter(([url, opts]) => url === '/api/package' && opts?.method === 'POST')).toHaveLength(0);
+ expect(useCartStore.getState().items.map(value => value.id)).toEqual(['test-app', 'not-reviewed']);
+});
