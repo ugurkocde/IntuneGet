@@ -97,9 +97,13 @@ export default function UpdatesPage() {
   const { isMspUser, selectedTenantId, managedTenants } = useMspOptional();
   const tenantId = isMspUser ? selectedTenantId || undefined : undefined;
   const refreshScope = JSON.stringify([user?.id ?? null, user?.tenantId ?? null, tenantId ?? null]);
-  const [checks, setChecks] = useState<Record<string, { checkedAt?: number; error?: Error }>>({});
+  const [checks, setChecks] = useState<Record<string, { checkedAt?: number; error?: Error; pending?: boolean }>>({});
+  const currentRefreshScope = useRef(refreshScope);
+  const activeRefreshes = useRef(new Set<string>());
+  useEffect(() => { currentRefreshScope.current = refreshScope; }, [refreshScope]);
   const lastCheckedAt = checks[refreshScope]?.checkedAt;
   const refreshError = checks[refreshScope]?.error;
+  const refreshPending = checks[refreshScope]?.pending === true;
   const hasGrantedManagedTenants = managedTenants.some(
     (tenant) => tenant.is_active && tenant.consent_status === 'granted' && Boolean(tenant.tenant_id)
   );
@@ -134,7 +138,7 @@ export default function UpdatesPage() {
 
   const updates = updatesData?.updates || [];
   const history = historyData?.history || [];
-  const isCheckingUpdates = isLoadingUpdates || isRefreshing || (
+  const isCheckingUpdates = isLoadingUpdates || isRefreshing || refreshPending || (
     !updatesError && !refreshError && (!updatesData || (updates.length === 0 && lastCheckedAt === undefined))
   );
 
@@ -362,17 +366,25 @@ export default function UpdatesPage() {
   }, [eligibleForBulkUpdate, triggerUpdate]);
 
   const handleRefresh = useCallback(async () => {
-    const updateCheck = (patch: { checkedAt?: number; error?: Error }) => {
+    if (activeRefreshes.current.has(refreshScope)) return;
+    activeRefreshes.current.add(refreshScope);
+    const updateCheck = (patch: { checkedAt?: number; error?: Error; pending?: boolean }) => {
       setChecks(previous => ({ ...previous, [refreshScope]: { ...previous[refreshScope], ...patch } }));
     };
-    updateCheck({ error: undefined });
+    updateCheck({ error: undefined, pending: true });
     try {
       await refreshUpdates();
+      // The query observer follows the current account and tenant.
+      if (currentRefreshScope.current !== refreshScope) return;
       const result = await refetchUpdates();
+      if (currentRefreshScope.current !== refreshScope) return;
       if (result.error) throw result.error;
       updateCheck({ checkedAt: Date.now(), error: undefined });
     } catch (error) {
       updateCheck({ error: error instanceof Error ? error : new Error('Failed to check for updates. Please try again.') });
+    } finally {
+      activeRefreshes.current.delete(refreshScope);
+      updateCheck({ pending: false });
     }
   }, [refreshUpdates, refetchUpdates, refreshScope]);
 
@@ -418,13 +430,13 @@ export default function UpdatesPage() {
               onClick={() => {
                 void handleRefresh();
               }}
-              disabled={isFetchingUpdates || isRefreshing}
+              disabled={isFetchingUpdates || isRefreshing || refreshPending}
               className="text-text-secondary hover:text-text-primary"
             >
               <RefreshCw
                 className={cn(
                   'w-4 h-4 mr-2',
-                  (isFetchingUpdates || isRefreshing) && 'animate-spin'
+                  (isFetchingUpdates || isRefreshing || refreshPending) && 'animate-spin'
                 )}
               />
               <T>Refresh</T>

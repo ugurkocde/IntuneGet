@@ -87,3 +87,41 @@ it('does not display a late previous account refresh error or time in the new ac
   expect(host.textContent).not.toContain('Previous account fixture failure');
   expect(host.querySelector('time')?.getAttribute('datetime')).toBe(checked);
 });
+it('keeps a retry busy through its refetch and prevents another refresh', async () => {
+  state.error = new Error('Cached query failure');
+  await render();
+  let finish!: (value: { error: Error | null }) => void;
+  state.refetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await click('Try Again');
+  expect(host.textContent).toContain('Checking updates');
+  expect(host.textContent).not.toContain('Try Again');
+  const refresh = [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Refresh');
+  expect(refresh?.disabled).toBe(true);
+  await act(async () => refresh!.click());
+  expect(state.refresh).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ error: new Error('Refetch fixture failed') }));
+  expect(host.textContent).toContain('Refetch fixture failed');
+  expect(host.textContent).toContain('Try Again');
+});
+it('does not refetch the next account when an older account scan finishes', async () => {
+  let finish!: (value: { success: boolean }) => void;
+  state.refresh.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await render();
+  state.userId = 'fixture-other-user'; state.error = new Error('New account query failure');
+  await render();
+  await act(async () => finish({ success: true }));
+  expect(state.refetch).not.toHaveBeenCalled();
+  expect(host.textContent).toContain('New account query failure');
+  expect(host.querySelector('time')).toBeNull();
+});
+it('discards a refetch completion after the account changes', async () => {
+  let finish!: (value: { error: Error | null }) => void;
+  state.refetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await render();
+  state.userId = 'fixture-other-user'; state.error = new Error('Other account query failure');
+  await render();
+  await act(async () => finish({ error: new Error('Previous refetch failure') }));
+  state.userId = 'fixture-user'; state.error = new Error('Original account query failure'); await render();
+  expect(host.textContent).not.toContain('Previous refetch failure');
+  expect(host.querySelector('time')).toBeNull();
+});
