@@ -1,0 +1,5 @@
+{
+  "title": "Know when automatic updates pause",
+  "summary": "Policy owners now receive an in app notice when repeated failures pause automatic updates. Failed starts also retain their error in update history so the paused card can explain what happened.",
+  "type": "fixed"
+}

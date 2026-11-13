@@ -12,6 +12,7 @@ import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
 
 const {
+  notifyPaused,
   getQaResultMock,
   getAppForInstallerMock,
   getVersionInstallerInfoMock,
@@ -20,6 +21,7 @@ const {
   defaultApprovalFailuresMock,
   curatedState,
 } = vi.hoisted(() => ({
+  notifyPaused: vi.fn(),
   curatedState: { envelope: {} as Record<string, unknown>, acceptances: new Set<string>() },
   getQaResultMock: vi.fn(),
   getAppForInstallerMock: vi.fn(),
@@ -28,6 +30,7 @@ const {
   getApprovalFailuresMock: vi.fn().mockResolvedValue([]),
   defaultApprovalFailuresMock: vi.fn().mockResolvedValue([]),
 }));
+vi.mock('@/lib/notification-service', () => ({ notifyAutoUpdatePaused: notifyPaused }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({
     getQaResult: getQaResultMock,
@@ -1463,5 +1466,30 @@ describe('manual update failure tracking preserves stored policy choices', () =>
     expect(change.consecutive_failures).toBe(3);
     if (policyType === 'auto_update') expect(change.is_enabled).toBe(false);
     else expect(change).not.toHaveProperty('is_enabled');
+  });
+});
+
+
+describe('trigger pause owner notices', () => {
+  it.each([['auto_update', true, true], ['auto_update', false, false], ['notify', true, false]] as const)('notifies the owner only on an enabled automatic pause: %s/%s', async (policyType, enabled, expected) => {
+    notifyPaused.mockClear();
+    const trigger = makeTrigger(createSupabaseMock({ app_update_policies: { singleResult: { data: { policy_type: policyType, is_enabled: enabled, consecutive_failures: 2, user_id: 'fixture-owner', winget_id: 'Fixture.App', tenant_id: 'fixture-tenant' }, error: null } } }));
+    await (trigger as unknown as { incrementFailureCount: (id: string, error: string) => Promise<void> }).incrementFailureCount('fixture-policy', 'Fixture failure');
+    expect(notifyPaused).toHaveBeenCalledTimes(expected ? 1 : 0);
+    if (expected) expect(notifyPaused).toHaveBeenCalledWith({ userId: 'fixture-owner', policyId: 'fixture-policy', wingetId: 'Fixture.App', tenantId: 'fixture-tenant', failures: 3, lastError: 'Fixture failure' });
+  });
+  it('records a created history row as failed when job creation throws', async () => {
+    const trigger = makeTrigger(createSupabaseMock({}));
+    const policy = { ...makePolicy({ displayName: 'Fixture app' }), consecutive_failures: 0 };
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never).mockResolvedValue({ id: 'fixture-history' } as never);
+    vi.spyOn(trigger as never, 'createPackagingJob' as never).mockRejectedValue(new Error('Fixture job failure') as never);
+    const failed = vi.spyOn(trigger, 'markUpdateFailed').mockResolvedValue();
+    ensureQaDemandMock.mockResolvedValue({ state: 'passed', identity: { executionProfileSha256: 'A'.repeat(64) } });
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true, bypassUpdateScope: true });
+    expect(result).toMatchObject({ success: false, error: 'Fixture job failure' });
+    expect(failed).toHaveBeenCalledWith('fixture-history', 'Fixture job failure');
   });
 });
