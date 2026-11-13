@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Loader2,
+  Menu,
 } from 'lucide-react';
 import { T } from 'gt-next';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,8 @@ export default function DashboardLayout({
   } = useOnboardingStatus();
   const router = useRouter();
   const isCollapsed = useSidebarStore((state) => state.isCollapsed);
+  const isMobileSidebarOpen = useSidebarStore((state) => state.isMobileOpen);
+  const openMobileSidebar = useSidebarStore((state) => state.openMobile);
   const fetchProfileImage = useProfileStore((state) => state.fetchProfileImage);
   const prefersReducedMotion = useReducedMotion();
   const [isLoading, setIsLoading] = useState(true);
@@ -161,7 +164,18 @@ export default function DashboardLayout({
       >
         {/* Top bar */}
         <header className="sticky top-0 z-30 h-16 glass-light">
-          <div className="flex items-center justify-between h-full pl-14 pr-3 sm:pr-4 lg:px-6">
+          <div className="flex items-center justify-between h-full pl-2 pr-3 sm:pr-4 lg:px-6">
+            {/* Sidebar trigger for small screens. It lives inside the top bar
+                so the bar can never cover it. */}
+            <button
+              type="button"
+              onClick={openMobileSidebar}
+              aria-label="Open sidebar"
+              aria-expanded={isMobileSidebarOpen}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-overlay/5 transition-colors lg:hidden"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
             {/* Command palette trigger */}
             <button
               onClick={handleOpenCommandPalette}
