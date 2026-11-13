@@ -12,6 +12,7 @@ import { createServerClient } from '@/lib/supabase';
 export type NotificationType =
   | 'deployment_complete'
   | 'deployment_failed'
+  | 'deployment_waiting'
   | 'consent_expired'
   | 'consent_revoked'
   | 'suggestion_approved'
