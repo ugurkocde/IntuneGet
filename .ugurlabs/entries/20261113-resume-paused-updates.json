@@ -1,0 +1,5 @@
+{
+  "title": "Resume paused automatic updates",
+  "summary": "Paused app policies have a clear state and a Resume action. Choosing automatic updates again resets the failed attempt count so updates can run again.",
+  "type": "fixed"
+}

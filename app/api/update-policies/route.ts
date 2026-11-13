@@ -77,6 +77,7 @@ async function savePolicySqlite(userId: string, body: AppUpdatePolicyInput): Pro
     deployment_config: derivedDeploymentConfig,
     original_upload_history_id: derivedOriginalUploadHistoryId,
     is_enabled: body.is_enabled ?? true,
+    ...(body.policy_type === 'auto_update' && body.is_enabled !== false ? { consecutive_failures: 0 } : {}),
     updated_at: new Date().toISOString(),
   };
 
@@ -321,6 +322,7 @@ export async function POST(request: NextRequest) {
       deployment_config: (derivedDeploymentConfig || null) as Json,
       original_upload_history_id: derivedOriginalUploadHistoryId,
       is_enabled: body.is_enabled ?? true,
+      ...(body.policy_type === 'auto_update' && body.is_enabled !== false ? { consecutive_failures: 0 } : {}),
       updated_at: new Date().toISOString(),
     };
 

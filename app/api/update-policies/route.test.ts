@@ -151,6 +151,16 @@ function makeRequest(body: Record<string, unknown>) {
 }
 
 describe('POST /api/update-policies', () => {
+  it('resets the failure count when the owner explicitly selects automatic updates again', async () => {
+    const { supabase, updatePayloads } = createSupabaseMock({ existing_policy: { id: 'paused-policy' } });
+    createServerClientMock.mockReturnValue(supabase);
+    const response = await POST(makeRequest({
+      winget_id: 'Vendor.App', tenant_id: 'tenant-1', policy_type: 'auto_update',
+      deployment_config: { displayName: 'Fixture app' },
+    }));
+    expect(response.status).toBe(200);
+    expect(updatePayloads).toContainEqual(expect.objectContaining({ is_enabled: true, consecutive_failures: 0 }));
+  });
   it('rejects invalid scopes before a hosted write and saves an explicit supported scope', async () => {
     parseAccessTokenMock.mockResolvedValue({ userId: 'user-1', tenantId: 'tenant-1' });
     const { supabase, insertPayloads } = createSupabaseMock({ existing_policy: null });
