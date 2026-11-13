@@ -3,35 +3,13 @@ import { act, createElement, useLayoutEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-// MSAL as a returning user's browser presents it: a stored active account
-// that cannot be read until initialization has finished.
-const msal = vi.hoisted(() => ({
-  inProgress: 'startup',
-  initialized: false,
-  storedAccount: { homeAccountId: 'home-a', localAccountId: 'user-a', tenantId: 'tenant-a', username: 'a@example.test', name: 'A' },
-  accounts: [] as unknown[],
-  lookups: 0,
-  silent: vi.fn(),
+import { InteractionStatus } from '@azure/msal-browser';
+import { cachedAccount, createMsalTestDouble } from '@/test-utils/msal-test-double';
+const state = vi.hoisted(() => ({ client: null as unknown as ReturnType<typeof import('@/test-utils/msal-test-double').createMsalTestDouble> }));
+vi.mock('@azure/msal-react', () => ({
+  useMsal: () => state.client.context,
+  useIsAuthenticated: () => state.client.context.accounts.length > 0,
 }));
-
-vi.mock('@azure/msal-react', () => {
-  const instance = {
-    getActiveAccount: () => {
-      msal.lookups += 1;
-      if (!msal.initialized) {
-        throw Object.assign(new Error('uninitialized_public_client_application'), {
-          errorCode: 'uninitialized_public_client_application',
-        });
-      }
-      return msal.storedAccount;
-    },
-    acquireTokenSilent: msal.silent,
-  };
-  return {
-    useMsal: () => ({ instance, accounts: msal.accounts, inProgress: msal.inProgress }),
-    useIsAuthenticated: () => msal.accounts.length > 0,
-  };
-});
 vi.mock('@/lib/msal-config', () => ({ graphScopes: ['fixture.read'], getAdminConsentUrl: vi.fn() }));
 
 import { useMicrosoftAuth } from './useMicrosoftAuth';
@@ -50,11 +28,7 @@ async function render() {
 }
 
 beforeEach(() => {
-  msal.inProgress = 'startup';
-  msal.initialized = false;
-  msal.accounts = [];
-  msal.lookups = 0;
-  msal.silent.mockResolvedValue({ accessToken: 'fixture-token', expiresOn: new Date(Date.now() + 3600000) });
+  state.client = createMsalTestDouble();
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -69,7 +43,7 @@ afterEach(async () => {
 it('renders for a returning user while MSAL is still starting', async () => {
   await render();
 
-  expect(msal.lookups).toBe(0);
+  expect(state.client.instance.getActiveAccount.mock.calls.length).toBe(0);
   expect(auth.isInitializing).toBe(true);
   expect(auth.account).toBeNull();
   expect(auth.user).toBeNull();
@@ -79,22 +53,22 @@ it('renders for a returning user while MSAL is still starting', async () => {
 it('picks up the stored account once MSAL has started', async () => {
   await render();
 
-  msal.initialized = true;
-  msal.inProgress = 'none';
-  msal.accounts = [msal.storedAccount];
+  const initialization = state.client.instance.initialize();
+  state.client.finishInitialization();
+  await initialization;
   await render();
 
   expect(auth.isInitializing).toBe(false);
-  expect(auth.account).toBe(msal.storedAccount);
+  expect(auth.account).toBe(cachedAccount);
   expect(auth.user?.id).toBe('user-a');
   expect(await auth.getAccessToken()).toBe('fixture-token');
 });
 
 it('falls back to the known accounts when the lookup fails after startup', async () => {
-  msal.inProgress = 'none';
-  msal.accounts = [msal.storedAccount];
+  state.client.context.inProgress = InteractionStatus.None;
+  state.client.context.accounts = [cachedAccount];
   await render();
 
-  expect(msal.lookups).toBeGreaterThan(0);
-  expect(auth.account).toBe(msal.storedAccount);
+  expect(state.client.instance.getActiveAccount.mock.calls.length).toBeGreaterThan(0);
+  expect(auth.account).toBe(cachedAccount);
 });
