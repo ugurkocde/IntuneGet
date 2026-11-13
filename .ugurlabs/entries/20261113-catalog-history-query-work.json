@@ -1,0 +1,5 @@
+{
+  "title": "Reduce database work for app version history",
+  "summary": "App-specific release history now reuses the existing history index while preserving case-insensitive matching, filters and previous-version details.",
+  "type": "improved"
+}
