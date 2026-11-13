@@ -283,7 +283,7 @@ export const sqliteDb: DatabaseAdapter = {
       const identity = scope.tenantId ?? scope.userId;
       if (!identity) throw new Error('Statistics identity required');
       const rows = getDb().prepare(`
-        SELECT id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url
+        SELECT id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url, publisher, error_message, version, architecture, installer_type, intune_app_id
         FROM packaging_jobs WHERE ${key} = ? AND archived_at IS NULL
         ORDER BY created_at DESC, id DESC LIMIT 100001
       `).all(identity) as AnalyticsJob[];

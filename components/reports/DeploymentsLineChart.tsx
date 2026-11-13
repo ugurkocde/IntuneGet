@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale } from 'gt-next';
+
 import {
   LineChart,
   Line,
@@ -22,6 +24,7 @@ interface DeploymentsLineChartProps {
 }
 
 export function DeploymentsLineChart({ data }: DeploymentsLineChartProps) {
+  const locale = useLocale();
   if (!data || data.length === 0) {
     return (
       <div className="h-[300px] flex items-center justify-center text-slate-400">
@@ -33,7 +36,8 @@ export function DeploymentsLineChart({ data }: DeploymentsLineChartProps) {
   // Format date for display
   const formattedData = data.map((item) => ({
     ...item,
-    displayDate: new Date(item.date).toLocaleDateString('en-US', {
+    displayDate: new Date(item.date + 'T00:00:00Z').toLocaleDateString(locale, {
+      timeZone: 'UTC',
       month: 'short',
       day: 'numeric',
     }),
