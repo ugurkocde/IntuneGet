@@ -365,6 +365,7 @@ export default function UpdatesPage() {
     }
   }, [eligibleForBulkUpdate, triggerUpdate]);
 
+  const hasTriggeredAutoRefresh = useRef(new Set<string>());
   const handleRefresh = useCallback(async () => {
     if (activeRefreshes.current.has(refreshScope)) return;
     activeRefreshes.current.add(refreshScope);
@@ -372,12 +373,17 @@ export default function UpdatesPage() {
       setChecks(previous => ({ ...previous, [refreshScope]: { ...previous[refreshScope], ...patch } }));
     };
     updateCheck({ error: undefined, pending: true });
+    const scopeWasAbandoned = () => {
+      if (currentRefreshScope.current === refreshScope) return false;
+      if (lastCheckedAt === undefined) hasTriggeredAutoRefresh.current.delete(refreshScope);
+      return true;
+    };
     try {
       await refreshUpdates();
       // The query observer follows the current account and tenant.
-      if (currentRefreshScope.current !== refreshScope) return;
+      if (scopeWasAbandoned()) return;
       const result = await refetchUpdates();
-      if (currentRefreshScope.current !== refreshScope) return;
+      if (scopeWasAbandoned()) return;
       if (result.error) throw result.error;
       updateCheck({ checkedAt: Date.now(), error: undefined });
     } catch (error) {
@@ -386,20 +392,19 @@ export default function UpdatesPage() {
       activeRefreshes.current.delete(refreshScope);
       updateCheck({ pending: false });
     }
-  }, [refreshUpdates, refetchUpdates, refreshScope]);
+  }, [refreshUpdates, refetchUpdates, refreshScope, lastCheckedAt]);
 
   // Auto-refresh when initial load returns empty results
-  const hasTriggeredAutoRefresh = useRef<string | null>(null);
   useEffect(() => {
     if (
       !isLoadingUpdates &&
       !isRefreshing &&
-      hasTriggeredAutoRefresh.current !== refreshScope &&
+      !hasTriggeredAutoRefresh.current.has(refreshScope) &&
       !updatesError && updatesData !== undefined &&
       !mspTenantSelectionRequired &&
       updates.length === 0
     ) {
-      hasTriggeredAutoRefresh.current = refreshScope;
+      hasTriggeredAutoRefresh.current.add(refreshScope);
       void handleRefresh();
     }
   }, [isLoadingUpdates, isRefreshing, mspTenantSelectionRequired, updates.length, handleRefresh, refreshScope, updatesError, updatesData]);

@@ -125,3 +125,16 @@ it('discards a refetch completion after the account changes', async () => {
   expect(host.textContent).not.toContain('Previous refetch failure');
   expect(host.querySelector('time')).toBeNull();
 });
+it.each(['scan', 'refetch'])('restarts an abandoned first %s when its account becomes active again', async phase => {
+  let finish!: () => void;
+  if (phase === 'scan') state.refresh.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ success: true }); }));
+  else state.refetch.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ error: null }); }));
+  await render();
+  state.userId = 'fixture-other-user'; state.error = new Error('Other account query failed');
+  await render();
+  await act(async () => finish());
+  state.userId = 'fixture-user'; state.error = null;
+  await render();
+  expect(state.refresh).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toContain('All apps are up to date');
+});
