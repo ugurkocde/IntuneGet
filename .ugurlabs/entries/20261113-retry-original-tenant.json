@@ -1,0 +1,5 @@
+{
+  "title": "Retries stay with the original deployment tenant",
+  "summary": "Deployment cards name their destination tenant. Retrying a deployment checks the original account and tenant, including after signing in, so a customer deployment cannot silently move to another tenant.",
+  "type": "fixed"
+}
