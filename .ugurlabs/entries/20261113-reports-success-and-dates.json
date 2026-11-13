@@ -1,0 +1,5 @@
+{
+  "title": "Reports include finished deployments and keep chart dates aligned",
+  "summary": "Reports and CSV exports include the complete deployment history. Reports count deployed and completed jobs consistently with Overview, and chart dates follow the bucket day in your locale.",
+  "type": "fixed"
+}

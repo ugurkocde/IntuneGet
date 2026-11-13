@@ -6,7 +6,7 @@ vi.mock('@/lib/auth-utils', () => ({
   parseAccessToken: async () => ({ userId: 'export-user' }),
 }));
 vi.mock('@/lib/db', () => ({
-  getDatabase: () => ({ jobs: { getByUserId: async () => fixture.jobs } }),
+  getDatabase: () => ({ jobs: { getByUserId: async () => fixture.jobs.slice(0, 50), getAnalyticsJobs: async () => fixture.jobs } }),
 }));
 
 import { GET } from './route';
@@ -53,4 +53,9 @@ describe('analytics export', () => {
     expect(row).toContain(`"'-1 returned, see ""log""\nsecond line"`);
     expect(row.startsWith('"job-1","Vendor.App",')).toBe(true);
   });
+});
+
+it('exports every row beyond fifty and preserves deployed status', async () => {
+ fixture.jobs=Array.from({length:75},(_,i)=>({id:'export-'+i,winget_id:'Example.App',display_name:'Fixture',publisher:'Example',version:'1',architecture:'x64',installer_type:'exe',status:'deployed',error_message:null,intune_app_id:null,created_at:new Date().toISOString(),completed_at:new Date().toISOString()}));
+ const text=await(await GET(request())).text();expect(text.trim().split('\n')).toHaveLength(76);expect(text).toContain('"export-74"');expect(text).toContain('"deployed"');
 });

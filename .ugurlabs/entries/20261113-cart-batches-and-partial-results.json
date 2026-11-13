@@ -1,0 +1,5 @@
+{
+  "title": "Large deployment carts keep every result visible",
+  "summary": "Carts deploy in batches within the existing request limit. Apps that did not start keep their configuration in the cart, while started deployments stay accessible through View Progress. Repeated clicks no longer submit the same cart twice.",
+  "type": "fixed"
+}

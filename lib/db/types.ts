@@ -178,7 +178,7 @@ export interface UploadHistoryRecord {
 /**
  * Job statistics
  */
-export type AnalyticsJob = Pick<PackagingJob, 'id' | 'user_id' | 'user_email' | 'status' | 'completed_at' | 'created_at' | 'winget_id' | 'display_name' | 'intune_app_url'>;
+export type AnalyticsJob = Pick<PackagingJob, 'id' | 'user_id' | 'user_email' | 'status' | 'completed_at' | 'created_at' | 'winget_id' | 'display_name' | 'intune_app_url'> & Partial<Pick<PackagingJob, 'publisher' | 'error_message' | 'version' | 'architecture' | 'installer_type' | 'intune_app_id'>>;
 export type AnalyticsJobScope = { userId: string; tenantId?: never } | { tenantId: string; userId?: never };
 
 export interface JobStats {

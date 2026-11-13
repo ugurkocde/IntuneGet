@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   X,
@@ -54,12 +54,13 @@ interface PackagingJob {
   display_name: string;
   status: string;
   github_run_url?: string;
+  package_config?: { id?: string };
 }
 
 interface PackageApiResponse {
   success: boolean;
   jobs?: PackagingJob[];
-  errors?: { wingetId: string; error: string }[];
+  errors?: { wingetId: string; error: string; code?: string }[];
   message?: string;
 }
 
@@ -70,6 +71,7 @@ interface DeploymentError {
   message: string;
   retryable: boolean;
   blockedBeforeDispatch?: boolean;
+  startedCount?: number;
   packageName?: string;
   packageVersion?: string;
 }
@@ -107,6 +109,8 @@ export function UploadCart() {
   const updateItem = useCartStore((state) => state.updateItem);
   const clearCart = useCartStore((state) => state.clearCart);
   const [isDeploying, setIsDeploying] = useState(false);
+  const deploymentInFlight = useRef(false);
+  const [itemFailures, setItemFailures] = useState<Record<string, string>>({});
   const [showLargeDeployConfirm, setShowLargeDeployConfirm] = useState(false);
   const [error, setError] = useState<DeploymentError | null>(null);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
@@ -131,7 +135,7 @@ export function UploadCart() {
     ? selectedTenant?.display_name || 'the selected customer tenant'
     : user?.email ? 'your organization (' + user.email + ')' : 'your organization';
   useEffect(() => {
-    setEditingItem(null); setRecovery(null); setQaDetailsTarget(null); setError(null); setShowLargeDeployConfirm(false);
+    setEditingItem(null); setRecovery(null); setQaDetailsTarget(null); setError(null); setItemFailures({}); setShowLargeDeployConfirm(false);
   }, [activeScope]);
   useEffect(() => {
     if (editingItem && !items.some(item => item.id === editingItem.id)) setEditingItem(null);
@@ -224,127 +228,153 @@ export function UploadCart() {
   };
 
   const handleDeploy = async () => {
-    if (items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
-
+    if (deploymentInFlight.current || items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
+    deploymentInFlight.current = true;
+    setIsDeploying(true);
+    setError(null);
+    setItemFailures({});
     const reviewedItems = items;
     const start = useCartStore.getState().activeScope;
+    let scopeInvalidated = false;
+    // Observe every transition, including a switch away and back in one render.
+    const unsubscribe = useCartStore.subscribe((state, previous) => {
+      if (state.scope !== previous.scope || state.activeScope !== previous.activeScope) scopeInvalidated = true;
+    });
     const scopeIsCurrent = () => {
       const state = useCartStore.getState();
-      if (start && state.scope === start && state.activeScope === start && state.items === reviewedItems) return true;
+      if (!scopeInvalidated && start && state.scope === start && state.activeScope === start) return true;
       setError({ title: 'Cart changed', message: 'Review the current cart and check Deployments for requests already sent.', retryable: false });
       return false;
     };
-    if (!scopeIsCurrent()) return;
-    setError(null);
-
-    if (!isAuthenticated) {
-      const signedIn = await signIn();
+    const startedJobs: PackagingJob[] = [];
+    const confirmed = new Set<string>();
+    let complete = false;
+    let requestSent = false;
+    const sent = new Set<string>();
+    let activeBatch: CartItem[] = [];
+    try {
       if (!scopeIsCurrent()) return;
-      if (!signedIn) {
-        setError({
-          title: 'Microsoft sign-in required',
-          message: 'Please sign in with Microsoft to deploy packages.',
-          retryable: true,
-        });
+      if (!isAuthenticated) {
+        const signedIn = await signIn();
+        if (!scopeIsCurrent()) return;
+        if (!signedIn) {
+          setError({ title: 'Microsoft sign-in required', message: 'Please sign in with Microsoft to deploy packages.', retryable: true });
+          return;
+        }
+      }
+      const accessToken = await getAccessToken();
+      if (!scopeIsCurrent()) return;
+      if (!accessToken) {
+        setError({ title: 'Microsoft sign-in expired', message: 'Failed to get an access token. Please sign in again.', retryable: true });
         return;
       }
-    }
-
-    const accessToken = await getAccessToken();
-    if (!scopeIsCurrent()) return;
-    if (!accessToken) {
-      setError({
-        title: 'Microsoft sign-in expired',
-        message: 'Failed to get an access token. Please sign in again.',
-        retryable: true,
-      });
-      return;
-    }
-
-    setIsDeploying(true);
-
-    try {
-      // Recheck at the point of deployment, including after signing in. The
-      // server independently authorizes the exact profile again in /api/package.
       if (curatedSettings.curatedItems.length > 0) {
         const verification = await curatedSettings.refetch();
         if (!scopeIsCurrent()) return;
         if (verification.isError || !verification.data || curatedSettings.curatedItems.some(item =>
           !verification.data.items.some(status => status.itemId === item.id && status.status === 'ready'))) return;
       }
-      const response = await fetch('/api/package', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          ...(isMspUser ? { 'X-MSP-Tenant-Id': start!.slice(start!.lastIndexOf('|') + 1) } : {}),
-        },
-        body: JSON.stringify({ items: reviewedItems }),
-      });
-
-      if (!scopeIsCurrent()) return;
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType?.includes('application/json')) {
-          const errorData = await response.json() as PackageApiErrorResponse;
-          if (!scopeIsCurrent()) return;
-          if (errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED' || errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED') {
-            await curatedSettings.refetch();
-            return;
+      for (let offset = 0; offset < reviewedItems.length; offset += 10) {
+        if (!scopeIsCurrent()) return;
+        const batch = reviewedItems.slice(offset, offset + 10).filter(item => {
+          const current = useCartStore.getState().items.find(value => value.id === item.id);
+          if (current === item) return true;
+          if (current) setItemFailures(previous => ({ ...previous, [item.id]: 'Changed during deployment, not sent.' }));
+          return false;
+        });
+        if (batch.length === 0) continue;
+        activeBatch = batch;
+        for (const item of batch) sent.add(item.id);
+        requestSent = true;
+        const response = await fetch('/api/package', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            ...(isMspUser ? { 'X-MSP-Tenant-Id': start!.slice(start!.lastIndexOf('|') + 1) } : {}),
+          },
+          body: JSON.stringify({ items: batch }),
+        });
+        if (!scopeIsCurrent()) return;
+        if (!response.ok) {
+          if (response.status >= 500 && !response.headers.get('content-type')?.includes('application/json')) throw new Error('Unknown outcome');
+          let rejectionMessage = 'Review the remaining cart items before trying again.';
+          if (response.headers.get('content-type')?.includes('application/json')) {
+            const errorData = await response.json() as PackageApiErrorResponse;
+            rejectionMessage = errorData.message || errorData.error || rejectionMessage;
+            if (!scopeIsCurrent()) return;
+            if (errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED' || errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED') {
+              await curatedSettings.refetch();
+              if (!scopeIsCurrent()) return;
+              setError({ title: 'Deployment needs verification', message: 'Review the remaining cart items before continuing.', retryable: true });
+              return;
+            }
+            if (response.status === 409 || (Boolean(errorData.code) && (response.status < 500 || response.status === 503))) {
+              const retryable = errorData.retryable === true;
+              setError({ code: errorData.code, packageId: errorData.package?.wingetId,
+                title: errorData.code === 'MANIFEST_UNAVAILABLE' ? 'Selected version is no longer available' : retryable ? 'Installer verification temporarily unavailable' : 'Deployment blocked before upload',
+                message: errorData.message || errorData.error || 'The installer could not be verified safely.', retryable,
+                blockedBeforeDispatch: true, startedCount: startedJobs.length, packageName: errorData.package?.displayName, packageVersion: errorData.package?.version });
+              return;
+            }
           }
-          if (response.status === 409 || Boolean(errorData.code)) {
-            const packageLabel = errorData.package?.displayName;
-            const versionLabel = errorData.package?.version;
-            const retryable = errorData.retryable === true;
-            setError({
-              code: errorData.code,
-              packageId: errorData.package?.wingetId,
-              title: errorData.code === 'MANIFEST_UNAVAILABLE'
-                ? 'Selected version is no longer available'
-                : retryable
-                ? 'Installer verification temporarily unavailable'
-                : 'Deployment blocked before upload',
-              message: errorData.message || errorData.error || 'The installer could not be verified safely.',
-              retryable,
-              blockedBeforeDispatch: true,
-              packageName: packageLabel,
-              packageVersion: versionLabel,
-            });
-            return;
-          }
-          throw new Error(errorData.message || errorData.error || 'Failed to queue packaging jobs');
+          if (response.status >= 500) throw new Error('Unknown outcome');
+          setError({ title: 'Deployment request was rejected', message: rejectionMessage, retryable: true });
+          return;
         }
-        throw new Error(`Deployment failed (${response.status})`);
+        const data: PackageApiResponse = await response.json();
+        if (!scopeIsCurrent()) return;
+        const batchById = new Map(batch.map(item => [item.id, item]));
+        const matched = new Set<string>();
+        for (const job of data.jobs ?? []) {
+          const id = job.package_config?.id;
+          if (typeof job.id === 'string' && job.id) {
+            if (!startedJobs.some(value => value.id === job.id)) startedJobs.push(job);
+            if (id && batchById.has(id)) { matched.add(id); confirmed.add(id); }
+          }
+        }
+        useCartStore.setState(state => ({ items: state.items.filter(item => !matched.has(item.id) || batchById.get(item.id) !== item) }));
+        const remaining = batch.filter(item => !matched.has(item.id));
+        const failures: Record<string, string> = {};
+        let unknown = (data.jobs ?? []).some(job => !job.id || !job.package_config?.id || !batchById.has(job.package_config.id));
+        for (const item of remaining) {
+          const errors = data.errors?.filter(error => error.wingetId === item.wingetId) ?? [];
+          if (errors.length > 0 && !errors.some(error => error.code === 'WORKFLOW_DISPATCH_UNCONFIRMED')) failures[item.id] = describeDeploymentFailure({ errors }, [item]);
+          else { unknown = true; failures[item.id] = 'Outcome unknown. Please check Deployments before retrying.'; }
+        }
+        setItemFailures(previous => ({ ...previous, ...failures }));
+        if (unknown) throw new Error('Unknown outcome');
+        if (remaining.length > 0) setError({ title: 'Some deployments did not start', message: describeDeploymentFailure(data, remaining), retryable: true });
       }
-
-      const data: PackageApiResponse = await response.json();
+      complete = confirmed.size === reviewedItems.length;
+    } catch {
       if (!scopeIsCurrent()) return;
-
-      if (!data.success || !data.jobs || data.jobs.length === 0) {
-        throw new Error(describeDeploymentFailure(data, items));
+      if (requestSent) {
+        const labels: Record<string, string> = {};
+        for (const item of activeBatch) if (!confirmed.has(item.id)) labels[item.id] = 'Outcome unknown. Please check Deployments before retrying.';
+        for (const item of reviewedItems) if (!sent.has(item.id)) labels[item.id] = 'Not sent.';
+        setItemFailures(previous => ({ ...labels, ...previous }));
       }
-
-      const jobCount = data.jobs.length;
-      const jobIds = data.jobs.map((job) => job.id).join(',');
-      clearCart();
-      closeCart();
-      toast.success(`${jobCount} deployment${jobCount !== 1 ? 's' : ''} started`, {
-        action: {
-          label: 'View Progress',
-          onClick: () => router.push(`/dashboard/uploads?jobs=${jobIds}`),
-        },
-      });
-      router.push(`/dashboard/uploads?jobs=${jobIds}`);
-    } catch (err) {
-      if (!scopeIsCurrent()) return;
-      console.error('Deploy error:', err);
-      setError({
-        title: 'Deployment could not be started',
-        message: err instanceof Error ? err.message : 'Failed to deploy packages',
-        retryable: true,
-      });
+      setError(requestSent
+        ? { title: 'Deployment outcome needs checking', message: 'Some requests may have started. Please check Deployments before retrying the remaining cart items.', retryable: false }
+        : { title: 'Microsoft sign-in unavailable', message: 'Please sign in again before deploying the cart.', retryable: true });
     } finally {
+      unsubscribe();
+      deploymentInFlight.current = false;
       setIsDeploying(false);
+      const current = useCartStore.getState();
+      if (!scopeInvalidated && start && current.scope === start && current.activeScope === start && startedJobs.length > 0) {
+        const count = startedJobs.length;
+        const jobIds = startedJobs.map(job => job.id).join(',');
+        const action = { label: 'View Progress', onClick: () => router.push(`/dashboard/uploads?jobs=${jobIds}`) };
+        if (complete && current.items.length === 0) {
+          closeCart();
+          toast.success(`${count} deployment${count !== 1 ? 's' : ''} started`, { action });
+          router.push(`/dashboard/uploads?jobs=${jobIds}`);
+        } else {
+          toast.warning(`${count} deployment${count !== 1 ? 's' : ''} started; ${current.items.length} items remain in the cart`, { action });
+        }
+      }
     }
   };
 
@@ -438,6 +468,7 @@ export function UploadCart() {
                           className="flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
+                          {itemFailures[item.id] && <p role="status" className="text-status-warning text-sm">{itemFailures[item.id]}</p>}
                           <h4 className="text-text-primary font-medium truncate">
                             {item.displayName}
                           </h4>
@@ -614,7 +645,7 @@ export function UploadCart() {
                       <p className="text-status-error/70 mt-1 whitespace-pre-line break-words">{error.message}</p>
                       {error.blockedBeforeDispatch && (
                         <p className="text-text-muted mt-2">
-                          No packaging pipeline was started and no changes were made in Intune.
+                          {error.startedCount ? 'This batch did not start. Earlier deployments are available through View Progress.' : 'No packaging pipeline was started and no changes were made in Intune.'}
                         </p>
                       )}
                       {needsVersionReview && (
@@ -631,7 +662,7 @@ export function UploadCart() {
                           </Button>
                         </div>
                       )}
-                      {!error.retryable && !needsVersionReview && (
+                      {error.blockedBeforeDispatch && !error.retryable && !needsVersionReview && (
                         <p className="text-text-muted mt-1">
                           Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.
                         </p>
