@@ -1,0 +1,39 @@
+import {describe,it,expect,vi} from 'vitest';
+import {reconcileActive} from './active-health.mjs';
+import {holdStalledPublication,recoverInfrastructure,PUBLICATION_FAILURE} from './recovery.mjs';
+import {spawnSync} from 'node:child_process';
+const now=Date.now();
+const c={id:'held',status:'running',phase:'publishing',github_run_id:'101',test_level:'psadt-package',started_at:new Date(now-1200000).toISOString(),recovery_history:[{kind:'publication',previousRunId:'101'}]};
+const run={id:101,status:'pending',run_attempt:3,path:'.github/workflows/intune-qa.yml',head_branch:'main',event:'workflow_dispatch'};
+const jobs=[{id:1,name:'qa',status:'completed',conclusion:'success'},{id:2,name:'Publish compact app JSON',status:'completed',conclusion:'failure'}];
+function deps(){return{candidate:{...c},now,github:vi.fn(async (p:string)=>p.includes('/jobs?')?{total_count:2,jobs:structuredClone(jobs)}:run),patch:vi.fn(async()=>[{id:c.id}])};}
+describe('candidate scoped publication hold',()=>{
+ it('holds completed VM evidence without resetting attempts, history, phase or identity',async()=>{const d=deps();expect(await holdStalledPublication(d)).toMatchObject({action:'publication_candidate_held',candidateId:c.id});expect(d.patch).toHaveBeenCalledWith('qa_candidates',{id:'eq.held',status:'eq.running',phase:'eq.publishing',github_run_id:'eq.101'},expect.objectContaining({status:'error',next_retry_at:'infinity'}));const body=d.patch.mock.calls[0][2];for(const k of ['attempts','recovery_attempts','recovery_history','github_run_id','phase'])expect(body).not.toHaveProperty(k);});
+ it.each(['incomplete','running_vm','missing_history','queued_vm','identity'])('does not settle unqualified evidence: %s',async mode=>{const d=deps();if(mode==='missing_history')d.candidate.recovery_history=[];const base=d.github.getMockImplementation()!;d.github.mockImplementation(async p=>{const x:any=await base(p);if(p.includes('/jobs?')){if(mode==='incomplete')x.total_count++;if(mode==='running_vm'||mode==='queued_vm')x.jobs[0].status=mode==='running_vm'?'in_progress':'queued';}else if(mode==='identity')return{...x,id:102};return x;});expect(await holdStalledPublication(d)).toBeNull();expect(d.patch).not.toHaveBeenCalled();});
+ it('loses a compare and set without pausing',async()=>{const d=deps();d.patch.mockResolvedValue([]);expect(await holdStalledPublication(d)).toMatchObject({action:'recovery_claim_lost'});});
+ it('checks the publication cancellation escalation and ordinary stale exit',async()=>{for(const cancel of [true,false]){const hold=vi.fn(async()=>({action:'publication_candidate_held'}));const r=await reconcileActive({candidate:c,now,snapshot:async()=>({active:[c]}),invokeCron:async()=>({body:{reason:'qa_active'}}),recoverPublication:async()=>cancel?{repairRequired:true,repairKey:'qa-publication-cancel-stalled'}:null,holdPublication:hold});expect(r.action).toBe('publication_candidate_held');expect(r.repairRequired).toBeUndefined();expect(hold).toHaveBeenCalledOnce();}});
+ it('dry run never calls the hold',async()=>{const hold=vi.fn();await reconcileActive({candidate:c,now,dryRun:true,holdPublication:hold});expect(hold).not.toHaveBeenCalled();});
+ it('publication retry exhaustion holds only its candidate; dispatch exhaustion still escalates',async()=>{for(const kind of ['publication','dispatch']){const row={...c,status:'error',started_at:kind==='dispatch'?null:c.started_at,github_run_id:kind==='dispatch'?null:'101',recovery_attempts:5,finished_at:new Date(now-600000).toISOString(),failure_summary:kind==='dispatch'?'The QA workflow did not start before the dispatch timeout.':PUBLICATION_FAILURE};const patch=vi.fn(async()=>[{id:c.id}]);const r=await recoverInfrastructure({rows:async(t:string,p:any)=>t==='qa_candidates'&&p.status==='eq.error'?[row]:[],patch,github:async(p:string)=>p.includes('/jobs?')?{total_count:2,jobs}:({...run,status:'completed'}),now});expect(r.action).toBe(kind==='publication'?'publication_candidate_held':'recovery_exhausted');expect(!!r.repairRequired).toBe(kind==='dispatch');}});
+});
+function controller(vmRunning=false){
+ const url=new URL('./qa-control.mjs',import.meta.url).href;
+ const code=`const now=Date.now();let active=true;const writes=[],calls=[];
+ const candidate=${JSON.stringify(c)};const control={id:'global',paused:false,required_packager_commit:'a'.repeat(40),scheduler_packager_commit:'a'.repeat(40),scheduler_seen_at:new Date(now).toISOString()};
+ globalThis.fetch=async(input,init={})=>{const u=new URL(input),method=init.method||'GET';calls.push({path:u.pathname,method});
+ if(u.origin==='https://api.github.com'){if(method!=='GET')throw Error('No GitHub writes');return Response.json(u.pathname.endsWith('/jobs')?{total_count:2,jobs:${JSON.stringify(jobs)}.map(j=>j.name==='qa'&&${vmRunning}?{...j,status:'in_progress'}:j)}:${JSON.stringify(run)});}
+ if(u.origin==='https://www.intuneget.com')return Response.json(active?{reason:'qa_active'}:{dispatched:true});
+ if(u.origin!=='https://mock.invalid')throw Error('Network escaped fixture');
+ if(method==='PATCH'){const body=JSON.parse(init.body);writes.push({table:u.pathname.split('/').at(-1),query:u.search,body});if(u.pathname.endsWith('/qa_candidates'))active=false;return Response.json([{id:'held'}]);}
+ if(method!=='GET')throw Error('Unexpected write');
+ if(u.pathname.endsWith('/qa_pipeline_control'))return Response.json([control]);
+ if(init.headers.Prefer==='count=exact')return new Response('[]',{headers:{'content-range':'0-0/1'}});
+ if(u.pathname.endsWith('/qa_candidates')&&u.searchParams.get('status')==='in.(dispatched,running)')return Response.json(active?[candidate]:[]);
+ if(u.pathname.endsWith('/qa_candidates')&&u.searchParams.get('status')==='eq.error'){if(!u.searchParams.get('next_retry_at')?.startsWith('lte.'))throw Error('Held row not excluded');return Response.json([]);}
+ if(u.pathname.endsWith('/qa_candidates')&&u.searchParams.get('status')==='eq.queued')return Response.json([{id:'other',winget_id:'Other.App'}]);
+ return Response.json([]);};
+ process.argv=['node','controller'];const results=[];const output=process.stdout.write.bind(process.stdout);process.stdout.write=x=>{results.push(JSON.parse(x));return true;};await import(${JSON.stringify(url)}+'?cycle=1');if(!${vmRunning})await import(${JSON.stringify(url)}+'?cycle=2');output(JSON.stringify({results,writes,calls}));`;
+ const result=spawnSync(process.execPath,['--input-type=module','--eval',code],{encoding:'utf8',env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot,NEXT_PUBLIC_SUPABASE_URL:'https://mock.invalid',SUPABASE_SERVICE_ROLE_KEY:'mock',CRON_SECRET:'mock',GITHUB_PAT:'mock',GITHUB_OWNER:'ugurkocde',GITHUB_WORKFLOWS_REPO:'IntuneGet-Workflows'}});
+ expect(result.status,result.stderr+result.stdout).toBe(0);return JSON.parse(result.stdout);
+}
+it('real controller holds one publication then dispatches the unrelated queue next cycle',()=>{const x=controller();expect(x.results.map((r:any)=>r.action)).toEqual(['publication_candidate_held','dispatched']);expect(x.writes.filter((w:any)=>w.table==='qa_pipeline_control')).toEqual([]);expect(x.writes.filter((w:any)=>w.table==='qa_candidates')).toHaveLength(1);});
+it('real controller retains the global guard for a genuine active VM stall',()=>{const x=controller(true);expect(x.results[0].repairKey).toBe('qa-execution-stalled');expect(x.writes).toContainEqual(expect.objectContaining({table:'qa_pipeline_control',body:expect.objectContaining({paused:true})}));expect(x.writes.filter((w:any)=>w.table==='qa_candidates')).toEqual([]);});
