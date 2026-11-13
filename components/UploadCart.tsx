@@ -294,6 +294,7 @@ export function UploadCart() {
         if (!scopeIsCurrent()) return;
         if (!response.ok) {
           if (response.status >= 500 && !response.headers.get('content-type')?.includes('application/json')) throw new Error('Unknown outcome');
+          let rejectionMessage = 'Review the remaining cart items before trying again.';
           if (response.headers.get('content-type')?.includes('application/json')) {
             const errorData = await response.json() as PackageApiErrorResponse;
             if (!scopeIsCurrent()) return;
@@ -303,7 +304,7 @@ export function UploadCart() {
               setError({ title: 'Deployment needs verification', message: 'Review the remaining cart items before continuing.', retryable: true });
               return;
             }
-            if (response.status === 409 || (response.status === 503 && Boolean(errorData.code))) {
+            if (response.status === 409 || (Boolean(errorData.code) && (response.status < 500 || response.status === 503))) {
               const retryable = errorData.retryable === true;
               setError({ code: errorData.code, packageId: errorData.package?.wingetId,
                 title: errorData.code === 'MANIFEST_UNAVAILABLE' ? 'Selected version is no longer available' : retryable ? 'Installer verification temporarily unavailable' : 'Deployment blocked before upload',
@@ -313,7 +314,7 @@ export function UploadCart() {
             }
           }
           if (response.status >= 500) throw new Error('Unknown outcome');
-          setError({ title: 'Deployment request was rejected', message: 'Review the remaining cart items before trying again.', retryable: true });
+          setError({ title: 'Deployment request was rejected', message: rejectionMessage, retryable: true });
           return;
         }
         const data: PackageApiResponse = await response.json();

@@ -140,3 +140,13 @@ it('preserves ordinary one app success navigation', async () => {
  expect(useCartStore.getState().items).toHaveLength(0); expect(mocks.success).toHaveBeenCalled();
  expect(mocks.push).toHaveBeenCalledWith('/dashboard/uploads?jobs=job-test-app');
 });
+
+it('preserves a coded 400 installer preflight block after earlier batches started', async () => {
+ let requests = 0; const explanation = 'This installer needs explicit silent switches.';
+ const button = await mountCart(batch => ++requests === 1 ? started(batch) : Response.json({ code: 'SILENT_INSTALL_UNAVAILABLE', message: explanation, retryable: false }, { status: 400 }), { items: many(25) });
+ await clickDeploy(button);
+ expect(requests).toBe(2); expect(useCartStore.getState().items).toHaveLength(15);
+ expect(document.body.textContent).toContain('Deployment blocked before upload'); expect(document.body.textContent).toContain(explanation);
+ expect(document.body.textContent).not.toContain('Retry deployment');
+ expect(document.body.textContent).toContain('Earlier deployments'); expect(mocks.warning).toHaveBeenCalled();
+});

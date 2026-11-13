@@ -95,4 +95,10 @@ describe('deployment result presentation', () => {
     expect(document.querySelector('[role="alert"]')?.textContent).toContain('check Deployments');
     expect(useCartStore.getState().items).toHaveLength(1);
   });
+  it('shows the server consent message for a rejected request', async () => {
+    await deploy(Response.json({ error: 'Admin consent is required before deployment.' }, { status: 403 }));
+    expect(document.body.textContent).toContain('Admin consent is required before deployment.');
+    expect(useCartStore.getState().items).toHaveLength(1);
+  });
+
 });
