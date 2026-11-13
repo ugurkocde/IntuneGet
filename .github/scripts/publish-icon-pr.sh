@@ -80,7 +80,10 @@ for _ in $(seq 1 180); do
     gh pr update-branch "$pr_url" >/dev/null 2>&1 || true
   fi
 
-  failed_checks=$(gh pr checks "$pr_url" --json bucket --jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' 2>/dev/null || echo 0)
+  failed_checks=$(gh pr checks "$pr_url" --required --json bucket --jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' 2>/dev/null) || true
+  if [[ ! "$failed_checks" =~ ^[0-9]+$ ]]; then
+    failed_checks=0
+  fi
   if [[ "$failed_checks" -gt 0 ]]; then
     echo "Required checks failed for icon publication PR: $pr_url" >&2
     exit 1
