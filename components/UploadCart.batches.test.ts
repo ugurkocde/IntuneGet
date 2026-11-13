@@ -150,3 +150,16 @@ it('preserves a coded 400 installer preflight block after earlier batches starte
  expect(document.body.textContent).not.toContain('Retry deployment');
  expect(document.body.textContent).toContain('Earlier deployments'); expect(mocks.warning).toHaveBeenCalled();
 });
+
+it('stops later batches for an unconfirmed custom dispatch returned as an item error', async () => {
+ let requests = 0; const button = await mountCart(batch => { requests++; return Response.json({ success: false, jobs: [], errors: batch.map(value => ({ wingetId: value.wingetId, error: 'GitHub did not confirm that packaging started.', code: 'WORKFLOW_DISPATCH_UNCONFIRMED' })) }); }, { items: many(25) });
+ await clickDeploy(button); expect(requests).toBe(1); expect(useCartStore.getState().items).toHaveLength(25);
+ expect(document.body.textContent).toContain('check Deployments'); expect(mocks.success).not.toHaveBeenCalled();
+});
+it('labels uncertain and unsent items separately after a later request loses its response', async () => {
+ let requests = 0; const button = await mountCart(batch => ++requests === 1 ? started(batch) : Promise.reject(new Error('Lost response')), { items: many(25) });
+ await clickDeploy(button); expect(requests).toBe(2);
+ const text = document.body.textContent ?? '';
+ expect((text.match(/Outcome unknown/g) ?? []).length).toBe(10);
+ expect((text.match(/Not sent/g) ?? []).length).toBe(5);
+});

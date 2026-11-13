@@ -60,7 +60,7 @@ interface PackagingJob {
 interface PackageApiResponse {
   success: boolean;
   jobs?: PackagingJob[];
-  errors?: { wingetId: string; error: string }[];
+  errors?: { wingetId: string; error: string; code?: string }[];
   message?: string;
 }
 
@@ -250,6 +250,8 @@ export function UploadCart() {
     const confirmed = new Set<string>();
     let complete = false;
     let requestSent = false;
+    const sent = new Set<string>();
+    let activeBatch: CartItem[] = [];
     try {
       if (!scopeIsCurrent()) return;
       if (!isAuthenticated) {
@@ -281,6 +283,8 @@ export function UploadCart() {
           return false;
         });
         if (batch.length === 0) continue;
+        activeBatch = batch;
+        for (const item of batch) sent.add(item.id);
         requestSent = true;
         const response = await fetch('/api/package', {
           method: 'POST',
@@ -335,7 +339,7 @@ export function UploadCart() {
         let unknown = (data.jobs ?? []).some(job => !job.id || !job.package_config?.id || !batchById.has(job.package_config.id));
         for (const item of remaining) {
           const errors = data.errors?.filter(error => error.wingetId === item.wingetId) ?? [];
-          if (errors.length > 0) failures[item.id] = describeDeploymentFailure({ errors }, [item]);
+          if (errors.length > 0 && !errors.some(error => error.code === 'WORKFLOW_DISPATCH_UNCONFIRMED')) failures[item.id] = describeDeploymentFailure({ errors }, [item]);
           else { unknown = true; failures[item.id] = 'Outcome unknown. Please check Deployments before retrying.'; }
         }
         setItemFailures(previous => ({ ...previous, ...failures }));
@@ -345,6 +349,12 @@ export function UploadCart() {
       complete = confirmed.size === reviewedItems.length;
     } catch {
       if (!scopeIsCurrent()) return;
+      if (requestSent) {
+        const labels: Record<string, string> = {};
+        for (const item of activeBatch) if (!confirmed.has(item.id)) labels[item.id] = 'Outcome unknown. Please check Deployments before retrying.';
+        for (const item of reviewedItems) if (!sent.has(item.id)) labels[item.id] = 'Not sent.';
+        setItemFailures(previous => ({ ...labels, ...previous }));
+      }
       setError(requestSent
         ? { title: 'Deployment outcome needs checking', message: 'Some requests may have started. Please check Deployments before retrying the remaining cart items.', retryable: false }
         : { title: 'Microsoft sign-in unavailable', message: 'Please sign in again before deploying the cart.', retryable: true });
