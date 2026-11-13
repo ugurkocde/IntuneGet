@@ -1,0 +1,5 @@
+{
+  "title": "Approval details follow the selected Microsoft account",
+  "summary": "Switching accounts on a service provider approval request loads details for the selected account and discards earlier account responses.",
+  "type": "fixed"
+}

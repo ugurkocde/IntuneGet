@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -52,48 +52,47 @@ function ApproveContent() {
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
-
-  const loadInfo = useCallback(async () => {
-    if (!state) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setInfo(null);
-        return;
-      }
-      const response = await fetch(`/api/msp/tenants/consent-approval?state=${encodeURIComponent(state)}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setInfo(null);
-        setError(data.message || 'This request could not be loaded.');
-        return;
-      }
-      setInfo(data as ApprovalInfo);
-      setOrganizationName(data.organization_name);
-    } catch {
-      setError('This request could not be loaded. Check your connection and try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [state, getAccessToken]);
+  const [reloadDetails, setReloadDetails] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && state && !callbackError) {
-      void loadInfo();
-    }
-  }, [isAuthenticated, state, callbackError, loadInfo]);
+    if (!isAuthenticated || !state || callbackError) return;
+    const controller = new AbortController();
+    const loadInfo = async () => {
+      setIsLoading(true);
+      setInfo(null);
+      setOrganizationName(null);
+      setError(null);
+      try {
+        const accessToken = await getAccessToken();
+        if (controller.signal.aborted || !accessToken) return;
+        const response = await fetch(`/api/msp/tenants/consent-approval?state=${encodeURIComponent(state)}`, {
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (controller.signal.aborted) return;
+        if (!response.ok) {
+          setError(data.message || 'This request could not be loaded.');
+          return;
+        }
+        setInfo(data as ApprovalInfo);
+        setOrganizationName(data.organization_name);
+      } catch {
+        if (!controller.signal.aborted) setError('This request could not be loaded. Check your connection and try again.');
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
+    };
+    void loadInfo();
+    return () => controller.abort();
+  }, [isAuthenticated, state, callbackError, getAccessToken, reloadDetails]);
 
   const handleSignIn = async (selectAccount: boolean) => {
     setIsSigningIn(true);
     setError(null);
     try {
-      const signedIn = await signIn({ selectAccount });
-      if (signedIn) {
-        await loadInfo();
+      if (await signIn({ selectAccount })) {
+        setReloadDetails(value => !value);
       }
     } finally {
       setIsSigningIn(false);
