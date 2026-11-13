@@ -386,10 +386,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    query = query
-      .order('deployment_count', { ascending: false })
-      .order('display_name', { ascending: true })
-      .range(offset, offset + limit - 1);
+    const sortColumn = new Map([
+      ['name', 'display_name'],
+      ['status', 'match_status'],
+      ['confidence', 'match_confidence'],
+      ['deployments', 'deployment_count'],
+    ]).get(searchParams.get('sortBy') || '');
+    query = query.order(sortColumn || 'deployment_count', {
+      ascending: sortColumn ? searchParams.get('sortDir') !== 'desc' : false,
+    });
+    if (sortColumn !== 'display_name') {
+      query = query.order('display_name', { ascending: true });
+    }
+    query = query.range(offset, offset + limit - 1);
 
     const { data: apps, count, error } = await query;
 
