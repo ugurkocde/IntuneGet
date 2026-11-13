@@ -26,7 +26,7 @@ const REVIEWED_INSTALL_TIMEOUT_HEADROOM_MINUTES = 5;
 
 /** One fixed, expiring scan-only entry point. The caller has exhausted both fair queues. */
 export async function dispatchReaderStaticScan(supabase: SupabaseClient): Promise<boolean> {
-  const cutoff = Date.parse('2026-11-11T21:00:00Z');
+  const cutoff = Date.parse('2026-11-14T08:00:00Z');
   const since = '2026-11-11T00:00:00Z';
   const id = 'de979d31-562f-40ef-9dd1-3752fa091953';
   const sha256 = '7bec66953457f6bc78bce9f0a1dcdde1c4cf2a8f8ac26f73fcecf5738f42f307';

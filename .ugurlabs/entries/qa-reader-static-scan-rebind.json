@@ -1,0 +1,5 @@
+{
+  "title": "Improve Reader installer verification",
+  "summary": "Reader installer verification can recover from an expired scheduling window while preserving installer security checks.",
+  "type": "fixed"
+}

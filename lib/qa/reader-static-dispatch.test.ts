@@ -41,7 +41,7 @@ const history = (workflow_runs: unknown[] = [], total_count = workflow_runs.leng
   new Response(JSON.stringify({ total_count, workflow_runs }), { status: 200 });
 
 beforeEach(() => {
-  vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime('2026-11-11T10:00:00Z');
+  vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime('2026-11-13T10:00:00Z');
   config.mockReturnValue({ owner: 'ugurkocde', workflowsRepo: 'IntuneGet-Workflows', ref: 'main', token: 'fixture-only' });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -109,12 +109,12 @@ describe('idle Reader static dispatch', () => {
   });
 
   it('refuses after the deadline without reading or dispatching', async () => {
-    vi.setSystemTime('2026-11-11T21:00:00Z'); const db = database(), fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
+    vi.setSystemTime('2026-11-14T08:00:00Z'); const db = database(), fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
     expect(await dispatchReaderStaticScan(db.client)).toBe(false); expect(db.from).not.toHaveBeenCalled(); expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rechecks the deadline after history reads', async () => {
-    const fetchMock = vi.fn().mockImplementation(() => { vi.setSystemTime('2026-11-11T21:00:00Z'); return Promise.resolve(history()); });
+    const fetchMock = vi.fn().mockImplementation(() => { vi.setSystemTime('2026-11-14T08:00:00Z'); return Promise.resolve(history()); });
     vi.stubGlobal('fetch', fetchMock);
     expect(await dispatchReaderStaticScan(database().client)).toBe(false); expect(fetchMock).toHaveBeenCalledOnce();
   });
