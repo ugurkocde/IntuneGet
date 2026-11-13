@@ -145,8 +145,16 @@ export default function MspPage() {
           <li><T>Generate a consent URL using the Consent URL Generator</T></li>
           <li><T>Share the URL with the client&apos;s Global Administrator</T></li>
           <li><T>The admin grants consent through the Microsoft consent flow</T></li>
-          <li><T>The callback registers the tenant in your MSP organization</T></li>
+          <li><T>The admin signs in to IntuneGet and approves your organization by name</T></li>
+          <li><T>The tenant appears as Active in your MSP organization</T></li>
         </ol>
+        <p className="text-text-secondary mb-6">
+          <T>The approval has to come from a Global Administrator, Privileged Role
+          Administrator or Intune Administrator of the client tenant. An account of
+          your own organization cannot approve, and consent at Microsoft alone does
+          not connect a tenant. Adding and removing tenants needs the Owner or Admin
+          role.</T>
+        </p>
 
         <Callout type="info" title="Tenant Switching">
           <p>

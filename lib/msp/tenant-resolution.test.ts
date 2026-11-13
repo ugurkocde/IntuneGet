@@ -154,3 +154,72 @@ describe('resolveTargetTenantId', () => {
     expect(result.errorResponse?.status).toBe(403);
   });
 });
+
+describe('resolveTargetTenantId role enforcement in customer tenants', () => {
+  const withRole = (role: string | null | undefined) => ({ ...fullMembership, role });
+  const target = (role: string | null | undefined, requiredPermission?: 'deploy_apps' | 'manage_policies' | 'view_dashboard') =>
+    resolveTargetTenantId({
+      supabase: makeSupabase({ membership: withRole(role), managedTenant: { id: 'mt-1' } }),
+      userId: 'u1',
+      tokenTenantId: PRIMARY,
+      requestedTenantId: CUSTOMER,
+      requiredPermission,
+    });
+
+  it.each([
+    ['viewer', 'deploy_apps', 403],
+    ['viewer', 'manage_policies', 403],
+    ['operator', 'deploy_apps', 200],
+    ['operator', 'manage_policies', 403],
+    ['admin', 'deploy_apps', 200],
+    ['admin', 'manage_policies', 200],
+    ['owner', 'manage_policies', 200],
+  ] as const)('%s asking for %s gets %i', async (role, permission, status) => {
+    const result = await target(role, permission);
+    if (status === 200) {
+      expect(result.errorResponse).toBeNull();
+      expect(result.tenantId).toBe(CUSTOMER);
+      expect(result.mspRole).toBe(role);
+    } else {
+      expect(result.errorResponse?.status).toBe(403);
+      // A denied caller must never be handed the customer tenant id to act on.
+      expect(result.tenantId).toBe(PRIMARY);
+      expect(await result.errorResponse?.json()).toMatchObject({ required_permission: permission });
+    }
+  });
+
+  it.each([null, undefined, '', 'superuser'])('treats the role %j as viewer', async (role) => {
+    expect((await target(role, 'deploy_apps')).errorResponse?.status).toBe(403);
+    expect((await target(role, 'view_dashboard')).errorResponse).toBeNull();
+  });
+
+  it('keeps read routes open to every role when no permission is required', async () => {
+    const result = await target('viewer');
+    expect(result.errorResponse).toBeNull();
+    expect(result.tenantId).toBe(CUSTOMER);
+  });
+
+  it("does not apply the MSP role to work in the caller's own tenant", async () => {
+    const result = await resolveTargetTenantId({
+      supabase: makeSupabase({ membership: withRole('viewer') }),
+      userId: 'u1',
+      tokenTenantId: PRIMARY,
+      requestedTenantId: null,
+      requiredPermission: 'deploy_apps',
+    });
+    expect(result.errorResponse).toBeNull();
+    expect(result.tenantId).toBe(PRIMARY);
+  });
+
+  it('checks tenant access before the role, so an unmanaged tenant is refused for every role', async () => {
+    const result = await resolveTargetTenantId({
+      supabase: makeSupabase({ membership: withRole('owner'), managedTenant: null }),
+      userId: 'u1',
+      tokenTenantId: PRIMARY,
+      requestedTenantId: 'unmanaged-tenant',
+      requiredPermission: 'deploy_apps',
+    });
+    expect(result.errorResponse?.status).toBe(403);
+    expect(result.tenantId).toBe(PRIMARY);
+  });
+});

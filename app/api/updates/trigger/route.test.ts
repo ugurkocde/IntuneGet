@@ -51,6 +51,18 @@ vi.mock('@/lib/features', () => ({
   getFeatureFlags: getFeatureFlagsMock,
 }));
 
+// Tenant authorization has its own tests in lib/msp/tenant-resolution.test.ts.
+// Here it allows the requested tenant unless a test says otherwise.
+const { resolveTargetTenantIdMock } = vi.hoisted(() => ({ resolveTargetTenantIdMock: vi.fn() }));
+vi.mock('@/lib/msp/tenant-resolution', () => ({
+  resolveTargetTenantId: resolveTargetTenantIdMock,
+}));
+const allowRequestedTenant = async ({ requestedTenantId }: { requestedTenantId: string }) => ({
+  tenantId: requestedTenantId,
+  errorResponse: null,
+});
+
+import { NextResponse } from 'next/server';
 import { POST } from '@/app/api/updates/trigger/route';
 
 interface TriggerSupabaseMocks {
@@ -174,6 +186,40 @@ describe('POST /api/updates/trigger', () => {
       tenantId: 'home-tenant',
       userName: 'User',
     });
+    resolveTargetTenantIdMock.mockImplementation(allowRequestedTenant);
+  });
+
+  it('refuses the whole request when one of the named tenants is not the caller\'s to deploy to', async () => {
+    const from = vi.fn(() => {
+      throw new Error('no table may be touched before authorization');
+    });
+    createServerClientMock.mockReturnValue({ from });
+    resolveTargetTenantIdMock.mockImplementation(async ({ requestedTenantId }: { requestedTenantId: string }) =>
+      requestedTenantId === 'someone-elses-tenant'
+        ? { tenantId: 'home-tenant', errorResponse: NextResponse.json({ error: 'Not authorized to access other tenants' }, { status: 403 }) }
+        : { tenantId: requestedTenantId, errorResponse: null }
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/updates/trigger', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: [
+            { winget_id: 'Vendor.One', tenant_id: 'tenant-1' },
+            { winget_id: 'Vendor.Two', tenant_id: 'someone-elses-tenant' },
+          ],
+        }),
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(from).not.toHaveBeenCalled();
+    expect(triggerAutoUpdateMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(resolveTargetTenantIdMock).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedTenantId: 'tenant-1', requiredPermission: 'deploy_apps', tokenTenantId: 'home-tenant' })
+    );
   });
 
   it('restores original policy fields when installer lookup fails', async () => {

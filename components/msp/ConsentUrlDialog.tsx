@@ -107,9 +107,9 @@ export function ConsentUrlDialog({
             <h4 className="text-sm font-medium text-text-primary mb-2">What happens next?</h4>
             <ul className="text-sm text-text-secondary space-y-1">
               <li>1. Send the consent URL to your customer&apos;s admin</li>
-              <li>2. They click the link and sign in with their admin account</li>
-              <li>3. They grant consent for IntuneGet permissions</li>
-              <li>4. The tenant will automatically appear as &quot;Active&quot; in your list</li>
+              <li>2. They open the link, sign in with their admin account and grant consent for the IntuneGet permissions</li>
+              <li>3. They sign in to IntuneGet and approve your organization by name</li>
+              <li>4. The tenant then appears as &quot;Active&quot; in your list</li>
             </ul>
           </div>
 

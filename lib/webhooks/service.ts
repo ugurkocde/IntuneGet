@@ -19,6 +19,12 @@ import {
   formatTeamsTestMessage,
   formatDiscordTestMessage,
 } from './formatters';
+import {
+  describeWebhookFailure,
+  parseWebhookUrl,
+  postWebhook,
+  WebhookDestinationError,
+} from './destination';
 
 // Circuit breaker thresholds
 const MAX_FAILURES = 5;
@@ -163,20 +169,16 @@ export async function deliverWebhook(
     }
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), opts.timeout);
-
-      const response = await fetch(webhook.url, {
-        method: 'POST',
+      // The destination is resolved, checked and pinned on every attempt.
+      const response = await postWebhook(webhook.url, {
         headers,
         body: payloadString,
-        signal: controller.signal,
+        timeoutMs: opts.timeout ?? 10000,
       });
 
-      clearTimeout(timeoutId);
       lastStatusCode = response.status;
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         return {
           success: true,
           statusCode: response.status,
@@ -185,11 +187,10 @@ export async function deliverWebhook(
 
       // Non-retryable errors
       if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-        const errorText = await response.text().catch(() => 'Unknown error');
         return {
           success: false,
           statusCode: response.status,
-          error: `HTTP ${response.status}: ${errorText.slice(0, 200)}`,
+          error: `HTTP ${response.status}: ${response.bodyExcerpt.slice(0, 200)}`,
           retryable: false,
         };
       }
@@ -197,15 +198,17 @@ export async function deliverWebhook(
       // Retryable error (5xx or 429)
       lastError = `HTTP ${response.status}`;
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          lastError = 'Request timed out';
-        } else {
-          lastError = error.message;
-        }
-      } else {
-        lastError = 'Unknown error';
+      const failure = describeWebhookFailure(error);
+      if (!failure.retryable) {
+        // Refused destinations and redirects fail the same way every time.
+        return {
+          success: false,
+          statusCode: failure.statusCode,
+          error: failure.message,
+          retryable: false,
+        };
       }
+      lastError = failure.message;
     }
   }
 
@@ -237,76 +240,51 @@ export async function sendTestWebhook(
   }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(webhook.url, {
-      method: 'POST',
+    const response = await postWebhook(webhook.url, {
       headers,
       body: payloadString,
-      signal: controller.signal,
+      timeoutMs: 10000,
     });
 
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
+    if (response.status >= 200 && response.status < 300) {
       return {
         success: true,
         statusCode: response.status,
       };
     }
 
-    const errorText = await response.text().catch(() => 'Unknown error');
+    // The result goes back to the caller of the test endpoint, so it carries
+    // the status code only and never text returned by the destination.
     return {
       success: false,
       statusCode: response.status,
-      error: `HTTP ${response.status}: ${errorText.slice(0, 200)}`,
+      error: `HTTP ${response.status}`,
     };
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        return {
-          success: false,
-          error: 'Request timed out',
-        };
-      }
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
+    const failure = describeWebhookFailure(error);
     return {
       success: false,
-      error: 'Unknown error',
+      statusCode: failure.statusCode,
+      error: failure.message,
     };
   }
 }
 
 /**
- * Validate webhook URL
+ * Validate the webhook URL string (HTTPS, no embedded credentials).
+ * This does not resolve the host. Routes that store a URL must also call
+ * validateWebhookDestination from ./destination, which requires a public
+ * destination.
  */
 export function validateWebhookUrl(url: string): { valid: boolean; error?: string } {
   try {
-    const parsed = new URL(url);
-
-    // Must be HTTPS
-    if (parsed.protocol !== 'https:') {
-      return { valid: false, error: 'URL must use HTTPS' };
-    }
-
-    // Basic validation for known webhook types
-    if (
-      url.includes('hooks.slack.com') ||
-      url.includes('webhook.office.com') ||
-      url.includes('discord.com/api/webhooks')
-    ) {
-      return { valid: true };
-    }
-
-    // Allow any HTTPS URL for custom webhooks
+    parseWebhookUrl(url);
     return { valid: true };
-  } catch {
-    return { valid: false, error: 'Invalid URL format' };
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof WebhookDestinationError ? error.message : 'Invalid URL format',
+    };
   }
 }
 

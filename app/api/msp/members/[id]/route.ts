@@ -18,6 +18,7 @@ import {
   isValidUuid,
 } from '@/lib/validators/msp';
 import { logRoleChanged, logMemberRemoved } from '@/lib/audit-logger';
+import { disablePoliciesForRemovedMember } from '@/lib/msp/revocation';
 import { notifyMemberRemoved } from '@/lib/notification-service';
 
 interface RouteParams {
@@ -322,6 +323,28 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // The removed member's update policies for customer tenants must stop
+    // acting, otherwise the nightly update check keeps deploying for them.
+    let disabledPolicies = 0;
+    try {
+      const { data: orgForRevocation } = await supabase
+        .from('msp_organizations')
+        .select('primary_tenant_id')
+        .eq('id', actorMembership.msp_organization_id)
+        .single();
+      disabledPolicies = await disablePoliciesForRemovedMember(
+        supabase,
+        actorMembership.msp_organization_id,
+        targetMember.user_id,
+        orgForRevocation?.primary_tenant_id ?? null
+      );
+    } catch (revocationError) {
+      console.error(
+        'Failed to disable update policies of a removed MSP member:',
+        revocationError instanceof Error ? revocationError.message : 'Unknown error'
+      );
+    }
+
     // Log the member removal
     try {
       await logMemberRemoved(
@@ -362,6 +385,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       success: true,
       removed_member_email: targetMember.user_email,
+      disabled_policies: disabledPolicies,
     });
   } catch (error) {
     return NextResponse.json(

@@ -49,6 +49,12 @@ export default function ApiReferencePage() {
         <pre className="rounded-lg border border-overlay/10 bg-bg-elevated p-4 text-sm text-text-secondary overflow-x-auto">
 {`Authorization: Bearer <microsoft-access-token>`}
         </pre>
+        <p className="text-text-secondary mt-4 mb-4">
+          <T>This is the Microsoft Graph access token the portal obtains at sign-in, issued to
+          this deployment&apos;s app registration. A Graph token issued to another application
+          is rejected. To let a script of your own call the API, list the client id of its app
+          registration in <code>ALLOWED_TOKEN_CLIENT_IDS</code> on your deployment.</T>
+        </p>
         <Callout type="info" title="Callback Security">
           <p>
             <T>Pipeline callbacks use HMAC verification when{" "}

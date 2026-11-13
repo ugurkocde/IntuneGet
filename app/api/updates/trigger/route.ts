@@ -8,6 +8,7 @@ import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import {
   AutoUpdateTrigger,
   getLatestInstallerInfo,
@@ -96,6 +97,22 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient();
+
+    // The tenant ids come from the request body. Each one must be the
+    // caller's own tenant or a customer tenant their MSP role may deploy to.
+    // Rows stored earlier for a tenant are not proof of current access.
+    for (const tenantId of new Set(updateRequests.map((req) => req.tenant_id))) {
+      const tenantResolution = await resolveTargetTenantId({
+        supabase,
+        userId: user.userId,
+        tokenTenantId: user.tenantId,
+        requestedTenantId: tenantId,
+        requiredPermission: 'deploy_apps',
+      });
+      if (tenantResolution.errorResponse) {
+        return tenantResolution.errorResponse;
+      }
+    }
 
     // Get Supabase config for trigger
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

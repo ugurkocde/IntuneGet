@@ -70,7 +70,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Send test webhook
     const result = await sendTestWebhook(webhook);
 
-    return NextResponse.json(result);
+    // Return the outcome and status code only. The message is a short server
+    // authored reason; text returned by the destination is never passed back.
+    return NextResponse.json({
+      success: result.success,
+      message: result.message,
+      response_status: result.response_status,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: 'Internal server error' },

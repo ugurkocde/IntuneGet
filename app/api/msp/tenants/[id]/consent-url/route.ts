@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getMspCustomerConsentUrl } from '@/lib/msal-config';
 import { parseAccessToken, signConsentState, getBaseUrl } from '@/lib/auth-utils';
+import { hasPermission, parseRole, type MspRole } from '@/lib/msp-permissions';
 import type { MspManagedTenant, ConsentStatus } from '@/types/msp';
 
 /**
@@ -14,25 +15,28 @@ import type { MspManagedTenant, ConsentStatus } from '@/types/msp';
  */
 interface MspUserMembershipWithOrg {
   msp_organization_id: string;
+  role?: string | null;
   msp_organizations: {
     is_active: boolean;
   };
 }
 
 /**
- * Get the user's MSP organization ID (only for active organizations)
+ * Get the user's MSP organization and role (only for active organizations)
  */
-async function getUserMspOrgId(userId: string): Promise<string | null> {
+async function getUserMspMembership(userId: string): Promise<{ mspOrgId: string; role: MspRole } | null> {
   const supabase = createServerClient();
 
   const { data: membership } = await supabase
     .from('msp_user_memberships')
-    .select('msp_organization_id, msp_organizations!inner(is_active)')
+    .select('msp_organization_id, role, msp_organizations!inner(is_active)')
     .eq('user_id', userId)
     .eq('msp_organizations.is_active', true)
     .single<MspUserMembershipWithOrg>();
 
-  return membership?.msp_organization_id || null;
+  if (!membership?.msp_organization_id) return null;
+  // An unknown or missing role counts as the least privileged one.
+  return { mspOrgId: membership.msp_organization_id, role: parseRole(membership.role) };
 }
 
 // Allowed consent statuses for regenerating consent URL
@@ -55,13 +59,20 @@ export async function POST(
       );
     }
 
-    const mspOrgId = await getUserMspOrgId(user.userId);
-    if (!mspOrgId) {
+    const membership = await getUserMspMembership(user.userId);
+    if (!membership) {
       return NextResponse.json(
         { error: 'Not a member of any MSP organization' },
         { status: 403 }
       );
     }
+    if (!hasPermission(membership.role, 'manage_tenants')) {
+      return NextResponse.json(
+        { error: 'Your MSP role does not allow managing customer tenants. Ask an owner or admin of your organization.' },
+        { status: 403 }
+      );
+    }
+    const mspOrgId = membership.mspOrgId;
 
     const { id: tenantRecordId } = await params;
 

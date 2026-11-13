@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import * as http from 'node:http';
 import * as https from 'node:https';
+import { isPublicIpAddress } from '@/lib/net/public-address';
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -83,41 +84,9 @@ interface RangeMetadata {
   validator: string | null;
 }
 
-function isPrivateIpv4(address: string): boolean {
-  const parts = address.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
-    return true;
-  }
-
-  const [a, b] = parts;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 0) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
-
-export function isPublicIpAddress(address: string): boolean {
-  const normalized = address.toLowerCase().split('%')[0];
-  const family = isIP(normalized);
-  if (family === 4) return !isPrivateIpv4(normalized);
-  if (family !== 6) return false;
-
-  if (normalized === '::' || normalized === '::1') return false;
-  if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
-    return false;
-  }
-
-  const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
-  return mappedIpv4 ? !isPrivateIpv4(mappedIpv4) : true;
-}
+// The address classification is shared with webhook delivery. Re-exported so
+// existing importers of this module keep working.
+export { isPublicIpAddress };
 
 async function resolvePublicAddress(hostname: string): Promise<{ address: string; family: 4 | 6 }> {
   const literalFamily = isIP(hostname);

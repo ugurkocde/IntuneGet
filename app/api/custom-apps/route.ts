@@ -3,12 +3,13 @@ import { parseAccessToken } from '@/lib/auth-utils';
 import { getDatabase, isSqliteMode } from '@/lib/db';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
+import type { Permission } from '@/lib/msp-permissions';
 import { parseCustomAppDefinition } from '@/lib/custom-app-definitions';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
-async function scope(request: NextRequest) {
+async function scope(request: NextRequest, requiredPermission?: Permission) {
   const user = await parseAccessToken(request.headers.get('Authorization'));
   if (!user) return { error: reply({ error: 'Authentication required' }, 401) };
   const requestedTenantId = request.headers.get('X-MSP-Tenant-Id');
@@ -17,7 +18,7 @@ async function scope(request: NextRequest) {
     return { userId: user.userId, tenantId: user.tenantId };
   }
   if (!isSupabaseServerConfigured()) return { error: reply({ error: 'Saved custom apps are unavailable' }, 503) };
-  const resolved = await resolveTargetTenantId({ supabase: createServerClient(), userId: user.userId, tokenTenantId: user.tenantId, requestedTenantId });
+  const resolved = await resolveTargetTenantId({ supabase: createServerClient(), userId: user.userId, tokenTenantId: user.tenantId, requestedTenantId, requiredPermission });
   if (resolved.errorResponse) {
     resolved.errorResponse.headers.set('Cache-Control', 'no-store');
     return { error: resolved.errorResponse };
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const owner = await scope(request);
+    const owner = await scope(request, 'deploy_apps');
     if (owner.error) return owner.error;
     let body: unknown;
     try { body = await readBody(request); }
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const owner = await scope(request);
+    const owner = await scope(request, 'deploy_apps');
     if (owner.error) return owner.error;
     const id = request.nextUrl.searchParams.get('id');
     if (!id || !uuid.test(id)) return reply({ error: 'Invalid saved custom app ID' }, 400);

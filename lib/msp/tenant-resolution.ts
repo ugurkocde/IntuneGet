@@ -1,21 +1,39 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { canAccessPrimaryTenant, type AccessMode } from '@/lib/msp-permissions';
+import {
+  canAccessPrimaryTenant,
+  getRoleDisplayName,
+  hasPermission,
+  parseRole,
+  type AccessMode,
+  type MspRole,
+  type Permission,
+} from '@/lib/msp-permissions';
 
 interface ResolveTargetTenantInput {
   supabase: ReturnType<typeof createServerClient>;
   userId: string;
   tokenTenantId: string;
   requestedTenantId: string | null;
+  /**
+   * MSP permission the caller needs to act in a customer tenant. Pass it on
+   * every route that changes something. It is checked whenever the target is
+   * not the caller's own tenant; work in the caller's own tenant is not an MSP
+   * action and is unaffected.
+   */
+  requiredPermission?: Permission;
 }
 
 interface ResolveTargetTenantResult {
   tenantId: string;
   errorResponse: NextResponse | null;
+  /** The caller's MSP role when the target is a managed customer tenant. */
+  mspRole?: MspRole;
 }
 
 interface MembershipWithOrg {
   access_mode: AccessMode;
+  role?: string | null;
   msp_organization_id: string;
   msp_organizations: {
     primary_tenant_id: string;
@@ -39,10 +57,11 @@ export async function resolveTargetTenantId({
   userId,
   tokenTenantId,
   requestedTenantId,
+  requiredPermission,
 }: ResolveTargetTenantInput): Promise<ResolveTargetTenantResult> {
   const { data: membershipData } = await supabase
     .from('msp_user_memberships')
-    .select('access_mode, msp_organization_id, msp_organizations!inner(primary_tenant_id)')
+    .select('access_mode, role, msp_organization_id, msp_organizations!inner(primary_tenant_id)')
     .eq('user_id', userId)
     .single();
 
@@ -98,5 +117,22 @@ export async function resolveTargetTenantId({
     };
   }
 
-  return { tenantId: targetTenantId, errorResponse: null };
+  // An unknown or missing role counts as the least privileged one.
+  const mspRole = parseRole(membership.role);
+
+  if (requiredPermission && !hasPermission(mspRole, requiredPermission)) {
+    return {
+      tenantId: tokenTenantId,
+      mspRole,
+      errorResponse: NextResponse.json(
+        {
+          error: `Your MSP role (${getRoleDisplayName(mspRole)}) does not allow this action in customer tenants.`,
+          required_permission: requiredPermission,
+        },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { tenantId: targetTenantId, errorResponse: null, mspRole };
 }

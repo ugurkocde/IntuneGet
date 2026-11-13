@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/cron-auth';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate, dispatchReaderStaticScan } from '@/lib/qa/dispatch';
 import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
@@ -53,8 +54,7 @@ function postgrestQuoted(value: string): string {
 }
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -530,8 +530,7 @@ export async function GET(request: Request) {
 
 /** Operator recovery for a terminal infrastructure error; protected by CRON_SECRET. */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const body = (await request.json().catch(() => null)) as { candidateId?: string; mode?: string } | null;

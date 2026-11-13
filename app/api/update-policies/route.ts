@@ -10,6 +10,7 @@ import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import {
   buildDeploymentConfigForApp,
   buildDeploymentConfigFromAdapter,
@@ -184,6 +185,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (isSqliteMode()) {
+      // A self-hosted installation serves one tenant: the caller's own.
+      if (body.tenant_id !== user.tenantId) {
+        return NextResponse.json(
+          { error: 'This installation cannot manage another tenant' },
+          { status: 403 }
+        );
+      }
       return savePolicySqlite(user.userId, body);
     }
 
@@ -195,6 +203,19 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient();
+
+    // tenant_id comes from the request body. It must be the caller's own
+    // tenant or a customer tenant their MSP role may set policies for.
+    const tenantResolution = await resolveTargetTenantId({
+      supabase,
+      userId: user.userId,
+      tokenTenantId: user.tenantId,
+      requestedTenantId: body.tenant_id,
+      requiredPermission: 'manage_policies',
+    });
+    if (tenantResolution.errorResponse) {
+      return tenantResolution.errorResponse;
+    }
 
     // Fields the client may omit for pin_version / auto_update. We derive them
     // server-side below so the bell-icon dropdown can set these policies with
