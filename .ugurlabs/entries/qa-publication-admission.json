@@ -1,5 +1,5 @@
 {
   "title": "Stronger QA publication security checks",
   "summary": "Adds authenticated security admission for every result profile before QA publication. Installer holds and application restrictions remain enforced, and missing identity or security evidence cannot grant a pass.",
-  "type": "fix"
+  "type": "fixed"
 }
