@@ -373,13 +373,14 @@ export default function MigrationDetailPage({ params }: PageProps) {
         const result = results[index];
         return result.status === 'rejected' || !result.value.ok;
       });
+      setSelectedApps(current => new Set(
+        [...current].filter(id => !ids.includes(id) || failedIds.includes(id))
+      ));
       if (failedIds.length > 0) {
-        setSelectedApps(new Set(failedIds));
         throw new Error(`Excluded ${ids.length - failedIds.length} of ${ids.length} apps; ${failedIds.length} failed. Please try again.`);
       }
 
       toast.success(`Excluded ${ids.length} apps`);
-      setSelectedApps(new Set());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to exclude apps');
     } finally {

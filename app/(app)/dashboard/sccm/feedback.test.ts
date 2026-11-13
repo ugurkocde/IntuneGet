@@ -85,6 +85,32 @@ it.each([200, 400])('shows every numbered row error after an import HTTP %s', as
   expect(items[1].textContent).toBe('Row 5: Missing identifier');
 });
 
+it.each([200, 500])('preserves a new selection while an exclusion batch returns HTTP %s', async status => {
+  let finishPatch!: (value: Response) => void;
+  const pendingPatch = new Promise<Response>(resolve => { finishPatch = resolve; });
+  const apps = ['a', 'b'].map(id => ({ id, migration_id: 'migration-1', display_name: 'Fixture ' + id,
+    manufacturer: 'Fixture', version: '1.0', technology: 'MSI', is_deployed: false,
+    deployment_count: 0, match_status: 'matched', match_confidence: 1, partial_matches: [] }));
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'PATCH') return pendingPatch;
+    if (url.startsWith('/api/sccm/migrations')) return response({ migration: { id: 'migration-1', name: 'Fixture',
+      status: 'ready', totalApps: 2, matchedApps: 2, partialMatchApps: 0, unmatchedApps: 0,
+      excludedApps: 0, migratedApps: 0, failedApps: 0 } });
+    return response({ apps, total: 2 });
+  }));
+  const params = Promise.resolve({ migrationId: 'migration-1' });
+  await act(async () => { root.render(createElement(Suspense, { fallback: null }, createElement(MigrationPage, { params }))); await params; });
+  const boxes = () => node.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+  await act(async () => boxes()[1].click());
+  const exclude = [...node.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Exclude Selected')!;
+  await act(async () => exclude.click());
+  await act(async () => boxes()[1].click());
+  await act(async () => boxes()[2].click());
+  await act(async () => finishPatch(response({}, status)));
+  expect(boxes()[1].checked).toBe(false);
+  expect(boxes()[2].checked).toBe(true);
+});
+
 it.each([
   [{ error: 'Migration name is already in use' }, 'Migration name is already in use'],
   [{ error: '<img src=x onerror=alert(1)>' }, '<img src=x onerror=alert(1)>'],
