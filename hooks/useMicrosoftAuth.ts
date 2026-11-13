@@ -139,9 +139,12 @@ export function useMicrosoftAuth() {
   /**
    * Sign in with Microsoft popup
    */
-  const signIn = useCallback(async () => {
+  const signIn = useCallback(async (options?: { selectAccount?: boolean }) => {
+    // selectAccount shows the Microsoft account picker even when a session
+    // exists, for pages where the current account is the wrong one.
+    const prompt = options?.selectAccount ? { prompt: 'select_account' as const } : {};
     try {
-      const result = await instance.loginPopup({ scopes: graphScopes });
+      const result = await instance.loginPopup({ scopes: graphScopes, ...prompt });
       if (result?.account) {
         // Pin the account we just signed in with so subsequent silent token
         // calls target it instead of blindly using accounts[0], which breaks
@@ -157,7 +160,7 @@ export function useMicrosoftAuth() {
       if (isBlockedPopupError(error)) {
         try {
           document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
-          await instance.loginRedirect({ scopes: graphScopes });
+          await instance.loginRedirect({ scopes: graphScopes, ...prompt });
           return true;
         } catch {
           return false;

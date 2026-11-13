@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { isBearerSecret } from '@/lib/cron-auth';
 
 // Jobs older than this (in minutes) in intermediate states will be marked as failed
 const STALE_JOB_TIMEOUT_MINUTES = 30;
@@ -15,11 +16,12 @@ const INTERMEDIATE_STATES = ['queued', 'packaging', 'uploading'];
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify cleanup secret for security
+    // Verify cleanup secret for security. Without a configured secret every
+    // request is rejected.
     const authHeader = request.headers.get('Authorization');
     const cleanupSecret = process.env.CLEANUP_SECRET || process.env.CALLBACK_SECRET;
 
-    if (cleanupSecret && authHeader !== `Bearer ${cleanupSecret}`) {
+    if (!isBearerSecret(authHeader, cleanupSecret)) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -102,7 +104,7 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('Authorization');
     const cleanupSecret = process.env.CLEANUP_SECRET || process.env.CALLBACK_SECRET;
 
-    if (cleanupSecret && authHeader !== `Bearer ${cleanupSecret}`) {
+    if (!isBearerSecret(authHeader, cleanupSecret)) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

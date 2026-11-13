@@ -44,6 +44,7 @@ export async function PATCH(
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
+      requiredPermission: 'deploy_apps',
     }) : { tenantId: user.tenantId, errorResponse: null };
 
     if (tenantResolution.errorResponse) {

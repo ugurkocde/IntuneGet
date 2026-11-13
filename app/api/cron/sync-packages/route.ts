@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/cron-auth';
 import { createClient } from '@supabase/supabase-js';
 import {
   classifyWingetSyncRun,
@@ -57,8 +58,7 @@ interface CuratedAppUpdate {
 
 export async function GET(request: Request) {
   // Verify cron secret (Vercel adds this header for cron jobs)
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -42,9 +42,15 @@ function expIn(minutes: number): number {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+/** The app registration this deployment signs users in with. */
+const CLIENT_ID = '11111111-aaaa-4bbb-8ccc-222222222222';
+
 describe('parseAccessToken', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Only tokens issued to this app are accepted; see lib/auth-utils.test.ts
+    // for the tests of that rule.
+    vi.stubEnv('NEXT_PUBLIC_AZURE_AD_CLIENT_ID', CLIENT_ID);
   });
 
   // ── Input validation ────────────────────────────────────────────────────────
@@ -106,6 +112,7 @@ describe('parseAccessToken', () => {
 
     vi.mocked(decodeJwt).mockReturnValueOnce({
       tid: 'tenant-xyz',
+      appid: CLIENT_ID,
       exp: expIn(60),
     } as ReturnType<typeof decodeJwt>);
 
@@ -137,6 +144,7 @@ describe('parseAccessToken', () => {
 
     vi.mocked(decodeJwt).mockReturnValue({
       tid: 'tenant-cache',
+      appid: CLIENT_ID,
       exp: expIn(60),
     } as ReturnType<typeof decodeJwt>);
 

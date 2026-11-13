@@ -2,6 +2,7 @@ import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/in
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/cron-auth';
 import { getDatabase } from '@/lib/db';
 import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, WorkflowDispatchRetryStopped, DISPATCH_IDENTITY_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import { unsupportedDependencyMessage, knownUnavailableDisposition, isExactPretestCandidate } from '@/lib/unsupported-dependency';
@@ -33,8 +34,7 @@ const TERMINAL_MANIFEST_CODES = new Set(['MANIFEST_UNAVAILABLE', 'INSTALLER_TYPE
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
+      requiredPermission: 'deploy_apps',
     });
 
     if (tenantResolution.errorResponse) {
@@ -340,6 +341,7 @@ export async function PATCH(request: NextRequest) {
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
+      requiredPermission: 'deploy_apps',
     });
 
     if (tenantResolution.errorResponse) {

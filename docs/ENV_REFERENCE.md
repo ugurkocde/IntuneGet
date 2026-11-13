@@ -79,6 +79,8 @@ repository, so it reads its own compact JSON without a cross-repository token.
 |---|---|
 | `CRON_SECRET` | Protect cron routes |
 | `MSP_STATE_SECRET` | MSP state/signing support |
+| `WEBHOOK_ALLOW_PRIVATE_DESTINATIONS` | Set to `true` on a self-hosted installation to let webhooks post to receivers on the local network. Off by default: webhook URLs must resolve to public internet addresses only. Leave it off on any deployment whose users you do not trust with the server's network |
+| `ALLOWED_TOKEN_CLIENT_IDS` | Extra app registration client ids (comma separated) whose Microsoft Graph tokens may call the API. Empty by default: only tokens issued to this deployment's own app registration are accepted |
 
 ## Packager Service Variables
 

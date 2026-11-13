@@ -1,0 +1,5 @@
+{
+  "title": "Customers approve their service provider by name",
+  "summary": "When a managed service provider adds a customer, an administrator of the customer now signs in to IntuneGet and approves the provider by name before the tenant is connected. The provider's role is also checked on the server for every change in a customer tenant: Viewers cannot deploy, and only Owners and Admins can add or remove tenants and set update policies. Removing a tenant or a team member switches off the update policies that were created for it.",
+  "type": "improved"
+}

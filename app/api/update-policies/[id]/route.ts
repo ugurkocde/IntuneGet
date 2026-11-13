@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import type { AppUpdatePolicy, DeploymentConfig, UpdatePolicyType } from '@/types/update-policies';
 import type { Database } from '@/types/database';
 
@@ -206,6 +207,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { error: 'Policy not found' },
         { status: 404 }
       );
+    }
+
+    // Owning the row is not enough: the policy acts on a tenant, and the
+    // caller's access to that tenant may have ended since it was created.
+    const tenantResolution = await resolveTargetTenantId({
+      supabase,
+      userId: user.userId,
+      tokenTenantId: user.tenantId,
+      requestedTenantId: existingPolicy.tenant_id,
+      requiredPermission: 'manage_policies',
+    });
+    if (tenantResolution.errorResponse) {
+      return tenantResolution.errorResponse;
     }
 
     // Validate the policy type if provided, then the effective state after the

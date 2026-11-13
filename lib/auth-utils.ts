@@ -14,6 +14,70 @@ export interface TokenUserInfo {
   userEmail: string;
   tenantId: string;
   userName: string | null;
+  /**
+   * Entra directory role template ids from the token's `wids` claim.
+   * Undefined when the token carries no such claim, which is different from
+   * an empty list: callers that gate on a role must treat undefined as
+   * "unknown" and not as "no roles".
+   */
+  directoryRoles?: string[];
+}
+
+/**
+ * Client ids this deployment issues sign-in tokens for. The browser signs in
+ * with the public client id, and server side code uses AZURE_CLIENT_ID for the
+ * same app registration, so both names are accepted.
+ */
+function getAcceptedClientIds(): Set<string> {
+  // Next.js replaces `process.env.NEXT_PUBLIC_*` with the build time value,
+  // also in server code. A Docker image is built without the real client id
+  // and receives it when the container starts, so the public name is read a
+  // second time through a computed key, which is not replaced.
+  const runtimePublicClientId = process.env[['NEXT_PUBLIC', 'AZURE_AD_CLIENT_ID'].join('_')];
+  const ids = [
+    process.env.AZURE_CLIENT_ID,
+    process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID,
+    runtimePublicClientId,
+    process.env.AZURE_AD_CLIENT_ID,
+    // Operators can name further app registrations of their own whose Graph
+    // tokens may call this API, for example a script that signs in with its
+    // own client id. Empty by default.
+    ...(process.env.ALLOWED_TOKEN_CLIENT_IDS || '').split(','),
+  ]
+    .map((value) => value?.trim().toLowerCase())
+    .filter((value): value is string => Boolean(value));
+  return new Set(ids);
+}
+
+let _missingClientIdLogged = false;
+
+/**
+ * A Graph token is only an IntuneGet sign-in when it was issued to the
+ * IntuneGet app registration. Graph accepts tokens issued to any app (Graph
+ * Explorer, the Azure CLI, a third party tool the user once signed in to), and
+ * without this check each of those would authenticate as the user here.
+ */
+function isIssuedToThisApp(payload: Record<string, unknown>): boolean {
+  const accepted = getAcceptedClientIds();
+  if (accepted.size === 0) {
+    if (!_missingClientIdLogged) {
+      _missingClientIdLogged = true;
+      console.error(
+        'Token verification is rejecting every request: neither AZURE_CLIENT_ID nor NEXT_PUBLIC_AZURE_AD_CLIENT_ID is set.'
+      );
+    }
+    return false;
+  }
+  // v1.0 access tokens carry `appid`, v2.0 tokens carry `azp`.
+  const issuedTo = typeof payload.appid === 'string' ? payload.appid : payload.azp;
+  return typeof issuedTo === 'string' && accepted.has(issuedTo.toLowerCase());
+}
+
+function readDirectoryRoles(payload: Record<string, unknown>): string[] | undefined {
+  if (!Array.isArray(payload.wids)) return undefined;
+  return payload.wids
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.toLowerCase());
 }
 
 /**
@@ -68,13 +132,17 @@ async function verifyTokenWithGraph(accessToken: string): Promise<TokenUserInfo 
 
     const me = await response.json();
 
-    // Decode (not verify) the payload only to read the tenant ID (tid).  The
-    // Graph call above has already authenticated the token, so reading tid here
-    // is safe — an attacker cannot forge a tid that Microsoft would accept.
-    const payload = decodeJwt(accessToken);
+    // Decode (not verify) the payload to read claims. The Graph call above has
+    // already authenticated the token, so the claims are genuine: an attacker
+    // cannot change tid, appid or wids and keep a signature Microsoft accepts.
+    const payload = decodeJwt(accessToken) as Record<string, unknown>;
     const tenantId = payload.tid as string | undefined;
 
     if (!me.id || !tenantId) {
+      return null;
+    }
+
+    if (!isIssuedToThisApp(payload)) {
       return null;
     }
 
@@ -83,6 +151,7 @@ async function verifyTokenWithGraph(accessToken: string): Promise<TokenUserInfo 
       userEmail: ((me.userPrincipalName || me.mail || 'unknown') as string),
       tenantId,
       userName: (me.displayName as string) || null,
+      directoryRoles: readDirectoryRoles(payload),
     };
 
     // Cache until the token expires or TTL elapses, whichever comes first.
@@ -194,22 +263,29 @@ function getStateSecret(): string {
   throw new Error('MSP_STATE_SECRET or AZURE_CLIENT_SECRET/AZURE_AD_CLIENT_SECRET must be set');
 }
 
+/** A consent link is valid for one hour. */
+const CONSENT_STATE_MAX_AGE_MS = 60 * 60 * 1000;
+/** Tolerated clock difference between the instances that sign and verify. */
+const CONSENT_STATE_MAX_SKEW_MS = 5 * 60 * 1000;
+
+function consentStateSignature(payload: string): string {
+  return crypto.createHmac('sha256', getStateSecret()).update(payload).digest('hex');
+}
+
 /**
  * Sign a state parameter for consent URL
  * Format: mspOrgId:tenantRecordId:timestamp:signature
+ *
+ * The state identifies which pending record a consent round trip belongs to.
+ * It is not proof of consent: the link is handed to the MSP, so whoever holds
+ * it can replay it. Linking a tenant needs the signed-in approval in
+ * /api/msp/tenants/consent-approval.
  */
 export function signConsentState(mspOrgId: string, tenantRecordId: string): string {
   const timestamp = Date.now().toString();
   const payload = `${mspOrgId}:${tenantRecordId}:${timestamp}`;
 
-  const secret = getStateSecret();
-  const signature = crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex')
-    .substring(0, 16); // Use first 16 chars to keep URL shorter
-
-  return `${payload}:${signature}`;
+  return `${payload}:${consentStateSignature(payload)}`;
 }
 
 /**
@@ -225,26 +301,23 @@ export function verifyConsentState(state: string): { mspOrgId: string; tenantRec
 
     const [mspOrgId, tenantRecordId, timestamp, signature] = parts;
 
-    // Verify timestamp (state expires after 1 hour)
-    const stateTime = parseInt(timestamp, 10);
-    const now = Date.now();
-    const oneHour = 60 * 60 * 1000;
+    if (!/^\d{1,15}$/.test(timestamp)) {
+      return null;
+    }
 
-    if (isNaN(stateTime) || now - stateTime > oneHour) {
+    const stateTime = Number(timestamp);
+    const age = Date.now() - stateTime;
+
+    // A timestamp from the future would otherwise never expire.
+    if (age > CONSENT_STATE_MAX_AGE_MS || age < -CONSENT_STATE_MAX_SKEW_MS) {
       console.warn('Consent state expired or invalid timestamp');
       return null;
     }
 
-    // Verify signature
-    const payload = `${mspOrgId}:${tenantRecordId}:${timestamp}`;
-    const secret = getStateSecret();
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(payload)
-      .digest('hex')
-      .substring(0, 16);
+    const expected = Buffer.from(consentStateSignature(`${mspOrgId}:${tenantRecordId}:${timestamp}`), 'utf8');
+    const received = Buffer.from(signature, 'utf8');
 
-    if (signature !== expectedSignature) {
+    if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
       console.warn('Consent state signature mismatch');
       return null;
     }

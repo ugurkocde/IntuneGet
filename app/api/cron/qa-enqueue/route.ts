@@ -4,6 +4,7 @@ import { adoptRepairCorrectedCandidate, parseRepairCorrectionRequest } from '@/l
 import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/cron-auth';
 import { createServerClient } from '@/lib/supabase';
 import {
   emitQaPollAlert,
@@ -482,8 +483,7 @@ async function persistQaCatalogReconciliation(
 }
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   let requestedPackageIds: string[];
@@ -1403,8 +1403,7 @@ export async function GET(request: Request) {
 
 /** Explicit repair preparation only; the hourly GET never invokes this path. */
 export async function POST(request: Request) {
-  const secret=process.env.CRON_SECRET;
-  if(!secret || request.headers.get('authorization')!==`Bearer ${secret}`) {
+  if(!isAuthorizedCronRequest(request)) {
     return NextResponse.json({error:'Unauthorized'},{status:401});
   }
   let correction;
