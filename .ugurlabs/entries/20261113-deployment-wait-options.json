@@ -1,0 +1,5 @@
+{
+  "title": "Help for deployment requests waiting on validation",
+  "summary": "Your deployment requests waiting at least 72 hours now show links to the catalog and packaging help. Existing validation holds and security checks continue to apply.",
+  "type": "improved"
+}

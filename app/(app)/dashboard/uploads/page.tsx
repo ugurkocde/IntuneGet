@@ -47,6 +47,8 @@ import { EspProfileSelector } from '@/components/EspProfileSelector';
 import { PageHeader, AnimatedStatCard, StatCardGrid, AnimatedEmptyState, SkeletonCard, SkeletonGrid } from '@/components/dashboard';
 import type { PackageAssignment } from '@/types/upload';
 import type { CustomerQaStatus } from '@/types/customer-qa';
+import { CustomerWaitOptions } from '@/components/CustomerWaitOptions';
+import { customerJobSnapshotKey, type CustomerJobSnapshot } from '@/lib/customer-wait-options';
 
 interface PackagingJob {
   qa_status?: CustomerQaStatus;
@@ -134,6 +136,9 @@ export default function UploadsPage() {
   // 'mine' shows the signed-in user's deployments; 'tenant' shows everyone's in
   // the tenant so a team can avoid deploying the same app twice.
   const [viewScope, setViewScope] = useState<'mine' | 'tenant'>('mine');
+  const [jobsSnapshotKey, setJobsSnapshotKey] = useState<string | null>(null);
+  const jobScope = { viewScope, isMspUser, selectedTenantId, userId: user?.id, userTenantId: user?.tenantId };
+  const waitOptionsContext: CustomerJobSnapshot = { scope: jobScope, snapshotKey: jobsSnapshotKey, isLoading, error, sessionExpired };
 
   const jobsRequest = useRef<AbortController | null>(null);
   useEffect(() => () => { jobsRequest.current?.abort(); jobsRequest.current = null; }, [viewScope, isMspUser, selectedTenantId, user?.id, user?.tenantId]);
@@ -142,6 +147,7 @@ export default function UploadsPage() {
     if (!user?.id || jobsRequest.current) return;
     const controller = new AbortController();
     jobsRequest.current = controller;
+    const requestSnapshotKey = customerJobSnapshotKey({ viewScope, isMspUser, selectedTenantId, userId: user?.id, userTenantId: user?.tenantId });
 
     if (showRefreshing) {
       setIsRefreshing(true);
@@ -185,6 +191,7 @@ export default function UploadsPage() {
       const data = await response.json();
       if (controller.signal.aborted) return;
       setJobs(data.jobs || []);
+      setJobsSnapshotKey(requestSnapshotKey);
       setError(null);
       setSessionExpired(false);
     } catch (err) {
@@ -198,7 +205,7 @@ export default function UploadsPage() {
         setIsRefreshing(false);
       }
     }
-  }, [user?.id, getAccessToken, viewScope, isMspUser, selectedTenantId]);
+  }, [user?.id, user?.tenantId, getAccessToken, viewScope, isMspUser, selectedTenantId]);
 
   // Initial load
   useEffect(() => {
@@ -653,6 +660,7 @@ export default function UploadsPage() {
                 onRedeploy={handleRedeploy}
                 isRedeploying={redeployingJobId === job.id}
                 showOwner={viewScope === 'tenant'}
+                waitOptionsContext={waitOptionsContext}
               />
             ))}
           </AnimatePresence>
@@ -671,6 +679,7 @@ function UploadJobCard({
   onRedeploy,
   isRedeploying,
   showOwner,
+  waitOptionsContext,
 }: {
   job: PackagingJob;
   index: number;
@@ -680,6 +689,7 @@ function UploadJobCard({
   onRedeploy: (job: PackagingJob, forceCreate?: boolean) => void;
   isRedeploying?: boolean;
   showOwner?: boolean;
+  waitOptionsContext: CustomerJobSnapshot;
 }) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -990,6 +1000,8 @@ function UploadJobCard({
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
             <span title={job.id} translate="no">Support ID: {job.id.slice(0, 8)}</span>
           </div>
+
+          <CustomerWaitOptions job={job} context={waitOptionsContext} />
 
           {/* Error message */}
           {['failed', 'qa_failed'].includes(job.status) && (job.error_message || job.error_code || job.status_message) && (
