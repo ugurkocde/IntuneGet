@@ -1,0 +1,5 @@
+{
+  "title": "SCCM migration sorting follows the selected order",
+  "summary": "Application lists now honor name, status, confidence and deployment sorting in either direction during SCCM migration.",
+  "type": "fixed"
+}

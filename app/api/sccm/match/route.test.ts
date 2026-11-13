@@ -11,7 +11,7 @@ vi.mock('@/lib/sccm/history-logger', () => ({
   createSuccessEntry: vi.fn(),
 }));
 vi.mock('@/lib/matching/sccm-matcher', () => ({ matchSccmApp: vi.fn() }));
-import { PATCH } from './route';
+import { GET, PATCH } from './route';
 
 function fixture(found = true) {
   const app = { id: 'app-1', migration_id: 'migration-1', display_name: 'Synthetic App',
@@ -59,5 +59,37 @@ describe('SCCM exclusion requests', () => {
     const f = fixture(false);
     expect((await PATCH(request({ appId: 'app-1', action: 'exclude' }))).status).toBe(404);
     expect(f.write.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('SCCM application sorting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.auth.mockResolvedValue({ userId: 'user-1', tenantId: 'tenant-1' });
+  });
+  it.each([
+    ['name', 'asc', [['display_name', { ascending: true }]]],
+    ['name', 'desc', [['display_name', { ascending: false }]]],
+    ['status', 'desc', [['match_status', { ascending: false }], ['display_name', { ascending: true }]]],
+    ['confidence', 'asc', [['match_confidence', { ascending: true }], ['display_name', { ascending: true }]]],
+    ['deployments', 'asc', [['deployment_count', { ascending: true }], ['display_name', { ascending: true }]]],
+    ['toString', 'desc', [['deployment_count', { ascending: false }], ['display_name', { ascending: true }]]],
+    ['display_name.desc', 'asc', [['deployment_count', { ascending: false }], ['display_name', { ascending: true }]]],
+    ['', '', [['deployment_count', { ascending: false }], ['display_name', { ascending: true }]]],
+  ])('honors the requested %s %s order without accepting arbitrary columns', async (sortBy, sortDir, expected) => {
+    const query = {
+      select: vi.fn(), eq: vi.fn(), order: vi.fn(), range: vi.fn(),
+      then: (resolve: (result: { data: unknown[]; count: number; error: null }) => unknown) =>
+        Promise.resolve({ data: [], count: 0, error: null }).then(resolve),
+    };
+    for (const method of ['select', 'eq', 'order', 'range'] as const) query[method].mockReturnValue(query);
+    mocks.client.mockReturnValue({ from: vi.fn(() => query) });
+    const params = new URLSearchParams({ migrationId: 'migration-1', sortBy: String(sortBy), sortDir: String(sortDir) });
+    const response = await GET(new NextRequest('https://example.test/api/sccm/match?' + params));
+    expect(response.status).toBe(200);
+    expect(query.order.mock.calls).toEqual(expected);
+    expect(query.eq).toHaveBeenCalledWith('migration_id', 'migration-1');
+    expect(query.eq).toHaveBeenCalledWith('tenant_id', 'tenant-1');
+    expect(query.range).toHaveBeenCalledWith(0, 99);
   });
 });
