@@ -1444,3 +1444,24 @@ describe('hosted automatic scope gate', () => {
     expect(result.skipped).not.toBe(true);
   });
 });
+
+
+describe('manual update failure tracking preserves stored policy choices', () => {
+  it.each(['auto_update', 'notify', 'ignore', 'pin_version'] as const)('only pauses a stored automatic policy: %s', async policyType => {
+    const updateSpy = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({ app_update_policies: {
+      singleResult: { data: { policy_type: policyType, consecutive_failures: 2 }, error: null }, updateSpy,
+    } }));
+    vi.spyOn(trigger as unknown as { verifyTenantConsent: () => Promise<boolean> }, 'verifyTenantConsent')
+      .mockRejectedValueOnce(new Error('synthetic consent read failure'));
+    const policy = { ...makePolicy({ displayName: 'App' }), consecutive_failures: 0 };
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO,
+      { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result).toMatchObject({ success: false, error: 'synthetic consent read failure' });
+    expect(updateSpy).toHaveBeenCalledOnce();
+    const change = updateSpy.mock.calls[0][0];
+    expect(change.consecutive_failures).toBe(3);
+    if (policyType === 'auto_update') expect(change.is_enabled).toBe(false);
+    else expect(change).not.toHaveProperty('is_enabled');
+  });
+});

@@ -32,6 +32,14 @@ describe('SQLite auto-update completion', () => {
     expect(history).toMatchObject({ status: success ? 'completed' : status, completed_at: time, error_message: success ? null : 'test failure' });
     expect(await db.updatePolicies.getById(policy.id, 'user')).toMatchObject({ consecutive_failures: success ? 0 : 3, is_enabled: success, last_auto_update_version: success ? '2.0' : null });
   });
+  it.each(['notify', 'ignore', 'pin_version'] as const)('keeps the stored %s policy enabled after a manual attempt fails', async policyType => {
+    const { policy, job } = await seed();
+    await db.updatePolicies.update(policy.id, 'user', { policy_type: policyType });
+    await db.jobs.update(job.id, { status: 'failed', error_message: 'synthetic failure' });
+    expect(await db.updatePolicies.getById(policy.id, 'user')).toMatchObject({
+      policy_type: policyType, is_enabled: true, consecutive_failures: 3,
+    });
+  });
   it('does not change history when the ownership condition rejects the job update', async () => {
     const { job } = await seed();
     expect(await db.jobs.update(job.id, { status: 'deployed' }, { packager_id: 'other' })).toBeNull();
