@@ -52,7 +52,7 @@ describe('cart permission verification', () => {
       return Response.json({ statuses: {}, tenantDeployments: [] });
     });
     vi.stubGlobal('fetch', fetchMock);
-    useCartStore.setState({ isOpen: true, items: [item] });
+    useCartStore.setState({ scope: 'fixture|test-tenant', activeScope: 'fixture|test-tenant', isOpen: true, items: [item] });
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
     await act(async () => root!.render(createElement(QueryClientProvider, { client: client! }, createElement(UploadCart))));
@@ -87,7 +87,7 @@ describe('cart permission verification', () => {
   it('does not refetch negative permission responses on checking/error transitions', async () => {
     const fetchMock = vi.fn(async () => Response.json({ verified: false, tenantId: 'tenant', error: 'consent_propagating', message: 'Waiting' }));
     vi.stubGlobal('fetch', fetchMock);
-    useCartStore.setState({ isOpen: true, items: [] });
+    useCartStore.setState({ scope: 'fixture|test-tenant', activeScope: 'fixture|test-tenant', isOpen: true, items: [] });
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
     await act(async () => { root!.render(createElement(QueryClientProvider, { client: client! }, createElement(UploadCart))); });
@@ -118,7 +118,7 @@ describe('cart permission verification', () => {
       return Response.json({ statuses: {}, tenantDeployments: [] });
     });
     vi.stubGlobal('fetch', fetchMock);
-    useCartStore.setState({ isOpen: true, items: [item, { ...item, id: 'other', wingetId: 'Other.App', displayName: 'Other App' }] });
+    useCartStore.setState({ scope: 'fixture|test-tenant', activeScope: 'fixture|test-tenant', isOpen: true, items: [item, { ...item, id: 'other', wingetId: 'Other.App', displayName: 'Other App' }] });
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
     await act(async () => root!.render(createElement(QueryClientProvider, { client: client! }, createElement(UploadCart))));
