@@ -42,13 +42,17 @@ export async function GET(request: NextRequest) {
       const policies = await db.updatePolicies.list(user.userId, tenantId ?? undefined);
       const recentErrors = new Map<string, string>();
       if (policies.some(isAutoUpdatePaused)) {
-        const history = await db.autoUpdateHistory.list(user.userId, {
-          tenantId: tenantId ?? undefined, limit: 200, offset: 0,
-        });
-        for (const row of history) {
-          if (['failed', 'cancelled'].includes(row.status) && row.error_message && !recentErrors.has(row.policy_id)) {
-            recentErrors.set(row.policy_id, row.error_message.slice(0, 1000));
+        try {
+          const history = await db.autoUpdateHistory.list(user.userId, {
+            tenantId: tenantId ?? undefined, limit: 200, offset: 0,
+          });
+          for (const row of history) {
+            if (['failed', 'cancelled'].includes(row.status) && row.error_message && !recentErrors.has(row.policy_id)) {
+              recentErrors.set(row.policy_id, row.error_message.slice(0, 1000));
+            }
           }
+        } catch {
+          // Supplementary history must not hide successfully loaded updates.
         }
       }
       const policyMap = new Map(
@@ -154,21 +158,24 @@ export async function GET(request: NextRequest) {
     const recentErrors = new Map<string, string>();
     const pausedIds = (policies ?? []).filter(isAutoUpdatePaused).map(policy => policy.id);
     if (pausedIds.length > 0) {
-      const { data: history, error: historyError } = await supabase
-        .from('auto_update_history')
-        .select('policy_id, error_message, triggered_at')
-        .in('policy_id', pausedIds)
-        .in('status', ['failed', 'cancelled'])
-        .not('error_message', 'is', null)
-        .order('triggered_at', { ascending: false })
-        .limit(200);
-      if (historyError) {
-        return NextResponse.json({ error: 'Failed to fetch update failure history' }, { status: 500 });
-      }
-      for (const row of history ?? []) {
-        if (row.error_message && !recentErrors.has(row.policy_id)) {
-          recentErrors.set(row.policy_id, row.error_message.slice(0, 1000));
+      try {
+        const { data: history, error: historyError } = await supabase
+          .from('auto_update_history')
+          .select('policy_id, error_message, triggered_at')
+          .in('policy_id', pausedIds)
+          .in('status', ['failed', 'cancelled'])
+          .not('error_message', 'is', null)
+          .order('triggered_at', { ascending: false })
+          .limit(200);
+        if (!historyError) {
+          for (const row of history ?? []) {
+            if (row.error_message && !recentErrors.has(row.policy_id)) {
+              recentErrors.set(row.policy_id, row.error_message.slice(0, 1000));
+            }
+          }
         }
+      } catch {
+        // The card already has a fallback when recent detail is unavailable.
       }
     }
 

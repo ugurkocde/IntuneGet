@@ -261,7 +261,7 @@ describe('paused policy failure details', () => {
     expect((await response.json()).updates[0].policy.last_error).toBe('Latest fixture failure');
     expect(list).toHaveBeenCalledWith('fixture-owner', { tenantId: 'fixture-tenant', limit: 200, offset: 0 });
   });
-  it('skips history for active policies and propagates a paused history lookup failure', async () => {
+  it('skips history for active policies and preserves updates when paused history is unavailable', async () => {
     sqliteModeMock.mockReturnValue(false);
     parseAccessTokenMock.mockResolvedValue({ userId: 'fixture-owner' });
     const historyRead = vi.fn();
@@ -277,8 +277,21 @@ describe('paused policy failure details', () => {
     expect(historyRead).not.toHaveBeenCalled();
     enabled = false;
     const unavailable = await GET(request());
-    expect(unavailable.status).toBe(500);
-    expect(await unavailable.json()).toEqual({ error: 'Failed to fetch update failure history' });
+    expect(unavailable.status).toBe(200);
+    const body = await unavailable.json();
+    expect(body.count).toBe(1);
+    expect(body.updates[0].policy.last_error).toBeNull();
+  });
+
+  it('preserves self-hosted updates when supplementary history throws', async () => {
+    sqliteModeMock.mockReturnValue(true);
+    parseAccessTokenMock.mockResolvedValue({ userId: 'fixture-owner' });
+    databaseMock.mockReturnValue({ updateCheckResults: { list: vi.fn().mockResolvedValue([update]) }, updatePolicies: { list: vi.fn().mockResolvedValue([paused]) }, autoUpdateHistory: { list: vi.fn().mockRejectedValue(new Error('fixture history unavailable')) } });
+    const response = await GET(new NextRequest('http://localhost/api/updates/available'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.count).toBe(1);
+    expect(body.updates[0].policy.last_error).toBeNull();
   });
 
 });
