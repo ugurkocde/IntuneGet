@@ -53,7 +53,7 @@ async function deploy(response: Response) {
     if (url.startsWith('/api/auth/verify-consent')) return Response.json({ verified: true, tenantId: 'test-tenant' });
     return Response.json({ statuses: {}, tenantDeployments: [] });
   }));
-  useCartStore.setState({ isOpen: true, items: [item] });
+  useCartStore.setState({ scope: 'fixture|test-tenant', activeScope: 'fixture|test-tenant', isOpen: true, items: [item] });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
   await act(async () => root!.render(createElement(QueryClientProvider, { client: client! }, createElement(UploadCart))));
