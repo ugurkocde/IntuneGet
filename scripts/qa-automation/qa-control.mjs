@@ -419,7 +419,7 @@ try {
     } else if (currentActive) {
       const health = await reconcileActive({ candidate: currentActive, invokeCron, snapshot, dryRun: isDryRun,
         recoverPublication: candidate => recoverStalledPublication({ candidate, github, patch }),
-        holdPublication: candidate => holdStalledPublication({ candidate, github, patch }) });
+        holdPublication: candidate => holdStalledPublication({ candidate, github, patch, rows }) });
       result.action = health.action;
       if (health.snapshot) result.snapshot = health.snapshot;
       if (health.reconciled) result.actions.push({ type: 'active_reconcile', ...health.reconciled });
