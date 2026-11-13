@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
-import { hasPermission, type MspRole } from '@/lib/msp-permissions';
+import { canModifyRole, hasPermission, type MspRole } from '@/lib/msp-permissions';
 import { invitationSchema, validateMspInput } from '@/lib/validators/msp';
 import {
   applyRateLimit,
@@ -214,6 +214,23 @@ export async function POST(request: NextRequest) {
     if (!hasPermission(userRole, 'invite_members')) {
       return NextResponse.json(
         { error: 'You do not have permission to invite members' },
+        { status: 403 }
+      );
+    }
+
+    // An invitation assigns a role, so it follows the same rule as a role
+    // change: a member may only assign roles below their own.
+    if (!canModifyRole(userRole, role)) {
+      return NextResponse.json(
+        { error: 'You can only invite members to a role below your own' },
+        { status: 403 }
+      );
+    }
+
+    // A member limited to customer tenants cannot hand out full access.
+    if (typedMembership.access_mode === 'customer_only' && access_mode === 'full') {
+      return NextResponse.json(
+        { error: 'Your access is limited to customer tenants, so you can only invite members with customer tenant access' },
         { status: 403 }
       );
     }

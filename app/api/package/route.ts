@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
           userId,
           tokenTenantId,
           requestedTenantId: mspTenantId,
+          requiredPermission: 'deploy_apps',
         })
       : { tenantId: tokenTenantId, errorResponse: null };
 

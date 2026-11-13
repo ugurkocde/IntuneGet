@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getMspCustomerConsentUrl } from '@/lib/msal-config';
 import { parseAccessToken, signConsentState, getBaseUrl } from '@/lib/auth-utils';
+import { hasPermission, parseRole, type MspRole } from '@/lib/msp-permissions';
+import { getRequestMetadata, logTenantCreated, logTenantRemoved } from '@/lib/audit-logger';
+import { disablePoliciesForRemovedTenant } from '@/lib/msp/revocation';
 import type {
   MspManagedTenant,
   MspManagedTenantWithStats,
@@ -23,6 +26,7 @@ import type {
 interface MembershipWithOrg {
   msp_organization_id: string;
   access_mode: 'full' | 'customer_only';
+  role?: string | null;
   msp_organizations: {
     is_active: boolean;
     primary_tenant_id: string;
@@ -36,6 +40,14 @@ interface UserMspMembership {
   mspOrgId: string;
   accessMode: 'full' | 'customer_only';
   primaryTenantId: string;
+  role: MspRole;
+}
+
+function manageTenantsDenied() {
+  return NextResponse.json(
+    { error: 'Your MSP role does not allow managing customer tenants. Ask an owner or admin of your organization.' },
+    { status: 403 }
+  );
 }
 
 /**
@@ -46,7 +58,7 @@ async function getUserMspMembership(userId: string): Promise<UserMspMembership |
 
   const { data } = await supabase
     .from('msp_user_memberships')
-    .select('msp_organization_id, access_mode, msp_organizations!inner(is_active, primary_tenant_id)')
+    .select('msp_organization_id, access_mode, role, msp_organizations!inner(is_active, primary_tenant_id)')
     .eq('user_id', userId)
     .eq('msp_organizations.is_active', true)
     .single();
@@ -58,6 +70,8 @@ async function getUserMspMembership(userId: string): Promise<UserMspMembership |
     mspOrgId: membership.msp_organization_id,
     accessMode: membership.access_mode || 'full',
     primaryTenantId: membership.msp_organizations.primary_tenant_id,
+    // An unknown or missing role counts as the least privileged one.
+    role: parseRole(membership.role),
   };
 }
 
@@ -195,6 +209,9 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+    if (!hasPermission(membership.role, 'manage_tenants')) {
+      return manageTenantsDenied();
+    }
     const mspOrgId = membership.mspOrgId;
 
     // Parse request body
@@ -230,6 +247,12 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await logTenantCreated(
+      { organization_id: mspOrgId, user_id: user.userId, user_email: user.userEmail, ...getRequestMetadata(request) },
+      tenant.id,
+      tenant.display_name
+    );
 
     // Generate the consent URL with signed state for security
     let consentUrl: string;
@@ -296,6 +319,9 @@ export async function DELETE(request: NextRequest) {
         { status: 403 }
       );
     }
+    if (!hasPermission(membership.role, 'manage_tenants')) {
+      return manageTenantsDenied();
+    }
     const mspOrgId = membership.mspOrgId;
 
     // Get tenant record ID from query params
@@ -314,7 +340,7 @@ export async function DELETE(request: NextRequest) {
     // Verify the tenant belongs to this MSP organization
     const { data: tenant } = await supabase
       .from('msp_managed_tenants')
-      .select('id, msp_organization_id, tenant_id')
+      .select('id, msp_organization_id, tenant_id, display_name')
       .eq('id', tenantRecordId)
       .single();
 
@@ -363,7 +389,27 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    // Removal has to stop automation too: update policies the team created
+    // for this customer would otherwise keep deploying into the tenant.
+    // The tenant is already removed at this point, so a failure here must not
+    // turn the answer into an error.
+    let disabledPolicies = 0;
+    try {
+      disabledPolicies = await disablePoliciesForRemovedTenant(supabase, mspOrgId, tenant.tenant_id);
+    } catch (revocationError) {
+      console.error(
+        'Failed to disable update policies of a removed MSP tenant:',
+        revocationError instanceof Error ? revocationError.message : 'Unknown error'
+      );
+    }
+
+    await logTenantRemoved(
+      { organization_id: mspOrgId, user_id: user.userId, user_email: user.userEmail, ...getRequestMetadata(request) },
+      tenant.id,
+      tenant.display_name
+    );
+
+    return NextResponse.json({ success: true, disabled_policies: disabledPolicies });
   } catch (error) {
     return NextResponse.json(
       { error: 'Internal server error' },

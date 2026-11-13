@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Building2,
@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils';
 
 export default function MspTenantsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { getAccessToken } = useMicrosoftAuth();
   const {
     isMspUser,
@@ -42,42 +41,9 @@ export default function MspTenantsPage() {
     tenantName: '',
   });
 
-  // Check for URL params (consent callback results)
-  useEffect(() => {
-    const success = searchParams.get('success');
-    const error = searchParams.get('error');
-    const warning = searchParams.get('warning');
-    const message = searchParams.get('message');
-
-    if (success) {
-      setNotification({
-        type: 'success',
-        message: success === 'consent_granted'
-          ? 'Customer consent granted successfully!'
-          : message || 'Operation completed successfully',
-      });
-      // Refresh tenants list to show updated status
-      refreshTenants();
-      // Clear params
-      router.replace('/dashboard/msp/tenants', { scroll: false });
-    } else if (warning) {
-      setNotification({
-        type: 'warning',
-        message: message || 'Action completed with warnings',
-      });
-      // Refresh tenants list to show updated status
-      refreshTenants();
-      // Clear params
-      router.replace('/dashboard/msp/tenants', { scroll: false });
-    } else if (error) {
-      setNotification({
-        type: 'error',
-        message: message || 'An error occurred',
-      });
-      // Clear params
-      router.replace('/dashboard/msp/tenants', { scroll: false });
-    }
-  }, [searchParams, router, refreshTenants]);
+  // The consent round trip no longer returns to this page (the customer
+  // finishes it on /msp/consent/approve), so nothing in the URL is turned into
+  // a banner here. Banner text only ever comes from this page's own actions.
 
   // Clear notification after 5 seconds
   useEffect(() => {
@@ -95,7 +61,7 @@ export default function MspTenantsPage() {
   }, [isLoadingOrganization, isMspUser, router]);
 
   const handleRemoveTenant = async (tenantRecordId: string) => {
-    if (!confirm('Are you sure you want to remove this tenant? They will need to grant consent again to reconnect.')) {
+    if (!confirm('Remove this tenant? Your team loses access to it right away, and update policies your team created for it are switched off. To reconnect, a customer administrator has to approve a new link. This does not remove the IntuneGet app from the customer tenant.')) {
       return;
     }
 

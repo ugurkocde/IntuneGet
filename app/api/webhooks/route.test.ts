@@ -6,6 +6,10 @@ const clientFactory = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth-utils', () => ({
   parseAccessToken: async () => fixture.allowed ? { userId: 'local-webhook-owner' } : null,
 }));
+// Creating a webhook resolves its host. Keep that lookup off the network.
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }]),
+}));
 async function route() {
   vi.doMock('@/lib/supabase', async () => {
     const original = await vi.importActual<typeof import('@/lib/supabase')>('@/lib/supabase');

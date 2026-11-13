@@ -15,6 +15,7 @@ import {
   Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { encodeCsvRow } from '@/lib/csv';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
@@ -156,13 +157,14 @@ export function AuditLogTable() {
             log.user_email,
             log.resource_type || '',
             log.resource_id || '',
-            details.replace(/"/g, '""'), // Escape quotes for CSV
+            details,
           ];
         });
 
+        // encodeCsvRow quotes every cell and neutralises formulas
         const csvContent = [
-          headers.join(','),
-          ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+          encodeCsvRow(headers),
+          ...rows.map((row) => encodeCsvRow(row)),
         ].join('\n');
 
         // Download file

@@ -5,6 +5,7 @@
 
 import { createServerClient } from '@/lib/supabase';
 import { createWebhookHeaders } from './webhook-signatures';
+import { describeWebhookFailure, postWebhook } from '@/lib/webhooks/destination';
 
 // Webhook event types
 export type WebhookEventType =
@@ -123,9 +124,6 @@ async function deliverWebhook(
     return;
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
   try {
     const headers = createWebhookHeaders(
       payloadString,
@@ -133,18 +131,16 @@ async function deliverWebhook(
       webhook.headers
     );
 
-    const response = await fetch(webhook.url, {
-      method: 'POST',
+    // The destination is resolved, checked and pinned before every delivery.
+    const response = await postWebhook(webhook.url, {
       headers,
       body: payloadString,
-      signal: controller.signal,
+      timeoutMs: 10000, // 10 second timeout
     });
 
-    clearTimeout(timeoutId);
+    const responseBody = response.bodyExcerpt;
 
-    const responseBody = await response.text().catch(() => '');
-
-    if (response.ok) {
+    if (response.status >= 200 && response.status < 300) {
       // Success - update delivery record
       await supabase
         .from('msp_webhook_deliveries')
@@ -176,15 +172,9 @@ async function deliverWebhook(
       );
     }
   } catch (error) {
-    clearTimeout(timeoutId);
+    const failure = describeWebhookFailure(error);
 
-    const errorMessage = error instanceof Error
-      ? error.name === 'AbortError'
-        ? 'Request timeout'
-        : error.message
-      : 'Unknown error';
-
-    await handleDeliveryFailure(supabase, delivery, webhook, errorMessage);
+    await handleDeliveryFailure(supabase, delivery, webhook, failure.message, failure.statusCode);
   }
 }
 
@@ -267,45 +257,35 @@ export async function sendTestWebhook(
   const payloadString = JSON.stringify(testPayload);
   const headers = createWebhookHeaders(payloadString, webhook.secret, webhook.headers);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
   try {
-    const response = await fetch(webhook.url, {
-      method: 'POST',
+    const response = await postWebhook(webhook.url, {
       headers,
       body: payloadString,
-      signal: controller.signal,
+      timeoutMs: 10000,
     });
 
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
+    if (response.status >= 200 && response.status < 300) {
       return {
         success: true,
         message: 'Test webhook delivered successfully',
         response_status: response.status,
       };
     } else {
-      const body = await response.text().catch(() => '');
+      // The result goes back to the caller of the test endpoint, so it
+      // carries the status code only and never text from the destination.
       return {
         success: false,
-        message: `HTTP ${response.status}: ${body.substring(0, 200)}`,
+        message: `HTTP ${response.status}`,
         response_status: response.status,
       };
     }
   } catch (error) {
-    clearTimeout(timeoutId);
-
-    const message = error instanceof Error
-      ? error.name === 'AbortError'
-        ? 'Request timeout (10s)'
-        : error.message
-      : 'Unknown error';
+    const failure = describeWebhookFailure(error);
 
     return {
       success: false,
-      message,
+      message: failure.message,
+      ...(failure.statusCode !== undefined && { response_status: failure.statusCode }),
     };
   }
 }

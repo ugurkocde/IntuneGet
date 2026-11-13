@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { validateWebhookUrl, detectWebhookType } from '@/lib/webhooks/service';
+import { validateWebhookDestination } from '@/lib/webhooks/destination';
 import { WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE } from '@/types/notifications';
 import type {
   WebhookConfiguration,
@@ -125,6 +126,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE },
         { status: 503 }
+      );
+    }
+
+    // The destination must resolve to public addresses only
+    const destination = await validateWebhookDestination(body.url);
+    if (!destination.valid) {
+      return NextResponse.json(
+        { error: destination.error || 'Invalid webhook URL' },
+        { status: 400 }
       );
     }
 

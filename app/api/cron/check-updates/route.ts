@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/cron-auth';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getDatabase, isSqliteMode } from '@/lib/db';
 import { runSqliteUpdateCheck } from '@/lib/auto-update/sqlite';
@@ -17,6 +18,7 @@ import {
 import { AppUpdatePolicy, autoUpdateScopeReason, shouldSkipUpdate } from '@/types/update-policies';
 import { getCatalogSource } from '@/lib/catalog';
 import { logValue } from '@/lib/server-log';
+import { filterPoliciesByCurrentAccess } from '@/lib/msp/revocation';
 
 const BATCH_SIZE = 50;
 
@@ -149,10 +151,25 @@ async function processAutoUpdates(
     return result;
   }
 
-  const policies = policyRows as AppUpdatePolicy[];
-  if (policies.length === 0) {
+  const allPolicies = policyRows as AppUpdatePolicy[];
+  if (allPolicies.length === 0) {
     return result;
   }
+
+  // This run has no signed-in user, so access is checked here: a policy only
+  // acts while its owner may still work in the policy's tenant.
+  const access = await filterPoliciesByCurrentAccess(
+    supabase as unknown as Parameters<typeof filterPoliciesByCurrentAccess>[0],
+    allPolicies
+  );
+  if (access.error) {
+    result.errors.push(`${access.error}. Auto-updates were skipped for this run.`);
+  } else if (access.denied.length > 0) {
+    console.warn(
+      `[auto-update] ${access.denied.length} policies skipped: the owner no longer has access to the tenant`
+    );
+  }
+  const policies = access.allowed;
 
   // Create lookup map for policies
   const policyMap = new Map<string, AppUpdatePolicy>();
@@ -260,9 +277,7 @@ async function processAutoUpdates(
 
 export async function GET(request: Request) {
   // Fail closed: without a configured secret, "Bearer undefined" must not pass.
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get('authorization');
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
