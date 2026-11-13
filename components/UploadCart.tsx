@@ -297,6 +297,7 @@ export function UploadCart() {
           let rejectionMessage = 'Review the remaining cart items before trying again.';
           if (response.headers.get('content-type')?.includes('application/json')) {
             const errorData = await response.json() as PackageApiErrorResponse;
+            rejectionMessage = errorData.message || errorData.error || rejectionMessage;
             if (!scopeIsCurrent()) return;
             if (errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED' || errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED') {
               await curatedSettings.refetch();
