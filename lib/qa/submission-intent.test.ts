@@ -4,7 +4,7 @@ const { preflight, rpc, server }=vi.hoisted(()=>({preflight:vi.fn(),rpc:vi.fn(),
 vi.mock('@/lib/installer-preflight',()=>({enforceInstallerPreflight:preflight}));
 vi.mock('@/lib/supabase',()=>({getServerClientOrNull:server}));
 vi.mock('@/lib/github-actions',()=>({getGitHubActionsConfig:()=>({owner:'example',workflowsRepo:'workflows',ref:'main',token:'fixture-only'})}));
-const candidate:QaDispatchCandidate={id:'11111111-1111-4111-8111-111111111111',winget_id:'Example.App',version:'1',architecture:'x64',installer_url:'https://example.test/public.exe',installer_sha256:'A'.repeat(64),installer_file_name:'public.exe',installer_type:'exe',definition_path:null,test_level:'psadt-package',package_profile_sha256:'B'.repeat(64),test_config:{mode:'psadt-package'}};
+const candidate:QaDispatchCandidate={dispatched_at:null,id:'11111111-1111-4111-8111-111111111111',winget_id:'Example.App',version:'1',architecture:'x64',installer_url:'https://example.test/public.exe',installer_sha256:'A'.repeat(64),installer_file_name:'public.exe',installer_type:'exe',definition_path:null,test_level:'psadt-package',package_profile_sha256:'B'.repeat(64),test_config:{mode:'psadt-package'}};
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();preflight.mockReset();rpc.mockReset();server.mockReset();});
 it.each(['live','cache'])('records server %s provenance before GitHub dispatch',async source=>{
   preflight.mockResolvedValue({status:'healthy',source,cacheKey:'verified'});server.mockReturnValue({rpc});
