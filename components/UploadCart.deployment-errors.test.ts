@@ -12,7 +12,7 @@ vi.hoisted(() => {
     removeItem: (key: string) => values.delete(key),
   } });
 });
-const mocks = vi.hoisted(() => ({ push: vi.fn(), success: vi.fn() }));
+const mocks = vi.hoisted(() => ({ push: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 const auth = vi.hoisted(() => ({
   isAuthenticated: true, user: { id: 'test-user', tenantId: 'test-tenant' },
   getAccessToken: vi.fn().mockResolvedValue('test-token'),
@@ -21,7 +21,7 @@ vi.mock('@/hooks/useMicrosoftAuth', () => ({ useMicrosoftAuth: () => auth }));
 vi.mock('@/hooks/useMspOptional', () => ({ useMspOptional: () => ({ isMspUser: false, selectedTenantId: null }) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
-vi.mock('sonner', () => ({ toast: { success: mocks.success } }));
+vi.mock('sonner', () => ({ toast: { success: mocks.success, warning: mocks.warning } }));
 vi.mock('@/components/AdminConsentBanner', () => ({ clearConsentPending: vi.fn(), isConsentPending: () => false }));
 import { UploadCart } from './UploadCart';
 import { useCartStore } from '@/stores/cart-store';
@@ -46,14 +46,14 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-async function deploy(response: Response) {
+async function deploy(response: Response, entries = [item]) {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url === '/api/package') return response;
     if (url.startsWith('/api/auth/verify-consent')) return Response.json({ verified: true, tenantId: 'test-tenant' });
     return Response.json({ statuses: {}, tenantDeployments: [] });
   }));
-  useCartStore.setState({ scope: 'fixture|test-tenant', activeScope: 'fixture|test-tenant', isOpen: true, items: [item] });
+  useCartStore.setState({ scope: 'fixture|test-tenant', activeScope: 'fixture|test-tenant', isOpen: true, items: entries });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
   await act(async () => root!.render(createElement(QueryClientProvider, { client: client! }, createElement(UploadCart))));
@@ -81,16 +81,18 @@ describe('deployment result presentation', () => {
     expect(document.body.textContent).not.toContain('private-fixture');
   });
 
-  it('preserves partial success navigation and clears the cart', async () => {
-    await deploy(Response.json({ success: true, jobs: [{ id: 'job-1' }], errors: [{ wingetId: item.wingetId, error: 'Packaging pipeline not configured' }] }));
-    expect(useCartStore.getState().items).toHaveLength(0);
-    expect(mocks.push).toHaveBeenCalledWith('/dashboard/uploads?jobs=job-1');
-    expect(mocks.success).toHaveBeenCalled();
+  it('retains rejected items and offers progress without a success toast', async () => {
+    const rejected = { ...item, id: 'rejected', wingetId: 'Other.App', displayName: 'Other App' };
+    await deploy(Response.json({ success: true, jobs: [{ id: 'job-1', package_config: item }], errors: [{ wingetId: rejected.wingetId, error: 'Packaging pipeline not configured' }] }), [item, rejected]);
+    expect(useCartStore.getState().items).toEqual([rejected]);
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.success).not.toHaveBeenCalled();
+    expect(mocks.warning).toHaveBeenCalled();
   });
 
-  it('preserves the existing non-JSON HTTP failure', async () => {
+  it('marks a non-JSON server failure as an unknown outcome', async () => {
     await deploy(new Response('Unavailable', { status: 500, headers: { 'content-type': 'text/plain' } }));
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('Deployment failed (500)');
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('check Deployments');
     expect(useCartStore.getState().items).toHaveLength(1);
   });
 });
