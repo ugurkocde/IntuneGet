@@ -3,7 +3,7 @@
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionRequiredAuthError, InteractionStatus } from "@azure/msal-browser";
 import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
 
 import { useCartStore } from "@/stores/cart-store";
@@ -23,7 +23,10 @@ export function isBlockedPopupError(error: unknown): boolean {
 export function useMicrosoftAuth() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
-  const active = instance.getActiveAccount() ?? accounts[0] ?? null;
+  const rawActive = instance.getActiveAccount() ?? accounts[0] ?? null;
+  const activeKey = rawActive ? JSON.stringify([rawActive.homeAccountId, rawActive.localAccountId, rawActive.tenantId]) : null;
+  // MSAL can return a new object for the same account on every lookup.
+  const active = useMemo(() => instance.getActiveAccount() ?? accounts[0] ?? null, [instance, accounts, activeKey]);
 
   // Track sign-out in progress to prevent auth guard redirects
   const [isSigningOut, setIsSigningOut] = useState(false);
