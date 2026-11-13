@@ -26,6 +26,7 @@ import type { AutoUpdateScope, UpdatePolicyType } from '@/types/update-policies'
 interface UpdatePolicySelectorProps {
   currentPolicy?: UpdatePolicyType | null;
   currentScope?: AutoUpdateScope;
+  paused?: boolean;
   onPolicyChange: (policyType: UpdatePolicyType, scope?: AutoUpdateScope) => Promise<void>;
   disabled?: boolean;
   size?: 'sm' | 'default';
@@ -82,6 +83,7 @@ const policyOptions: {
 export function UpdatePolicySelector({
   currentPolicy,
   currentScope = 'all',
+  paused = false,
   onPolicyChange,
   disabled = false,
   size = 'default',
@@ -92,7 +94,7 @@ export function UpdatePolicySelector({
   const selectedOption = policyOptions.find((o) => o.type === currentPolicy) || policyOptions[1];
 
   const handleSelect = async (policyType: UpdatePolicyType) => {
-    if (policyType === currentPolicy) return;
+    if (policyType === currentPolicy && !(paused && policyType === 'auto_update')) return;
 
     setIsUpdating(true);
     try {
@@ -160,7 +162,7 @@ export function UpdatePolicySelector({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-text-primary">
-                  <T>{option.label}</T>
+                  <T>{paused && option.type === 'auto_update' ? 'Resume automatic updates' : option.label}</T>
                 </span>
                 {option.type === currentPolicy && (
                   <Check className="w-3.5 h-3.5 text-status-success flex-shrink-0" />
