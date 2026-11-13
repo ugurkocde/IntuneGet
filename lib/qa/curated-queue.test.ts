@@ -13,7 +13,7 @@ const row = (patch: Partial<Row> = {}): Row => ({
   id: '10000000-0000-4000-8000-000000000001', verification_key: `release:${candidate.id}`, app_id: candidate.appId,
   version: candidate.version, kind: 'release', inputs: { candidate: JSON.stringify(candidate), previous: '', app_label: `Chrome [${candidate.id}]` },
   priority: 2000, status: 'queued', enqueued_at: now.toISOString(), dispatched_at: now.toISOString(),
-  finished_at: null, github_run_id: null, updated_at: now.toISOString(), ...patch,
+  finished_at: null, github_run_id: null, hold: null, updated_at: now.toISOString(), ...patch,
 });
 function client(active: Row | null, next: Row | null, claim: unknown = { row: next }) {
   const updates: unknown[] = [];
@@ -80,7 +80,7 @@ describe('curated priority dispatch', () => {
   it('releases a completed claim without treating workflow success as release approval', async () => {
     const mock = client(row({ status: 'dispatched' }), null);
     const fetchMock = vi.fn(async () => Response.json({ total_count: 1, workflow_runs: [{ id: 42,
-      display_title: `Curated verification - Chrome [${candidate.id}]`, status: 'completed', created_at: now.toISOString(),
+      display_title: `Curated verification - Chrome [${candidate.id}]`, status: 'completed', conclusion: 'success', run_attempt: 1, created_at: now.toISOString(),
       event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/curated-catalog-verification.yml' }] }));
     expect(await dispatchCuratedQueue(mock.supabase, now, fetchMock)).toMatchObject({ handled: false, dispatched: false });
     expect(mock.updates).toEqual([expect.objectContaining({ status: 'completed', github_run_id: '42' })]);
@@ -93,6 +93,35 @@ describe('curated priority dispatch', () => {
       display_title: 'Other verification', status: 'completed', created_at: now.toISOString(),
       event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/curated-catalog-verification.yml' }] }));
     await expect(dispatchCuratedQueue(mock.supabase, now, fetchMock)).rejects.toThrow('inventory is incomplete');
+    expect(mock.updates).toEqual([]);
+  });
+  it('holds a failed config before any next dispatch without inventing a lifecycle cause', async () => {
+    const id = '20000000-0000-4000-8000-000000000001';
+    const active = row({ status: 'dispatched', kind: 'config', verification_key: `config:${id}` });
+    const mock = client(active, row());
+    const fetchMock = vi.fn(async () => Response.json({ total_count: 1, workflow_runs: [{ id: 42,
+      display_title: `Curated verification - Chrome [${candidate.id}]`, status: 'completed', conclusion: 'failure', run_attempt: 1,
+      created_at: now.toISOString(), event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/curated-catalog-verification.yml' }] }));
+    expect(await dispatchCuratedQueue(mock.supabase, now, fetchMock)).toMatchObject({handled:false,dispatched:false,reason:'failed_config_requires_classification'});
+    expect(mock.updates).toEqual([expect.objectContaining({status:'held',github_run_id:'42',dispatched_at:active.dispatched_at,
+      hold:{schemaVersion:2,holdType:'failed_config_requires_classification',runId:'42',attempt:1,configVerificationId:id,conclusion:'failure',reason:'GitHub run concluded failure; classification required before another verification.'}})]);
+    expect(mock.rpc).not.toHaveBeenCalledWith('claim_qa_work',expect.anything());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([null,'unknown',''])('keeps an unqualified completed run claimed (%s)', async conclusion => {
+    const mock=client(row({status:'dispatched'}),row());
+    const fetchMock=vi.fn(async()=>Response.json({total_count:1,workflow_runs:[{id:42,
+      display_title:`Curated verification - Chrome [${candidate.id}]`,status:'completed',conclusion,run_attempt:1,created_at:now.toISOString(),
+      event:'workflow_dispatch',head_branch:'main',path:'.github/workflows/curated-catalog-verification.yml'}]}));
+    await expect(dispatchCuratedQueue(mock.supabase,now,fetchMock)).rejects.toThrow('Invalid completed curated workflow outcome');
+    expect(mock.updates).toEqual([]);
+  });
+  it.each([null,0,-1,1.5])('keeps a completed run with an invalid attempt claimed (%s)', async run_attempt => {
+    const mock=client(row({status:'dispatched'}),row());
+    const fetchMock=vi.fn(async()=>Response.json({total_count:1,workflow_runs:[{id:42,
+      display_title:`Curated verification - Chrome [${candidate.id}]`,status:'completed',conclusion:'failure',run_attempt,created_at:now.toISOString(),
+      event:'workflow_dispatch',head_branch:'main',path:'.github/workflows/curated-catalog-verification.yml'}]}));
+    await expect(dispatchCuratedQueue(mock.supabase,now,fetchMock)).rejects.toThrow('Invalid completed curated workflow outcome');
     expect(mock.updates).toEqual([]);
   });
   it('rejects malformed workflow dates instead of retrying an ambiguous dispatch', async () => {
