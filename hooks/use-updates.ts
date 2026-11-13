@@ -11,6 +11,8 @@ import type {
   TriggerUpdateResponse,
 } from '@/types/update-policies';
 
+const MISSING_SESSION_MESSAGE = 'Your session is unavailable. Please sign in again.';
+
 export interface AvailableUpdatesResponse {
   updates: AvailableUpdate[];
   count: number;
@@ -67,7 +69,7 @@ export function useAvailableUpdates(options: UseAvailableUpdatesOptions = {}) {
     queryFn: async () => {
       const token = await getAccessToken();
       if (!token) {
-        return { updates: [], count: 0, criticalCount: 0 };
+        throw new Error(MISSING_SESSION_MESSAGE);
       }
 
       const url = queryString
@@ -103,7 +105,7 @@ export function useRefreshAvailableUpdates(options: { tenantId?: string } = {}) 
     mutationFn: async () => {
       const token = await getAccessToken();
       if (!token) {
-        throw new Error('Not authenticated');
+        throw new Error(MISSING_SESSION_MESSAGE);
       }
 
       const response = await fetch('/api/updates/refresh', {
@@ -184,7 +186,7 @@ export function useAutoUpdateHistory(options: UseAutoUpdateHistoryOptions = {}) 
     queryFn: async ({ pageParam }) => {
       const token = await getAccessToken();
       if (!token) {
-        return { history: [], count: 0, hasMore: false };
+        throw new Error(MISSING_SESSION_MESSAGE);
       }
 
       const queryParams = buildAutoUpdateHistoryQueryParams(
@@ -408,7 +410,7 @@ export function useUpdatePolicies(tenantId?: string) {
     queryFn: async () => {
       const token = await getAccessToken();
       if (!token) {
-        return { policies: [], count: 0 };
+        throw new Error(MISSING_SESSION_MESSAGE);
       }
 
       const queryParams = new URLSearchParams();
