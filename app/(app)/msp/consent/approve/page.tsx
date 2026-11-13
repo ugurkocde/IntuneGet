@@ -52,6 +52,7 @@ function ApproveContent() {
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
+  const [reloadDetails, setReloadDetails] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !state || callbackError) return;
@@ -84,13 +85,15 @@ function ApproveContent() {
     };
     void loadInfo();
     return () => controller.abort();
-  }, [isAuthenticated, state, callbackError, getAccessToken]);
+  }, [isAuthenticated, state, callbackError, getAccessToken, reloadDetails]);
 
   const handleSignIn = async (selectAccount: boolean) => {
     setIsSigningIn(true);
     setError(null);
     try {
-      await signIn({ selectAccount });
+      if (await signIn({ selectAccount })) {
+        setReloadDetails(value => !value);
+      }
     } finally {
       setIsSigningIn(false);
     }

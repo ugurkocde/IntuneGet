@@ -38,3 +38,12 @@ it('does not send an obsolete account request after its token resolves', async (
  expect(fetchMock).toHaveBeenCalledTimes(1);
  expect((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers).toEqual({ Authorization: 'Bearer token-b' });
 });
+
+it('retries a failed details load after successfully choosing the same account', async () => {
+ const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ message: 'Temporary fixture failure' }, { status: 503 })).mockResolvedValueOnce(info('account-a@example.test'));
+ vi.stubGlobal('fetch', fetchMock); await render(); expect(document.body.textContent).toContain('Temporary fixture failure');
+ auth.signIn.mockResolvedValueOnce(true);
+ const button = [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Use another account')!;
+ await act(async () => button.click());
+ expect(fetchMock).toHaveBeenCalledTimes(2); expect(document.body.textContent).toContain('account-a@example.test');
+});
