@@ -8,7 +8,7 @@ import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { compareVersions } from '@/lib/version-compare';
-import type { AvailableUpdate } from '@/types/update-policies';
+import { isAutoUpdatePaused, type AvailableUpdate } from '@/types/update-policies';
 
 /**
  * GET /api/updates/available
@@ -40,6 +40,17 @@ export async function GET(request: NextRequest) {
         criticalOnly,
       });
       const policies = await db.updatePolicies.list(user.userId, tenantId ?? undefined);
+      const recentErrors = new Map<string, string>();
+      if (policies.some(isAutoUpdatePaused)) {
+        const history = await db.autoUpdateHistory.list(user.userId, {
+          tenantId: tenantId ?? undefined, limit: 200, offset: 0,
+        });
+        for (const row of history) {
+          if (['failed', 'cancelled'].includes(row.status) && row.error_message && !recentErrors.has(row.policy_id)) {
+            recentErrors.set(row.policy_id, row.error_message.slice(0, 1000));
+          }
+        }
+      }
       const policyMap = new Map(
         policies.map((policy) => [
           `${policy.winget_id}:${policy.tenant_id}`,
@@ -52,6 +63,7 @@ export async function GET(request: NextRequest) {
             last_auto_update_at: policy.last_auto_update_at,
             last_auto_update_version: policy.last_auto_update_version,
             consecutive_failures: policy.consecutive_failures,
+            last_error: isAutoUpdatePaused(policy) ? recentErrors.get(policy.id) ?? null : null,
           } satisfies NonNullable<AvailableUpdate['policy']>,
         ])
       );
@@ -139,6 +151,27 @@ export async function GET(request: NextRequest) {
 
     const { data: policies } = await policiesQuery;
 
+    const recentErrors = new Map<string, string>();
+    const pausedIds = (policies ?? []).filter(isAutoUpdatePaused).map(policy => policy.id);
+    if (pausedIds.length > 0) {
+      const { data: history, error: historyError } = await supabase
+        .from('auto_update_history')
+        .select('policy_id, error_message, triggered_at')
+        .in('policy_id', pausedIds)
+        .in('status', ['failed', 'cancelled'])
+        .not('error_message', 'is', null)
+        .order('triggered_at', { ascending: false })
+        .limit(200);
+      if (historyError) {
+        return NextResponse.json({ error: 'Failed to fetch update failure history' }, { status: 500 });
+      }
+      for (const row of history ?? []) {
+        if (row.error_message && !recentErrors.has(row.policy_id)) {
+          recentErrors.set(row.policy_id, row.error_message.slice(0, 1000));
+        }
+      }
+    }
+
     // Query upload_history to determine which apps were deployed through IntuneGet
     let deployedQuery = supabase
       .from('upload_history')
@@ -173,6 +206,7 @@ export async function GET(request: NextRequest) {
           last_auto_update_at: policy.last_auto_update_at,
           last_auto_update_version: policy.last_auto_update_version,
           consecutive_failures: policy.consecutive_failures,
+          last_error: isAutoUpdatePaused(policy) ? recentErrors.get(policy.id) ?? null : null,
         });
       });
     }
