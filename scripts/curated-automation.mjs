@@ -385,6 +385,15 @@ async function publish() {
   }
   if (!releases.length) { console.log('Nothing to sign.'); return; }
 
+  const securityWithdrawals = [];
+  for (const release of releases) {
+    if (withdrawnReleaseIds.includes(release.id)) continue;
+    if (await curatedInstallerSecurityHeld(release.installerSha256)) {
+      withdrawnReleaseIds.push(release.id);
+      securityWithdrawals.push(release.id);
+    }
+  }
+
   const privateKey = process.env.CURATED_CATALOG_SIGNING_KEY;
   if (!privateKey) throw new Error('The environment signing key is unavailable.');
   const keyId = Object.keys(await readJson(KEYS_PATH)).at(-1);
@@ -401,10 +410,11 @@ async function publish() {
   }
 
   const added = evidenceFiles.map(([, evidence]) => `${appById(evidence.candidate.appId).name} ${evidence.candidate.version}`);
-  const title = added.length ? `Publish verified curated releases: ${added.join(', ')}` : withdraw ? 'Withdraw a curated release' : 'Renew the signed curated catalog';
+  const title = added.length ? `Publish verified curated releases: ${added.join(', ')}` : withdraw || securityWithdrawals.length ? 'Withdraw curated releases' : 'Renew the signed curated catalog';
   const details = [
     added.length ? `Adds ${added.join(', ')}. Each release passed the isolated VM lifecycle test (install, ${evidenceFiles.some(([, e]) => e.previous) ? 'upgrade, ' : ''}detection, uninstall and removal), a publisher signature check and a clean Defender scan of the exact installer hash.` : '',
     withdraw ? `Withdraws \`${withdraw}\`: ${process.env.CURATED_WITHDRAW_REASON.trim()}` : '',
+    securityWithdrawals.length ? `Withdraws releases with an active installer security hold: ${securityWithdrawals.join(', ')}. The security holds remain in place.` : '',
     catalog.dropped.length ? `Drops ${catalog.dropped.length} release(s) that no longer match the current definitions or packaging profile; they are verified again automatically.` : '',
     `Signed catalog valid until ${envelope.payload.expiresAt}.`,
     '', 'CI validates the signature and definitions. Publication requires independent final patch review of the exact revision.',
