@@ -1,6 +1,7 @@
 import { writeFile, rename } from 'node:fs/promises';
 import { recoverInfrastructure, recoverStalledPublication, holdStalledPublication, rateLimitUntil } from './recovery.mjs';
-import { reconcileActive, completedHourStarts } from './active-health.mjs';
+import { reconcileActive } from './active-health.mjs';
+import { parseWatchdogResponse, observeLifecycleWatchdog, recordWatchdogAlert } from './lifecycle-watchdog.mjs';
 import { decideDiskAction, diskGuardActor, lowDiskReason, parseHostFreeGb } from './host-disk-guard.mjs';
 
 const base = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -102,7 +103,10 @@ async function github(path, init = {}) {
   const owner = process.env.GITHUB_OWNER;
   const repository = process.env.GITHUB_WORKFLOWS_REPO;
   if (!token || !owner || !repository) throw new Error('GitHub recovery configuration is missing.');
+  const watchdogRead = path.startsWith('/actions/workflows/intune-qa.yml/runs?');
+  if (watchdogRead && (owner !== 'ugurkocde' || repository !== 'IntuneGet-Workflows')) throw Object.assign(new Error('scope'), { watchdogCause: 'scope' });
   const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}${path}`, {
+    ...(watchdogRead ? { redirect: 'error' } : {}),
     ...init, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28' },
     signal: AbortSignal.timeout(20_000),
   });
@@ -114,6 +118,7 @@ async function github(path, init = {}) {
   if (!response.ok) throw Object.assign(new Error(`GitHub recovery returned ${response.status}.`), { httpStatus: response.status, retryAt });
   // Job rerun can return an empty 201 response, not only an empty 204.
   const payload = await response.text();
+  if (path.startsWith('/actions/workflows/intune-qa.yml/runs?') && path.endsWith('&per_page=20')) return parseWatchdogResponse(payload);
   return payload ? JSON.parse(payload) : null;
 }
 
@@ -329,25 +334,6 @@ try {
     current = await snapshot();
     result.snapshot = current;
 
-    // This observation never changes the pause, repair key or dispatch decision.
-    try {
-      const awaitingQaJobs = await exactCount('packaging_jobs', { select: 'id', status: 'eq.awaiting_qa' });
-      if (awaitingQaJobs > 0) {
-        const now = Date.now();
-        result.startWindow = { ...completedHourStarts({ now, complete: false }), awaitingQaJobs };
-        const lookback = new Date(Math.floor(now / 3_600_000) * 3_600_000 - 25 * 3_600_000).toISOString();
-        const listed = await github(`/actions/workflows/intune-qa.yml/runs?event=workflow_dispatch&branch=main&created=${encodeURIComponent('>=' + lookback)}&per_page=100`);
-        if (!Array.isArray(listed?.workflow_runs) || !Number.isSafeInteger(listed.total_count) ||
-            listed.total_count > 100 || listed.total_count !== listed.workflow_runs.length) throw new Error('Incomplete Execute-step observation.');
-        const start = Date.parse(result.startWindow.window.start);
-        const runs = listed.workflow_runs.filter(run => run.status !== 'completed' || !Number.isFinite(Date.parse(run.updated_at)) || Date.parse(run.updated_at) >= start);
-        if (runs.length > 12 || runs.some(run => !Number.isSafeInteger(run.id) || run.id <= 0)) throw new Error('Execute-step observation exceeds its bounded read scope.');
-        const jobsByRun = {};
-        for (const run of runs) jobsByRun[run.id] = await github(`/actions/runs/${run.id}/jobs?filter=all&per_page=100`);
-        result.startWindow = { ...completedHourStarts({ now, runs, jobsByRun }), awaitingQaJobs };
-      }
-    } catch { /* An unavailable demand or GitHub read never changes recovery behavior. */ }
-
     if (current.active.length !== 0) {
       requireRepair('The pipeline is paused but an active lifecycle still exists.', current.active[0]?.id || 'active-while-paused');
     } else {
@@ -365,10 +351,7 @@ try {
         result.snapshot = current;
       }
     }
-    if (result.startWindow?.state === 'zero' && result.repairRequired) {
-      const { window, awaitingQaJobs } = result.startWindow;
-      result.repairReason += `; zero Execute step starts in completed hour ${window.start} to ${window.end} while ${awaitingQaJobs} jobs await QA`;
-    }
+
   }
 
   if (!result.repairRequired && !result.snapshot.control.paused) {
@@ -483,6 +466,13 @@ try {
       // Until the repair-request migration is live the table does not exist.
       if (!/PGRST205|42P01|Supabase REST 404/.test(String(error?.message))) throw error;
     }
+  }
+
+  // Observe after recovery decisions: alerts never gate dispatch, pause, resume or repairs.
+  if (!isDryRun) {
+    let awaitingQaJobs;
+    try { awaitingQaJobs = await exactCount('packaging_jobs', { select: 'id', status: 'eq.awaiting_qa' }); } catch { /* Unknown demand remains unknown. */ }
+    recordWatchdogAlert(result, await observeLifecycleWatchdog({ read: github, awaitingQaJobs }));
   }
 
   result.ok = true;
