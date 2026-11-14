@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "c3a0df8d149cf85a2a28cf1523e281d1115b0dc2",
+    "runId": "43528864768",
+    "runAttempt": "1",
+    "websiteCommit": "a80f1fa95b2ddaac6a65eb1da44d8be26f7cdcce",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "arduino-ide",
+    "version": "2.3.11",
+    "installerUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.11/arduino-ide_2.3.11_Windows_64bit.msi",
+    "vendorSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+    "releaseNotesUrl": "https://github.com/arduino/arduino-ide/releases/tag/2.3.11",
+    "discoveredAt": "2026-11-12T15:40:33.598Z",
+    "id": "6f6a820d85bdc6466ef9857a"
+  },
+  "previous": {
+    "appId": "arduino-ide",
+    "version": "2.3.10",
+    "installerUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.msi",
+    "vendorSha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+    "releaseNotesUrl": "https://github.com/arduino/arduino-ide/releases/tag/2.3.10",
+    "discoveredAt": "2026-10-08T13:29:08.873Z",
+    "id": "dd13e16d8e482430b3e588e4"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "6f6a820d85bdc6466ef9857a",
+      "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+      "sourceUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.11/arduino-ide_2.3.11_Windows_64bit.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Arduino SA"
+      },
+      "security": {
+        "status": "clean",
+        "scannedAt": "2026-11-13T23:52:16.9252735Z",
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "scanner": "defender",
+        "suspicious": 0,
+        "signatureVersion": "1.463.288.0",
+        "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f"
+      }
+    },
+    "previous": {
+      "candidateId": "dd13e16d8e482430b3e588e4",
+      "installerSha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+      "sourceUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Arduino SA"
+      },
+      "security": {
+        "status": "clean",
+        "scannedAt": "2026-11-13T23:52:50.4353588Z",
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "scanner": "defender",
+        "suspicious": 0,
+        "signatureVersion": "1.463.288.0",
+        "installerSha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "6f6a820d85bdc6466ef9857a",
+    "packageId": "IntuneGet.Curated.ArduinoIDE",
+    "installerUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.11/arduino-ide_2.3.11_Windows_64bit.msi",
+    "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.ArduinoIDE",
+      "displayName": "Arduino IDE",
+      "publisher": "Arduino SA",
+      "version": "2.3.11",
+      "architecture": "x64",
+      "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Arduino IDE",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ArduinoIDE\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.3.11\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ArduinoIDE\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.3.11\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "078752EC68003AC3B1C9647564AED86B6B91FDB7BF303252E98680FFC165D4B0",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.ArduinoIDE\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.3.11\",\"wingetId\":\"IntuneGet.Curated.ArduinoIDE\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.3.11\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ArduinoIDE\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"92363F66870440B64F13FAAA730EAA98A977F67A3113F9967354B5F373DAC5FC\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"5A5C69BB46C4F3CFCD64400F02E0E5CEF62DDDA31A234D73856F36727914006F\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Arduino IDE\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.3.11\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ArduinoIDE\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"9C929614CEDF165664576631F4F20D86D1C4D79E5CC2810374C5E195DBBE2673\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "9c929614cedf165664576631f4f20d86d1c4d79e5cc2810374c5e195dbbe2673",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionProfileSha256": "078752EC68003AC3B1C9647564AED86B6B91FDB7BF303252E98680FFC165D4B0",
+    "previousInstallerSha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+    "installerVersion": "2.3.11",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "testedAt": "2026-11-13T23:59:56.2302387Z",
+    "architecture": "x64",
+    "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "candidateId": "6f6a820d85bdc6466ef9857a",
+    "upgradeFromVersion": "2.3.10"
+  },
+  "verifiedAt": "2026-11-14T00:00:03.3737566Z",
+  "authenticatedArtifact": {
+    "id": 14087476872,
+    "sha256": "f7cc556223daaa9e0cd1af7a86f5885f1c97e51044e0e2813b305e99ae168780"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-14T02:41:40.265Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
