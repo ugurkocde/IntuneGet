@@ -334,7 +334,10 @@ export default function UploadsPage() {
         }
         throw new Error(`Failed to cancel job (${response.status})`);
       }
-      if (dismiss) progressJobs.current.delete(jobId);
+      if (dismiss) {
+        progressJobs.current.delete(jobId);
+        setJobs((currentJobs) => currentJobs.filter((candidate) => candidate.id !== jobId));
+      }
       fetchJobs();
     } catch (err) {
       if (!isCurrentScope()) return;

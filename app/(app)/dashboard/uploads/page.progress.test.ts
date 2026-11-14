@@ -225,3 +225,23 @@ it.each(['cancel', 'dismiss'])('preserves refreshed rows and statuses after a fa
  expect(document.body.textContent).toContain('Synthetic POST failure');
  expect(actionButtons('Cancel')).toHaveLength(0);
 });
+
+it('removes only a confirmed dismissed row even if the reconciliation refresh fails', async () => {
+ let finish!: (response: Response) => void;
+ let dismissed = false;
+ let rows = [job(1, 'Dismissed fixture'), job(2, 'Original survivor')];
+ f.fetch.mockImplementation((url: string) => url === '/api/package/cancel'
+  ? new Promise(resolve => { finish = resolve; })
+  : Promise.resolve(dismissed ? Response.json({ error: 'Synthetic refresh failure' }, { status: 503 }) : Response.json({ jobs: rows })));
+ await render();
+ await act(async () => actionButtons('Dismiss')[0].click());
+ await act(async () => actionButtons('Dismiss').at(-1)!.click());
+ rows = [job(1, 'Dismissed fixture'), job(2, 'Updated survivor'), job(3, 'New survivor')];
+ await act(async () => actionButtons('Refresh')[0].click());
+ dismissed = true;
+ await act(async () => finish(Response.json({ success: true })));
+ expect(document.body.textContent).not.toContain('Dismissed fixture');
+ expect(document.body.textContent).toContain('Updated survivor');
+ expect(document.body.textContent).toContain('New survivor');
+ expect(document.body.textContent).toContain('Synthetic refresh failure');
+});
