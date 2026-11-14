@@ -1,6 +1,6 @@
 import { writeFile, rename } from 'node:fs/promises';
 import { recoverInfrastructure, recoverStalledPublication, holdStalledPublication, rateLimitUntil } from './recovery.mjs';
-import { reconcileActive } from './active-health.mjs';
+import { reconcileActive, completedHourStarts } from './active-health.mjs';
 import { decideDiskAction, diskGuardActor, lowDiskReason, parseHostFreeGb } from './host-disk-guard.mjs';
 
 const base = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -329,6 +329,25 @@ try {
     current = await snapshot();
     result.snapshot = current;
 
+    // This observation never changes the pause, repair key or dispatch decision.
+    try {
+      const awaitingQaJobs = await exactCount('packaging_jobs', { select: 'id', status: 'eq.awaiting_qa' });
+      if (awaitingQaJobs > 0) {
+        const now = Date.now();
+        result.startWindow = { ...completedHourStarts({ now, complete: false }), awaitingQaJobs };
+        const lookback = new Date(Math.floor(now / 3_600_000) * 3_600_000 - 25 * 3_600_000).toISOString();
+        const listed = await github(`/actions/workflows/intune-qa.yml/runs?event=workflow_dispatch&branch=main&created=${encodeURIComponent('>=' + lookback)}&per_page=100`);
+        if (!Array.isArray(listed?.workflow_runs) || !Number.isSafeInteger(listed.total_count) ||
+            listed.total_count > 100 || listed.total_count !== listed.workflow_runs.length) throw new Error('Incomplete Execute-step observation.');
+        const start = Date.parse(result.startWindow.window.start);
+        const runs = listed.workflow_runs.filter(run => run.status !== 'completed' || !Number.isFinite(Date.parse(run.updated_at)) || Date.parse(run.updated_at) >= start);
+        if (runs.length > 12 || runs.some(run => !Number.isSafeInteger(run.id) || run.id <= 0)) throw new Error('Execute-step observation exceeds its bounded read scope.');
+        const jobsByRun = {};
+        for (const run of runs) jobsByRun[run.id] = await github(`/actions/runs/${run.id}/jobs?filter=all&per_page=100`);
+        result.startWindow = { ...completedHourStarts({ now, runs, jobsByRun }), awaitingQaJobs };
+      }
+    } catch { /* An unavailable demand or GitHub read never changes recovery behavior. */ }
+
     if (current.active.length !== 0) {
       requireRepair('The pipeline is paused but an active lifecycle still exists.', current.active[0]?.id || 'active-while-paused');
     } else {
@@ -345,6 +364,10 @@ try {
         current = await snapshot();
         result.snapshot = current;
       }
+    }
+    if (result.startWindow?.state === 'zero' && result.repairRequired) {
+      const { window, awaitingQaJobs } = result.startWindow;
+      result.repairReason += `; zero Execute step starts in completed hour ${window.start} to ${window.end} while ${awaitingQaJobs} jobs await QA`;
     }
   }
 
