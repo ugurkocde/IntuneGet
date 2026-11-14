@@ -18,7 +18,7 @@ it.each(['rejected', 'wait_timeout'] as const)('keeps the actual Next stale valu
   const error = vi.spyOn(console, 'error').mockImplementation(() => {});
   let cold = false;
   const lastGood = { rows: ['fixture'], total: 1 };
-  const cache = { generateCacheKey: async (key: string) => key,
+  const cache = { generateSimpleCacheKey: async (key: string) => key,
     get: vi.fn(async () => cold ? null : ({ isStale: true, value: { kind: 'FETCH', data: { body: JSON.stringify(lastGood) } } })),
     set: vi.fn(async () => {}) };
   vi.stubGlobal('__incrementalCache', cache);
