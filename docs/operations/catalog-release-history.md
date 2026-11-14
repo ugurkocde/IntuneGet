@@ -55,3 +55,14 @@ Validation: run the catalog TypeScript tests and `supabase/tests/catalog_release
 Metadata batches have a three-second request timeout. An aborted request skips the batch retry when individual recovery is available; other transient errors receive one retry. The website then falls back to indexed app/version equality lookups with at most four concurrent requests. Each fallback request has a three-second timeout and all fallback work shares an eight-second deadline. Only records whose requests still fail show unavailable details; missing optional vendor metadata is not a request failure.
 
 Incomplete history responses are thrown out of the page-cache callback, preserving the previous complete response during background revalidation. On a cold request the available records can still render without storing the partial result. History links do not depend on enrichment. The displayed full-catalog check timestamp is explicitly labelled to distinguish it from incremental updates.
+
+
+## Precomputed request rows
+
+History requests read precomputed version rows rather than deriving first and previous versions from installer records. The existing hourly sync packages cron refreshes those rows after its writes. Names, publishers, locale classification and sync status remain live.
+
+Changes from other writers appear after the next successful hourly refresh, up to sixty minutes later in normal operation. If a refresh fails the last snapshot remains available and the cron logs a generic warning. The refresh does not truncate the table and overlapping refreshes return without work.
+
+Validate requests and a refresh under at least eight real PostgreSQL 17 sessions before deployment. Record the old failing and new passing timings, p95 below two seconds, and unrelated query latency. Serialized PGlite does not satisfy this gate.
+
+After deployment read shared timeout logs every five minutes for forty minutes. Revert on the first shared timeout within ten minutes of onset. Recovery requires two full hours, each with fewer than ten history failures, zero shared timeouts and zero client page errors.
