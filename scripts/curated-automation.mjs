@@ -19,7 +19,7 @@ import { discoverCandidate, discoverPreviousCandidate, upgradeBaselineFromApprov
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
 import { createCuratedGitHubClient } from './curated-github.mjs';
 import { createCuratedGitRunner, prepareCuratedPublication } from './curated-publication.mjs';
-import { curatedInstallerSecurityHeld, enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
+import { assertCuratedSecurityProject, curatedInstallerSecurityHeld, enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
 const QA = 'ugurkocde/IntuneGet-Workflows';
@@ -195,6 +195,7 @@ async function syncAlertIssue(alerts, runUrl) {
 }
 
 async function plan() {
+  assertCuratedSecurityProject();
   const now = new Date();
   const runUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${process.env.GITHUB_REPOSITORY || WEBSITE}/actions/runs/${process.env.GITHUB_RUN_ID || 'local'}`;
   const alerts = []; const rows = []; const approvals = []; const configStates = [];
@@ -360,6 +361,7 @@ async function plan() {
 }
 
 async function publish() {
+  assertCuratedSecurityProject();
   const now = new Date();
   const approvedAt = now.toISOString();
   const keys = await trustedKeys();

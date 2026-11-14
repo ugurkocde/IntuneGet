@@ -88,7 +88,7 @@ async function holdReader(response: unknown, status = 200, configured = true, or
   const fetcher = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify(response), { status }));
   vi.stubGlobal('fetch', fetcher);
   const store = await import('./curated-qa-store.mjs');
-  return { read: store.curatedInstallerSecurityHeld, fetcher };
+  return { read: store.curatedInstallerSecurityHeld, assertProject: store.assertCuratedSecurityProject, fetcher };
 }
 
 it('checks the exact lowercase hash and every unreleased hold, including unknown coverage with zero detections', async () => {
@@ -113,6 +113,18 @@ it.each([
 ])('refuses unqualified hold storage before a successful empty response can admit a release: %s', async origin => {
   const { read, fetcher } = await holdReader([], 200, true, origin);
   await expect(read(hash)).rejects.toThrow();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each(['plan', 'publish'])('blocks %s before any evidence read or renewal signing when the project is unqualified', async mode => {
+  const { assertProject, fetcher } = await holdReader([], 200, true, 'https://another-project.supabase.co');
+  const forbidden = vi.fn(() => { throw new Error('Evidence or signing must not run.'); });
+  await expect(runInNewContext(`(${declaration(mode).getText(source)})()`, {
+    assertCuratedSecurityProject: assertProject, process: { env: {} }, trustedKeys: forbidden,
+    WEBSITE: 'owner/site', CATALOG_PATH: 'catalog.json', loadCatalog: forbidden,
+    readJson: forbidden, gh: forbidden, signCatalog: forbidden,
+  })).rejects.toThrow(/project is not qualified/);
+  expect(forbidden).not.toHaveBeenCalled();
   expect(fetcher).not.toHaveBeenCalled();
 });
 

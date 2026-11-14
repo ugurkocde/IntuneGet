@@ -30,16 +30,21 @@ async function rest(path, { method = 'GET', body, prefer } = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-/** Fresh admission check shared by planning and publication; any unreleased hash hold blocks. */
-export async function curatedInstallerSecurityHeld(installerSha256) {
-  const hash = typeof installerSha256 === 'string' ? installerSha256.toLowerCase() : '';
-  if (!/^[a-f0-9]{64}$/.test(hash) || hash === '0'.repeat(64)) throw new Error('Invalid curated installer hash.');
+/** Bind both modes to the production project before reading or signing evidence. */
+export function assertCuratedSecurityProject() {
   if (!supabaseConfigured()) throw new Error('Curated installer security storage is required.');
   let destination;
   try { destination = new URL(SUPABASE_URL); } catch { throw new Error('Curated installer security project is not qualified.'); }
   if (destination.origin !== CURATED_SECURITY_ORIGIN || destination.pathname !== '/' || destination.search || destination.hash || destination.username || destination.password) {
     throw new Error('Curated installer security project is not qualified.');
   }
+}
+
+/** Fresh admission check shared by planning and publication; any unreleased hash hold blocks. */
+export async function curatedInstallerSecurityHeld(installerSha256) {
+  const hash = typeof installerSha256 === 'string' ? installerSha256.toLowerCase() : '';
+  if (!/^[a-f0-9]{64}$/.test(hash) || hash === '0'.repeat(64)) throw new Error('Invalid curated installer hash.');
+  assertCuratedSecurityProject();
   const rows = await rest(`qa_installer_security_holds?select=sha256&sha256=eq.${hash}&released_at=is.null&limit=1`);
   if (!Array.isArray(rows) || rows.length > 1 || rows.some(row => row?.sha256 !== hash)) throw new Error('Invalid curated installer hold evidence.');
   return rows.length !== 0;
