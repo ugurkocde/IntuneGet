@@ -46,3 +46,72 @@ it('does not duplicate cart entries when Claim All retries a failed app',async()
  expect(useCartStore.getState().items).toHaveLength(1);
  expect(api.claimAllModal?.results.get('fixture')).toBe('success');
 });
+
+it.each(['pending', 'failed'])('keeps server %s claims with an empty cart after reload', async (claimStatus) => {
+ vi.stubGlobal('fetch', vi.fn(async () => Response.json({ apps: [{ ...app, isClaimed: true, claimStatus }], total: 1 })));
+ await act(async () => api.handleRefresh());
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, claimStatus });
+ expect(api.filteredApps[0].inCart).toBe(false);
+ expect(api.computedStats.claimed).toBe(1);
+ expect(api.claimableCount).toBe(0);
+ await act(async () => api.setFilters({ ...api.filters, showClaimed: false }));
+ expect(api.filteredApps).toHaveLength(0);
+});
+
+it('recovers a saved pending claim and keeps cart membership separate from saved state', async () => {
+ const manifestFetch = globalThis.fetch;
+ vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) =>
+   url.startsWith('/api/intune/unmanaged-apps')
+     ? Response.json({ apps: [{ ...app, isClaimed: true, claimStatus: 'pending' }], total: 1 })
+     : manifestFetch(url, init)));
+ f.claim.mockImplementation(() => Response.json({ success: true }));
+ await act(async () => api.handleRefresh());
+ const saved = api.filteredApps[0];
+ expect(saved).toMatchObject({ isClaimed: true, inCart: false });
+ await act(async () => api.handleClaimApp(saved));
+ expect(f.claim).toHaveBeenCalledTimes(1);
+ expect(useCartStore.getState().items).toHaveLength(1);
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, inCart: true });
+ await act(async () => api.handleClaimApp(saved));
+ expect(useCartStore.getState().items).toHaveLength(1);
+ await act(async () => useCartStore.setState({ items: [] }));
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, inCart: false, claimStatus: 'pending' });
+});
+
+it.each(['deploying', 'deployed'] as const)('does not reclaim a %s app', async claimStatus => {
+ await act(async () => api.handleClaimApp({ ...app, isClaimed: true, claimStatus }));
+ expect(f.claim).not.toHaveBeenCalled();
+ expect(useCartStore.getState().items).toHaveLength(0);
+});
+
+it.each(['single', 'bulk'])('removes only the item added by a conflicting %s claim and refreshes status', async mode => {
+ const manifestFetch = globalThis.fetch;
+ let status = 'pending';
+ vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) =>
+   url.startsWith('/api/intune/unmanaged-apps')
+     ? Response.json({ apps: [{ ...app, isClaimed: true, claimStatus: status }], total: 1 })
+     : manifestFetch(url, init)));
+ f.claim.mockImplementation(() => { status = 'deployed'; return Response.json({ error: 'This app is already deploying or deployed.' }, { status: 409 }); });
+ await act(async () => api.handleRefresh());
+ if (mode === 'single') {
+   await act(async () => { await expect(api.handleClaimApp(api.filteredApps[0])).rejects.toThrow('already deploying or deployed'); });
+ } else {
+   await act(async () => api.setClaimAllModal({ apps: [app], results: new Map(), isComplete: false } as never));
+   await act(async () => api.processClaimAll([app]));
+   expect(api.claimAllModal?.results.get('fixture')).toBe('failed');
+ }
+ expect(useCartStore.getState().items).toHaveLength(0);
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, claimStatus: 'deployed', inCart: false });
+});
+
+it('preserves a cart item that was already present when a claim conflicts', async () => {
+ const manifestFetch = globalThis.fetch;
+ vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) =>
+   url.startsWith('/api/intune/unmanaged-apps') ? Response.json({ apps: [], total: 0 }) : manifestFetch(url, init)));
+ f.claim.mockImplementationOnce(() => Response.json({ success: true }));
+ await act(async () => api.handleClaimApp(app));
+ const before = useCartStore.getState().items[0];
+ f.claim.mockImplementation(() => Response.json({ error: 'Already deployed' }, { status: 409 }));
+ await act(async () => { await expect(api.handleClaimApp(app)).rejects.toThrow('Already deployed'); });
+ expect(useCartStore.getState().items).toEqual([before]);
+});

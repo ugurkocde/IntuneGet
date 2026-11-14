@@ -54,3 +54,5 @@ describe('assignment group name resolution',()=>{
     expect(assignmentTargetLabel({'@odata.type':'#microsoft.graph.allUsersAssignmentTarget'})).toBe('All Users');
   });
 });
+
+it('labels the Microsoft Graph All Users target', () => { expect(assignmentTargetLabel({'@odata.type':'#microsoft.graph.allLicensedUsersAssignmentTarget'})).toBe('All Users'); });

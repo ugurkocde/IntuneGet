@@ -309,8 +309,12 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     return indexedApps.filter(({ app, search }) =>
       (!needle || search.includes(needle)) &&
       (filters.matchStatus === 'all' || app.matchStatus === filters.matchStatus) &&
-      (filters.showClaimed || !app.matchedPackageId || !cartWingetIds.has(app.matchedPackageId))
-    ).map(({ app }) => ({ ...app, isClaimed: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId) }));
+      (filters.showClaimed || !(app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId))))
+    ).map(({ app }) => ({
+      ...app,
+      inCart: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId),
+      isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)),
+    }));
   }, [indexedApps, deferredSearch, filters.matchStatus, filters.showClaimed, cartWingetIds]);
 
   // Status counts
@@ -327,7 +331,8 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
   const computedStats = useMemo((): UnmanagedAppsStats => {
     const appsWithClaimSync = nonMicrosoftApps.map(app => ({
       ...app,
-      isClaimed: app.matchedPackageId ? cartWingetIds.has(app.matchedPackageId) : false,
+      inCart: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId),
+      isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)),
     }));
 
     return {
@@ -349,6 +354,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
 
   // Claim app handler
   const handleClaimApp = useCallback(async (app: UnmanagedApp) => {
+    if (app.claimStatus === 'deploying' || app.claimStatus === 'deployed') return;
     const accessToken = await getToken();
     if (!accessToken || !app.matchedPackageId) return;
 
@@ -386,6 +392,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
         recommendedInstaller.type
       );
 
+      let addedCartItem: (typeof cartItems)[number] | undefined;
       if (!useCartStore.getState().isInCart(app.matchedPackageId, manifest?.version || app.version || '', recommendedInstaller.architecture, recommendedInstaller.scope || 'machine')) {
         addItem({
           appSource: 'win32',
@@ -422,6 +429,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
             detectionRules,
           },
         });
+        addedCartItem = useCartStore.getState().items.at(-1);
       }
 
       const claimResponse = await fetch('/api/intune/claim', {
@@ -441,6 +449,12 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
 
       if (!claimResponse.ok) {
         const errorData = await claimResponse.json().catch(() => ({}));
+        if (claimResponse.status === 409) {
+          const cart = useCartStore.getState();
+          if (addedCartItem && cart.items.includes(addedCartItem)) cart.removeItem(addedCartItem.id);
+          await fetchApps();
+          throw new Error(errorData.error || 'This app is already deploying or deployed.');
+        }
         if (claimResponse.status === 403) {
           throw new Error('Permission denied. You may not have access to claim apps.');
         } else if (claimResponse.status >= 500) {
@@ -466,7 +480,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     } finally {
       setClaimingAppId(null);
     }
-  }, [getToken, addItem, mspHeaders]);
+  }, [getToken, addItem, mspHeaders, fetchApps]);
 
   // Claim single app (used by handleClaimAll)
   const claimSingleApp = useCallback(async (
@@ -500,6 +514,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
         recommendedInstaller.type
       );
 
+      let addedCartItem: (typeof cartItems)[number] | undefined;
       if (!useCartStore.getState().isInCart(app.matchedPackageId!, manifest?.version || app.version || '', recommendedInstaller.architecture, recommendedInstaller.scope || 'machine')) {
         addItemSilent({
           appSource: 'win32',
@@ -530,6 +545,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
             detectionRules,
           },
         });
+        addedCartItem = useCartStore.getState().items.at(-1);
       }
 
       const claimResponse = await fetch('/api/intune/claim', {
@@ -548,6 +564,13 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       });
 
       if (!claimResponse.ok) {
+        if (claimResponse.status === 409) {
+          const cart = useCartStore.getState();
+          if (addedCartItem && cart.items.includes(addedCartItem)) cart.removeItem(addedCartItem.id);
+          await fetchApps();
+          const errorData = await claimResponse.json().catch(() => ({}));
+          toast({ title: 'App claim changed', description: errorData.error || 'This app is already deploying or deployed.', variant: 'destructive' });
+        }
         return { app, success: false };
       }
 
@@ -556,7 +579,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       console.error(`Error claiming app ${app.displayName}:`, error);
       return { app, success: false };
     }
-  }, [addItemSilent, mspHeaders]);
+  }, [addItemSilent, mspHeaders, fetchApps]);
 
   // Claim All cancellation ref
   const claimAllCancelledRef = useRef(false);

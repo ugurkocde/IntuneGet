@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 type CacheRow = Record<string, unknown> & { tenant_id: string; discovered_app_id: string; last_synced: string };
-const { upsert, prune, from, cache } = vi.hoisted(() => ({
-  upsert: vi.fn(), prune: vi.fn(), from: vi.fn(), cache: { rows: [] as CacheRow[], maxRows: 2 },
+const { upsert, prune, from, cache, match } = vi.hoisted(() => ({
+  upsert: vi.fn(), prune: vi.fn(), from: vi.fn(), match: vi.fn(), cache: { rows: [] as CacheRow[], maxRows: 2 },
 }));
 vi.mock('@/lib/supabase', () => ({ isSupabaseConfigured: () => true, createServerClient: () => ({ from }) }));
 vi.mock('@/lib/msp/tenant-resolution', () => ({ resolveTargetTenantId: async () => ({ tenantId: 'tenant-fixture' }) }));
@@ -11,11 +11,12 @@ vi.mock('@/lib/intune/graph-client', () => ({ getServicePrincipalToken: async ()
 vi.mock('@/lib/matching/app-matcher', () => ({
   filterUserApps: (apps: unknown[]) => apps, isSystemApp: () => false,
   normalizeAppName: (name: string) => name.toLowerCase(),
-  matchDiscoveredApp: () => ({ status: 'unmatched', wingetId: null, wingetName: null, confidence: 0, partialMatches: [] }),
+  matchDiscoveredApp: match,
 }));
 import { GET } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
+  match.mockReturnValue({ status: 'unmatched', wingetId: null, wingetName: null, confidence: 0, partialMatches: [] });
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-10T10:00:00.000Z'));
   cache.rows = [
@@ -139,4 +140,23 @@ describe('discovered apps cache preservation', () => {
     expect((await response.json()).apps).toHaveLength(1);
     expect(prune).not.toHaveBeenCalled();
   });
+});
+
+it.each([null, 'Example.App'])('restores suggestions on the cached path for saved package %s', async (matchedPackageId) => {
+ const partialMatches = [{ wingetId: 'Example.App', name: 'Example', confidence: 0.7 }];
+ match.mockReturnValue({ status: 'partial', wingetId: matchedPackageId, wingetName: null, confidence: 0.7, partialMatches });
+ cache.rows = [{ tenant_id: 'tenant-fixture', discovered_app_id: 'app-one', last_synced: '2026-10-10T10:00:00.000Z', display_name: 'Example', publisher: 'Example', match_status: 'partial', matched_package_id: matchedPackageId, match_confidence: 0.7, app_data: { id: 'app-one', displayName: 'Example', publisher: 'Example' } }];
+ const response = await GET(new NextRequest('http://localhost/api/intune/unmanaged-apps', { headers: { Authorization: 'Bearer offline-test-token' } }));
+ expect(response.status).toBe(200);
+ const data = await response.json();
+ expect(data.fromCache).toBe(true);
+ expect(data.apps[0]).toMatchObject({ partialMatches, matchedPackageId, matchConfidence: 0.7 });
+ expect(fetch).not.toHaveBeenCalled();
+});
+
+it('does not attach recomputed suggestions to a saved manual match', async () => {
+ match.mockReturnValue({ status: 'partial', wingetId: null, partialMatches: [{ wingetId: 'Wrong.App' }] });
+ cache.rows = [{ tenant_id: 'tenant-fixture', discovered_app_id: 'app-one', last_synced: '2026-10-10T10:00:00.000Z', display_name: 'Example', match_status: 'matched', matched_package_id: 'Manual.Package', app_data: { displayName: 'Example' } }];
+ const data = await (await GET(new NextRequest('http://localhost/api/intune/unmanaged-apps', { headers: { Authorization: 'Bearer fixture' } }))).json();
+ expect(data.apps[0]).toMatchObject({ partialMatches: [], matchedPackageId: 'Manual.Package' });
 });
