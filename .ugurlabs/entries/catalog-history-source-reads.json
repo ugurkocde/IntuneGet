@@ -1,0 +1,1 @@
+{"title":"Share concurrent catalog history reads","summary":"Concurrent requests for the same release history share pending database work while complete history caching and retry behavior stay intact.","type":"fixed"}
