@@ -2,6 +2,7 @@ import { loadReleaseMetadata, releasePairKey } from './release-metadata';
 import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
+import { knownLastHistoryPage, rememberHistoryTotal, withHistoryCapacity } from './release-history-capacity';
 /**
  * Supabase-backed CatalogSource.
  *
@@ -78,7 +79,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     ]);
     const existing = pending.get(key);
     if (existing) return existing;
-    const read = load().finally(() => {
+    const read = withHistoryCapacity(load).finally(() => {
       if (pending.get(key) === read) pending.delete(key);
     });
     pending.set(key, read);
@@ -140,6 +141,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       }).abortSignal(signal);
       if (error) throw new Error('Catalog history unavailable', { cause: error });
       success = true;
+      rememberHistoryTotal(filters, (data as ReleaseHistoryResult).total);
       return data as ReleaseHistoryResult;
     } finally {
       // SDK settlement includes body reading/parsing; headers are not wire first byte.
@@ -168,6 +170,8 @@ export class SupabaseCatalogSource implements CatalogSource {
   }
 
   getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const lastPage = knownLastHistoryPage(filters);
+    if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
     return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
   }
 
