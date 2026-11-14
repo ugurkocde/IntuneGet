@@ -10,12 +10,12 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => state.params }));
 vi.mock('next/link', () => ({ default: ({ children }: { children: ReactNode }) => createElement('span', null, children) }));
-vi.mock('next/dynamic', () => ({ default: () => function Editor(props: { isDeployed: boolean; deployedConfig: unknown; onClose: () => void }) {
+vi.mock('next/dynamic', () => ({ default: () => function Editor(props: { isDeployed: boolean; deployedConfig: unknown; onClose: () => void; configurationRefreshNotice?: ReactNode }) {
   const [draft, setDraft] = useState('');
   state.editor(props);
   return createElement('div', { 'data-config-editor': true },
     createElement('input', { 'data-draft': true, value: draft, onInput: (event: InputEvent<HTMLInputElement>) => setDraft(event.currentTarget.value) }),
-    createElement('button', { onClick: props.onClose }, 'Close fixture editor'));
+    createElement('button', { onClick: props.onClose }, 'Close fixture editor'), props.configurationRefreshNotice);
 } }));
 vi.mock('gt-next', () => ({ T: ({ children }: { children: ReactNode }) => children, Var: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ settings: { viewMode: 'grid' }, setViewMode: vi.fn() }) }));
@@ -93,6 +93,7 @@ it('keeps the mounted editor draft after a background refresh fails', async () =
   expect(host.querySelector('[data-draft]')).toBe(input);
   expect(input.value).toBe('Unsaved fixture draft');
   expect(alert()!.textContent).toContain('Your unsaved edits are kept');
+  expect(editor()!.contains(alert())).toBe(true);
   expect(host.querySelector('[aria-label="Saved configuration unavailable"]')).toBeNull();
   expect(host.textContent).not.toContain('private refresh error');
   const retry = alert()!.querySelector('button')!;
@@ -108,4 +109,16 @@ it('moves focus into the error dialog and restores it on close', async () => {
   expect(document.activeElement?.textContent).toBe('Retry');
   const close = [...alert()!.querySelectorAll('button')].find(x => x.textContent === 'Close')!;
   await act(async () => close.click()); expect(document.activeElement).toBe(opener);
+});
+
+it('requires a successful read after a tenant round trip', async () => {
+  Object.assign(state.config, { isError: false, error: null, deployedConfig: { displayName: 'Saved fixture' } });
+  await select(); expect(editor()).not.toBeNull();
+  Object.assign(state.config, { scopeKey: 'fixture-another-tenant', isPending: true });
+  await render(); expect(editor()).toBeNull();
+  Object.assign(state.config, { scopeKey: 'fixture-self', isPending: false, isError: true, error: new Error('cached refresh failure') });
+  await render(); expect(editor()).toBeNull();
+  expect(host.querySelector('[aria-label="Saved configuration unavailable"]')).not.toBeNull();
+  Object.assign(state.config, { isError: false, error: null });
+  await render(); expect(editor()).not.toBeNull();
 });

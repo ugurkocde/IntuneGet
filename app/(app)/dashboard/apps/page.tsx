@@ -109,6 +109,7 @@ export default function AppCatalogPage() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   const [selectedPackage, setSelectedPackage] = useState<NormalizedPackage | null>(null);
   const [openedConfigScope, setOpenedConfigScope] = useState<string | null>(null);
+  const previousConfigScope = useRef<string | null>(null);
   const [deploymentIntentError, setDeploymentIntentError] = useState<string | null>(null);
   const processedDeploymentIntentRef = useRef<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(searchParams.get('category') || null);
@@ -318,6 +319,10 @@ export default function AppCatalogPage() {
   const selectedInstallers = manifestData?.installers || [];
   const selectedVersions = manifestData?.versions || [];
   useEffect(() => {
+    if (previousConfigScope.current !== configScopeKey) {
+      previousConfigScope.current = configScopeKey;
+      setOpenedConfigScope(null);
+    }
     if (!selectedPackage) setOpenedConfigScope(null);
     else if (isSelectedDeployed && !isDeployedConfigPending && !isDeployedConfigError &&
       ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0))) {
@@ -1085,6 +1090,12 @@ export default function AppCatalogPage() {
           isDeployed={isSelectedDeployed}
           deployedConfig={deployedConfig}
           intuneAppId={intuneAppId}
+          configurationRefreshNotice={isSelectedDeployed && openedConfigScope === configScopeKey && isDeployedConfigError ? (
+            <div role="alert" className="rounded-lg border border-status-warning/30 bg-bg-surface p-4">
+              <p><T>Could not refresh saved configuration. Your unsaved edits are kept.</T></p>
+              <button type="button" onClick={() => void refetchDeployedConfig()} disabled={isFetchingDeployedConfig} className="mt-2 text-accent-cyan disabled:opacity-50"><T>Retry</T></button>
+            </div>
+          ) : null}
           storeManifest={storeManifestData}
         />
       )}
@@ -1108,12 +1119,7 @@ export default function AppCatalogPage() {
         <SavedConfigurationError onClose={handleCloseConfig} onRetry={() => void refetchDeployedConfig()} isFetching={isFetchingDeployedConfig} />
       )}
 
-      {selectedPackage && isSelectedDeployed && openedConfigScope === configScopeKey && isDeployedConfigError && (
-        <div role="alert" className="fixed right-4 top-4 z-[60] max-w-lg rounded-lg border border-status-warning/30 bg-bg-surface p-4 shadow-lg">
-          <p><T>Could not refresh saved configuration. Your unsaved edits are kept.</T></p>
-          <button type="button" onClick={() => void refetchDeployedConfig()} disabled={isFetchingDeployedConfig} className="mt-2 text-accent-cyan disabled:opacity-50"><T>Retry</T></button>
-        </div>
-      )}
+
 
       {selectedPackage && !isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length === 0 && (
         <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label="No installers found">
