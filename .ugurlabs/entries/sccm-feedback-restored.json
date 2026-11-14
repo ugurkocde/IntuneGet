@@ -1,0 +1,5 @@
+{
+  "title": "SCCM migration action feedback restored",
+  "summary": "Bulk exclusion again reports confirmed successes and failures while retaining failed selections for retry. Imports show server errors and all numbered row errors.",
+  "type": "fixed"
+}
