@@ -6,7 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getGT } from "gt-next/server";
-import { CompleteHistoryError, requireCompleteHistory } from "@/lib/catalog/release-history-cache";
+import { CompleteHistoryError, loadCompleteHistory, countRecentUpdates } from "@/lib/catalog/release-history-cache";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -42,7 +42,7 @@ type Props = {
 const PAGE_SIZE = 40;
 const loadHistory = unstable_cache(
   async (filters: ReleaseHistoryFilters) =>
-    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters)),
+    loadCompleteHistory(getCatalogSource(), filters),
   ["catalog-release-history-v8"],
   { revalidate: 300 },
 );
@@ -51,7 +51,7 @@ const loadHistory = unstable_cache(
 const loadHistoryOrPartial = cache((key: string) =>
   loadHistory(JSON.parse(key) as ReleaseHistoryFilters).catch(error => error instanceof CompleteHistoryError ? error.result : null));
 const loadRecentUpdates = unstable_cache(
-  (from: string) => getCatalogSource().countReleaseHistory({ query: "", month: "", kind: "updated", page: 1, from }),
+  (from: string) => countRecentUpdates(getCatalogSource(), from),
   ["catalog-release-history-recent-v1"],
   { revalidate: 300 },
 );
