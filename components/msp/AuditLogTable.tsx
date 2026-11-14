@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Loader2,
   FileText,
@@ -73,17 +73,23 @@ export function AuditLogTable() {
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<AuditLogFilters>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
-  const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
+  const { getAccessToken, isAuthenticated, isInitializing } = useMicrosoftAuth();
 
   const fetchLogs = useCallback(async () => {
     if (!isAuthenticated) return;
 
+    const request = ++requestSequence.current;
     setIsLoading(true);
+    setError(null);
+    if (isInitializing) return;
 
     try {
       const accessToken = await getAccessToken();
-      if (!accessToken) return;
+      if (request !== requestSequence.current) return;
+      if (!accessToken) throw new Error('Audit access token unavailable');
 
       const params = new URLSearchParams({
         page: page.toString(),
@@ -99,22 +105,23 @@ export function AuditLogTable() {
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setLogs(data.logs);
-        setTotalPages(data.total_pages);
-      }
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
+      if (!response.ok) throw new Error('Audit request failed');
+      const data = await response.json();
+      if (request !== requestSequence.current) return;
+      setLogs(data.logs);
+      setTotalPages(data.total_pages);
+    } catch {
+      if (request === requestSequence.current) setError('Could not load audit logs.');
     } finally {
-      setIsLoading(false);
+      if (request === requestSequence.current) setIsLoading(false);
     }
-  }, [getAccessToken, isAuthenticated, page, filters]);
+  }, [getAccessToken, isAuthenticated, isInitializing, page, filters]);
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchLogs();
     }
+    return () => { requestSequence.current += 1; };
   }, [isAuthenticated, fetchLogs]);
 
   const exportToCsv = useCallback(async () => {
@@ -266,7 +273,7 @@ export function AuditLogTable() {
           >
             <Filter className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={fetchLogs} aria-label="Refresh audit logs">
+          <Button variant="outline" size="sm" onClick={fetchLogs} disabled={isLoading} aria-label="Refresh audit logs">
             <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
@@ -324,6 +331,11 @@ export function AuditLogTable() {
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="w-6 h-6 animate-spin text-accent-cyan" />
+        </div>
+      ) : error ? (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-overlay/10 p-4">
+          <p className="text-sm text-text-secondary">{error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={fetchLogs}>Retry</Button>
         </div>
       ) : logs.length === 0 ? (
         <div className="p-8 text-center text-text-muted">
