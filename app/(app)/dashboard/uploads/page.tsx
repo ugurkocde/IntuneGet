@@ -130,6 +130,7 @@ export default function UploadsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const cancellingJob = useRef<string | null>(null);
   const [redeployingJobId, setRedeployingJobId] = useState<string | null>(null);
   const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -290,36 +291,30 @@ export default function UploadsPage() {
   };
 
   const handleCancelJob = async (jobId: string, dismiss?: boolean) => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return;
-
-    // Optimistic UI update: immediately update state so the dialog closes fast
+    const job = jobs.find((candidate) => candidate.id === jobId);
+    if (!user?.id || job?.user_id !== user.id || cancellingJob.current) return;
+    const requestScopeKey = customerJobSnapshotKey(redeployScope.current);
+    const isCurrentScope = () => customerJobSnapshotKey(redeployScope.current) === requestScopeKey;
+    cancellingJob.current = jobId;
+    setCancellingJobId(jobId);
     const previousJobs = jobs;
-    if (dismiss) {
-      // For dismiss, remove the job from the list immediately
-      setJobs((prev) => prev.filter((j) => j.id !== jobId));
-    } else {
-      // For cancel, mark as cancelled immediately
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === jobId
-            ? { ...j, status: 'cancelled' as const, cancelled_at: new Date().toISOString() }
-            : j
-        )
-      );
-    }
-
-    // Fire the API call in the background
     try {
+      const accessToken = await getAccessToken();
+      if (!accessToken || !isCurrentScope()) return;
+
+      if (dismiss) {
+        setJobs((prev) => prev.filter((candidate) => candidate.id !== jobId));
+      } else {
+        setJobs((prev) => prev.map((candidate) => candidate.id === jobId
+          ? { ...candidate, status: 'cancelled' as const, cancelled_at: new Date().toISOString() }
+          : candidate));
+      }
       const response = await fetch('/api/package/cancel', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ jobId, dismiss }),
       });
-
+      if (!isCurrentScope()) return;
       if (!response.ok) {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
@@ -328,15 +323,16 @@ export default function UploadsPage() {
         }
         throw new Error(`Failed to cancel job (${response.status})`);
       }
-
       if (dismiss) progressJobs.current.delete(jobId);
-      // Silently sync with server to pick up any fields set by the backend
       fetchJobs();
     } catch (err) {
-      // Revert optimistic update on failure
+      if (!isCurrentScope()) return;
       setJobs(previousJobs);
       console.error('Failed to cancel job:', err);
       setError(err instanceof Error ? err.message : `Failed to ${dismiss ? 'dismiss' : 'cancel'} job`);
+    } finally {
+      cancellingJob.current = null;
+      setCancellingJobId(null);
     }
   };
 
@@ -716,6 +712,7 @@ export default function UploadsPage() {
               <UploadJobCard
                 key={job.id}
                 job={job}
+                currentUserId={user?.id}
                 index={index}
                 isHighlighted={highlightedJobIds.includes(job.id)}
                 onCancel={handleCancelJob}
@@ -736,6 +733,7 @@ export default function UploadsPage() {
 
 function UploadJobCard({
   job,
+  currentUserId,
   index,
   isHighlighted,
   onCancel,
@@ -747,6 +745,7 @@ function UploadJobCard({
   tenantLabel,
 }: {
   job: PackagingJob;
+  currentUserId?: string;
   index: number;
   isHighlighted?: boolean;
   onCancel: (jobId: string, dismiss?: boolean) => void;
@@ -850,7 +849,7 @@ function UploadJobCard({
   // Allow cancelling active jobs or dismissing completed/failed jobs
   const isCancellable = ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
   const isDismissable = ['qa_failed', 'completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
-  const canRemove = isCancellable || isDismissable;
+  const canRemove = !!currentUserId && job.user_id === currentUserId && (isCancellable || isDismissable);
 
   const itemVariants = {
     hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 20 },

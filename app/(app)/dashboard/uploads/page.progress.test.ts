@@ -102,3 +102,62 @@ it('offers Clear History when only cancelled jobs remain', async () => {
  await render();
  expect([...document.querySelectorAll('button')].some(b => b.textContent?.trim() === 'Clear History')).toBe(true);
 });
+
+const actionButtons = (label: string) => [...document.querySelectorAll('button')].filter(b => b.textContent?.trim() === label);
+const confirmCancel = async () => {
+ await act(async () => actionButtons('Cancel')[0].click());
+ await act(async () => actionButtons('Cancel Upload')[0].click());
+};
+it('hides Cancel and Dismiss for teammate jobs in tenant view', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [{ ...job(1), user_id: 'teammate', status: 'queued' }, { ...job(2), user_id: 'teammate' }] }));
+ await render(); await act(async () => actionButtons('All in tenant')[0].click());
+ expect(actionButtons('Cancel')).toHaveLength(0); expect(actionButtons('Dismiss')).toHaveLength(0);
+});
+it('keeps owner actions available and prevents a second action while the token is pending', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [{ ...job(1), status: 'queued' }, { ...job(2), status: 'queued' }] }));
+ await render(); let release!: (value: string | null) => void;
+ f.getToken.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+ await confirmCancel();
+ expect(actionButtons('Cancel')[0].disabled).toBe(true);
+ await act(async () => actionButtons('Cancel').find(b => !b.disabled)?.click());
+ await act(async () => actionButtons('Cancel Upload')[0]?.click());
+ expect(f.getToken).toHaveBeenCalledTimes(2); // initial list token and one action token
+ await act(async () => release(null));
+ expect(actionButtons('Cancel').every(b => !b.disabled)).toBe(true);
+ expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(0);
+});
+it('restores the owned row and clears the pending action when the server refuses it', async () => {
+ f.fetch.mockImplementation(async (url: string) => url === '/api/package/cancel'
+  ? Response.json({ error: 'Synthetic permission refusal' }, { status: 403 })
+  : Response.json({ jobs: [{ ...job(1, 'Owned active fixture'), status: 'queued' }] }));
+ await render(); await confirmCancel();
+ expect(document.body.textContent).toContain('Synthetic permission refusal');
+ expect(document.body.textContent).toContain('Owned active fixture');
+ expect(actionButtons('Cancel')[0].disabled).toBe(false);
+});
+
+it('does not submit a second job while the first POST is pending', async () => {
+ let finish!: (response: Response) => void;
+ f.fetch.mockImplementation((url: string) => url === '/api/package/cancel'
+  ? new Promise(resolve => { finish = resolve; })
+  : Promise.resolve(Response.json({ jobs: [{ ...job(1), status: 'queued' }, { ...job(2), status: 'queued' }] })));
+ await render(); await confirmCancel(); await confirmCancel();
+ expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(1);
+ await act(async () => finish(Response.json({ success: true })));
+ expect(actionButtons('Cancel').every(b => !b.disabled)).toBe(true);
+});
+it('clears the pending action after a token rejection', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [{ ...job(1), status: 'queued' }] }));
+ await render(); f.getToken.mockRejectedValueOnce(new Error('Synthetic token failure'));
+ await confirmCancel();
+ expect(actionButtons('Cancel')[0].disabled).toBe(false);
+ expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(0);
+});
+it('does not send an old owner action after an account switch during token acquisition', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [{ ...job(1), status: 'queued' }] }));
+ await render(); let release!: (value: string) => void;
+ f.getToken.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+ await confirmCancel(); f.user = { id: 'other-owner', tenantId: 'primary' }; await render();
+ await act(async () => release('fixture-token'));
+ expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(0);
+});
