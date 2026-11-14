@@ -305,14 +305,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Refresh once after this writer finishes. Keep serving the last snapshot on failure.
-    try {
-      const { error } = await supabase.rpc('refresh_catalog_release_history_rows').abortSignal(AbortSignal.timeout(20_000));
-      if (error) console.warn('Catalog history snapshot refresh unavailable');
-    } catch {
-      console.warn('Catalog history snapshot refresh unavailable');
-    }
-
     const classification = classifyWingetSyncRun({ complete: true, failed, unavailable });
     const errorMessage = failed > 0
       ? `${failed} operational sync failures`

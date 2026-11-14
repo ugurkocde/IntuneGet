@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET } from './route';
 
 const mocks = vi.hoisted(() => ({
-  rpc: vi.fn(), refresh: vi.fn(),
   apps: [{ winget_id: 'Example.App', latest_version: '2.0', description: 'Example', upstream_miss_count: 0 }] as Array<Record<string, unknown>>,
   metadata: {} as Record<string, unknown>,
   writes: [] as Array<{ table: string; value: Record<string, unknown> }>,
@@ -14,7 +13,7 @@ const mocks = vi.hoisted(() => ({
     fetchInstallerManifest: vi.fn(), fetchLocaleManifest: vi.fn(),
   },
 }));
-vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ rpc: mocks.rpc, from: (table: string) => ({
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: (table: string) => ({
   select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { metadata: mocks.metadata }, error: null }) }) }),
   upsert: async (value: Record<string, unknown>) => {
     mocks.writes.push({ table, value });
@@ -55,8 +54,6 @@ beforeEach(() => {
   vi.stubEnv('CRON_SECRET', 'cron-test'); vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.test');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-key');
   vi.stubEnv('GITHUB_PAT', 'fake-token');
-  mocks.rpc.mockReturnValue({ abortSignal: mocks.refresh });
-  mocks.refresh.mockResolvedValue({ data: 0, error: null });
   mocks.apps = [{ winget_id: 'Example.App', latest_version: '2.0', description: 'Example', upstream_miss_count: 0 }];
   mocks.metadata = { upstream_etags: { 'Example.App': entry(), 'Not.Selected': entry() } };
   mocks.writes = []; mocks.deletes = []; mocks.historyError = null; mocks.appError = null;
@@ -145,21 +142,4 @@ describe('upstream_removed recovery', () => {
     expect(mocks.deletes).toEqual([]);
     expect(mocks.writes.find(w => w.table === 'curated_apps')?.value).not.toHaveProperty('is_verified');
   });
-});
-
-
-it('refreshes history rows once after the hourly writer completes', async () => {
-  expect((await GET(request())).status).toBe(200);
-  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('refresh_catalog_release_history_rows');
-  expect(mocks.refresh).toHaveBeenCalledWith(expect.any(AbortSignal));
-});
-
-it('keeps a completed sync successful when snapshot refresh fails', async () => {
-  mocks.refresh.mockRejectedValueOnce(new Error('synthetic refresh failure'));
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  try {
-    expect((await GET(request())).status).toBe(200);
-    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('refresh_catalog_release_history_rows');
-    expect(warn).toHaveBeenCalledWith('Catalog history snapshot refresh unavailable');
-  } finally { warn.mockRestore(); }
 });
