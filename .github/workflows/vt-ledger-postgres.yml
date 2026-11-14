@@ -29,3 +29,7 @@ jobs:
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: python3 scripts/qa-automation/vt-ledger-postgres.test.py
+      - name: Check catalog history with 8, 16 and 32 real sessions
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/catalog-release-history-postgres.py

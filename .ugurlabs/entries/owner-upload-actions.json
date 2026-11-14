@@ -1,0 +1,5 @@
+{
+  "title": "Keep deployment actions with their owner",
+  "summary": "Deployment history shows Cancel and Dismiss only for your own jobs and prevents duplicate actions while a request is pending.",
+  "type": "fixed"
+}
