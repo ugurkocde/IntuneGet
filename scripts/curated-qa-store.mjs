@@ -28,6 +28,16 @@ async function rest(path, { method = 'GET', body, prefer } = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+/** Fresh admission check shared by planning and publication; any unreleased hash hold blocks. */
+export async function curatedInstallerSecurityHeld(installerSha256) {
+  const hash = typeof installerSha256 === 'string' ? installerSha256.toLowerCase() : '';
+  if (!/^[a-f0-9]{64}$/.test(hash) || hash === '0'.repeat(64)) throw new Error('Invalid curated installer hash.');
+  if (!supabaseConfigured()) throw new Error('Curated installer security storage is required.');
+  const rows = await rest(`qa_installer_security_holds?select=sha256&sha256=eq.${hash}&released_at=is.null&limit=1`);
+  if (!Array.isArray(rows) || rows.length > 1 || rows.some(row => row?.sha256 !== hash)) throw new Error('Invalid curated installer hold evidence.');
+  return rows.length !== 0;
+}
+
 /** Persist priority work; only older queued releases of this app are replaced. */
 export async function enqueueCuratedVerification(inputs) {
   if (!supabaseConfigured()) throw new Error('Curated QA queue storage is required.');

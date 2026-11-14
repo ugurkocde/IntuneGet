@@ -19,7 +19,7 @@ import { discoverCandidate, discoverPreviousCandidate, upgradeBaselineFromApprov
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
 import { createCuratedGitHubClient } from './curated-github.mjs';
 import { createCuratedGitRunner, prepareCuratedPublication } from './curated-publication.mjs';
-import { enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
+import { curatedInstallerSecurityHeld, enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
 const QA = 'ugurkocde/IntuneGet-Workflows';
@@ -100,6 +100,11 @@ async function approvedRelease(runId, approvedAt) {
     websiteCommit: report.provenance.websiteCommit, artifactSha256, approvedBy: AUTOMATED_APPROVER, approvedAt, ...exceptions,
   });
   assertCuratedPackageProfile(app, release);
+  try {
+    if (await curatedInstallerSecurityHeld(release.installerSha256)) return null;
+  } catch (cause) {
+    throw Object.assign(new Error('Current curated installer security could not be verified.'), { code: 'CURATED_INSTALLER_SECURITY_UNAVAILABLE', cause });
+  }
   const evidence = { ...report, authenticatedArtifact: { id: artifact.id, sha256: artifactSha256 },
     automatedApproval: { approvedBy: AUTOMATED_APPROVER, approvedAt, unsignedException: exceptions.unsignedException ?? null, upgradeException: exceptions.upgradeException ?? null } };
   return { app, release, evidence };
@@ -252,11 +257,13 @@ async function plan() {
     const success = mine.find(run => run.conclusion === 'success' && run.head_branch === 'main');
     if (success) {
       try {
-        await approvedRelease(success.id, now.toISOString());
+        const approval = await approvedRelease(success.id, now.toISOString());
+        if (!approval) { row.state = 'Held: installer security'; continue; }
         approvals.push(success.id);
         row.state = `Passed verification (run ${success.id}); publishing`;
         continue;
       } catch (error) {
+        if (error?.code === 'CURATED_INSTALLER_SECURITY_UNAVAILABLE') { row.state = 'Blocked: installer security check unavailable'; continue; }
         // A pass that no longer satisfies the policy (for example after an
         // incompatible packager release) counts as a failure and is retried.
         failures.push({ ...success, policyError: error.message });
@@ -361,7 +368,9 @@ async function publish() {
   const withdrawnReleaseIds = [...catalog.payload.withdrawnReleaseIds];
   const evidenceFiles = [];
   for (const runId of JSON.parse(process.env.CURATED_APPROVALS || '[]')) {
-    const { app, release, evidence } = await approvedRelease(runId, approvedAt);
+    const approval = await approvedRelease(runId, approvedAt);
+    if (!approval) { console.log(`Skipping held curated verification run ${runId}.`); continue; }
+    const { app, release, evidence } = approval;
     if (releaseAlreadySigned(releases, withdrawnReleaseIds, release)) continue;
     releases.push(release);
     evidenceFiles.push([`catalog/curated/evidence/${app.id}/${release.candidate.id}.json`, evidence]);
