@@ -91,6 +91,11 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     return () => { lookupSequence.current += 1; };
   }, [fetchWebhooks]);
 
+  const invalidatePendingLookups = () => {
+    lookupSequence.current += 1;
+    setIsLoading(false);
+  };
+
   const handleCreateWebhook = async (data: {
     name: string;
     url: string;
@@ -117,7 +122,8 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       }
 
       const result = await response.json();
-      setWebhooks([result.webhook, ...webhooks]);
+      invalidatePendingLookups();
+      setWebhooks(current => [result.webhook, ...current]);
       setIsModalOpen(false);
     } catch (err) {
       throw err;
@@ -152,7 +158,8 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       }
 
       const result = await response.json();
-      setWebhooks(webhooks.map((w) => (w.id === editingWebhook.id ? result.webhook : w)));
+      invalidatePendingLookups();
+      setWebhooks(current => current.map(w => w.id === editingWebhook.id ? result.webhook : w));
       setEditingWebhook(null);
       setIsModalOpen(false);
     } catch (err) {
@@ -176,6 +183,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       });
 
       if (response.ok) {
+        invalidatePendingLookups();
         setWebhooks(current => current.filter(w => w.id !== id));
       } else throw new Error('Webhook deletion failed');
     } catch {
@@ -202,6 +210,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
       if (response.ok) {
         const result = await response.json();
+        invalidatePendingLookups();
         setWebhooks(current => current.map(w => w.id === webhook.id ? result.webhook : w));
       } else throw new Error('Webhook update failed');
     } catch {

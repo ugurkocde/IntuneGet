@@ -55,3 +55,8 @@ it('does not start an old account reload when its webhook test finishes after sw
  await act(async()=>root.render(createElement(WebhookManager)));await act(async()=>host.querySelector<HTMLButtonElement>('button[title="Send test"]')!.click());switchAccount();await act(async()=>root.render(createElement(WebhookManager)));
  await act(async()=>test(response({success:true})));expect(fetch).toHaveBeenCalledTimes(3);await act(async()=>next(response({webhooks:[{...hook,name:'Account B hook'}]})));expect(host.textContent).toContain('Account B hook');
 });
+it.each(['Delete','Disable'])('does not let a pending list refresh undo a successful %s',async title=>{
+ let finish!:(r:Response)=>void,loads=0;vi.stubGlobal('confirm',()=>true);vi.stubGlobal('fetch',vi.fn(async(url,options)=>String(url).endsWith('/test')?response({success:true}):options?.method?response({webhook:{...hook,is_enabled:false}}):++loads===1?response({webhooks:[hook]}):new Promise<Response>(resolve=>{finish=resolve;})));
+ await act(async()=>root.render(createElement(WebhookManager)));await act(async()=>host.querySelector<HTMLButtonElement>('button[title="Send test"]')!.click());await act(async()=>host.querySelector<HTMLButtonElement>(`button[title="${title}"]`)!.click());
+ await act(async()=>finish(response({webhooks:[hook]})));if(title==='Delete')expect(host.textContent).not.toContain('Fixture hook');else expect(host.querySelector('button[title="Enable"]')).not.toBeNull();
+});
