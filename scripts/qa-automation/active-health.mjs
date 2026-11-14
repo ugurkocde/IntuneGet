@@ -1,5 +1,41 @@
 export const STALLED_MS = 10 * 60_000;
 
+/** Observe runner Execute steps, never infer VM boots from dispatch bookkeeping. */
+export function completedHourStarts({ now = Date.now(), runs, jobsByRun, complete = true }) {
+  const end = Math.floor(now / 3_600_000) * 3_600_000;
+  const start = end - 3_600_000;
+  const window = { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
+  if (!complete || !Array.isArray(runs) || !jobsByRun) {
+    return { window, executeStarts: null, unknownRuns: null, state: 'unknown' };
+  }
+  let executeStarts = 0;
+  let unknownRuns = 0;
+  for (const run of runs) {
+    const data = jobsByRun[run.id];
+    let unknown = false;
+    if (!data || !Array.isArray(data.jobs) || !Number.isSafeInteger(data.total_count) ||
+        data.total_count > 100 || data.total_count !== data.jobs.length) {
+      unknownRuns++;
+      continue;
+    }
+    for (const job of data.jobs.filter(job => job.name === 'qa')) {
+      if (!Array.isArray(job.steps)) { unknown = true; continue; }
+      const step = job.steps.find(step => step.name === 'Execute isolated QA test');
+      if (!step) { if (!['queued', 'waiting'].includes(job.status)) unknown = true; continue; }
+      if (step.conclusion === 'skipped' || step.started_at == null) continue;
+      const started = Date.parse(step.started_at);
+      if (!Number.isFinite(started) || step.conclusion === 'cancelled') { unknown = true; continue; }
+      if (step.status === 'in_progress' || ['success', 'failure'].includes(step.conclusion)) {
+        if (started >= start && started < end) executeStarts++;
+      } else unknown = true;
+    }
+    if (!data.jobs.some(job => job.name === 'qa') && !['queued', 'waiting', 'requested'].includes(run.status)) unknown = true;
+    if (unknown) unknownRuns++;
+  }
+  return { window, executeStarts: unknownRuns ? null : executeStarts, unknownRuns,
+    state: unknownRuns ? 'unknown' : executeStarts ? 'started' : 'zero' };
+}
+
 export function activeHealth(candidate, now = Date.now()) {
   if (!candidate) return { action: 'idle_waiting_for_work', stale: false };
   // Bookkeeping updates are not execution heartbeats. In particular, retries
