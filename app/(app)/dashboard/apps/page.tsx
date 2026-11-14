@@ -250,9 +250,14 @@ export default function AppCatalogPage() {
   } = useCatalogPackage(deploymentIntentId);
 
   const isSelectedDeployed = selectedPackage ? deployedSet.has(selectedPackage.id) : false;
-  const { deployedConfig, intuneAppId, isLoading: isLoadingDeployedConfig } = useDeployedConfig(
+  const {
+    deployedConfig, intuneAppId,
+    isPending: isDeployedConfigPending, isError: isDeployedConfigError,
+    isFetching: isFetchingDeployedConfig, refetch: refetchDeployedConfig,
+  } = useDeployedConfig(
     isSelectedDeployed ? selectedPackage?.id ?? null : null
   );
+  const isDeployedConfigBlocked = isSelectedDeployed && (isDeployedConfigPending || isDeployedConfigError);
 
   const isSelectedStoreApp = selectedPackage?.appSource === 'store';
   const {
@@ -1042,7 +1047,7 @@ export default function AppCatalogPage() {
           </div>
         )}
 
-      {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && !(isSelectedDeployed && isLoadingDeployedConfig) && (
+      {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && !isDeployedConfigBlocked && (
         <PackageConfig
           package={selectedPackage}
           installers={selectedInstallers}
@@ -1055,7 +1060,7 @@ export default function AppCatalogPage() {
         />
       )}
 
-      {selectedPackage && ((isSelectedStoreApp && isLoadingStoreManifest) || (!isSelectedStoreApp && isLoadingInstallers) || (isSelectedDeployed && isLoadingDeployedConfig)) && (
+      {selectedPackage && ((isSelectedStoreApp && isLoadingStoreManifest) || (!isSelectedStoreApp && isLoadingInstallers) || (isSelectedDeployed && isDeployedConfigPending)) && (
         <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label="Loading package details">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleCloseConfig} aria-hidden="true" />
           <div className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-bg-surface border-l border-overlay/5 shadow-2xl flex items-center justify-center animate-slide-in-right">
@@ -1065,6 +1070,22 @@ export default function AppCatalogPage() {
                 <div className="absolute inset-0 w-10 h-10 mx-auto blur-xl bg-accent-cyan/30 animate-pulse-glow" />
               </div>
               <p className="text-text-secondary"><T>Loading package details...</T></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && isSelectedDeployed && isDeployedConfigError && (
+        <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label="Saved configuration unavailable">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleCloseConfig} aria-hidden="true" />
+          <div className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-bg-surface border-l border-overlay/5 shadow-2xl flex items-center justify-center">
+            <div role="alert" className="text-center px-6">
+              <h3 className="text-text-primary font-medium mb-2"><T>Could not load saved configuration</T></h3>
+              <p className="text-text-secondary text-sm mb-4"><T>Your saved settings could not be loaded. Retry before editing this app.</T></p>
+              <div className="flex justify-center gap-3">
+                <button type="button" onClick={() => void refetchDeployedConfig()} disabled={isFetchingDeployedConfig} className="rounded-lg bg-accent-cyan px-4 py-2 text-sm text-white disabled:opacity-50"><T>Retry</T></button>
+                <button type="button" onClick={handleCloseConfig} className="rounded-lg border border-overlay/10 bg-bg-elevated px-4 py-2 text-sm text-text-primary"><T>Close</T></button>
+              </div>
             </div>
           </div>
         </div>
