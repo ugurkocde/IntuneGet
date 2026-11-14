@@ -6,8 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
-
-const DEFAULT_TERMINAL_STATUSES = ['completed', 'deployed', 'failed', 'cancelled', 'duplicate_skipped'];
+import { TERMINAL_DEPLOYMENT_STATUSES } from '@/lib/deployment-status-groups';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,13 +19,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse optional statuses from request body
-    let statuses = DEFAULT_TERMINAL_STATUSES;
+    let statuses = [...TERMINAL_DEPLOYMENT_STATUSES];
     try {
       const body = await request.json();
       if (Array.isArray(body.statuses) && body.statuses.length > 0) {
         // Only allow valid terminal statuses
         statuses = body.statuses.filter((s: unknown) =>
-          typeof s === 'string' && DEFAULT_TERMINAL_STATUSES.includes(s)
+          typeof s === 'string' && TERMINAL_DEPLOYMENT_STATUSES.includes(s)
         );
         if (statuses.length === 0) {
           return NextResponse.json(
