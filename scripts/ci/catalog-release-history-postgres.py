@@ -174,10 +174,11 @@ def contracts(sql):
                 assert time.monotonic() < deadline, 'Refresh lock fixture not acquired'
             assert run('select public.refresh_catalog_release_history_rows()').stdout.strip() == '-1'
             assert lock.result().returncode == 0
-        for query in ["insert into public.catalog_release_history_rows(id) values(999999)",
+        for query in ["insert into public.catalog_release_history_rows(id,winget_id,version,detected_at,is_first,architectures) values(999999,'Fixture.Permission','1',now(),true,'{}')",
                       'select public.refresh_catalog_release_history_rows()']:
             for role in ['anon', 'authenticated']:
-                assert run(query, check=False, role=role).returncode != 0
+                denied = run(query, check=False, role=role)
+                assert denied.returncode != 0 and re.search(r'permission denied|violates row-level security policy', denied.stderr), denied.stderr
         assert run('select count(*) from public.catalog_release_history_rows', role='anon').returncode == 0
         print('PASS real PG17 calibrated RED/GREEN, refresh load, JSON equivalence and ACL')
     finally:
