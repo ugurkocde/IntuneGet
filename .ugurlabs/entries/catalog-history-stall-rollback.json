@@ -1,0 +1,5 @@
+{
+  "title": "Restore earlier catalog history query behavior",
+  "summary": "Restores the earlier catalog history query while shared production stalls are investigated. The timeout investigation remains open.",
+  "type": "maintenance"
+}

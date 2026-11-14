@@ -1,0 +1,5 @@
+{
+  "title": "Retry failed audit log requests",
+  "summary": "Audit logs now show a retry action when a request fails, keep earlier rows out of the failed result, and wait for sign in to finish before loading.",
+  "type": "fixed"
+}
