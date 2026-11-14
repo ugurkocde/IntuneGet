@@ -294,10 +294,14 @@ export default function UploadsPage() {
     const job = jobs.find((candidate) => candidate.id === jobId);
     if (!user?.id || job?.user_id !== user.id || cancellingJob.current) return;
     const requestScopeKey = customerJobSnapshotKey(redeployScope.current);
+    const scope = redeployScope.current;
+    const targetTenant = scope.isMspUser && scope.selectedTenantId ? scope.selectedTenantId : scope.userTenantId;
+    if (!requestScopeKey || jobsSnapshotKey !== requestScopeKey || job.tenant_id !== targetTenant) return;
     const isCurrentScope = () => customerJobSnapshotKey(redeployScope.current) === requestScopeKey;
     cancellingJob.current = jobId;
     setCancellingJobId(jobId);
     const previousJobs = jobs;
+    let optimisticUpdateApplied = false;
     try {
       const accessToken = await getAccessToken();
       if (!accessToken || !isCurrentScope()) return;
@@ -309,6 +313,7 @@ export default function UploadsPage() {
           ? { ...candidate, status: 'cancelled' as const, cancelled_at: new Date().toISOString() }
           : candidate));
       }
+      optimisticUpdateApplied = true;
       const response = await fetch('/api/package/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -327,7 +332,7 @@ export default function UploadsPage() {
       fetchJobs();
     } catch (err) {
       if (!isCurrentScope()) return;
-      setJobs(previousJobs);
+      if (optimisticUpdateApplied) setJobs(previousJobs);
       console.error('Failed to cancel job:', err);
       setError(err instanceof Error ? err.message : `Failed to ${dismiss ? 'dismiss' : 'cancel'} job`);
     } finally {

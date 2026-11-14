@@ -161,3 +161,26 @@ it('does not send an old owner action after an account switch during token acqui
  await act(async () => release('fixture-token'));
  expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(0);
 });
+
+it('preserves refreshed rows when action token acquisition rejects', async () => {
+ let rows = [{ ...job(1, 'Old snapshot'), status: 'queued' }];
+ f.fetch.mockImplementation(async () => Response.json({ jobs: rows }));
+ await render(); let reject!: (error: Error) => void;
+ f.getToken.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+ await confirmCancel();
+ rows = [{ ...job(2, 'Fresh snapshot'), status: 'queued' }];
+ await act(async () => actionButtons('Refresh')[0].click());
+ expect(document.body.textContent).toContain('Fresh snapshot');
+ await act(async () => reject(new Error('Synthetic delayed token failure')));
+ expect(document.body.textContent).toContain('Fresh snapshot');
+ expect(document.body.textContent).not.toContain('Old snapshot');
+ expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(0);
+});
+it('does not cancel stale owned rows while a newly selected tenant list is pending', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [{ ...job(1), status: 'queued' }] }));
+ await render();
+ f.getToken.mockImplementationOnce(() => new Promise(() => {}));
+ f.tenant = 'customer-c'; await render();
+ await confirmCancel();
+ expect(f.fetch.mock.calls.filter(([url]) => url === '/api/package/cancel')).toHaveLength(0);
+});
