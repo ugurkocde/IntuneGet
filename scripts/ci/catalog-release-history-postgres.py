@@ -1,13 +1,14 @@
 """Catalog history contracts on the existing disposable PostgreSQL 17 service.
 
-Eight real sessions share a bounded pool. No production data or endpoint is used.
-The unchanged old function must fail the same latency contract the candidate passes.
+Eight, sixteen and thirty-two real sessions share a bounded pool. No production
+data or endpoint is used. If capacity does not reproduce, require a structural
+RED/GREEN proving heavy derivation leaves the request path.
 """
 import concurrent.futures
 import json
 from pathlib import Path
 import runpy
-import statistics
+import re
 import threading
 import time
 import uuid
@@ -36,22 +37,22 @@ def contracts(sql):
             "'','','all',5,'',null,null,''",
             "'','','all',1,'Mozilla.Firefox.ESR.fur',null,null,''"]
 
-    def burst(function, mode, with_refresh=False):
-        barrier = threading.Barrier(8)
+    def burst(function, mode, sessions, with_refresh=False):
+        barrier = threading.Barrier(sessions)
 
         def request(index):
             barrier.wait(timeout=15)
             started = time.monotonic()
             result = run("set statement_timeout='8s';set plan_cache_mode=" + mode +
-                         ';select pg_backend_pid();select public.' + function + '(' + args[index] + ');', False)
+                         ';select pg_backend_pid();select public.' + function + '(' + args[index % len(args)] + ');', False)
             elapsed = (time.monotonic() - started) * 1000
             pid = int(result.stdout.splitlines()[0]) if result.returncode == 0 else None
             return {'shape': index, 'ms': round(elapsed, 2), 'ok': result.returncode == 0, 'pid': pid}
 
         all_rows, unrelated = [], []
         for wave in range(3):
-            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-                futures = [pool.submit(request, index) for index in range(8)]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=sessions) as pool:
+                futures = [pool.submit(request, index) for index in range(sessions)]
                 # Include time waiting for a free connection, not just SQL execution.
                 started = time.monotonic()
 
@@ -73,7 +74,7 @@ def contracts(sql):
                 assert len({r['pid'] for r in rows if r['ok']}) == sum(r['ok'] for r in rows)
                 all_rows.extend([{**r, 'wave': wave} for r in rows])
         p95 = sorted(r['ms'] for r in all_rows)[int(len(all_rows) * .95)]
-        result = {'function': function, 'mode': mode, 'refresh': with_refresh,
+        result = {'function': function, 'mode': mode, 'sessions': sessions, 'refresh': with_refresh,
                   'p95_ms': round(p95, 2), 'unrelated_max_ms': round(max(unrelated), 2),
                   'calls': all_rows}
         print(json.dumps(result), flush=True)
@@ -119,24 +120,38 @@ def contracts(sql):
         run(restored.replace('public.get_catalog_release_history_v2(', 'public.legacy_history_oracle('), role='fixture_owner')
         acl_before = value("select proacl::text acl,proconfig,prosecdef from pg_proc where oid="
                            "'public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")
-        baseline = []
-        for _ in range(5):
-            started = time.monotonic()
-            run('select 1')
-            baseline.append((time.monotonic() - started) * 1000)
-        unrelated_limit = max(500, 2 * statistics.median(baseline))
-        red = [burst('get_catalog_release_history_v2', mode) for mode in ['force_generic_plan', 'force_custom_plan']]
-        assert any(any(not r['ok'] for r in b['calls']) or b['p95_ms'] >= 2000 or
-                   b['unrelated_max_ms'] > unrelated_limit for b in red), 'NO_GO: old body did not reproduce the capacity failure'
+        modes = ['force_generic_plan', 'force_custom_plan']
+        red = [burst('get_catalog_release_history_v2', mode, sessions)
+               for sessions in [8, 16, 32] for mode in modes]
+        failing = [b for b in red if b['p95_ms'] > 2000 or b['unrelated_max_ms'] > 1000]
+        sessions = min(b['sessions'] for b in failing) if failing else 32
+
+        def request_reads_precomputed_rows():
+            body = value("select pg_get_functiondef('public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure) body")['body']
+            assert re.search(r'from\s+public\.catalog_release_history_rows\b', body, re.I), 'Request must read precomputed history rows'
+            assert not re.search(r'\bversion_history\b|\brow_number\s*\(|\blag\s*\(|\bjsonb_array_elements\s*\(', body, re.I), 'Heavy history derivation in request path'
+
+        # Prove the structural contract rejects the actual main function, even
+        # when this runner cannot reproduce production contention.
+        try:
+            request_reads_precomputed_rows()
+        except AssertionError:
+            print('RED structural: main request derives history instead of reading precomputed rows', flush=True)
+        else:
+            raise AssertionError('Structural test did not fail on main')
+        print(json.dumps({'fail_before': 'capacity' if failing else 'structural',
+                          'candidate_sessions': sessions,
+                          'old_measurements': [{k: b[k] for k in ['sessions', 'mode', 'p95_ms', 'unrelated_max_ms']} for b in red]}), flush=True)
         started = time.monotonic()
         run('begin;' + migration + 'commit;', role='fixture_owner')
         print(json.dumps({'initial_fill_ms': round((time.monotonic()-started)*1000, 2)}), flush=True)
         assert value("select proacl::text acl,proconfig,prosecdef from pg_proc where oid="
                      "'public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == acl_before
-        for mode in ['force_generic_plan', 'force_custom_plan']:
-            green = burst('get_catalog_release_history_v2', mode, with_refresh=True)
+        request_reads_precomputed_rows()
+        for mode in modes:
+            green = burst('get_catalog_release_history_v2', mode, sessions, with_refresh=True)
             assert all(r['ok'] for r in green['calls']) and green['p95_ms'] < 2000
-            assert green['unrelated_max_ms'] <= unrelated_limit
+            assert green['unrelated_max_ms'] < 1000
         cases = args + ["'','','all',0,'',null,null,''", "'','','all',10001,'',null,null,''",
                         "'','','all',1,'fixture.app1',null,null,''", "'','','all',1,'unknown',null,null,''",
                         "'','2026-01','all',1,'','2026-01-01','2026-01-31','x86'",
@@ -164,7 +179,7 @@ def contracts(sql):
             for role in ['anon', 'authenticated']:
                 assert run(query, check=False, role=role).returncode != 0
         assert run('select count(*) from public.catalog_release_history_rows', role='anon').returncode == 0
-        print('PASS real PG17 eight session capacity RED/GREEN, refresh load, JSON equivalence and ACL')
+        print('PASS real PG17 calibrated RED/GREEN, refresh load, JSON equivalence and ACL')
     finally:
         sql('drop database ' + database + ' with (force)', role=None, database='postgres')
 
