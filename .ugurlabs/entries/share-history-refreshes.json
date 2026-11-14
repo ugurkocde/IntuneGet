@@ -1,0 +1,5 @@
+{
+  "title": "Share overlapping release history refreshes",
+  "summary": "Overlapping requests reuse an active history refresh while complete cached results remain available after a refresh failure.",
+  "type": "improved"
+}
