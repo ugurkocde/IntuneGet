@@ -70,6 +70,15 @@ describe('app claims with the SQLite adapter', () => {
     expect((await stored()).filter(row => row.discovered_app_id === body.discoveredAppId)).toHaveLength(1);
   });
 
+  it.each(['deploying', 'deployed'] as const)('does not reset a %s claim during recovery', async status => {
+    const body = claimBody();
+    const { claim } = await (await POST(request('POST', body))).json();
+    await sqliteDb.claimedApps.update(claim.id, 'fixture-tenant', { status });
+    const before = (await stored()).find(row => row.id === claim.id);
+    expect((await POST(request('POST', body))).status).toBe(409);
+    expect((await stored()).find(row => row.id === claim.id)).toEqual(before);
+  });
+
   it('lists only the signed in tenant claims', async () => {
     const own = claimBody();
     await POST(request('POST', own));

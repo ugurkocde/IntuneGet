@@ -30,7 +30,9 @@ function UnmanagedAppCardComponent({
   onDeviceCountClick,
   isClaimLoading = false,
 }: UnmanagedAppCardProps) {
-  const canClaim = app.matchStatus === 'matched' && !app.isClaimed;
+  const canRecover = app.isClaimed && (app.claimStatus === 'pending' || app.claimStatus === 'failed');
+  const canClaim = app.matchStatus === 'matched' && !!app.matchedPackageId && !app.inCart &&
+    app.claimStatus !== 'deploying' && app.claimStatus !== 'deployed' && (!app.isClaimed || canRecover);
   const canLink = app.matchStatus === 'unmatched' || app.matchStatus === 'partial';
   const hasPartialSuggestions = app.partialMatches && app.partialMatches.length > 0;
 
@@ -134,7 +136,7 @@ function UnmanagedAppCardComponent({
           {app.isClaimed && (
             <span className="text-xs text-status-success flex items-center gap-1">
               <Check className="w-3.5 h-3.5" />
-              Claimed
+              {app.claimStatus === 'failed' ? 'Claim failed' : app.claimStatus === 'pending' && !app.inCart ? 'Claimed (not in cart)' : 'Claimed'}
             </span>
           )}
           {app.claimStatus === 'deployed' && (
@@ -171,12 +173,12 @@ function UnmanagedAppCardComponent({
               ) : (
                 <>
                   <ShoppingCart className="w-4 h-4 mr-1.5" />
-                  Claim
+                  {canRecover ? app.claimStatus === 'failed' ? 'Retry' : 'Add to cart' : 'Claim'}
                 </>
               )}
             </Button>
           )}
-          {app.isClaimed && !app.claimStatus?.includes('deploy') && (
+          {app.inCart && !app.claimStatus?.includes('deploy') && (
             <Button
               type="button"
               size="sm"
@@ -204,6 +206,7 @@ export const UnmanagedAppCard = memo(UnmanagedAppCardComponent, (prev, next) => 
     prev.app.matchedPackageId === next.app.matchedPackageId &&
     prev.app.matchConfidence === next.app.matchConfidence &&
     prev.app.isClaimed === next.app.isClaimed &&
+    prev.app.inCart === next.app.inCart &&
     prev.app.claimStatus === next.app.claimStatus &&
     prev.app.partialMatches === next.app.partialMatches &&
     prev.isClaimLoading === next.isClaimLoading &&

@@ -116,6 +116,9 @@ export async function POST(request: NextRequest) {
         winget_package_id: body.wingetPackageId,
         device_count_at_claim: body.deviceCount || 0,
       });
+      if (claim.status === 'deploying' || claim.status === 'deployed') {
+        return NextResponse.json({ error: 'This app is already deploying or deployed.' }, { status: 409 });
+      }
       return NextResponse.json({ claim: formatClaim(claim) }, { status: 201 });
     }
 
@@ -163,10 +166,15 @@ export async function POST(request: NextRequest) {
         .from('claimed_apps')
         .update(updateData)
         .eq('id', existing.id)
+        .eq('tenant_id', tenantId)
+        .in('status', ['pending', 'failed'])
         .select()
-        .single();
+        .maybeSingle();
       claim = result.data;
       error = result.error;
+      if (!error && !claim) {
+        return NextResponse.json({ error: 'This app is already deploying or deployed.' }, { status: 409 });
+      }
     } else {
       // Create new claim record
       const insertData: ClaimedAppInsert = {

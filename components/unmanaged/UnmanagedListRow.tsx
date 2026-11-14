@@ -39,7 +39,9 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
   isClaimLoading,
 }: UnmanagedListRowProps) {
   const prefersReducedMotion = useReducedMotion();
-  const canClaim = app.matchStatus === 'matched' && !app.isClaimed;
+  const canRecover = app.isClaimed && (app.claimStatus === 'pending' || app.claimStatus === 'failed');
+  const canClaim = app.matchStatus === 'matched' && !!app.matchedPackageId && !app.inCart &&
+    app.claimStatus !== 'deploying' && app.claimStatus !== 'deployed' && (!app.isClaimed || canRecover);
   const canLink = app.matchStatus === 'unmatched' || app.matchStatus === 'partial';
   const hasPartialSuggestions = app.partialMatches && app.partialMatches.length > 0;
 
@@ -142,7 +144,7 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
                 ) : (
                   <>
                     <ShoppingCart className="w-3.5 h-3.5 mr-1.5" />
-                    Claim
+                    {canRecover ? app.claimStatus === 'failed' ? 'Retry' : 'Add to cart' : 'Claim'}
                   </>
                 )}
               </Button>
@@ -150,7 +152,8 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
             {app.isClaimed && (
               <span className="flex items-center gap-1 text-xs text-emerald-400">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Claimed
+                {app.claimStatus === 'deploying' ? 'Deploying...' : app.claimStatus === 'deployed' ? 'Deployed' :
+                  app.inCart ? 'In Cart' : app.claimStatus === 'failed' ? 'Claim failed' : 'Claimed (not in cart)'}
               </span>
             )}
           </div>

@@ -1081,7 +1081,8 @@ export const sqliteDb: DatabaseAdapter = {
              winget_package_id = excluded.winget_package_id,
              device_count_at_claim = excluded.device_count_at_claim,
              status = 'pending',
-             claimed_at = excluded.claimed_at`
+             claimed_at = excluded.claimed_at
+           WHERE claimed_apps.status IN ('pending', 'failed')`
         )
         .run(
           crypto.randomUUID(),
