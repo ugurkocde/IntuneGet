@@ -107,7 +107,7 @@ def contracts(sql):
         old_statement = old.split('AS $$', 1)[1].rsplit('$$;', 1)[0].rstrip().removesuffix(';')
         assert new.split("THEN (\n", 1)[1].split("\n) ELSE (\n", 1)[0] == old_statement, 'Global branch changed'
         run(old)
-        before_acl = value("select to_json(proacl::text) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")
+        before_acl = value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")
         before_md5 = value("select to_json(md5(prosrc)) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")
         old_app = plans('Fixture.1')
         assert any(n['Node Type'] == 'Seq Scan' and n.get('Relation Name') == 'curated_apps' for n in old_app)
@@ -125,7 +125,7 @@ def contracts(sql):
         assert indexed(candidate), candidate
         assert not any(n['Node Type'] == 'Seq Scan' and n.get('Relation Name') in ('curated_apps', 'version_history') for n in candidate)
         assert shape(plans('')) == old_global, 'Global executed plan changed'
-        assert value("select to_json(proacl::text) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
+        assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
         # A representative matrix covers every filter and empty/miss/locale/case/page shape.
         cases = [(app, month, kind, page, search, architecture, start, end)
                  for app in ('', None, 'fIxTuRe.1', 'Missing.App', 'x'*130, 'Fixture.16000')
@@ -143,7 +143,7 @@ def contracts(sql):
         assert timing['unrelated_ms'] < 1000, timing
         run('begin;' + old + 'commit;')
         assert value("select to_json(md5(prosrc)) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_md5 == '2417636d1e9100e491341b7864a4d3ba'
-        assert value("select to_json(proacl::text) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
+        assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
         print('PASS real PG17 per-app plan RED/GREEN, global plan, full JSON parity, ACL, rollback and eight-session timing; production effect unverified', flush=True)
     finally:
         sql('drop database ' + database + ' with (force)', role=None, database='postgres')
