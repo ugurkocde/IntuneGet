@@ -1,0 +1,5 @@
+{
+  "title": "Keep held installers out of catalog renewals",
+  "summary": "Signed catalog renewals now withdraw releases whose installers have an active security hold, while keeping other eligible applications available.",
+  "type": "fixed"
+}
