@@ -18,6 +18,7 @@ beforeAll(async () => {
     CREATE TABLE public.curated_apps(winget_id text PRIMARY KEY,name text,publisher text,is_locale_variant boolean);
     CREATE TABLE public.version_history(id bigserial PRIMARY KEY,winget_id text,version text NOT NULL,release_date text,created_at timestamptz,installers jsonb);
     CREATE INDEX idx_version_history_winget_id ON public.version_history(winget_id);
+    CREATE INDEX idx_version_history_version ON public.version_history(winget_id,version);
     CREATE TABLE public.curated_sync_status(id text,last_run_status text,last_run_completed_at timestamptz,last_successful_sync_at timestamptz);
     INSERT INTO public.curated_apps SELECT 'Fixture.'||g,'App '||g,'Publisher',false FROM generate_series(1,16484) g;
     INSERT INTO public.curated_apps VALUES ('fixture.1','Case variant','Publisher',false),('Locale.App','Locale','Publisher',true),(repeat('x',120),'Long app','Publisher',false);
@@ -88,10 +89,10 @@ it('preserves the existing execution grants', async () => {
 
 
 type PlanNode = Record<string, unknown> & { Plans?: PlanNode[] };
-async function historyPlans(app: string, mode: string, name = 'public.get_catalog_release_history_v2') {
+async function historyPlans(app: string, mode: string, name = 'public.get_catalog_release_history_v2', architecture = '') {
   await db.exec("LOAD 'auto_explain'; SET auto_explain.log_min_duration=0; SET auto_explain.log_nested_statements=on; SET auto_explain.log_analyze=on; SET auto_explain.log_buffers=on; SET auto_explain.log_timing=off; SET auto_explain.log_format='json'; SET auto_explain.log_level='notice'; SET plan_cache_mode=" + mode);
   const plans: PlanNode[] = [];
-  await db.query("select " + name + "('','','all',1,$1,NULL,NULL,'')", [app], {
+  await db.query("select " + name + "('','','all',1,$1,NULL,NULL,$2)", [app, architecture], {
     onNotice: notice => {
       const offset = notice.message.indexOf('{');
       if (offset >= 0) {
@@ -128,5 +129,15 @@ it('keeps actual app function reads indexed under generic and custom plans', asy
     expect(nodes.some(node => node['Node Type'] === 'Seq Scan' || node['Node Type'] === 'Hash Join')).toBe(false);
     const buffers = nodes.reduce((sum, node) => sum + Number(node['Shared Hit Blocks'] ?? 0) + Number(node['Shared Read Blocks'] ?? 0), 0);
     expect(buffers).toBeLessThanOrEqual(256);
+  }
+}, 60000);
+
+it('does not add a per-row primary-key lookup for global architecture filtering', async () => {
+  for (const mode of ['force_generic_plan', 'force_custom_plan']) {
+    const nodes = await historyPlans('', mode, 'public.get_catalog_release_history_v2', 'x64');
+    expect(nodes.filter(node => node['Index Name'] === 'version_history_pkey' && Number(node['Actual Loops']) > 40)).toEqual([]);
+    const before = await historyPlans('', mode, 'pg_temp.catalog_restored', 'x64');
+    const buffers = (plans: PlanNode[]) => plans.reduce((sum, node) => sum + Number(node['Shared Hit Blocks'] ?? 0) + Number(node['Shared Read Blocks'] ?? 0), 0);
+    expect(buffers(nodes)).toBeLessThanOrEqual(buffers(before) * 1.05);
   }
 }, 60000);
