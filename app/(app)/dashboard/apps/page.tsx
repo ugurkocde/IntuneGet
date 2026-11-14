@@ -228,14 +228,18 @@ export default function AppCatalogPage() {
   }, []);
   const { data: categoriesData } = useCategories();
   const { data: featuredData, isLoading: isLoadingFeatured } = usePopularPackages(5, null, isBrowseMode && discoveryNear);
-  const { data: searchData, isLoading: isSearching, isFetching } = useSearchPackages(searchQuery, 50, selectedCategory, sortBy);
+  const { data: searchData, isLoading: isSearching, isFetching, isError: isSearchError, refetch: refetchSearch } = useSearchPackages(searchQuery, 50, selectedCategory, sortBy);
 
   const {
     data: infiniteData,
     isLoading: isLoadingInfinite,
     isFetchingNextPage,
+    isFetching: isFetchingBrowse,
+    isError: isBrowseError,
+    isFetchNextPageError,
     hasNextPage,
     fetchNextPage,
+    refetch: refetchBrowse,
   } = useInfinitePackages(20, selectedCategory, sortBy, !hasSearched);
   const { deployedSet } = useDeployedPackages();
   const { tenantDeployments } = useTenantDeployments();
@@ -305,7 +309,7 @@ export default function AppCatalogPage() {
   const activeSortLabel = SORT_OPTIONS.find((option) => option.key === sortBy)?.label || 'Popular';
 
   const showInitialLoading = hasSearched && isSearching && searchPackages.length === 0;
-  const showEmptyState = hasSearched && !isSearching && !isFetching && searchPackages.length === 0;
+  const showEmptyState = hasSearched && !isSearchError && !isSearching && !isFetching && searchPackages.length === 0;
 
   useEffect(() => {
     if (
@@ -432,10 +436,10 @@ export default function AppCatalogPage() {
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
-    if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
+    if (target.isIntersecting && !hasSearched && !isBrowseError && hasNextPage && !isFetchingBrowse) {
       fetchNextPage();
     }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, hasSearched, isBrowseError, isFetchingBrowse]);
 
   useEffect(() => {
     const element = loadMoreRef.current;
@@ -811,6 +815,26 @@ export default function AppCatalogPage() {
         </div>
       )}
 
+      {(hasSearched ? isSearchError : isBrowseError) && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-status-error/30 bg-status-error/5 p-4">
+          <p className="text-sm text-text-primary">
+            {loadedCount > 0 ? <T>Could not refresh catalog results.</T> : <T>Could not load catalog results.</T>}
+          </p>
+          <button
+            type="button"
+            disabled={hasSearched ? isFetching : isFetchingBrowse}
+            onClick={() => {
+              if (hasSearched) void refetchSearch();
+              else if (isFetchNextPageError) void fetchNextPage();
+              else void refetchBrowse();
+            }}
+            className="rounded-lg border border-overlay/10 bg-bg-elevated px-4 py-2 text-sm text-text-primary hover:bg-overlay/5 disabled:opacity-50"
+          >
+            <T>Retry</T>
+          </button>
+        </div>
+      )}
+
       {showInitialLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
@@ -914,7 +938,7 @@ export default function AppCatalogPage() {
                           <span className="text-sm"><T>Loading more apps...</T></span>
                         </div>
                       )}
-                      {!hasNextPage && allPackages.length > 0 && (
+                      {!isBrowseError && !hasNextPage && allPackages.length > 0 && (
                         <p className="text-text-muted text-sm"><T>You&apos;ve seen all the apps</T></p>
                       )}
                     </div>
