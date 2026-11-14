@@ -1,0 +1,5 @@
+{
+  "title": "More reliable catalog release history",
+  "summary": "Release history queries avoid repeated lookups for every application and keep intermediate results from spilling to disk while preserving filters, counts and release ordering.",
+  "type": "fixed"
+}
