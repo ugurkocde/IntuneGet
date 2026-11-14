@@ -1,0 +1,5 @@
+{
+  "title": "Retry failed notification requests",
+  "summary": "Notification failures show a retry action instead of an empty inbox. Existing notifications stay visible when a background refresh fails.",
+  "type": "fixed"
+}
