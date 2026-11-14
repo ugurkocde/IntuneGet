@@ -1,0 +1,1 @@
+{"title":"Confirm duplicate deployments and keep claim retries in one cart entry","summary":"Claim retries keep a single cart entry for the same app, version and installer configuration. Creating another Intune app from a skipped duplicate now requires confirmation.","type":"fixed"}
