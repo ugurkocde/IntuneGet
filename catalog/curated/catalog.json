@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-13T20:16:43.202Z",
-    "expiresAt": "2026-11-20T20:16:43.202Z",
+    "generatedAt": "2026-11-14T02:41:40.265Z",
+    "expiresAt": "2026-11-21T02:41:40.265Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -12760,6 +12760,446 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/chrome/49d68cc381aa619be4a1fa33.json"
           }
         }
+      },
+      {
+        "id": "notepad-plus-plus:3945373f251f7097cb4f6840",
+        "candidate": {
+          "appId": "notepad-plus-plus",
+          "version": "8.9.9.1",
+          "installerUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.9.1/npp.8.9.9.1.Installer.x64.exe",
+          "vendorSha256": "ce3267f5c4e7e42f847e00f4b20234da6150647203033cdde34a69593efc3152",
+          "releaseNotesUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/tag/v8.9.9.1",
+          "discoveredAt": "2026-11-12T01:42:19.218Z",
+          "id": "3945373f251f7097cb4f6840"
+        },
+        "installerSha256": "ce3267f5c4e7e42f847e00f4b20234da6150647203033cdde34a69593efc3152",
+        "executionProfileSha256": "3D897064FC1DC245BFB7575D9CB1C5BE2900ABD1EEF3DEB7DC999BD24B03493F",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-14T02:41:40.265Z",
+        "evidence": {
+          "verifiedAt": "2026-11-13T21:54:16.6217853Z",
+          "installerSha256": "ce3267f5c4e7e42f847e00f4b20234da6150647203033cdde34a69593efc3152",
+          "installerVersion": "8.9.9.1",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/notepad-plus-plus/3945373f251f7097cb4f6840.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "NOTEPAD++"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "53fe410b3ef1b5ea7a4257aa0f7061c964a09f4c",
+            "websiteCommit": "b88b11154bfe45baf9c6de23088ea764b0552a6a",
+            "runId": "43512698810",
+            "runAttempt": 1,
+            "artifactId": "14080326631",
+            "artifactSha256": "1b0da2434a3181a6f0153485c5fb03fa5b0d5d18a812d8939cb56301a316967d"
+          },
+          "security": {
+            "suspicious": 0,
+            "malicious": 0,
+            "installerSha256": "ce3267f5c4e7e42f847e00f4b20234da6150647203033cdde34a69593efc3152",
+            "scanner": "defender",
+            "signatureVersion": "1.463.286.0",
+            "engineVersion": "1.1.26100.4",
+            "scannedAt": "2026-11-13T21:51:44.2909905Z",
+            "status": "clean",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/notepad-plus-plus/3945373f251f7097cb4f6840.json"
+          },
+          "qa": {
+            "architecture": "x64",
+            "testLevel": "psadt-package",
+            "installerSha256": "ce3267f5c4e7e42f847e00f4b20234da6150647203033cdde34a69593efc3152",
+            "testedAt": "2026-11-13T21:54:06.5905012Z",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "candidateId": "3945373f251f7097cb4f6840",
+            "upgradeFromVersion": "8.9.9",
+            "executionContext": "LocalSystem",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "previousInstallerSha256": "a18cfb33d616c8eecda0059604d40bdb9d607fbc4ede857c8be6e41986464367",
+            "installerVersion": "8.9.9.1",
+            "executionProfileSha256": "3D897064FC1DC245BFB7575D9CB1C5BE2900ABD1EEF3DEB7DC999BD24B03493F",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/notepad-plus-plus/3945373f251f7097cb4f6840.json"
+          }
+        }
+      },
+      {
+        "id": "cmake:1de45910fa68d4b2865b916d",
+        "candidate": {
+          "appId": "cmake",
+          "version": "4.5.0",
+          "installerUrl": "https://github.com/Kitware/CMake/releases/download/v4.5.0/cmake-4.5.0-windows-x86_64.msi",
+          "vendorSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+          "releaseNotesUrl": "https://github.com/Kitware/CMake/releases/tag/v4.5.0",
+          "discoveredAt": "2026-11-12T19:12:53.683Z",
+          "id": "1de45910fa68d4b2865b916d"
+        },
+        "installerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+        "executionProfileSha256": "42897580D645C39ED99D035D87AB015F9101C429FAE0D5C8C1E8DFC8C3482818",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-14T02:41:40.265Z",
+        "evidence": {
+          "verifiedAt": "2026-11-14T02:22:01.2530841Z",
+          "installerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+          "installerVersion": "4.5.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/cmake/1de45910fa68d4b2865b916d.json",
+          "signature": {
+            "publisher": "Kitware, Inc.",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "87290b03038ecabae44440badc9a23f073318025",
+            "websiteCommit": "76c00075e1f9b7e3f70508e85bde8dcd720103fc",
+            "runId": "43544143233",
+            "runAttempt": 1,
+            "artifactId": "14093308858",
+            "artifactSha256": "cd3594c4ddffd19adc44c10bc3ce7e7891099167795f90b5b9c6fac777e7ae8a"
+          },
+          "security": {
+            "signatureVersion": "1.463.290.0",
+            "suspicious": 0,
+            "engineVersion": "1.1.26100.4",
+            "installerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+            "scanner": "defender",
+            "scannedAt": "2026-11-14T02:15:19.0751451Z",
+            "malicious": 0,
+            "status": "clean",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/cmake/1de45910fa68d4b2865b916d.json"
+          },
+          "qa": {
+            "installerVersion": "4.5.0",
+            "testedAt": "2026-11-14T02:21:54.1656241Z",
+            "testLevel": "psadt-package",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+            "upgradeFromVersion": "4.4.5",
+            "candidateId": "1de45910fa68d4b2865b916d",
+            "previousInstallerSha256": "c18b52b4017c4e5ffcd7d516ea39c4e0ed37f58920b90a5c98a46280b1857145",
+            "executionProfileSha256": "42897580D645C39ED99D035D87AB015F9101C429FAE0D5C8C1E8DFC8C3482818",
+            "architecture": "x64",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "executionContext": "LocalSystem",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/cmake/1de45910fa68d4b2865b916d.json"
+          }
+        }
+      },
+      {
+        "id": "github-cli:2f972218390e89d17ab4a593",
+        "candidate": {
+          "appId": "github-cli",
+          "version": "2.104.0",
+          "installerUrl": "https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_windows_amd64.msi",
+          "vendorSha256": "cc89beb33ee020669efac70270aff55ca3ad52321aa813307537f2fe9237cc6e",
+          "releaseNotesUrl": "https://github.com/cli/cli/releases/tag/v2.104.0",
+          "discoveredAt": "2026-11-12T19:12:53.864Z",
+          "id": "2f972218390e89d17ab4a593"
+        },
+        "installerSha256": "cc89beb33ee020669efac70270aff55ca3ad52321aa813307537f2fe9237cc6e",
+        "executionProfileSha256": "92A64BD4B1C8A87DFDED2942E29E48BDF20F0082B1E01DE69E7AD60EB401FAC4",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-14T02:41:40.265Z",
+        "evidence": {
+          "verifiedAt": "2026-11-14T02:37:39.2377384Z",
+          "installerSha256": "cc89beb33ee020669efac70270aff55ca3ad52321aa813307537f2fe9237cc6e",
+          "installerVersion": "2.104.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/github-cli/2f972218390e89d17ab4a593.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "GitHub, Inc."
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "52dbfaad6b8ef6704fe94246c72fe096ffbdaa80",
+            "websiteCommit": "d5f5742a933cf722b1233b7c4303a43f5297d071",
+            "runId": "43546135491",
+            "runAttempt": 1,
+            "artifactId": "14094104473",
+            "artifactSha256": "d1b109237307d5bf7a8fe0cd1b38a78220046b0e6350a3517ca7afbf6d71b496"
+          },
+          "security": {
+            "malicious": 0,
+            "engineVersion": "1.1.26100.4",
+            "scannedAt": "2026-11-14T02:35:49.7397207Z",
+            "status": "clean",
+            "installerSha256": "cc89beb33ee020669efac70270aff55ca3ad52321aa813307537f2fe9237cc6e",
+            "signatureVersion": "1.463.290.0",
+            "scanner": "defender",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/github-cli/2f972218390e89d17ab4a593.json"
+          },
+          "qa": {
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "candidateId": "2f972218390e89d17ab4a593",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "testedAt": "2026-11-14T02:37:29.2756782Z",
+            "executionProfileSha256": "92A64BD4B1C8A87DFDED2942E29E48BDF20F0082B1E01DE69E7AD60EB401FAC4",
+            "testLevel": "psadt-package",
+            "executionContext": "LocalSystem",
+            "installerVersion": "2.104.0",
+            "upgradeFromVersion": "2.103.3",
+            "architecture": "x64",
+            "installerSha256": "cc89beb33ee020669efac70270aff55ca3ad52321aa813307537f2fe9237cc6e",
+            "previousInstallerSha256": "5073112b7abb5ffbba24b76aee7e89269af531218c0a42751f5f0bfb6440c2cc",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/github-cli/2f972218390e89d17ab4a593.json"
+          }
+        }
+      },
+      {
+        "id": "musescore:d10a91439119c870b4414640",
+        "candidate": {
+          "appId": "musescore",
+          "version": "4.7.7",
+          "installerUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.7/MuseScore-Studio-4.7.7.261109195-x86_64.msi",
+          "vendorSha256": "1e54d88c63c20b348f12d23008b3533fd255e1bc88734a9496a46391c4b072a9",
+          "releaseNotesUrl": "https://github.com/musescore/MuseScore/releases/tag/v4.7.7",
+          "discoveredAt": "2026-11-12T10:15:21.665Z",
+          "id": "d10a91439119c870b4414640"
+        },
+        "installerSha256": "1e54d88c63c20b348f12d23008b3533fd255e1bc88734a9496a46391c4b072a9",
+        "executionProfileSha256": "147C19DF87B52DF9E447688F80CCBEF56E1644E2D9FF9E83FBD9664677BF1E1A",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-14T02:41:40.265Z",
+        "evidence": {
+          "verifiedAt": "2026-11-13T22:20:56.3078364Z",
+          "installerSha256": "1e54d88c63c20b348f12d23008b3533fd255e1bc88734a9496a46391c4b072a9",
+          "installerVersion": "4.7.7",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/musescore/d10a91439119c870b4414640.json",
+          "signature": {
+            "publisher": "MUSECY SM LTD",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "990c6f317b4dea3908faf390c1ec5eab7d2d109d",
+            "websiteCommit": "cc4759dc5bfde613c74220d7739ded57d7b3c42a",
+            "runId": "43516072532",
+            "runAttempt": 1,
+            "artifactId": "14082386202",
+            "artifactSha256": "ac5aff4b3355afdffe4f4ca7f857d233e976b8bc0e313f5e3a3bc9df91a09175"
+          },
+          "security": {
+            "engineVersion": "1.1.26100.4",
+            "installerSha256": "1e54d88c63c20b348f12d23008b3533fd255e1bc88734a9496a46391c4b072a9",
+            "signatureVersion": "1.463.286.0",
+            "status": "clean",
+            "scannedAt": "2026-11-13T22:17:04.2606741Z",
+            "scanner": "defender",
+            "suspicious": 0,
+            "malicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/musescore/d10a91439119c870b4414640.json"
+          },
+          "qa": {
+            "installerSha256": "1e54d88c63c20b348f12d23008b3533fd255e1bc88734a9496a46391c4b072a9",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "installerVersion": "4.7.7",
+            "candidateId": "d10a91439119c870b4414640",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "testedAt": "2026-11-13T22:20:47.8807013Z",
+            "executionContext": "LocalSystem",
+            "executionProfileSha256": "147C19DF87B52DF9E447688F80CCBEF56E1644E2D9FF9E83FBD9664677BF1E1A",
+            "architecture": "x64",
+            "upgradeFromVersion": "4.7.6",
+            "previousInstallerSha256": "41c9ca34fbf0b720f229ed3b0c4ff923b5d41a8c24ad9262e1fce390cd5c34e5",
+            "testLevel": "psadt-package",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/musescore/d10a91439119c870b4414640.json"
+          }
+        }
+      },
+      {
+        "id": "arduino-ide:6f6a820d85bdc6466ef9857a",
+        "candidate": {
+          "appId": "arduino-ide",
+          "version": "2.3.11",
+          "installerUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.11/arduino-ide_2.3.11_Windows_64bit.msi",
+          "vendorSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+          "releaseNotesUrl": "https://github.com/arduino/arduino-ide/releases/tag/2.3.11",
+          "discoveredAt": "2026-11-12T15:40:33.598Z",
+          "id": "6f6a820d85bdc6466ef9857a"
+        },
+        "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+        "executionProfileSha256": "078752EC68003AC3B1C9647564AED86B6B91FDB7BF303252E98680FFC165D4B0",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-14T02:41:40.265Z",
+        "evidence": {
+          "verifiedAt": "2026-11-14T00:00:03.3737566Z",
+          "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+          "installerVersion": "2.3.11",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/arduino-ide/6f6a820d85bdc6466ef9857a.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "Arduino SA"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "c3a0df8d149cf85a2a28cf1523e281d1115b0dc2",
+            "websiteCommit": "a80f1fa95b2ddaac6a65eb1da44d8be26f7cdcce",
+            "runId": "43528864768",
+            "runAttempt": 1,
+            "artifactId": "14087476872",
+            "artifactSha256": "f7cc556223daaa9e0cd1af7a86f5885f1c97e51044e0e2813b305e99ae168780"
+          },
+          "security": {
+            "status": "clean",
+            "scannedAt": "2026-11-13T23:52:16.9252735Z",
+            "engineVersion": "1.1.26100.4",
+            "malicious": 0,
+            "scanner": "defender",
+            "suspicious": 0,
+            "signatureVersion": "1.463.288.0",
+            "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/arduino-ide/6f6a820d85bdc6466ef9857a.json"
+          },
+          "qa": {
+            "executionProfileSha256": "078752EC68003AC3B1C9647564AED86B6B91FDB7BF303252E98680FFC165D4B0",
+            "previousInstallerSha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+            "installerVersion": "2.3.11",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "testLevel": "psadt-package",
+            "executionContext": "LocalSystem",
+            "testedAt": "2026-11-13T23:59:56.2302387Z",
+            "architecture": "x64",
+            "installerSha256": "5a5c69bb46c4f3cfcd64400f02e0e5cef62ddda31a234d73856f36727914006f",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "candidateId": "6f6a820d85bdc6466ef9857a",
+            "upgradeFromVersion": "2.3.10",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/arduino-ide/6f6a820d85bdc6466ef9857a.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": [
@@ -12768,5 +13208,5 @@
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "BgvYnD//yMGwagr0XCLypo0LMeiKPzKjUpqXW8UDYcEemnUWiEwDxGZV0yKirW63tJVGNJF9voU8Pvqc1MCICA=="
+  "signature": "V1OutBa1mgpRybCYq1dJlwGIhMT0hblAr+mJqrTlEekzbZmRIL3+lYSNYG28zL2odR41/wxI9lkGSSp6Jo4gDw=="
 }
