@@ -48,6 +48,7 @@ export function useDeployedConfig(wingetId: string | null) {
   });
 
   return {
+    scopeKey: JSON.stringify([wingetId, tenantKey]),
     deployedConfig: query.data?.config ?? null,
     deployedAt: query.data?.deployedAt ?? null,
     intuneAppId: query.data?.intuneAppId ?? null,

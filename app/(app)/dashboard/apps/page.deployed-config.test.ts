@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement, type ReactNode } from 'react';
+import { act, createElement, useState, type ReactNode, type InputEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NormalizedPackage } from '@/types/winget';
@@ -10,7 +10,13 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => state.params }));
 vi.mock('next/link', () => ({ default: ({ children }: { children: ReactNode }) => createElement('span', null, children) }));
-vi.mock('next/dynamic', () => ({ default: () => (props: { isDeployed: boolean; deployedConfig: unknown }) => { state.editor(props); return createElement('div', { 'data-config-editor': true }, 'Fixture config editor'); } }));
+vi.mock('next/dynamic', () => ({ default: () => function Editor(props: { isDeployed: boolean; deployedConfig: unknown; onClose: () => void }) {
+  const [draft, setDraft] = useState('');
+  state.editor(props);
+  return createElement('div', { 'data-config-editor': true },
+    createElement('input', { 'data-draft': true, value: draft, onInput: (event: InputEvent<HTMLInputElement>) => setDraft(event.currentTarget.value) }),
+    createElement('button', { onClick: props.onClose }, 'Close fixture editor'));
+} }));
 vi.mock('gt-next', () => ({ T: ({ children }: { children: ReactNode }) => children, Var: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ settings: { viewMode: 'grid' }, setViewMode: vi.fn() }) }));
 vi.mock('@/hooks/use-near-viewport', () => ({ useNearViewport: () => ({ ref: { current: null }, near: false }) }));
@@ -38,7 +44,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
   state.deployed = true; state.params = new URLSearchParams(); state.editor.mockClear(); state.retry.mockReset();
-  state.config = { deployedConfig: null, deployedAt: null, intuneAppId: null, isLoading: false, isFetching: false, isPending: false, isError: true, error: new Error('private config failure'), refetch: state.retry };
+  state.config = { scopeKey: 'fixture-self', deployedConfig: null, deployedAt: null, intuneAppId: null, isLoading: false, isFetching: false, isPending: false, isError: true, error: new Error('private config failure'), refetch: state.retry };
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
@@ -75,4 +81,31 @@ it('preserves successful null settings and does not block an app that is not dep
   expect(editor()).not.toBeNull(); expect(state.editor.mock.calls.at(-1)![0].deployedConfig).toBeNull();
   state.deployed = false; Object.assign(state.config, { isError: true, error: new Error('not queried') }); await render();
   expect(editor()).not.toBeNull(); expect(state.editor.mock.calls.at(-1)![0].isDeployed).toBe(false);
+});
+
+it('keeps the mounted editor draft after a background refresh fails', async () => {
+  Object.assign(state.config, { isError: false, error: null, deployedConfig: { displayName: 'Saved fixture' } });
+  await select();
+  const input = host.querySelector<HTMLInputElement>('[data-draft]')!;
+  await act(async () => { input.value = 'Unsaved fixture draft'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+  Object.assign(state.config, { isError: true, error: new Error('private refresh error') });
+  await render();
+  expect(host.querySelector('[data-draft]')).toBe(input);
+  expect(input.value).toBe('Unsaved fixture draft');
+  expect(alert()!.textContent).toContain('Your unsaved edits are kept');
+  expect(host.querySelector('[aria-label="Saved configuration unavailable"]')).toBeNull();
+  expect(host.textContent).not.toContain('private refresh error');
+  const retry = alert()!.querySelector('button')!;
+  await act(async () => retry.click()); expect(state.retry).toHaveBeenCalledTimes(1);
+  state.config.isFetching = true; await render(); expect(alert()!.querySelector('button')!.disabled).toBe(true);
+  state.config.scopeKey = 'fixture-another-tenant'; await render();
+  expect(editor()).toBeNull(); expect(host.querySelector('[aria-label="Saved configuration unavailable"]')).not.toBeNull();
+});
+
+it('moves focus into the error dialog and restores it on close', async () => {
+  await render(); const opener = [...host.querySelectorAll('button')].find(x => x.textContent === 'Edit fixture app')!;
+  opener.focus(); await act(async () => opener.click());
+  expect(document.activeElement?.textContent).toBe('Retry');
+  const close = [...alert()!.querySelectorAll('button')].find(x => x.textContent === 'Close')!;
+  await act(async () => close.click()); expect(document.activeElement).toBe(opener);
 });
