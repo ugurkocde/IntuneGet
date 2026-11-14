@@ -106,7 +106,7 @@ export default function AppCatalogPage() {
   const [deploymentIntentId] = useState(() => searchParams.get('deploy')?.trim() || null);
 
   // Initialize state from URL params
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || searchParams.get('search') || '');
   const [selectedPackage, setSelectedPackage] = useState<NormalizedPackage | null>(null);
   const [openedConfigScope, setOpenedConfigScope] = useState<string | null>(null);
   const previousConfigScope = useRef<string | null>(null);

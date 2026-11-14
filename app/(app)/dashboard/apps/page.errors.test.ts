@@ -147,3 +147,12 @@ it('keeps loaded browse rows after a page failure and retries only on request', 
   expect(host.textContent).toContain('Next fixture row');
   expect(host.querySelector('[role="alert"]')).toBeNull();
 });
+
+it('filters catalog links using the Inventory search parameter', async () => {
+ state.params = new URLSearchParams('search=Example%20App');
+ read = async () => response({ packages: [pkg], count: 1 });
+ await render();
+ const calls = requests('/api/winget/search');
+ expect(calls).toHaveLength(1);
+ expect(new URL(calls[0][0], 'https://example.test').searchParams.get('q')).toBe('Example App');
+});

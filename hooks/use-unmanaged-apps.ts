@@ -309,8 +309,8 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     return indexedApps.filter(({ app, search }) =>
       (!needle || search.includes(needle)) &&
       (filters.matchStatus === 'all' || app.matchStatus === filters.matchStatus) &&
-      (filters.showClaimed || !app.matchedPackageId || !cartWingetIds.has(app.matchedPackageId))
-    ).map(({ app }) => ({ ...app, isClaimed: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId) }));
+      (filters.showClaimed || !(app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId))))
+    ).map(({ app }) => ({ ...app, isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)) }));
   }, [indexedApps, deferredSearch, filters.matchStatus, filters.showClaimed, cartWingetIds]);
 
   // Status counts
@@ -327,7 +327,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
   const computedStats = useMemo((): UnmanagedAppsStats => {
     const appsWithClaimSync = nonMicrosoftApps.map(app => ({
       ...app,
-      isClaimed: app.matchedPackageId ? cartWingetIds.has(app.matchedPackageId) : false,
+      isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)),
     }));
 
     return {

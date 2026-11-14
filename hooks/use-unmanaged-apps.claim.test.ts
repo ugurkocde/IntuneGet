@@ -46,3 +46,13 @@ it('does not duplicate cart entries when Claim All retries a failed app',async()
  expect(useCartStore.getState().items).toHaveLength(1);
  expect(api.claimAllModal?.results.get('fixture')).toBe('success');
 });
+
+it.each(['pending', 'failed'])('keeps server %s claims with an empty cart after reload', async (claimStatus) => {
+ vi.stubGlobal('fetch', vi.fn(async () => Response.json({ apps: [{ ...app, isClaimed: true, claimStatus }], total: 1 })));
+ await act(async () => api.handleRefresh());
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, claimStatus });
+ expect(api.computedStats.claimed).toBe(1);
+ expect(api.claimableCount).toBe(0);
+ await act(async () => api.setFilters({ ...api.filters, showClaimed: false }));
+ expect(api.filteredApps).toHaveLength(0);
+});
