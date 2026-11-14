@@ -1,0 +1,5 @@
+{
+  "title": "Restore the prior catalog history query after shared timeouts",
+  "summary": "The earlier catalog history function is restored after production shared request timeouts returned. Existing migration history and access grants are preserved.",
+  "type": "fixed"
+}
