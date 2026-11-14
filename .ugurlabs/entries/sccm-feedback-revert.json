@@ -1,0 +1,5 @@
+{
+  "title": "Restore the previous SCCM feedback behavior",
+  "summary": "SCCM bulk actions and imports use the previous feedback behavior during reliability verification.",
+  "type": "maintenance"
+}

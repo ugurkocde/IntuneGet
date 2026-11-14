@@ -356,7 +356,7 @@ export default function MigrationDetailPage({ params }: PageProps) {
       if (!accessToken) throw new Error('Authentication required');
 
       const ids = Array.from(selectedApps);
-      const results = await Promise.allSettled(
+      await Promise.all(
         ids.map(appId =>
           fetch('/api/sccm/match', {
             method: 'PATCH',
@@ -369,23 +369,12 @@ export default function MigrationDetailPage({ params }: PageProps) {
         )
       );
 
-      const failedIds = ids.filter((_, index) => {
-        const result = results[index];
-        return result.status === 'rejected' || !result.value.ok;
-      });
-      setSelectedApps(current => new Set(
-        [...current].filter(id => !ids.includes(id) || failedIds.includes(id))
-      ));
-      if (failedIds.length > 0) {
-        throw new Error(`Excluded ${ids.length - failedIds.length} of ${ids.length} apps; ${failedIds.length} failed. Please try again.`);
-      }
-
       toast.success(`Excluded ${ids.length} apps`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to exclude apps');
-    } finally {
+      setSelectedApps(new Set());
       await fetchApps();
       await fetchMigration();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to exclude apps');
     }
   };
 
