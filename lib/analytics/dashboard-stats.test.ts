@@ -4,6 +4,19 @@ import { collectAnalyticsJobs } from './complete-job-pages';
 import type { AnalyticsJob } from '@/lib/db/types';
 const row = (id: string, status = 'deployed', completed_at: string | null = '2026-10-01T00:00:00Z'): AnalyticsJob => ({ id, user_id: 'user', user_email: null, status, completed_at, created_at: '2026-10-01T00:00:00Z', winget_id: 'Example.App', display_name: 'Example', intune_app_url: null });
 describe('statistics aggregation', () => {
+  it.each([
+    ['qa_failed', 'Deployment stopped', 'failed', 'error'],
+    ['duplicate_skipped', 'Duplicate skipped', 'success', 'package'],
+    ['awaiting_qa', 'Awaiting validation', 'pending', 'package'],
+    ['blocked_upstream', 'Blocked upstream', 'pending', 'package'],
+  ])('describes %s activity without claiming it was deployed', (jobStatus, verb, status, type) => {
+    const value = aggregateDashboardStats([row('fixture-job', jobStatus)], false);
+    expect(value.recentActivity).toEqual([expect.objectContaining({
+      id: 'fixture-job', description: `${verb} Example`, status, type,
+    })]);
+    expect(value.totalDeployed).toBe(0);
+    expect(value.thisMonth).toBe(0);
+  });
   it('preserves completion semantics and excludes cancellation from pending', () => { const v = aggregateDashboardStats(['deployed', 'completed', 'queued', 'packaging', 'uploading', 'failed', 'cancelled'].map((s, i) => row(String(i), s)), true, new Date('2026-10-10')); expect(v).toMatchObject({ totalDeployed: 2, thisMonth: 2, pending: 3, failed: 1, perUser: [{ userEmail: 'Unknown user', deployed: 2, pending: 3, failed: 1 }] }); });
   it('uses UTC month boundaries and rejects future month/invalid dates', () => { const v = aggregateDashboardStats([row('before', 'deployed', '2026-09-30T23:59:59Z'), row('now'), row('next', 'deployed', '2026-11-01T00:00:00Z'), row('bad', 'deployed', 'invalid')], false, new Date('2026-10-10')); expect(v.totalDeployed).toBe(4); expect(v.thisMonth).toBe(1); });
 });

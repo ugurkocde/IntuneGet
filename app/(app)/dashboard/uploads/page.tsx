@@ -49,6 +49,12 @@ import type { PackageAssignment } from '@/types/upload';
 import type { CustomerQaStatus } from '@/types/customer-qa';
 import { CustomerWaitOptions } from '@/components/CustomerWaitOptions';
 import { customerJobSnapshotKey, type CustomerJobSnapshot } from '@/lib/customer-wait-options';
+import {
+  ACTIVE_DEPLOYMENT_STATUSES,
+  SUCCEEDED_DEPLOYMENT_STATUSES,
+  FAILED_DEPLOYMENT_STATUSES,
+  TERMINAL_DEPLOYMENT_STATUSES,
+} from '@/lib/deployment-status-groups';
 
 interface PackagingJob {
   qa_status?: CustomerQaStatus;
@@ -110,7 +116,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 const PROGRESS_JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIVE_JOB_STATUSES: readonly string[] = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'];
+const ACTIVE_JOB_STATUSES = ACTIVE_DEPLOYMENT_STATUSES;
 
 export default function UploadsPage() {
   const searchParams = useSearchParams();
@@ -430,11 +436,11 @@ export default function UploadsPage() {
   const filteredJobs = jobs.filter((job) => {
     switch (filter) {
       case 'active':
-        return ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+        return ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
       case 'completed':
-        return ['completed', 'deployed', 'duplicate_skipped'].includes(job.status);
+        return SUCCEEDED_DEPLOYMENT_STATUSES.includes(job.status);
       case 'failed':
-        return ['failed', 'cancelled'].includes(job.status);
+        return FAILED_DEPLOYMENT_STATUSES.includes(job.status);
       default:
         return true;
     }
@@ -443,10 +449,10 @@ export default function UploadsPage() {
   const stats = {
     total: jobs.length,
     active: jobs.filter((j) =>
-      ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(j.status)
+      ACTIVE_DEPLOYMENT_STATUSES.includes(j.status)
     ).length,
-    completed: jobs.filter((j) => ['completed', 'deployed', 'duplicate_skipped'].includes(j.status)).length,
-    failed: jobs.filter((j) => ['qa_failed', 'failed'].includes(j.status)).length,
+    completed: jobs.filter((j) => SUCCEEDED_DEPLOYMENT_STATUSES.includes(j.status)).length,
+    failed: jobs.filter((j) => FAILED_DEPLOYMENT_STATUSES.includes(j.status)).length,
   };
 
   const filterButtons = ['all', 'active', 'completed', 'failed'] as const;
@@ -479,7 +485,7 @@ export default function UploadsPage() {
         badge={stats.active > 0 ? { text: <T>Live</T>, variant: 'success' as const } : undefined}
         actions={
           <div className="flex items-center gap-2">
-            {(stats.completed + stats.failed) > 0 && (
+            {jobs.some(job => TERMINAL_DEPLOYMENT_STATUSES.includes(job.status)) && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -499,7 +505,7 @@ export default function UploadsPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle><T>Clear Upload History?</T></AlertDialogTitle>
                     <AlertDialogDescription>
-                      <T>This hides completed, failed, cancelled, and deployed jobs from this page. Deployment audit and update records are preserved. Active jobs are not affected.</T>
+                      <T>This hides completed, stopped, failed, cancelled, and deployed jobs from this page. Deployment audit and update records are preserved. Active jobs are not affected.</T>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -839,10 +845,10 @@ function UploadJobCard({
 
   const config = statusConfig[job.status] || statusConfig.queued;
   const StatusIcon = config.icon;
-  const isActive = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isActive = ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
   const isStale = !['blocked_upstream', 'awaiting_qa'].includes(job.status) && isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
   // Allow cancelling active jobs or dismissing completed/failed jobs
-  const isCancellable = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isCancellable = ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
   const isDismissable = ['qa_failed', 'completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
   const canRemove = isCancellable || isDismissable;
 

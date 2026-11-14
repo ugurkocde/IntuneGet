@@ -1,0 +1,5 @@
+{
+  "title": "Show notification read failures with a retry action",
+  "summary": "Notifications show a clear error when a read fails and offer Retry while retaining saved rows after a failed refresh.",
+  "type": "fixed"
+}

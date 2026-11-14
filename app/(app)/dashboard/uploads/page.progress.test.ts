@@ -82,3 +82,23 @@ it('keeps a dismissed highlighted job out of the next refreshed list', async () 
  await act(async()=>[...document.querySelectorAll('button')].filter(b=>b.textContent?.trim()==='Dismiss').at(-1)!.click());
  expect(dismissed).toBe(true); expect(document.body.textContent).not.toContain('Dismiss fixture');
 });
+
+it('filters the same stopped jobs counted by the Failed card', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [
+  { ...job(1, 'Failed fixture'), status: 'failed' },
+  { ...job(2, 'Stopped fixture'), status: 'qa_failed' },
+  { ...job(3, 'Cancelled fixture'), status: 'cancelled' },
+ ] }));
+ await render();
+ const failed = [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Failed')!;
+ await act(async () => failed.click());
+ expect(document.body.textContent).toContain('Failed fixture');
+ expect(document.body.textContent).toContain('Stopped fixture');
+ expect(document.body.textContent).not.toContain('Cancelled fixture');
+});
+
+it('offers Clear History when only cancelled jobs remain', async () => {
+ f.fetch.mockResolvedValue(Response.json({ jobs: [{ ...job(1), status: 'cancelled' }] }));
+ await render();
+ expect([...document.querySelectorAll('button')].some(b => b.textContent?.trim() === 'Clear History')).toBe(true);
+});

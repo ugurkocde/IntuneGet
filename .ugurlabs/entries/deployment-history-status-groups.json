@@ -1,0 +1,5 @@
+{
+  "title": "Keep deployment history filters and cleanup consistent",
+  "summary": "The Failed filter includes stopped deployments, matching its count. Clear History also archives stopped jobs and remains available for cancelled history.",
+  "type": "fixed"
+}
