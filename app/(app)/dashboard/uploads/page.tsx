@@ -292,28 +292,34 @@ export default function UploadsPage() {
 
   const handleCancelJob = async (jobId: string, dismiss?: boolean) => {
     const job = jobs.find((candidate) => candidate.id === jobId);
-    if (!user?.id || job?.user_id !== user.id || cancellingJob.current) return;
+    if (!user?.id || job?.user_id !== user.id) {
+      setError('Only the deployment owner can cancel or dismiss this job.');
+      return;
+    }
+    if (cancellingJob.current) {
+      setError('Wait for the current deployment action to finish before starting another.');
+      return;
+    }
     const requestScopeKey = customerJobSnapshotKey(redeployScope.current);
-    const scope = redeployScope.current;
-    const targetTenant = scope.isMspUser && scope.selectedTenantId ? scope.selectedTenantId : scope.userTenantId;
-    if (!requestScopeKey || jobsSnapshotKey !== requestScopeKey || job.tenant_id !== targetTenant) return;
+    if (!requestScopeKey || jobsSnapshotKey !== requestScopeKey) {
+      setError('Refresh deployments before cancelling or dismissing a job in this view.');
+      return;
+    }
     const isCurrentScope = () => customerJobSnapshotKey(redeployScope.current) === requestScopeKey;
     cancellingJob.current = jobId;
     setCancellingJobId(jobId);
-    const previousJobs = jobs;
-    let optimisticUpdateApplied = false;
     try {
       const accessToken = await getAccessToken();
-      if (!accessToken || !isCurrentScope()) return;
-
-      if (dismiss) {
-        setJobs((prev) => prev.filter((candidate) => candidate.id !== jobId));
-      } else {
-        setJobs((prev) => prev.map((candidate) => candidate.id === jobId
-          ? { ...candidate, status: 'cancelled' as const, cancelled_at: new Date().toISOString() }
-          : candidate));
+      if (!isCurrentScope()) {
+        setError('The deployment view changed. Refresh deployments before trying again.');
+        return;
       }
-      optimisticUpdateApplied = true;
+      if (!accessToken) {
+        setSessionExpired(true);
+        return;
+      }
+      // Keep server rows intact while the action is pending. Polling can update
+      // them in the meantime, and failures must never restore an older list.
       const response = await fetch('/api/package/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -332,7 +338,6 @@ export default function UploadsPage() {
       fetchJobs();
     } catch (err) {
       if (!isCurrentScope()) return;
-      if (optimisticUpdateApplied) setJobs(previousJobs);
       console.error('Failed to cancel job:', err);
       setError(err instanceof Error ? err.message : `Failed to ${dismiss ? 'dismiss' : 'cancel'} job`);
     } finally {
