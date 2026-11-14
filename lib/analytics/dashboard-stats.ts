@@ -27,9 +27,10 @@ export function aggregateDashboardStats(jobs: AnalyticsJob[], includeUsers: bool
   }
   const recentActivity = jobs.slice(0, 5).map(job => {
     const name = job.display_name || job.winget_id;
-    const type: 'upload' | 'package' | 'error' = job.status === 'deployed' || job.status === 'uploading' ? 'upload' : ['failed', 'cancelled'].includes(job.status) ? 'error' : 'package';
-    const status: 'success' | 'pending' | 'failed' = isSuccessfulDeployment(job.status) ? 'success' : ['failed', 'cancelled'].includes(job.status) ? 'failed' : 'pending';
-    const verb = ({ deployed: 'Deployed', completed: 'Packaged', failed: 'Failed to deploy', cancelled: 'Cancelled', queued: 'Queued', packaging: 'Packaging', uploading: 'Uploading' } as Record<string, string>)[job.status] ?? 'Processing';
+    const failedActivity = ['failed', 'cancelled', 'qa_failed'].includes(job.status);
+    const type: 'upload' | 'package' | 'error' = job.status === 'deployed' || job.status === 'uploading' ? 'upload' : failedActivity ? 'error' : 'package';
+    const status: 'success' | 'pending' | 'failed' = isSuccessfulDeployment(job.status) || job.status === 'duplicate_skipped' ? 'success' : failedActivity ? 'failed' : 'pending';
+    const verb = ({ deployed: 'Deployed', completed: 'Packaged', failed: 'Failed to deploy', cancelled: 'Cancelled', queued: 'Queued', packaging: 'Packaging', uploading: 'Uploading', qa_failed: 'Deployment stopped', duplicate_skipped: 'Duplicate skipped', awaiting_qa: 'Awaiting validation', blocked_upstream: 'Blocked upstream' } as Record<string, string>)[job.status] ?? 'Processing';
     return { id: job.id, type, displayName: name, description: `${verb} ${name}`, timestamp: job.created_at, status, intuneAppUrl: job.intune_app_url ?? undefined, ...(includeUsers ? { deployedBy: job.user_email } : {}) };
   });
   return { ...counts, recentActivity, ...(includeUsers ? { perUser: [...users.values()].sort((a, b) => a.userEmail.localeCompare(b.userEmail)) } : {}) };

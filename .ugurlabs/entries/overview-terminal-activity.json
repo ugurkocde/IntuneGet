@@ -1,0 +1,5 @@
+{
+  "title": "Show stopped and skipped deployment activity clearly",
+  "summary": "Overview labels stopped, skipped and waiting deployment activity explicitly, so finished jobs no longer appear to keep processing.",
+  "type": "fixed"
+}
