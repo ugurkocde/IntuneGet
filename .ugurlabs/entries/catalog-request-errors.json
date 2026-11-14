@@ -1,0 +1,5 @@
+{
+  "title": "Retry catalog search and browse failures",
+  "summary": "Catalog request failures now show a retry option instead of an empty search result. Loaded results stay visible when a refresh or later page fails.",
+  "type": "fixed"
+}
