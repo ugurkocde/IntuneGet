@@ -68,3 +68,16 @@ it('shows an organization error for a missing token after startup',async()=>{
  await ready();state.client.instance.acquireTokenSilent.mockResolvedValue({accessToken:'',expiresOn:new Date(Date.now()+3600000)});const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
  await render(createElement(Probe));expect(fetch).not.toHaveBeenCalled();expect(context.organizationError).toBeTruthy();expect(context.hasResolvedOrganization).toBe(false);
 });
+const switchProfile=()=>{const account={...cachedAccount,localAccountId:'user-b',tenantId:'tenant-b'};state.client.instance.setActiveAccount(account);state.client.context.accounts=[account];};
+it('clears organization state when tenant profiles share the home account',async()=>{
+ await ready();let failed=false;vi.stubGlobal('fetch',vi.fn(async url=>String(url).endsWith('/tenants')?response({tenants:[]}):response(failed?{}:{organization:{id:'old-org'},stats:null,isMspUser:true},failed?500:200)));
+ await render(createElement(Probe));failed=true;switchProfile();await render(createElement(Probe));
+ expect(context.organization).toBeNull();expect(context.isMspUser).toBe(false);expect(context.hasResolvedOrganization).toBe(false);expect(context.organizationError).toBeTruthy();
+});
+it('does not let an old create completion invalidate the new account lookup',async()=>{
+ await ready();let post!:(r:Response)=>void,newLookup!:(r:Response)=>void;let calls=0;
+ const fetch=vi.fn(async(_url,options)=>options?.method==='POST'?new Promise<Response>(resolve=>{post=resolve;}):++calls===1?response(noOrganization):new Promise<Response>(resolve=>{newLookup=resolve;}));vi.stubGlobal('fetch',fetch);
+ await render(createElement(Probe));let creation!:Promise<unknown>;await act(async()=>{creation=context.createOrganization({name:'Fixture'});});switchProfile();await render(createElement(Probe));
+ await act(async()=>{post(response({organization:{id:'old-created'}}));await Promise.resolve();await Promise.resolve();});
+ expect(fetch).toHaveBeenCalledTimes(3);await act(async()=>{newLookup(response(noOrganization));await creation;});expect(context.hasResolvedOrganization).toBe(true);
+});

@@ -5,7 +5,7 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {WebhookManager} from './WebhookManager';
 const auth=vi.hoisted(()=>({token:vi.fn(),initializing:false}));
 vi.mock('@/hooks/useMicrosoftAuth',()=>({useMicrosoftAuth:()=>({getAccessToken:auth.token,isInitializing:auth.initializing})}));
-vi.mock('./WebhookFormModal',()=>({WebhookFormModal:()=>null}));
+vi.mock('./WebhookFormModal',()=>({WebhookFormModal:({isOpen}:{isOpen:boolean})=>isOpen?createElement('input',{'aria-label':'Webhook draft',defaultValue:''}):null}));
 let host:HTMLDivElement,root:Root;
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
 beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);auth.initializing=false;auth.token.mockResolvedValue('fixture-token');host=document.createElement('div');document.body.append(host);root=createRoot(host);});
@@ -31,4 +31,16 @@ it('loads once when startup finishes instead of getting stuck on a missing token
  auth.initializing=true;auth.token.mockResolvedValue(null);const fetch=vi.fn(async()=>response({webhooks:[]}));vi.stubGlobal('fetch',fetch);
  await act(async()=>root.render(createElement(WebhookManager)));expect(fetch).not.toHaveBeenCalled();expect(host.querySelector('[role="alert"]')).toBeNull();
  auth.initializing=false;auth.token.mockResolvedValue('fixture-token');await act(async()=>root.render(createElement(WebhookManager)));expect(fetch).toHaveBeenCalledTimes(1);
+});
+const hook={id:'fixture',name:'Fixture hook',url:'https://example.invalid/hook',webhook_type:'custom',is_enabled:true,failure_count:0};
+it('keeps a webhook draft mounted while a successful test refreshes the list',async()=>{
+ let finish!:(r:Response)=>void,loads=0;vi.stubGlobal('fetch',vi.fn(async url=>String(url).endsWith('/test')?response({success:true}):++loads===1?response({webhooks:[hook]}):new Promise<Response>(resolve=>{finish=resolve;})));
+ await act(async()=>root.render(createElement(WebhookManager)));await act(async()=>host.querySelector<HTMLButtonElement>('button[title="Edit"]')!.click());const draft=host.querySelector<HTMLInputElement>('input')!;draft.value='Keep this draft';
+ await act(async()=>host.querySelector<HTMLButtonElement>('button[title="Send test"]')!.click());expect(host.querySelector('input')).toBe(draft);
+ await act(async()=>finish(response({webhooks:[hook]})));expect(host.querySelector<HTMLInputElement>('input')!.value).toBe('Keep this draft');
+});
+it('ignores a stale webhook load after the auth callback changes',async()=>{
+ let old!:(r:Response)=>void;let calls=0;vi.stubGlobal('fetch',vi.fn(async()=>++calls===1?new Promise<Response>(resolve=>{old=resolve;}):response({webhooks:[{...hook,name:'Current hook'}]})));
+ await act(async()=>root.render(createElement(WebhookManager)));auth.token=vi.fn().mockResolvedValue('new-fixture-token');await act(async()=>root.render(createElement(WebhookManager)));
+ await act(async()=>old(response({webhooks:[{...hook,name:'Old hook'}]})));expect(host.textContent).toContain('Current hook');expect(host.textContent).not.toContain('Old hook');
 });

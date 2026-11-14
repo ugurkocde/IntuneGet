@@ -33,7 +33,11 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
   const [hasResolvedOrganization, setHasResolvedOrganization] = useState(false);
   const organizationRequest = useRef(0);
   const organizationOwner = useRef<string | null>(null);
-  const identityKey = account?.homeAccountId ?? null;
+  const identityKey = account
+    ? JSON.stringify([account.homeAccountId, account.localAccountId, account.tenantId])
+    : null;
+  const currentIdentityKey = useRef(identityKey);
+  useEffect(() => { currentIdentityKey.current = identityKey; }, [identityKey]);
 
   // Tenants state
   const [managedTenants, setManagedTenants] = useState<MspManagedTenantWithStats[]>([]);
@@ -54,6 +58,8 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
 
   // A failed lookup is not evidence that this account has no organization.
   const refreshOrganization = useCallback(async () => {
+    // A create started by another account may finish after this account's lookup.
+    if (identityKey !== currentIdentityKey.current) return;
     const request = ++organizationRequest.current;
     if (organizationOwner.current !== identityKey) {
       organizationOwner.current = identityKey;

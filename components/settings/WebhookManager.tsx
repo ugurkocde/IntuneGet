@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Webhook,
   Plus,
@@ -35,6 +35,8 @@ const WEBHOOK_TYPE_LABELS: Record<WebhookType, { label: string; color: string }>
 export function WebhookManager({ className }: WebhookManagerProps) {
   const { getAccessToken, isInitializing } = useMicrosoftAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const lookupSequence = useRef(0);
   const [webhooks, setWebhooks] = useState<WebhookConfiguration[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [unavailableMessage, setUnavailableMessage] = useState<string | null>(null);
@@ -46,23 +48,34 @@ export function WebhookManager({ className }: WebhookManagerProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchWebhooks = useCallback(async () => {
+    const lookup = ++lookupSequence.current;
     if (isInitializing) return;
     setIsLoading(true);
     setError(null);
     try {
       const token = await getAccessToken();
+      if (lookup !== lookupSequence.current) return;
       if (!token) throw new Error('Authentication required');
       const response = await fetch('/api/webhooks', { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
-        const data = await response.json(); setWebhooks(data.webhooks); setUnavailableMessage(null);
+        const data = await response.json();
+        if (lookup !== lookupSequence.current) return;
+        setWebhooks(data.webhooks); setUnavailableMessage(null);
       } else if (response.status === 503) {
         const data = await response.json().catch(() => ({}));
+        if (lookup !== lookupSequence.current) return;
         setUnavailableMessage(typeof data.error === 'string' && data.error ? data.error : 'Webhook notifications are not available on this server.');
       } else throw new Error('Webhook lookup failed');
-    } catch { setError('Could not load webhooks. Please try again.'); }
-    finally { setIsLoading(false); }
+    } catch {
+      if (lookup === lookupSequence.current) setError('Could not load webhooks. Please try again.');
+    } finally {
+      if (lookup === lookupSequence.current) { setIsLoading(false); setHasLoaded(true); }
+    }
   }, [getAccessToken, isInitializing]);
-  useEffect(() => { void fetchWebhooks(); }, [fetchWebhooks]);
+  useEffect(() => {
+    void fetchWebhooks();
+    return () => { lookupSequence.current += 1; };
+  }, [fetchWebhooks]);
 
   const handleCreateWebhook = async (data: {
     name: string;
@@ -234,7 +247,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     setEditingWebhook(null);
   };
 
-  if (isLoading) {
+  if (isLoading && !hasLoaded) {
     return (
       <div className={cn('glass-light rounded-xl p-6 border border-overlay/5', className)}>
         <div className="flex items-center justify-center py-8">
