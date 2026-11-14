@@ -83,6 +83,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT }}
           CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CURATED_CATALOG_SIGNING_KEY: ${{ secrets.CURATED_CATALOG_SIGNING_KEY }}
           CURATED_APPROVALS: ${{ needs.plan.outputs.approvals }}
           CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
