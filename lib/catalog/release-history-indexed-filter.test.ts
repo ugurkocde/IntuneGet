@@ -5,6 +5,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 const oldSql = readFileSync('supabase/migrations/20260911120000_release_history_filters.sql', 'utf8');
 const newSql = readFileSync('supabase/migrations/20261113050036_catalog_history_indexed_app_filter.sql', 'utf8');
 const boundedSql = readFileSync('supabase/migrations/20261113232318_catalog_history_page_bound_predecessors.sql', 'utf8');
+const narrowSql = readFileSync('supabase/migrations/20261114051500_catalog_history_narrow_classification.sql', 'utf8');
 let db: PGlite;
 let originalAcl: unknown;
 beforeAll(async () => {
@@ -12,7 +13,7 @@ beforeAll(async () => {
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
     CREATE TABLE public.curated_apps(winget_id text PRIMARY KEY,name text,publisher text,is_locale_variant boolean);
-    CREATE TABLE public.version_history(id bigserial PRIMARY KEY,winget_id text,version text NOT NULL,release_date text,created_at timestamptz,installers jsonb);
+    CREATE TABLE public.version_history(id serial PRIMARY KEY,winget_id text,version text NOT NULL,release_date text,created_at timestamptz,installers jsonb,UNIQUE(winget_id,version));
     CREATE INDEX idx_version_history_winget_id ON public.version_history(winget_id);
     CREATE TABLE public.curated_sync_status(id text,last_run_status text,last_run_completed_at timestamptz,last_successful_sync_at timestamptz);
     INSERT INTO public.curated_apps SELECT 'Fixture.'||g,'App '||g,'Publisher',false FROM generate_series(1,512) g;
@@ -24,6 +25,7 @@ beforeAll(async () => {
       ('No.History','Empty','Publisher',false),('Null.Name',NULL,'Publisher',false),('Single.App','Single','Publisher',false);
     INSERT INTO public.version_history(winget_id,version,created_at,installers) VALUES
       ('Tied.App','later','2026-02-03','[]'),('Tied.App','earlier','2026-02-01','[]'),
+      ('Tied.App','same-first-time','2026-02-01','[]'),
       ('Tied.App','same-time','2026-02-03','[]'),('Tied.App','undated',NULL,'[]'),
       ('Null.Date','undated',NULL,'[]'),('Null.Name','1','2026-02-03','[]'),('Single.App','1','2026-02-03','[]');
     ANALYZE public.curated_apps; ANALYZE public.version_history;
@@ -33,6 +35,7 @@ beforeAll(async () => {
   originalAcl = (await db.query("select proacl::text acl from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")).rows[0];
   await db.exec(newSql);
   if (boundedSql.trim()) await db.exec(boundedSql);
+  await db.exec(narrowSql);
 }, 30000);
 afterAll(async () => { await db?.close(); });
 
@@ -123,9 +126,8 @@ it('avoids a global history window and limits indexed predecessor reads to the r
       expect(previous).toBeDefined();
       expect(previous?.['Index Name']).toBe('idx_version_history_winget_id_created_at_id');
       expect(Number(previous?.['Actual Loops'])).toBeLessThanOrEqual(40);
-      const first = nodes.find(n => n.Alias === 'first_v');
-      expect(first?.['Index Name']).toBe('idx_version_history_winget_id_created_at_id');
-      expect(Number(first?.['Actual Loops'])).toBeLessThanOrEqual(520);
+      expect(nodes.filter(n => n['Relation Name'] === 'version_history')
+        .every(n => Number(n['Actual Loops']) <= 40)).toBe(true);
     }
   }
 }, 30000);
@@ -133,3 +135,61 @@ it('avoids a global history window and limits indexed predecessor reads to the r
 it('preserves the existing execution grants', async () => {
   expect((await db.query("select proacl::text acl from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")).rows[0]).toEqual(originalAcl);
 });
+
+it('bounds history reads and spill at production scale without changing either failing response', async () => {
+  const scale = new PGlite();
+  try {
+    await scale.exec(`
+      CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+      CREATE TABLE public.curated_apps(winget_id text PRIMARY KEY,name text,publisher text,is_locale_variant boolean);
+      CREATE TABLE public.version_history(id serial PRIMARY KEY,winget_id text,version text NOT NULL,release_date text,created_at timestamptz,installers jsonb,UNIQUE(winget_id,version));
+      CREATE INDEX idx_version_history_winget_id ON public.version_history(winget_id);
+      CREATE TABLE public.curated_sync_status(id text,last_run_status text,last_run_completed_at timestamptz,last_successful_sync_at timestamptz);
+      INSERT INTO public.curated_apps SELECT 'Fixture.Publisher.Product.'||lpad(g::text,5,'0'),'Fixture application '||g,'Fixture Publisher',false FROM generate_series(1,16415) g;
+      INSERT INTO public.curated_apps SELECT 'Fixture.Locale.Product.'||g,'Locale application '||g,'Fixture Publisher',true FROM generate_series(1,78) g;
+      INSERT INTO public.version_history(winget_id,version,release_date,created_at,installers)
+        SELECT a.winget_id,v::text,'2026-01-01',TIMESTAMPTZ '2026-01-01'+((row_number() OVER (ORDER BY a.winget_id,v))%325)*INTERVAL '1 day','[{"Architecture":"x64"}]'::jsonb
+        FROM public.curated_apps a CROSS JOIN generate_series(1,4) v;
+      INSERT INTO public.version_history(winget_id,version,release_date,created_at,installers)
+        SELECT winget_id,'5','2026-01-01',TIMESTAMPTZ '2026-11-10','[{"Architecture":"x64"}]'::jsonb FROM public.curated_apps WHERE is_locale_variant=false ORDER BY winget_id LIMIT 8871;
+      SET work_mem='4MB';
+    `);
+    await scale.exec(oldSql);
+    await scale.exec(boundedSql);
+    await scale.exec(boundedSql.replace('public.get_catalog_release_history_v2(', 'pg_temp.catalog_deployed('));
+    await scale.exec(narrowSql);
+    await scale.exec('VACUUM ANALYZE public.version_history;');
+    await scale.exec('ANALYZE public.curated_apps;');
+    const source = (await scale.query<{prosrc:string}>("select prosrc from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")).rows[0].prosrc;
+    const names = ['search_text','month_filter','kind_filter','page_number','app_filter','date_from','date_to','architecture_filter'];
+    let generic = source;
+    names.forEach((name,index)=>{generic=generic.replace(new RegExp('\\b'+name+'\\b','g'),'$'+(index+1));});
+    await scale.exec('PREPARE scale_history(text,text,text,integer,text,date,date,text) AS '+generic);
+    for (const args of [ ['', '', 'all', 1, '', null, null, ''], ['', '', 'updated', 1, '', '2026-11-08', null, ''] ]) {
+      const query = (name:string) => scale.query<{result:unknown}>(`select ${name}($1::text,$2::text,$3::text,$4::integer,$5::text,$6::date,$7::date,$8::text) result`,args);
+      expect((await query('public.get_catalog_release_history_v2')).rows[0].result).toEqual((await query('pg_temp.catalog_deployed')).rows[0].result);
+      const literals = args.map((value,index)=>value===null?'NULL::date':typeof value==='number'?String(value):"'"+value+"'"+(index===5||index===6?'::date':''));
+      for (const mode of ['force_custom_plan','force_generic_plan']) {
+        await scale.exec('SET plan_cache_mode='+mode);
+        let bound=source;
+        names.forEach((name,index)=>{bound=bound.replace(new RegExp('\\b'+name+'\\b','g'),literals[index]);});
+        const sql=mode==='force_generic_plan'?'EXECUTE scale_history('+literals.join(',')+')':bound;
+        const plan=(await scale.query('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) '+sql)).rows;
+        const nodes:Record<string,unknown>[]=[];
+        const visit=(node:unknown)=>{if(!node||typeof node!=='object')return;const value=node as Record<string,unknown>;if(value['Node Type'])nodes.push(value);for(const child of Object.values(value))if(Array.isArray(child))child.forEach(visit);else if(typeof child==='object')visit(child);};
+        visit(plan);
+        expect(nodes.filter(n=>n['Node Type']==='WindowAgg')).toEqual([]);
+        // Constant bulk passes replace per-app probes without hiding repeated CTE or subplan work.
+        expect(nodes.every(n=>Number(n['Actual Loops'])<=40)).toBe(true);
+        const historyNodes=nodes.filter(n=>n['Relation Name']==='version_history');
+        expect(historyNodes.filter(n=>Number(n['Actual Loops'])>1).length).toBeLessThanOrEqual(2);
+        expect(historyNodes.filter(n=>Number(n['Actual Loops'])===1).length).toBeLessThanOrEqual(5);
+        expect(nodes.find(n=>n['Parent Relationship']===undefined)?.['Temp Written Blocks']).toBe(0);
+      }
+      const elapsed:number[]=[];
+      for(let n=0;n<20;n++){const started=performance.now();await query('public.get_catalog_release_history_v2');elapsed.push(performance.now()-started);}
+      elapsed.sort((a,b)=>a-b);
+      console.info('History fixture timing',JSON.stringify({kind:args[2],from:args[5],samples:20,p95Ms:elapsed[18]}));
+    }
+  } finally { await scale.close(); }
+}, 120000);
