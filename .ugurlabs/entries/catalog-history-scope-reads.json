@@ -1,0 +1,5 @@
+{
+  "title": "Reduce catalog history database work",
+  "summary": "Catalog history keeps app reads scoped and scans narrow history keys for global results, reducing repeated database work while preserving filters and results.",
+  "type": "fixed"
+}
