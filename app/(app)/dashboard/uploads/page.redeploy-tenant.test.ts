@@ -58,3 +58,16 @@ it('keeps the committed retry scope when React suspends a different tenant rende
  await act(async () => resolve('fixture-token'));
  expect(posts()).toHaveLength(1); expect(posts()[0][1].headers['X-MSP-Tenant-Id']).toBe('customer-b');
 });
+
+it('creates a duplicate app only after confirmation, and cancellation sends nothing', async () => {
+ f.fetch.mockImplementation(async (_url: string, options?: RequestInit) => options?.method === 'POST' ? Response.json({ success:true,jobs:[{id:'new-job'}] }) : Response.json({jobs:[{id:'job',user_id:'owner',tenant_id:'customer-b',display_name:'Example app',publisher:'Example',winget_id:'Example.App',version:'1',architecture:'x64',installer_type:'msi',status:'duplicate_skipped',progress_percent:0,created_at:'2026-11-13T00:00:00Z',updated_at:'2026-11-13T00:00:00Z',error_details:{existingVersion:'1'},package_config:{wingetId:'Example.App',assignments:[]}}]}));
+ await render();
+ const button=(text:string)=>[...document.querySelectorAll('button')].find(b=>b.textContent?.trim()===text)!;
+ await act(async()=>button('Deploy as new app anyway').click());
+ expect(posts()).toHaveLength(0);expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+ await act(async()=>button('Keep existing app').click());expect(posts()).toHaveLength(0);
+ await act(async()=>button('Deploy as new app anyway').click());
+ await act(async()=>button('Deploy as new app').click());
+ expect(posts()).toHaveLength(1);expect(JSON.parse(posts()[0][1].body).forceCreate).toBe(true);
+});
+

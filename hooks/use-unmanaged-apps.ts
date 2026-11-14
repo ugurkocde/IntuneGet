@@ -386,41 +386,43 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
         recommendedInstaller.type
       );
 
-      addItem({
-        appSource: 'win32',
-        wingetId: app.matchedPackageId,
-        displayName: manifest?.name || app.displayName,
-        publisher: manifest?.publisher || app.publisher || '',
-        version: manifest?.version || app.version || '',
-        architecture: recommendedInstaller.architecture,
-        installScope: recommendedInstaller.scope || 'machine',
-        installerType: recommendedInstaller.type,
-        nestedInstallerType: recommendedInstaller.nestedInstallerType,
-        nestedInstallerPath: recommendedInstaller.nestedInstallerPath,
-        manifestDependencies: recommendedInstaller.packageDependencies,
-        installerUrl: recommendedInstaller.url,
-        installerSha256: recommendedInstaller.sha256,
-        installCommand: generateInstallCommand(
-          recommendedInstaller,
-          recommendedInstaller.scope || 'machine'
-        ),
-        uninstallCommand: generateUninstallCommand(
-          recommendedInstaller,
-          manifest?.name || app.displayName
-        ),
-        detectionRules,
-        requirementRules: buildCartItemRequirementRules(
-          manifest?.name || app.displayName,
-          recommendedInstaller.type,
-          recommendedInstaller.productCode,
-          undefined
-        ),
-        psadtConfig: {
-          ...DEFAULT_PSADT_CONFIG,
-          processesToClose,
+      if (!useCartStore.getState().isInCart(app.matchedPackageId, manifest?.version || app.version || '', recommendedInstaller.architecture, recommendedInstaller.scope || 'machine')) {
+        addItem({
+          appSource: 'win32',
+          wingetId: app.matchedPackageId,
+          displayName: manifest?.name || app.displayName,
+          publisher: manifest?.publisher || app.publisher || '',
+          version: manifest?.version || app.version || '',
+          architecture: recommendedInstaller.architecture,
+          installScope: recommendedInstaller.scope || 'machine',
+          installerType: recommendedInstaller.type,
+          nestedInstallerType: recommendedInstaller.nestedInstallerType,
+          nestedInstallerPath: recommendedInstaller.nestedInstallerPath,
+          manifestDependencies: recommendedInstaller.packageDependencies,
+          installerUrl: recommendedInstaller.url,
+          installerSha256: recommendedInstaller.sha256,
+          installCommand: generateInstallCommand(
+            recommendedInstaller,
+            recommendedInstaller.scope || 'machine'
+          ),
+          uninstallCommand: generateUninstallCommand(
+            recommendedInstaller,
+            manifest?.name || app.displayName
+          ),
           detectionRules,
-        },
-      });
+          requirementRules: buildCartItemRequirementRules(
+            manifest?.name || app.displayName,
+            recommendedInstaller.type,
+            recommendedInstaller.productCode,
+            undefined
+          ),
+          psadtConfig: {
+            ...DEFAULT_PSADT_CONFIG,
+            processesToClose,
+            detectionRules,
+          },
+        });
+      }
 
       const claimResponse = await fetch('/api/intune/claim', {
         method: 'POST',
@@ -498,35 +500,37 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
         recommendedInstaller.type
       );
 
-      addItemSilent({
-        appSource: 'win32',
-        wingetId: app.matchedPackageId!,
-        displayName: manifest?.name || app.displayName,
-        publisher: manifest?.publisher || app.publisher || '',
-        version: manifest?.version || app.version || '',
-        architecture: recommendedInstaller.architecture,
-        installScope: recommendedInstaller.scope || 'machine',
-        installerType: recommendedInstaller.type,
-        nestedInstallerType: recommendedInstaller.nestedInstallerType,
-        nestedInstallerPath: recommendedInstaller.nestedInstallerPath,
-        manifestDependencies: recommendedInstaller.packageDependencies,
-        installerUrl: recommendedInstaller.url,
-        installerSha256: recommendedInstaller.sha256,
-        installCommand: generateInstallCommand(
-          recommendedInstaller,
-          recommendedInstaller.scope || 'machine'
-        ),
-        uninstallCommand: generateUninstallCommand(
-          recommendedInstaller,
-          manifest?.name || app.displayName
-        ),
-        detectionRules,
-        psadtConfig: {
-          ...DEFAULT_PSADT_CONFIG,
-          processesToClose,
+      if (!useCartStore.getState().isInCart(app.matchedPackageId!, manifest?.version || app.version || '', recommendedInstaller.architecture, recommendedInstaller.scope || 'machine')) {
+        addItemSilent({
+          appSource: 'win32',
+          wingetId: app.matchedPackageId!,
+          displayName: manifest?.name || app.displayName,
+          publisher: manifest?.publisher || app.publisher || '',
+          version: manifest?.version || app.version || '',
+          architecture: recommendedInstaller.architecture,
+          installScope: recommendedInstaller.scope || 'machine',
+          installerType: recommendedInstaller.type,
+          nestedInstallerType: recommendedInstaller.nestedInstallerType,
+          nestedInstallerPath: recommendedInstaller.nestedInstallerPath,
+          manifestDependencies: recommendedInstaller.packageDependencies,
+          installerUrl: recommendedInstaller.url,
+          installerSha256: recommendedInstaller.sha256,
+          installCommand: generateInstallCommand(
+            recommendedInstaller,
+            recommendedInstaller.scope || 'machine'
+          ),
+          uninstallCommand: generateUninstallCommand(
+            recommendedInstaller,
+            manifest?.name || app.displayName
+          ),
           detectionRules,
-        },
-      });
+          psadtConfig: {
+            ...DEFAULT_PSADT_CONFIG,
+            processesToClose,
+            detectionRules,
+          },
+        });
+      }
 
       const claimResponse = await fetch('/api/intune/claim', {
         method: 'POST',

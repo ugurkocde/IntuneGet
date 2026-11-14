@@ -1163,11 +1163,12 @@ function UploadJobCard({
                         <T>View existing app</T>
                       </a>
                     )}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
                     <Button
                       size="sm"
                       variant="outline"
                       className="border-accent-cyan/30 text-accent-cyan hover:bg-accent-cyan/10 hover:border-accent-cyan/50 text-xs"
-                      onClick={() => onRedeploy(job, true)}
                       disabled={isRedeploying}
                     >
                       {isRedeploying ? (
@@ -1177,6 +1178,20 @@ function UploadJobCard({
                       )}
                       <T>Deploy as new app anyway</T>
                     </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle><T>Create a second Intune app?</T></AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <T><Var>{job.display_name}</Var> already exists in this tenant. Deploying it again creates a separate app with its own assignments.</T>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel><T>Keep existing app</T></AlertDialogCancel>
+                          <AlertDialogAction onClick={() => onRedeploy(job, true)}><T>Deploy as new app</T></AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               </div>
