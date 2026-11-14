@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Webhook,
   Plus,
@@ -33,8 +33,17 @@ const WEBHOOK_TYPE_LABELS: Record<WebhookType, { label: string; color: string }>
 };
 
 export function WebhookManager({ className }: WebhookManagerProps) {
-  const { getAccessToken } = useMicrosoftAuth();
+  const { getAccessToken, isInitializing, account } = useMicrosoftAuth();
+  const identityKey = account
+    ? JSON.stringify([account.homeAccountId, account.localAccountId, account.tenantId])
+    : null;
+  const currentIdentityKey = useRef(identityKey);
+  const lookupOwner = useRef(identityKey);
+  useEffect(() => { currentIdentityKey.current = identityKey; }, [identityKey]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadedIdentity, setLoadedIdentity] = useState<string | null>();
+  const hasLoaded = loadedIdentity === identityKey;
+  const lookupSequence = useRef(0);
   const [webhooks, setWebhooks] = useState<WebhookConfiguration[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [unavailableMessage, setUnavailableMessage] = useState<string | null>(null);
@@ -45,42 +54,47 @@ export function WebhookManager({ className }: WebhookManagerProps) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Fetch webhooks
-  useEffect(() => {
-    fetchWebhooks();
-  }, []);
-
-  async function fetchWebhooks() {
+  const fetchWebhooks = useCallback(async () => {
+    if (currentIdentityKey.current !== identityKey) return;
+    const lookup = ++lookupSequence.current;
+    if (lookupOwner.current !== identityKey) {
+      lookupOwner.current = identityKey;
+      setWebhooks([]); setError(null); setUnavailableMessage(null);
+      setTestResults({}); setIsModalOpen(false); setEditingWebhook(null);
+      setLoadedIdentity(undefined);
+    }
+    if (isInitializing) return;
+    setIsLoading(true);
+    setError(null);
     try {
       const token = await getAccessToken();
-      if (!token) return;
-
-      const response = await fetch('/api/webhooks', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
+      if (lookup !== lookupSequence.current) return;
+      if (!token) throw new Error('Authentication required');
+      const response = await fetch('/api/webhooks', { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
-        setWebhooks(data.webhooks);
-        setUnavailableMessage(null);
+        if (lookup !== lookupSequence.current) return;
+        setWebhooks(data.webhooks); setUnavailableMessage(null);
       } else if (response.status === 503) {
-        // The server cannot store webhooks (for example a SQLite only
-        // deployment), so explain the setup instead of offering a form.
         const data = await response.json().catch(() => ({}));
-        setUnavailableMessage(
-          typeof data.error === 'string' && data.error
-            ? data.error
-            : 'Webhook notifications are not available on this server.'
-        );
-      }
-    } catch (err) {
-      console.error('Failed to fetch webhooks:', err);
+        if (lookup !== lookupSequence.current) return;
+        setUnavailableMessage(typeof data.error === 'string' && data.error ? data.error : 'Webhook notifications are not available on this server.');
+      } else throw new Error('Webhook lookup failed');
+    } catch {
+      if (lookup === lookupSequence.current) setError('Could not load webhooks. Please try again.');
     } finally {
-      setIsLoading(false);
+      if (lookup === lookupSequence.current) { setIsLoading(false); setLoadedIdentity(identityKey); }
     }
-  }
+  }, [getAccessToken, isInitializing, identityKey]);
+  useEffect(() => {
+    void fetchWebhooks();
+    return () => { lookupSequence.current += 1; };
+  }, [fetchWebhooks]);
+
+  const invalidatePendingLookups = () => {
+    lookupSequence.current += 1;
+    setIsLoading(false);
+  };
 
   const handleCreateWebhook = async (data: {
     name: string;
@@ -108,7 +122,8 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       }
 
       const result = await response.json();
-      setWebhooks([result.webhook, ...webhooks]);
+      invalidatePendingLookups();
+      setWebhooks(current => [result.webhook, ...current]);
       setIsModalOpen(false);
     } catch (err) {
       throw err;
@@ -143,7 +158,8 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       }
 
       const result = await response.json();
-      setWebhooks(webhooks.map((w) => (w.id === editingWebhook.id ? result.webhook : w)));
+      invalidatePendingLookups();
+      setWebhooks(current => current.map(w => w.id === editingWebhook.id ? result.webhook : w));
       setEditingWebhook(null);
       setIsModalOpen(false);
     } catch (err) {
@@ -157,7 +173,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     setDeletingId(id);
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token) throw new Error('Authentication required');
 
       const response = await fetch(`/api/webhooks/${id}`, {
         method: 'DELETE',
@@ -167,10 +183,11 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       });
 
       if (response.ok) {
-        setWebhooks(webhooks.filter((w) => w.id !== id));
-      }
-    } catch (err) {
-      console.error('Failed to delete webhook:', err);
+        invalidatePendingLookups();
+        setWebhooks(current => current.filter(w => w.id !== id));
+      } else throw new Error('Webhook deletion failed');
+    } catch {
+      setError('Could not delete the webhook. Refresh the list before trying again.');
     } finally {
       setDeletingId(null);
     }
@@ -180,7 +197,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     setTogglingId(webhook.id);
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token) throw new Error('Authentication required');
 
       const response = await fetch(`/api/webhooks/${webhook.id}`, {
         method: 'PUT',
@@ -193,10 +210,11 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
       if (response.ok) {
         const result = await response.json();
-        setWebhooks(webhooks.map((w) => (w.id === webhook.id ? result.webhook : w)));
-      }
-    } catch (err) {
-      console.error('Failed to toggle webhook:', err);
+        invalidatePendingLookups();
+        setWebhooks(current => current.map(w => w.id === webhook.id ? result.webhook : w));
+      } else throw new Error('Webhook update failed');
+    } catch {
+      setError('Could not update the webhook. Refresh the list before trying again.');
     } finally {
       setTogglingId(null);
     }
@@ -219,6 +237,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
       const result = await response.json();
 
+      if (currentIdentityKey.current !== identityKey) return;
       if (result.success) {
         setTestResults((prev) => ({
           ...prev,
@@ -252,7 +271,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     setEditingWebhook(null);
   };
 
-  if (isLoading) {
+  if (!hasLoaded) {
     return (
       <div className={cn('glass-light rounded-xl p-6 border border-overlay/5', className)}>
         <div className="flex items-center justify-center py-8">
@@ -264,6 +283,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
   return (
     <div className={cn('glass-light rounded-xl p-6 border border-overlay/5 hover:border-accent-violet/20 transition-colors', className)}>
+      {error && <div role="alert" className="rounded-lg border border-status-error/30 p-4 text-sm"><p>{error}</p><Button type="button" onClick={() => void fetchWebhooks()} disabled={isLoading}>Retry</Button></div>}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-accent-violet/10 flex items-center justify-center">
@@ -303,7 +323,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
         </div>
       )}
 
-      {unavailableMessage ? null : webhooks.length === 0 ? (
+      {unavailableMessage ? null : webhooks.length === 0 && !error ? (
         <div className="text-center py-8">
           <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-overlay/5 flex items-center justify-center">
             <Webhook className="w-6 h-6 text-text-muted" />

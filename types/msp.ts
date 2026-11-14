@@ -232,6 +232,8 @@ export interface MspContextState {
   stats: MspOrganizationStats | null;
   isMspUser: boolean;
   isLoadingOrganization: boolean;
+  organizationError: string | null;
+  hasResolvedOrganization: boolean;
 
   // Caller's access mode within the organization
   accessMode: MspAccessMode;

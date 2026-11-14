@@ -1,0 +1,5 @@
+{
+  "title": "Retry failed MSP and webhook lookups",
+  "summary": "MSP pages wait for account startup and show a retry action when the organization cannot be loaded instead of redirecting to setup. Webhook settings distinguish failed requests from an empty list and preserve rows when a change fails.",
+  "type": "fixed"
+}
