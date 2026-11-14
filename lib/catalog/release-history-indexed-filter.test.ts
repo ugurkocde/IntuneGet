@@ -9,6 +9,7 @@ const boundedSql = readFileSync('supabase/migrations/20261113232318_catalog_hist
 const narrowSql = readFileSync('supabase/migrations/20261114051500_catalog_history_narrow_classification.sql', 'utf8');
 const scopedSql = readFileSync('supabase/migrations/20261114111119_catalog_history_scope_branches.sql', 'utf8');
 const restoredSql = readFileSync('supabase/migrations/20261114074820_restore_catalog_history_before_shared_stalls.sql', 'utf8');
+const rollbackSql = readFileSync('supabase/migrations/20261114125000_restore_history_after_scope_timeout.sql', 'utf8');
 let db: PGlite;
 let originalAcl: unknown;
 beforeAll(async () => {
@@ -139,5 +140,24 @@ it('does not add a per-row primary-key lookup for global architecture filtering'
     const before = await historyPlans('', mode, 'pg_temp.catalog_restored', 'x64');
     const buffers = (plans: PlanNode[]) => plans.reduce((sum, node) => sum + Number(node['Shared Hit Blocks'] ?? 0) + Number(node['Shared Read Blocks'] ?? 0), 0);
     expect(buffers(nodes)).toBeLessThanOrEqual(buffers(before) * 1.05);
+  }
+}, 60000);
+
+it('restores the exact prior function and grants through the forward rollback', async () => {
+  expect(rollbackSql.replace(/\r\n/g, '\n')).toBe(restoredSql.replace(/\r\n/g, '\n'));
+  try {
+    await db.exec(rollbackSql);
+    const properties = (await db.query(`select md5(p.prosrc) body_md5, l.lanname language,
+      p.provolatile, p.prosecdef, p.proconfig from pg_proc p join pg_language l on l.oid=p.prolang
+      where p.oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure`)).rows[0];
+    expect(properties).toMatchObject({ body_md5: '2417636d1e9100e491341b7864a4d3ba', language: 'sql', provolatile: 's', prosecdef: false });
+    expect((await db.query("select proacl::text acl from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure")).rows[0]).toEqual(originalAcl);
+    for (const args of [
+      ['', '', 'all', 1, 'Fixture.1', null, null, ''],
+      ['', '', 'all', 1, '', null, null, ''],
+      ['', '2026-04', 'all', 1, '', null, null, 'arm64'],
+    ]) expect(await call('public.get_catalog_release_history_v2', args)).toEqual(await call('pg_temp.catalog_restored', args));
+  } finally {
+    await db.exec(scopedSql);
   }
 }, 60000);

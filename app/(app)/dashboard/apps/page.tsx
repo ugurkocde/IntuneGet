@@ -50,6 +50,7 @@ import {
 import { useDeployedPackages } from '@/hooks/use-deployed-packages';
 import { useTenantDeployments } from '@/hooks/use-tenant-deployments';
 import { useDeployedConfig } from '@/hooks/use-deployed-config';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { useBulkAdd } from '@/hooks/use-bulk-add';
 import { useQaStatuses } from '@/hooks/use-qa';
 import { useCuratedReleases } from '@/hooks/use-curated-releases';
@@ -83,6 +84,23 @@ const SORT_OPTIONS = [
   { key: 'newest', label: 'Newest', icon: Clock },
 ] as const;
 
+function SavedConfigurationError({ onClose, onRetry, isFetching }: { onClose: () => void; onRetry: () => void; isFetching: boolean }) {
+  const focusRef = useFocusTrap<HTMLDivElement>();
+  return (<div ref={focusRef} tabIndex={-1} className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label="Saved configuration unavailable">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+          <div className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-bg-surface border-l border-overlay/5 shadow-2xl flex items-center justify-center">
+            <div role="alert" className="text-center px-6">
+              <h3 className="text-text-primary font-medium mb-2"><T>Could not load saved configuration</T></h3>
+              <p className="text-text-secondary text-sm mb-4"><T>Your saved settings could not be loaded. Retry before editing this app.</T></p>
+              <div className="flex justify-center gap-3">
+                <button type="button" onClick={onRetry} disabled={isFetching} className="rounded-lg bg-accent-cyan px-4 py-2 text-sm text-white disabled:opacity-50"><T>Retry</T></button>
+                <button type="button" onClick={onClose} className="rounded-lg border border-overlay/10 bg-bg-elevated px-4 py-2 text-sm text-text-primary"><T>Close</T></button>
+              </div>
+            </div>
+          </div>
+        </div>);
+}
+
 export default function AppCatalogPage() {
   const searchParams = useSearchParams();
   const [deploymentIntentId] = useState(() => searchParams.get('deploy')?.trim() || null);
@@ -90,6 +108,8 @@ export default function AppCatalogPage() {
   // Initialize state from URL params
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   const [selectedPackage, setSelectedPackage] = useState<NormalizedPackage | null>(null);
+  const [openedConfigScope, setOpenedConfigScope] = useState<string | null>(null);
+  const previousConfigScope = useRef<string | null>(null);
   const [deploymentIntentError, setDeploymentIntentError] = useState<string | null>(null);
   const processedDeploymentIntentRef = useRef<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(searchParams.get('category') || null);
@@ -250,9 +270,14 @@ export default function AppCatalogPage() {
   } = useCatalogPackage(deploymentIntentId);
 
   const isSelectedDeployed = selectedPackage ? deployedSet.has(selectedPackage.id) : false;
-  const { deployedConfig, intuneAppId, isLoading: isLoadingDeployedConfig } = useDeployedConfig(
+  const {
+    deployedConfig, intuneAppId, scopeKey: configScopeKey,
+    isPending: isDeployedConfigPending, isError: isDeployedConfigError,
+    isFetching: isFetchingDeployedConfig, refetch: refetchDeployedConfig,
+  } = useDeployedConfig(
     isSelectedDeployed ? selectedPackage?.id ?? null : null
   );
+  const isDeployedConfigBlocked = isSelectedDeployed && openedConfigScope !== configScopeKey && (isDeployedConfigPending || isDeployedConfigError);
 
   const isSelectedStoreApp = selectedPackage?.appSource === 'store';
   const {
@@ -293,6 +318,18 @@ export default function AppCatalogPage() {
   }, [infiniteData?.pages]);
   const selectedInstallers = manifestData?.installers || [];
   const selectedVersions = manifestData?.versions || [];
+  useEffect(() => {
+    if (previousConfigScope.current !== configScopeKey) {
+      previousConfigScope.current = configScopeKey;
+      setOpenedConfigScope(null);
+    }
+    if (!selectedPackage) setOpenedConfigScope(null);
+    else if (isSelectedDeployed && !isDeployedConfigPending && !isDeployedConfigError &&
+      ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0))) {
+      setOpenedConfigScope(configScopeKey);
+    }
+  }, [selectedPackage, isSelectedDeployed, configScopeKey, isDeployedConfigPending, isDeployedConfigError,
+    isSelectedStoreApp, isLoadingStoreManifest, isLoadingInstallers, selectedInstallers.length]);
 
   const showSearchResults = hasSearched;
   const { data: qaStatusesData } = useQaStatuses(visibleQaIds);
@@ -482,10 +519,12 @@ export default function AppCatalogPage() {
   }, [hasSearched, mounted, selectedCategory, selectedPackage, sortBy]);
 
   const handleSelectPackage = (pkg: NormalizedPackage) => {
+    setOpenedConfigScope(null);
     setSelectedPackage(pkg);
   };
 
   const handleCloseConfig = () => {
+    setOpenedConfigScope(null);
     setSelectedPackage(null);
   };
 
@@ -1042,7 +1081,7 @@ export default function AppCatalogPage() {
           </div>
         )}
 
-      {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && !(isSelectedDeployed && isLoadingDeployedConfig) && (
+      {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && !isDeployedConfigBlocked && (
         <PackageConfig
           package={selectedPackage}
           installers={selectedInstallers}
@@ -1051,11 +1090,17 @@ export default function AppCatalogPage() {
           isDeployed={isSelectedDeployed}
           deployedConfig={deployedConfig}
           intuneAppId={intuneAppId}
+          configurationRefreshNotice={isSelectedDeployed && openedConfigScope === configScopeKey && isDeployedConfigError ? (
+            <div role="alert" className="rounded-lg border border-status-warning/30 bg-bg-surface p-4">
+              <p><T>Could not refresh saved configuration. Your unsaved edits are kept.</T></p>
+              <button type="button" onClick={() => void refetchDeployedConfig()} disabled={isFetchingDeployedConfig} className="mt-2 text-accent-cyan disabled:opacity-50"><T>Retry</T></button>
+            </div>
+          ) : null}
           storeManifest={storeManifestData}
         />
       )}
 
-      {selectedPackage && ((isSelectedStoreApp && isLoadingStoreManifest) || (!isSelectedStoreApp && isLoadingInstallers) || (isSelectedDeployed && isLoadingDeployedConfig)) && (
+      {selectedPackage && ((isSelectedStoreApp && isLoadingStoreManifest) || (!isSelectedStoreApp && isLoadingInstallers) || (isSelectedDeployed && isDeployedConfigPending && isDeployedConfigBlocked)) && (
         <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label="Loading package details">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleCloseConfig} aria-hidden="true" />
           <div className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-bg-surface border-l border-overlay/5 shadow-2xl flex items-center justify-center animate-slide-in-right">
@@ -1069,6 +1114,12 @@ export default function AppCatalogPage() {
           </div>
         </div>
       )}
+
+      {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && isSelectedDeployed && isDeployedConfigError && isDeployedConfigBlocked && (
+        <SavedConfigurationError onClose={handleCloseConfig} onRetry={() => void refetchDeployedConfig()} isFetching={isFetchingDeployedConfig} />
+      )}
+
+
 
       {selectedPackage && !isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length === 0 && (
         <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label="No installers found">

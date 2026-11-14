@@ -12,7 +12,7 @@ interface DeployedConfigResponse {
 }
 
 export function useDeployedConfig(wingetId: string | null) {
-  const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
+  const { getAccessToken, isAuthenticated, isInitializing } = useMicrosoftAuth();
   const { isMspUser, selectedTenantId } = useMspOptional();
   const tenantKey = isMspUser ? selectedTenantId || 'primary' : 'self';
 
@@ -43,16 +43,20 @@ export function useDeployedConfig(wingetId: string | null) {
 
       return response.json();
     },
-    enabled: isAuthenticated && !!wingetId,
+    enabled: isAuthenticated && !isInitializing && !!wingetId,
     staleTime: 2 * 60 * 1000,
   });
 
   return {
+    scopeKey: JSON.stringify([wingetId, tenantKey]),
     deployedConfig: query.data?.config ?? null,
     deployedAt: query.data?.deployedAt ?? null,
     intuneAppId: query.data?.intuneAppId ?? null,
     isLoading: query.isLoading,
+    isPending: query.isPending,
+    isError: query.isError,
     isFetching: query.isFetching,
+    refetch: query.refetch,
     error: query.error,
   };
 }
