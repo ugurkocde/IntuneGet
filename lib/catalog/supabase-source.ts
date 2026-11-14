@@ -63,6 +63,28 @@ function serviceOrAnonClient() {
 let warnedMissingQaServiceRole = false;
 
 export class SupabaseCatalogSource implements CatalogSource {
+  private readonly historyReads = new Map<string, Promise<ReleaseHistoryResult>>();
+  private readonly historyCounts = new Map<string, Promise<number>>();
+
+  // Only pending work is shared. Next remains responsible for result caching.
+  private shareHistoryRead<T>(
+    pending: Map<string, Promise<T>>,
+    filters: ReleaseHistoryFilters,
+    load: () => Promise<T>,
+  ): Promise<T> {
+    const key = JSON.stringify([
+      filters.app ?? '', filters.query, filters.month, filters.kind, filters.page,
+      filters.from || null, filters.to || null, filters.architecture ?? '',
+    ]);
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const read = load().finally(() => {
+      if (pending.get(key) === read) pending.delete(key);
+    });
+    pending.set(key, read);
+    return read;
+  }
+
   private async withDeploymentBlocks<T extends QaStatusRow>(rows: T[]): Promise<T[]> {
     if (rows.length === 0) return rows;
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -140,11 +162,16 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
   }
 
-  async countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
-    return (await this.releaseHistoryPage(filters)).total;
+  countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
+    return this.shareHistoryRead(this.historyCounts, filters, async () =>
+      (await this.releaseHistoryPage(filters)).total);
   }
 
-  async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
+  }
+
+  private async loadReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
     const result = await this.releaseHistoryPage(filters);
