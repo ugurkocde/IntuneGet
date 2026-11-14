@@ -1,5 +1,5 @@
 {
   "title": "Keep held installers out of curated release publication",
-  "summary": "Curated release publication now checks current installer security holds again after verification, while continuing to publish eligible releases.",
+  "summary": "Curated release publication checks current installer security holds in the production project after verification, while continuing to publish eligible releases.",
   "type": "fixed"
 }

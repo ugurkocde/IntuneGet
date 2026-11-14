@@ -81,9 +81,9 @@ it('does not retry a passing lifecycle when its current security evidence is una
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
-async function holdReader(response: unknown, status = 200, configured = true) {
+async function holdReader(response: unknown, status = 200, configured = true, origin = 'https://mbhajocqtogfbgojkwhd.supabase.co') {
   vi.resetModules();
-  vi.stubEnv('SUPABASE_URL', configured ? 'https://supabase.test' : '');
+  vi.stubEnv('SUPABASE_URL', configured ? origin : '');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', configured ? 'fixture-service-key' : '');
   const fetcher = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify(response), { status }));
   vi.stubGlobal('fetch', fetcher);
@@ -94,13 +94,26 @@ async function holdReader(response: unknown, status = 200, configured = true) {
 it('checks the exact lowercase hash and every unreleased hold, including unknown coverage with zero detections', async () => {
   const { read, fetcher } = await holdReader([{ sha256: hash }]);
   expect(await read(hash.toUpperCase())).toBe(true);
-  expect(fetcher.mock.calls[0][0]).toBe(`https://supabase.test/rest/v1/qa_installer_security_holds?select=sha256&sha256=eq.${hash}&released_at=is.null&limit=1`);
+  expect(fetcher.mock.calls[0][0]).toBe(`https://mbhajocqtogfbgojkwhd.supabase.co/rest/v1/qa_installer_security_holds?select=sha256&sha256=eq.${hash}&released_at=is.null&limit=1`);
   expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'GET' });
 });
 
 it('allows a release only when the current unreleased-hold query is empty', async () => {
   const { read } = await holdReader([]);
   expect(await read(hash)).toBe(false);
+});
+
+it.each([
+  'https://another-project.supabase.co', '', 'not-a-url',
+  'http://mbhajocqtogfbgojkwhd.supabase.co',
+  'https://mbhajocqtogfbgojkwhd.supabase.co/unexpected',
+  'https://mbhajocqtogfbgojkwhd.supabase.co?project=other',
+  'https://mbhajocqtogfbgojkwhd.supabase.co#other',
+  'https://user:password@mbhajocqtogfbgojkwhd.supabase.co',
+])('refuses unqualified hold storage before a successful empty response can admit a release: %s', async origin => {
+  const { read, fetcher } = await holdReader([], 200, true, origin);
+  await expect(read(hash)).rejects.toThrow();
+  expect(fetcher).not.toHaveBeenCalled();
 });
 
 it.each([null, {}, [{ sha256: otherHash }]])('fails closed on malformed hold evidence %j', async response => {
