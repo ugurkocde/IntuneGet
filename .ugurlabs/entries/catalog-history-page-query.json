@@ -1,0 +1,5 @@
+{
+  "title": "Faster catalog release history refreshes",
+  "summary": "Release history avoids calculating previous versions for the entire catalog before returning a page. Filters, counts and complete history details stay the same.",
+  "type": "improved"
+}
