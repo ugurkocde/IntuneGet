@@ -1,0 +1,5 @@
+{
+  "title": "Retry loading saved deployment settings",
+  "summary": "Editing a deployed app now waits for its saved configuration and offers Retry when the read fails, instead of opening default settings.",
+  "type": "fixed"
+}

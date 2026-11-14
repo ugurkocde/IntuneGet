@@ -110,3 +110,17 @@ describe('reviewing a replacement version', () => {
     expect(useCartStore.getState().items).toEqual([]);
   });
 });
+
+it('places a saved configuration refresh notice inside the editor focus boundary', async () => {
+  const retry = vi.fn();
+  const props = { package: { id: oldItem.wingetId, name: oldItem.displayName, publisher: oldItem.publisher, version: '1.0' }, installers: [installer], deployedConfig: oldItem, onClose: vi.fn(),
+    configurationRefreshNotice: createElement('div', { role: 'alert' }, createElement('button', { onClick: retry }, 'Retry saved configuration')) };
+  await act(async () => root.render(createElement(PackageConfig, props)));
+  const button = [...document.querySelectorAll('button')].find(x => x.textContent === 'Retry saved configuration')!;
+  expect(button).toBeDefined();
+  const focusBoundary = document.querySelector('[role="dialog"]')!.children[1];
+  expect(focusBoundary.contains(button)).toBe(true);
+  const before = useCartStore.getState().items;
+  await act(async () => button.click()); expect(retry).toHaveBeenCalledTimes(1);
+  expect(useCartStore.getState().items).toBe(before);
+});
