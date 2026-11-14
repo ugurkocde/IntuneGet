@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import type {
@@ -19,7 +19,7 @@ import type {
 const MspContext = createContext<MspContextValue | null>(null);
 
 export function MspProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, getAccessToken } = useMicrosoftAuth();
+  const { isAuthenticated, isInitializing, account, getAccessToken } = useMicrosoftAuth();
   const { settings, setSelectedTenantId: setStoredSelectedTenantId } = useUserSettings();
 
   // Organization state
@@ -28,6 +28,12 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
   const [isMspUser, setIsMspUser] = useState(false);
   const [accessMode, setAccessMode] = useState<MspAccessMode>('full');
   const [isLoadingOrganization, setIsLoadingOrganization] = useState(true);
+
+  const [organizationError, setOrganizationError] = useState<string | null>(null);
+  const [hasResolvedOrganization, setHasResolvedOrganization] = useState(false);
+  const organizationRequest = useRef(0);
+  const organizationOwner = useRef<string | null>(null);
+  const identityKey = account?.homeAccountId ?? null;
 
   // Tenants state
   const [managedTenants, setManagedTenants] = useState<MspManagedTenantWithStats[]>([]);
@@ -46,48 +52,37 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
     setSelectedTenantIdState(settings.selectedTenantId);
   }, [settings.selectedTenantId]);
 
-  // Refresh organization data
+  // A failed lookup is not evidence that this account has no organization.
   const refreshOrganization = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsLoadingOrganization(false);
-      return;
+    const request = ++organizationRequest.current;
+    if (organizationOwner.current !== identityKey) {
+      organizationOwner.current = identityKey;
+      setOrganization(null); setStats(null); setIsMspUser(false); setAccessMode('full');
+      setManagedTenants([]); setHasResolvedOrganization(false); setOrganizationError(null);
     }
-
+    if (isInitializing) { setIsLoadingOrganization(true); return; }
+    if (!isAuthenticated) { setIsLoadingOrganization(false); return; }
     setIsLoadingOrganization(true);
-
+    setOrganizationError(null);
     try {
       const token = await getAccessToken();
-      if (!token) {
-        setIsLoadingOrganization(false);
-        return;
-      }
-
+      if (request !== organizationRequest.current) return;
+      if (!token) throw new Error('Authentication required');
       const response = await fetch('/api/msp/organization', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch organization');
-      }
-
+      if (!response.ok) throw new Error('Organization lookup failed');
       const data: GetOrganizationResponse = await response.json();
-
-      setOrganization(data.organization);
-      setStats(data.stats);
-      setIsMspUser(data.isMspUser);
+      if (request !== organizationRequest.current) return;
+      setOrganization(data.organization); setStats(data.stats); setIsMspUser(data.isMspUser);
       setAccessMode(data.current_user?.access_mode || 'full');
-    } catch (error) {
-      console.error('Error fetching MSP organization:', error);
-      setOrganization(null);
-      setStats(null);
-      setIsMspUser(false);
-      setAccessMode('full');
+      setHasResolvedOrganization(true);
+    } catch {
+      if (request === organizationRequest.current) setOrganizationError('Could not load your MSP organization. Please try again.');
     } finally {
-      setIsLoadingOrganization(false);
+      if (request === organizationRequest.current) setIsLoadingOrganization(false);
     }
-  }, [isAuthenticated, getAccessToken]);
+  }, [isAuthenticated, isInitializing, identityKey, getAccessToken]);
 
   // Create organization
   const createOrganization = useCallback(async (data: CreateOrganizationRequest): Promise<MspOrganization> => {
@@ -239,7 +234,8 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
 
   // Initial load
   useEffect(() => {
-    refreshOrganization();
+    void refreshOrganization();
+    return () => { organizationRequest.current += 1; };
   }, [refreshOrganization]);
 
   // Load tenants when organization changes
@@ -256,6 +252,8 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
     isMspUser,
     accessMode,
     isLoadingOrganization,
+    organizationError,
+    hasResolvedOrganization: hasResolvedOrganization && organizationOwner.current === identityKey,
     managedTenants,
     isLoadingTenants,
     selectedTenantId,
