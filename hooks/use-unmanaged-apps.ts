@@ -310,7 +310,11 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       (!needle || search.includes(needle)) &&
       (filters.matchStatus === 'all' || app.matchStatus === filters.matchStatus) &&
       (filters.showClaimed || !(app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId))))
-    ).map(({ app }) => ({ ...app, isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)) }));
+    ).map(({ app }) => ({
+      ...app,
+      inCart: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId),
+      isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)),
+    }));
   }, [indexedApps, deferredSearch, filters.matchStatus, filters.showClaimed, cartWingetIds]);
 
   // Status counts
@@ -327,6 +331,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
   const computedStats = useMemo((): UnmanagedAppsStats => {
     const appsWithClaimSync = nonMicrosoftApps.map(app => ({
       ...app,
+      inCart: !!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId),
       isClaimed: app.isClaimed || (!!app.matchedPackageId && cartWingetIds.has(app.matchedPackageId)),
     }));
 
@@ -349,6 +354,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
 
   // Claim app handler
   const handleClaimApp = useCallback(async (app: UnmanagedApp) => {
+    if (app.claimStatus === 'deploying' || app.claimStatus === 'deployed') return;
     const accessToken = await getToken();
     if (!accessToken || !app.matchedPackageId) return;
 

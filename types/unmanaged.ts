@@ -43,6 +43,8 @@ export interface UnmanagedApp {
   matchConfidence: number | null;
   partialMatches?: PartialMatch[];
   isClaimed: boolean;
+  /** Browser cart membership, populated by the client independently of saved claims. */
+  inCart?: boolean;
   claimStatus?: ClaimStatus;
   lastSynced: string;
 }

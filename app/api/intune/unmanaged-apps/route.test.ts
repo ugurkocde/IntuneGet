@@ -142,15 +142,15 @@ describe('discovered apps cache preservation', () => {
   });
 });
 
-it('restores suggestions on the cached path', async () => {
+it.each([null, 'Example.App'])('restores suggestions on the cached path for saved package %s', async (matchedPackageId) => {
  const partialMatches = [{ wingetId: 'Example.App', name: 'Example', confidence: 0.7 }];
- match.mockReturnValue({ status: 'partial', wingetId: null, wingetName: null, confidence: 0.7, partialMatches });
- cache.rows = [{ tenant_id: 'tenant-fixture', discovered_app_id: 'app-one', last_synced: '2026-10-10T10:00:00.000Z', display_name: 'Example', publisher: 'Example', match_status: 'partial', matched_package_id: null, match_confidence: 1, app_data: { id: 'app-one', displayName: 'Example', publisher: 'Example' } }];
+ match.mockReturnValue({ status: 'partial', wingetId: matchedPackageId, wingetName: null, confidence: 0.7, partialMatches });
+ cache.rows = [{ tenant_id: 'tenant-fixture', discovered_app_id: 'app-one', last_synced: '2026-10-10T10:00:00.000Z', display_name: 'Example', publisher: 'Example', match_status: 'partial', matched_package_id: matchedPackageId, match_confidence: 0.7, app_data: { id: 'app-one', displayName: 'Example', publisher: 'Example' } }];
  const response = await GET(new NextRequest('http://localhost/api/intune/unmanaged-apps', { headers: { Authorization: 'Bearer offline-test-token' } }));
  expect(response.status).toBe(200);
  const data = await response.json();
  expect(data.fromCache).toBe(true);
- expect(data.apps[0]).toMatchObject({ partialMatches, matchedPackageId: null, matchConfidence: 1 });
+ expect(data.apps[0]).toMatchObject({ partialMatches, matchedPackageId, matchConfidence: 0.7 });
  expect(fetch).not.toHaveBeenCalled();
 });
 

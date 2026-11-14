@@ -51,8 +51,35 @@ it.each(['pending', 'failed'])('keeps server %s claims with an empty cart after 
  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ apps: [{ ...app, isClaimed: true, claimStatus }], total: 1 })));
  await act(async () => api.handleRefresh());
  expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, claimStatus });
+ expect(api.filteredApps[0].inCart).toBe(false);
  expect(api.computedStats.claimed).toBe(1);
  expect(api.claimableCount).toBe(0);
  await act(async () => api.setFilters({ ...api.filters, showClaimed: false }));
  expect(api.filteredApps).toHaveLength(0);
+});
+
+it('recovers a saved pending claim and keeps cart membership separate from saved state', async () => {
+ const manifestFetch = globalThis.fetch;
+ vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) =>
+   url.startsWith('/api/intune/unmanaged-apps')
+     ? Response.json({ apps: [{ ...app, isClaimed: true, claimStatus: 'pending' }], total: 1 })
+     : manifestFetch(url, init)));
+ f.claim.mockImplementation(() => Response.json({ success: true }));
+ await act(async () => api.handleRefresh());
+ const saved = api.filteredApps[0];
+ expect(saved).toMatchObject({ isClaimed: true, inCart: false });
+ await act(async () => api.handleClaimApp(saved));
+ expect(f.claim).toHaveBeenCalledTimes(1);
+ expect(useCartStore.getState().items).toHaveLength(1);
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, inCart: true });
+ await act(async () => api.handleClaimApp(saved));
+ expect(useCartStore.getState().items).toHaveLength(1);
+ await act(async () => useCartStore.setState({ items: [] }));
+ expect(api.filteredApps[0]).toMatchObject({ isClaimed: true, inCart: false, claimStatus: 'pending' });
+});
+
+it.each(['deploying', 'deployed'] as const)('does not reclaim a %s app', async claimStatus => {
+ await act(async () => api.handleClaimApp({ ...app, isClaimed: true, claimStatus }));
+ expect(f.claim).not.toHaveBeenCalled();
+ expect(useCartStore.getState().items).toHaveLength(0);
 });
