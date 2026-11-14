@@ -99,3 +99,7 @@ controller, not the agent's final text, decides whether production recovered.
 
 Validate with the focused Vitest suites, PowerShell parsing, full tests, type
 checking, lint, a production build, and authenticated dry-run/live cycles.
+
+### Completed-hour workflow watchdog
+
+The existing controller writes `lifecycleWatchdog` and `alerts` into its cycle JSON. The bound IntuneGet QA health and repair agent consumes these fields during its required guardian health inspection; they are not repair or dispatch inputs. `qa_zero_lifecycle_hour` means no matching ordinary workflow was created in the completed UTC hour while customer jobs are waiting. It does not measure VM boots or Execute-step completion. `qa_watchdog_unknown` retains the rejection cause and one bounded next-cycle retry plan; unknown is never zero. Reads cover two hours at per_page20 and retain the 512 KiB raw guard.

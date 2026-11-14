@@ -47,7 +47,17 @@ const result = {
   retryAt: null,
 };
 
+let watchdogObserved = false;
+async function observeWatchdogOnce() {
+  if (isDryRun || watchdogObserved) return;
+  watchdogObserved = true;
+  let awaitingQaJobs;
+  try { awaitingQaJobs = await exactCount('packaging_jobs', { select: 'id', status: 'eq.awaiting_qa' }); } catch { /* Unknown demand remains unknown. */ }
+  recordWatchdogAlert(result, await observeLifecycleWatchdog({ read: github, awaitingQaJobs }));
+}
+
 async function persist() {
+  await observeWatchdogOnce().catch(() => {});
   const value = `${JSON.stringify(result, null, 2)}\n`;
   if (statePath) {
     await writeFile(`${statePath}.${process.pid}.tmp`, value, 'utf8');
@@ -468,12 +478,6 @@ try {
     }
   }
 
-  // Observe after recovery decisions: alerts never gate dispatch, pause, resume or repairs.
-  if (!isDryRun) {
-    let awaitingQaJobs;
-    try { awaitingQaJobs = await exactCount('packaging_jobs', { select: 'id', status: 'eq.awaiting_qa' }); } catch { /* Unknown demand remains unknown. */ }
-    recordWatchdogAlert(result, await observeLifecycleWatchdog({ read: github, awaitingQaJobs }));
-  }
 
   result.ok = true;
   await persist();
