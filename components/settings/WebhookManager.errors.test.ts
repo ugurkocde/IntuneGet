@@ -3,12 +3,12 @@ import {act,createElement} from 'react';
 import {createRoot,type Root} from 'react-dom/client';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {WebhookManager} from './WebhookManager';
-const auth=vi.hoisted(()=>({token:vi.fn(),initializing:false}));
-vi.mock('@/hooks/useMicrosoftAuth',()=>({useMicrosoftAuth:()=>({getAccessToken:auth.token,isInitializing:auth.initializing})}));
+const auth=vi.hoisted(()=>({token:vi.fn(),initializing:false,account:{homeAccountId:'fixture-home',localAccountId:'fixture-a',tenantId:'fixture-tenant-a'}}));
+vi.mock('@/hooks/useMicrosoftAuth',()=>({useMicrosoftAuth:()=>({getAccessToken:auth.token,isInitializing:auth.initializing,account:auth.account})}));
 vi.mock('./WebhookFormModal',()=>({WebhookFormModal:({isOpen}:{isOpen:boolean})=>isOpen?createElement('input',{'aria-label':'Webhook draft',defaultValue:''}):null}));
 let host:HTMLDivElement,root:Root;
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
-beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);auth.initializing=false;auth.token.mockResolvedValue('fixture-token');host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);auth.initializing=false;auth.account={homeAccountId:'fixture-home',localAccountId:'fixture-a',tenantId:'fixture-tenant-a'};auth.token.mockResolvedValue('fixture-token');host=document.createElement('div');document.body.append(host);root=createRoot(host);});
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.unstubAllGlobals();vi.clearAllMocks();});
 const response=(data:object,status=200)=>new Response(JSON.stringify(data),{status});
 it.each(['http','network'])('shows a retryable webhook load error for %s failure',async kind=>{
@@ -43,4 +43,15 @@ it('ignores a stale webhook load after the auth callback changes',async()=>{
  let old!:(r:Response)=>void;let calls=0;vi.stubGlobal('fetch',vi.fn(async()=>++calls===1?new Promise<Response>(resolve=>{old=resolve;}):response({webhooks:[{...hook,name:'Current hook'}]})));
  await act(async()=>root.render(createElement(WebhookManager)));auth.token=vi.fn().mockResolvedValue('new-fixture-token');await act(async()=>root.render(createElement(WebhookManager)));
  await act(async()=>old(response({webhooks:[{...hook,name:'Old hook'}]})));expect(host.textContent).toContain('Current hook');expect(host.textContent).not.toContain('Old hook');
+});
+const switchAccount=()=>{auth.account={...auth.account,localAccountId:'fixture-b',tenantId:'fixture-tenant-b'};auth.token=vi.fn().mockResolvedValue('fixture-token-b');};
+it.each([false,true])('hides the previous account rows while the new lookup is pending and after failure (%s)',async fail=>{
+ let finish!:(r:Response)=>void,calls=0;vi.stubGlobal('fetch',vi.fn(async()=>++calls===1?response({webhooks:[{...hook,name:'Account A hook'}]}):new Promise<Response>(resolve=>{finish=resolve;})));
+ await act(async()=>root.render(createElement(WebhookManager)));expect(host.textContent).toContain('Account A hook');switchAccount();await act(async()=>root.render(createElement(WebhookManager)));expect(host.textContent).not.toContain('Account A hook');
+ await act(async()=>finish(response(fail?{}:{webhooks:[{...hook,name:'Account B hook'}]},fail?500:200)));expect(host.textContent).not.toContain('Account A hook');if(fail)expect(host.querySelector('[role="alert"]')).not.toBeNull();else expect(host.textContent).toContain('Account B hook');
+});
+it('does not start an old account reload when its webhook test finishes after switching',async()=>{
+ let test!:(r:Response)=>void,next!:(r:Response)=>void,loads=0;const fetch=vi.fn(async url=>String(url).endsWith('/test')?new Promise<Response>(resolve=>{test=resolve;}):++loads===1?response({webhooks:[hook]}):new Promise<Response>(resolve=>{next=resolve;}));vi.stubGlobal('fetch',fetch);
+ await act(async()=>root.render(createElement(WebhookManager)));await act(async()=>host.querySelector<HTMLButtonElement>('button[title="Send test"]')!.click());switchAccount();await act(async()=>root.render(createElement(WebhookManager)));
+ await act(async()=>test(response({success:true})));expect(fetch).toHaveBeenCalledTimes(3);await act(async()=>next(response({webhooks:[{...hook,name:'Account B hook'}]})));expect(host.textContent).toContain('Account B hook');
 });

@@ -33,9 +33,16 @@ const WEBHOOK_TYPE_LABELS: Record<WebhookType, { label: string; color: string }>
 };
 
 export function WebhookManager({ className }: WebhookManagerProps) {
-  const { getAccessToken, isInitializing } = useMicrosoftAuth();
+  const { getAccessToken, isInitializing, account } = useMicrosoftAuth();
+  const identityKey = account
+    ? JSON.stringify([account.homeAccountId, account.localAccountId, account.tenantId])
+    : null;
+  const currentIdentityKey = useRef(identityKey);
+  const lookupOwner = useRef(identityKey);
+  useEffect(() => { currentIdentityKey.current = identityKey; }, [identityKey]);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadedIdentity, setLoadedIdentity] = useState<string | null>();
+  const hasLoaded = loadedIdentity === identityKey;
   const lookupSequence = useRef(0);
   const [webhooks, setWebhooks] = useState<WebhookConfiguration[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +55,14 @@ export function WebhookManager({ className }: WebhookManagerProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchWebhooks = useCallback(async () => {
+    if (currentIdentityKey.current !== identityKey) return;
     const lookup = ++lookupSequence.current;
+    if (lookupOwner.current !== identityKey) {
+      lookupOwner.current = identityKey;
+      setWebhooks([]); setError(null); setUnavailableMessage(null);
+      setTestResults({}); setIsModalOpen(false); setEditingWebhook(null);
+      setLoadedIdentity(undefined);
+    }
     if (isInitializing) return;
     setIsLoading(true);
     setError(null);
@@ -69,9 +83,9 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     } catch {
       if (lookup === lookupSequence.current) setError('Could not load webhooks. Please try again.');
     } finally {
-      if (lookup === lookupSequence.current) { setIsLoading(false); setHasLoaded(true); }
+      if (lookup === lookupSequence.current) { setIsLoading(false); setLoadedIdentity(identityKey); }
     }
-  }, [getAccessToken, isInitializing]);
+  }, [getAccessToken, isInitializing, identityKey]);
   useEffect(() => {
     void fetchWebhooks();
     return () => { lookupSequence.current += 1; };
@@ -214,6 +228,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
       const result = await response.json();
 
+      if (currentIdentityKey.current !== identityKey) return;
       if (result.success) {
         setTestResults((prev) => ({
           ...prev,
@@ -247,7 +262,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
     setEditingWebhook(null);
   };
 
-  if (isLoading && !hasLoaded) {
+  if (!hasLoaded) {
     return (
       <div className={cn('glass-light rounded-xl p-6 border border-overlay/5', className)}>
         <div className="flex items-center justify-center py-8">
