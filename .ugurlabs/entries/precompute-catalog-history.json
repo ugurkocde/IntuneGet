@@ -1,0 +1,5 @@
+{
+  "title": "Serve catalog history without repeated full history computation",
+  "summary": "Catalog history reads a periodically refreshed snapshot so requests do not repeatedly process installer history. Secondary writer updates appear after the next hourly refresh.",
+  "type": "fixed"
+}

@@ -8,6 +8,7 @@ VALUES ('IntuneGet.FilterFixture', '1', '2026-01-31T23:59:59Z', '[{"Architecture
        ('IntuneGet.FilterFixture', '2', '2026-02-01T00:00:00Z', '[{"Architecture":"arm64"},{"Architecture":"x64"}]'),
        ('IntuneGet.FilterFixture', '3', '2026-02-01T23:59:59Z', '[{"Architecture":"x64"}]'),
        ('IntuneGet.FilterFixture.More', '1', '2026-02-01T12:00:00Z', '[{"Architecture":"x64"}]');
+SELECT public.refresh_catalog_release_history_rows();
 SET LOCAL ROLE anon;
 SET LOCAL TIME ZONE 'Pacific/Auckland';
 DO $$
