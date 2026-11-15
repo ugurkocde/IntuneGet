@@ -41,3 +41,9 @@ jobs:
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: python3 scripts/ci/catalog-history-global-postgres.py
+      - name: Check recent count regression and mixed history load
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          python3 scripts/ci/catalog-recent-probe.test.py
+          python3 scripts/ci/catalog-recent-update-count-postgres.py
