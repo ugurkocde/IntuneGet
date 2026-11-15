@@ -1,0 +1,1 @@
+{"title":"Bound catalog history work","summary":"Limit overlapping history reads across filters and avoid repeated requests for pages beyond a recently known result count.","type":"fixed"}
