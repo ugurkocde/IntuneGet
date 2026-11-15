@@ -215,15 +215,23 @@ export async function recoverInfrastructure({ rows, patch, github, now = Date.no
       continue;
     }
     let job = null;
-    if (kind === 'publication' && !dryRun) {
+    if ((kind === 'publication' || (kind === 'lifecycle' && c.phase === 'preparing_package')) && !dryRun) {
       job = await publicationJob(c.github_run_id, github);
       if (job.waiting) continue;
       if (job.preparationFailed) {
-        const changed = await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error', github_run_id: `eq.${c.github_run_id}`, failure_summary: `eq.${PUBLICATION_FAILURE}` }, {
+        const held = await rows('qa_candidates', { select: 'winget_id', status: 'eq.error', next_retry_at: 'eq.infinity',
+          failure_summary: 'like.Candidate-only preparation hold:*', winget_id: `neq.${c.winget_id}`,
+          updated_at: `gte.${new Date(now - 24 * 60 * 60_000).toISOString()}`, limit: '100' });
+        if (held.length >= 100 || new Set(held.map(r => r.winget_id.toLowerCase())).size >= 2) return {
+          action: 'repair_required', repairRequired: true, repairKey: 'qa-preparation-systemic', candidateId: c.id,
+          repairReason: 'Preparation failures affect at least three distinct applications; inspect shared preparation infrastructure.' };
+        const changed = await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error', github_run_id: `eq.${c.github_run_id}`, failure_summary: `eq.${c.failure_summary}` }, {
           next_retry_at: 'infinity', updated_at: new Date(now).toISOString(),
           failure_summary: 'Candidate-only preparation hold: preparation failed before Execute. Installer remains untested; repair required before retry.',
         });
-        return { action: changed.length === 1 ? 'preparation_candidate_held' : 'recovery_claim_lost', candidateId: c.id };
+        return { action: changed.length === 1 ? 'preparation_candidate_held' : 'recovery_claim_lost', candidateId: c.id,
+          ...(changed.length === 1 ? { repairRequired: true, candidateOnly: true, repairKey: `preparation-stall:${c.id}`,
+            repairReason: 'Preparation failed before Execute. Candidate is held without replay; repair its preparation before any retry. Other candidates remain eligible.' } : {}) };
       }
       if (job.preExecutionRefusal) {
         await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error',
