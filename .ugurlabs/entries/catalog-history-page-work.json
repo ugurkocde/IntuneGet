@@ -1,0 +1,5 @@
+{
+  "title": "Reduce repeated work in release history",
+  "summary": "Later pages of unfiltered release history can reuse recent catalog totals while loading their version records separately. Search, filters, app history and recent update counts keep their existing behavior.",
+  "type": "improved"
+}
