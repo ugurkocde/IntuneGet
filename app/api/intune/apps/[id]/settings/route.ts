@@ -24,9 +24,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let phase = 'params';
   try {
     const { id: intuneAppId } = await params;
 
+    phase = 'authentication';
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -36,6 +38,7 @@ export async function PATCH(
     }
 
     // Resolve tenant (MSP-aware)
+    phase = 'tenant-resolution';
     const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
@@ -53,6 +56,7 @@ export async function PATCH(
 
     const tenantId = tenantResolution.tenantId;
 
+    phase = 'consent';
     // Verify admin consent
     const { data: consentData, error: consentError } = supabase ? await supabase
       .from('tenant_consent')
@@ -68,16 +72,19 @@ export async function PATCH(
       );
     }
 
+    phase = 'graph-token';
     // Get service principal token
     const graphToken = await getServicePrincipalToken(tenantId);
 
     if (!graphToken) {
+      console.error('[intune-app-settings] Update failed', { phase });
       return NextResponse.json(
         { error: 'Failed to get Graph API token' },
         { status: 500 }
       );
     }
 
+    phase = 'app-lookup';
     // Verify the app still exists in Intune
     const existingApp = await getApp(graphToken, intuneAppId);
 
@@ -88,6 +95,7 @@ export async function PATCH(
       );
     }
 
+    phase = 'request-body';
     // Parse request body
     const body = await request.json();
     const {
@@ -100,6 +108,7 @@ export async function PATCH(
       wingetId?: string;
     };
 
+    phase = 'local-config';
     // Validate the exact local deployment before changing its Intune settings.
     const localDb = wingetId && !supabase ? getDatabase() : null;
     const localJob = localDb && wingetId
@@ -115,6 +124,7 @@ export async function PATCH(
 
     // Apply assignments
     if (assignments) {
+      phase = 'requirement-rules';
       const productCode = existingApp.msiInformation?.productCode;
       const requirementRules = buildCartItemRequirementRules(
         existingApp.displayName,
@@ -135,17 +145,20 @@ export async function PATCH(
         ]);
       }
 
+      phase = 'assignments';
       const graphAssignments = convertToGraphAssignments(assignments);
       await assignToGroups(graphToken, intuneAppId, graphAssignments);
     }
 
     // Sync categories
     if (categories) {
+      phase = 'categories';
       await syncAppCategories(graphToken, intuneAppId, categories);
     }
 
     // Persist updated assignments/categories in the most recent packaging_jobs row
     if (wingetId && supabase) {
+      phase = 'config-read';
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
         .select('id, package_config')
@@ -170,6 +183,7 @@ export async function PATCH(
         if (categories) {
           updatedConfig.categories = categories as unknown as Json;
         }
+        phase = 'config-save';
         const { data: saved, error: saveError } = await supabase
           .from('packaging_jobs')
           .update({ package_config: updatedConfig })
@@ -194,6 +208,7 @@ export async function PATCH(
         );
       }
     } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig)) {
+      phase = 'config-save';
       const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');
       const saved = sqliteDeployedConfig.mergeFields(localJob.id, {
         userId: user.userId, tenantId, wingetId: wingetId!, intuneAppId,
@@ -208,6 +223,8 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    // Log only a fixed phase. Errors and request data may contain customer secrets.
+    console.error('[intune-app-settings] Update failed', { phase });
     const message = err instanceof Error ? err.message : 'Failed to update app settings';
     return NextResponse.json(
       { error: message },
