@@ -42,6 +42,7 @@ export function TeamManagement() {
   const [inviteMode, setInviteMode] = useState<'single' | 'bulk'>('single');
   const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
   const [searchQuery, setSearchQuery] = useState('');
+  const [resendResult, setResendResult] = useState<{ email: string; acceptUrl: string } | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
@@ -169,26 +170,13 @@ export function TeamManagement() {
     setResendingId(invitation.id);
 
     try {
-      // Delete the old invitation
-      await fetch(`/api/msp/invitations?id=${invitation.id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      // Create a new one
       const response = await fetch('/api/msp/invitations', {
-        method: 'POST',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          email: invitation.email,
-          role: invitation.role,
-          access_mode: invitation.access_mode || 'full',
-        }),
+        body: JSON.stringify({ id: invitation.id }),
       });
 
       if (!response.ok) {
@@ -196,9 +184,11 @@ export function TeamManagement() {
         throw new Error(error.error || 'Failed to resend invitation');
       }
 
+      const result = await response.json();
+      setResendResult(result.emailSent ? null : { email: invitation.email, acceptUrl: result.acceptUrl });
       toast({
-        title: 'Invitation resent',
-        description: `A new invitation has been sent to ${invitation.email}.`,
+        title: result.emailSent ? 'Invitation resent' : 'Invitation link ready',
+        description: result.emailSent ? `The invitation has been sent to ${invitation.email}.` : 'Email was not sent. Share the invitation link below.',
       });
 
       fetchInvitations();
@@ -231,6 +221,13 @@ export function TeamManagement() {
 
   return (
     <div className="space-y-6">
+      {resendResult && (
+        <div className="rounded-lg border border-overlay p-4 space-y-3" role="status">
+          <p>Share the invitation link with {resendResult.email}.</p>
+          <input className="w-full rounded border border-overlay bg-bg-secondary p-2" aria-label="Invitation link" readOnly value={resendResult.acceptUrl} onFocus={event => event.currentTarget.select()} />
+          <Button variant="outline" onClick={() => setResendResult(null)}>Done</Button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -301,7 +298,6 @@ export function TeamManagement() {
               actorRole={currentUserRole}
               onInviteSent={() => {
                 fetchInvitations();
-                setShowInviteForm(false);
               }}
               onCancel={() => setShowInviteForm(false)}
             />

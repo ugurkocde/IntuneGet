@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getGT } from "gt-next/server";
 import { CompleteHistoryError, requireCompleteHistory } from "@/lib/catalog/release-history-cache";
+import { knownLastHistoryPage } from "@/lib/catalog/release-history-capacity";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -56,10 +57,17 @@ const loadRecentUpdates = unstable_cache(
   { revalidate: 300 },
 );
 
+function boundedHistoryFilters(params: Record<string, string | string[] | undefined>) {
+  const filters = parseHistoryFilters(params);
+  const lastPage = knownLastHistoryPage(filters);
+  if (lastPage !== null && filters.page > lastPage) redirect(historyUrl(filters, lastPage));
+  return filters;
+}
+
 export async function generateMetadata({
   searchParams,
 }: Props): Promise<Metadata> {
-  const filters = parseHistoryFilters(await searchParams);
+  const filters = boundedHistoryFilters(await searchParams);
   const appName = filters.app ? (await loadHistoryOrPartial(JSON.stringify(filters)))?.rows[0]?.name ?? filters.app : null;
   return {
     title: appName ? `${appName} Version History - IntuneGet` : "WinGet App Release History and Update Tracker - IntuneGet",
@@ -185,7 +193,7 @@ function UpdateSizeBadge({ release }: { release: CatalogRelease }) {
 }
 
 export default async function CatalogReleasesPage({ searchParams }: Props) {
-  const filters = parseHistoryFilters(await searchParams);
+  const filters = boundedHistoryFilters(await searchParams);
   const gt = await getGT();
   const filtered = hasActiveFilters(filters);
   const weekStart = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);

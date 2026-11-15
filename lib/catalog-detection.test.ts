@@ -1,7 +1,81 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeCatalogDetectionRules } from './catalog-detection';
+import { generateDetectionRules } from './detection-rules';
+import type { ScriptDetectionRule } from '@/types/intune';
+import type { WingetScope } from '@/types/winget';
+
+function msixRule(scope: WingetScope): ScriptDetectionRule {
+  const [rule] = generateDetectionRules({
+    type: 'msix',
+    architecture: 'x64',
+    url: 'https://fixture.invalid/package.msix',
+    sha256: 'A'.repeat(64),
+    packageFamilyName: 'Agilebits.1Password_amwd9z03whsfe',
+    scope,
+  }, '1Password');
+  if (rule.type !== 'script') throw new Error('Expected generated MSIX script');
+  return rule;
+}
+
+function normalizeMsix(rule: ScriptDetectionRule, scope: string) {
+  return normalizeCatalogDetectionRules({
+    detectionRules: [rule],
+    wingetId: 'AgileBits.1Password',
+    version: '8.12.42.36',
+    installerType: 'msix',
+    installScope: scope,
+  });
+}
 
 describe('catalog detection normalization', () => {
+  it.each([
+    ['machine', 'user'],
+    ['user', 'machine'],
+  ] as const)('respects %s to %s install scope for an exact generated MSIX rule', (original, scope) => {
+    expect(normalizeMsix(msixRule(original), scope)).toEqual([msixRule(scope)]);
+  });
+
+  it.each(['machine', 'user'] as const)('keeps the exact %s scope rule byte-identical', (scope) => {
+    const rule = msixRule(scope);
+    const result = normalizeMsix(rule, scope);
+    expect(result).toEqual([rule]);
+    expect(result[0]).toBe(rule);
+  });
+
+  it.each(['machine', 'user'] as const)('preserves a header lookalike with an edited body under %s scope', (scope) => {
+    const rule = { ...msixRule(scope === 'user' ? 'machine' : 'user'), scriptContent: msixRule('machine').scriptContent + '\n# Customer customization' };
+    expect(normalizeMsix(rule, scope)[0]).toBe(rule);
+  });
+
+  it.each([
+    { label: 'CRLF', change: (rule: ScriptDetectionRule) => ({ ...rule, scriptContent: rule.scriptContent.replace(/\n/g, '\r\n') }) },
+    { label: 'trailing newline', change: (rule: ScriptDetectionRule) => ({ ...rule, scriptContent: rule.scriptContent + '\n' }) },
+    { label: '32-bit setting', change: (rule: ScriptDetectionRule) => ({ ...rule, runAs32Bit: true }) },
+    { label: 'signature setting', change: (rule: ScriptDetectionRule) => ({ ...rule, enforceSignatureCheck: true }) },
+    { label: 'missing setting', change: (rule: ScriptDetectionRule) => { const copy = { ...rule }; delete copy.runAs32Bit; return copy; } },
+    { label: 'extra setting', change: (rule: ScriptDetectionRule) => ({ ...rule, customSetting: false }) },
+  ])('preserves a generated-looking script with $label', ({ change }) => {
+    const rule = change(msixRule('machine'));
+    expect(normalizeMsix(rule, 'user')[0]).toBe(rule);
+  });
+
+  it('corrects an exact generated MSIX rule on the fallback path', () => {
+    expect(normalizeCatalogDetectionRules({
+      detectionRules: [null],
+      fallbackDetectionRules: [msixRule('machine')],
+      wingetId: 'AgileBits.1Password',
+      version: '8.12.42.36',
+      installerType: 'appx',
+      installScope: 'user',
+    })).toEqual([msixRule('user')]);
+  });
+
+  it('uses machine semantics for a whitespace-padded user scope', () => {
+    const rule = msixRule('machine');
+    expect(normalizeMsix(rule, ' user')[0]).toBe(rule);
+    expect(normalizeMsix(msixRule('user'), ' user')).toEqual([rule]);
+  });
+
   it('repairs an empty legacy profile with a machine-scoped managed marker', () => {
     expect(normalizeCatalogDetectionRules({
       detectionRules: [],

@@ -1,0 +1,5 @@
+{
+  "type": "fixed",
+  "title": "Keep team invitation links available",
+  "summary": "Keep the invitation result open until Done so a team invitation link can be copied when email delivery is unavailable."
+}

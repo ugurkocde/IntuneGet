@@ -61,7 +61,7 @@ export function assignmentTargetLabel(
 ): string {
   const type = target['@odata.type'];
   if (type?.includes('allDevices')) return 'All Devices';
-  if (type?.includes('allUsers')) return 'All Users';
+  if (type === '#microsoft.graph.allLicensedUsersAssignmentTarget' || type === '#microsoft.graph.allUsersAssignmentTarget') return 'All Users';
   if (!target.groupId) return 'Unknown Target';
   const excluded = type === '#microsoft.graph.exclusionGroupAssignmentTarget';
   const prefix = excluded ? 'Excluded group' : 'Group';

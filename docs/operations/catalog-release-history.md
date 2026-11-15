@@ -55,3 +55,39 @@ Validation: run the catalog TypeScript tests and `supabase/tests/catalog_release
 Metadata batches have a three-second request timeout. An aborted request skips the batch retry when individual recovery is available; other transient errors receive one retry. The website then falls back to indexed app/version equality lookups with at most four concurrent requests. Each fallback request has a three-second timeout and all fallback work shares an eight-second deadline. Only records whose requests still fail show unavailable details; missing optional vendor metadata is not a request failure.
 
 Incomplete history responses are thrown out of the page-cache callback, preserving the previous complete response during background revalidation. On a cold request the available records can still render without storing the partial result. History links do not depend on enrichment. The displayed full-catalog check timestamp is explicitly labelled to distinguish it from incremental updates.
+
+### History work capacity
+
+Each server instance admits at most four complete history reads, including their
+metadata lookups, across all filter keys and recent-count reads. Up to eight
+additional reads wait for at most five seconds. Admission failure remains a
+Catalog history unavailable error; it is never a successful empty result. A slot
+is released only when the underlying work settles. This is an instance limit,
+not a fleet limit, and HTTP abort does not prove cancellation in Postgres.
+
+The existing five minute page-cache callbacks and keys are unchanged. Failed
+background revalidation keeps the last complete cached value. Cold requests keep
+the existing unavailable or partial-data presentation. A bounded recent-total map
+uses successful RPC counts for at most five minutes to redirect known out of range
+pages before another cached load; unknown totals retain the existing cold path.
+
+The app-specific RPC branch uses the case-insensitive curated-app index. The global
+branch retains its previous SQL. The database change requires real Postgres 17
+plan, parity and concurrency evidence before deployment; fixture timings alone
+are not evidence of production recovery.
+
+### Global release page plan
+
+The unfiltered global page derives counts and month summaries without probing the first release for every catalog app. The previous release for each displayed row is loaded as before. Filtered global and app specific requests retain their existing bodies. Apply only the reviewed migration for this function, preserving existing grants. Rollback restores the prior function migration; do not apply unrelated pending migrations. Synthetic response parity is separate from Postgres 17 concurrency and production recovery evidence.
+
+## Recent update count
+
+The server uses `get_catalog_recent_update_count(date)` for the unfiltered seven day updates tile when its existing service key is configured. This count uses the same visible catalog rows, UTC date boundary and predecessor ordering as the history total. It does not construct pages, months or metadata. The existing history function and its grants are unchanged. The new function permits service_role only; anonymous only installations retain the previous history RPC path.
+
+Apply the additive count migration before the server change. It refreshes the PostgREST schema cache. No new credential is needed. Roll back the server source before dropping the additive function; the existing history body must remain `69204a947d44d31b8a4924c73ff14d4a` with the same ACL. Existing complete cache admission and error logging are unchanged.
+
+The old eight session PG17 baseline is retained as information even when it does not reproduce production. Production logs from 15 November 2026, 04:50 to 07:40 UTC recorded 23 recent count SQLSTATE 57014 failures and one abort. Those failures supply the regression evidence; a passing old CI baseline is not described as failing. No load escalation is performed. Candidate and mixed history tests still require p95 below two seconds, zero statement timeouts and the existing one second unrelated query limit, alongside parity, role ACL and rollback checks.
+
+live verification not runnable; post-merge production verification
+
+After deployment, require zero recent path SQLSTATE 57014 failures for two full hours. Compare total error rates with the preceding production window and revert in the same cycle if they rise. Count recent SQL timeouts and client aborts separately from the remaining history page failures. Keep earlier failed milestones on record; this count change does not establish recovery of the history page path.

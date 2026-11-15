@@ -2,6 +2,7 @@ import { loadReleaseMetadata, releasePairKey } from './release-metadata';
 import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
+import { knownLastHistoryPage, rememberHistoryTotal, withHistoryCapacity } from './release-history-capacity';
 /**
  * Supabase-backed CatalogSource.
  *
@@ -63,6 +64,28 @@ function serviceOrAnonClient() {
 let warnedMissingQaServiceRole = false;
 
 export class SupabaseCatalogSource implements CatalogSource {
+  private readonly historyReads = new Map<string, Promise<ReleaseHistoryResult>>();
+  private readonly historyCounts = new Map<string, Promise<number>>();
+
+  // Only pending work is shared. Next remains responsible for result caching.
+  private shareHistoryRead<T>(
+    pending: Map<string, Promise<T>>,
+    filters: ReleaseHistoryFilters,
+    load: () => Promise<T>,
+  ): Promise<T> {
+    const key = JSON.stringify([
+      filters.app ?? '', filters.query, filters.month, filters.kind, filters.page,
+      filters.from || null, filters.to || null, filters.architecture ?? '',
+    ]);
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const read = withHistoryCapacity(load).finally(() => {
+      if (pending.get(key) === read) pending.delete(key);
+    });
+    pending.set(key, read);
+    return read;
+  }
+
   private async withDeploymentBlocks<T extends QaStatusRow>(rows: T[]): Promise<T[]> {
     if (rows.length === 0) return rows;
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -91,7 +114,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       return rows.filter(row => row.outcome !== 'Passed');
     }
   }
-  private async releaseHistoryPage(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  private async historyRpc<T>(filters: ReleaseHistoryFilters, rpcName: string, args: Record<string, unknown>): Promise<T> {
     const started = performance.now();
     const elapsed = () => performance.now() - started;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -111,14 +134,10 @@ export class SupabaseCatalogSource implements CatalogSource {
     const signal = AbortSignal.timeout(15_000);
     let success = false;
     try {
-      const { data, error } = await client.rpc('get_catalog_release_history_v2', {
-      app_filter: filters.app ?? "", date_from: filters.from || null, date_to: filters.to || null, architecture_filter: filters.architecture ?? "",
-      search_text: filters.query, month_filter: filters.month,
-      kind_filter: filters.kind, page_number: filters.page,
-      }).abortSignal(signal);
+      const { data, error } = await client.rpc(rpcName, args).abortSignal(signal);
       if (error) throw new Error('Catalog history unavailable', { cause: error });
       success = true;
-      return data as ReleaseHistoryResult;
+      return data as T;
     } finally {
       // SDK settlement includes body reading/parsing; headers are not wire first byte.
       // A never-settling SDK operation produces no summary; no watchdog is added.
@@ -140,11 +159,37 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
   }
 
-  async countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
-    return (await this.releaseHistoryPage(filters)).total;
+  private async releaseHistoryPage(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const result = await this.historyRpc<ReleaseHistoryResult>(filters, 'get_catalog_release_history_v2', {
+      app_filter: filters.app ?? '', date_from: filters.from || null, date_to: filters.to || null,
+      architecture_filter: filters.architecture ?? '', search_text: filters.query,
+      month_filter: filters.month, kind_filter: filters.kind, page_number: filters.page,
+    });
+    rememberHistoryTotal(filters, result.total);
+    return result;
   }
 
-  async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
+    return this.shareHistoryRead(this.historyCounts, filters, async () => {
+      // Preserve the legacy public/anon path; the additive count RPC is service only.
+      const recent = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY) && !filters.app && !filters.query
+        && !filters.month && filters.kind === 'updated' && filters.page === 1
+        && Boolean(filters.from) && !filters.to && !filters.architecture;
+      if (!recent) return (await this.releaseHistoryPage(filters)).total;
+      const total = await this.historyRpc<unknown>(filters, 'get_catalog_recent_update_count', { date_from: filters.from });
+      if (typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0) throw new Error('Catalog history unavailable');
+      rememberHistoryTotal(filters, total);
+      return total;
+    });
+  }
+
+  getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const lastPage = knownLastHistoryPage(filters);
+    if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
+    return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
+  }
+
+  private async loadReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
     const result = await this.releaseHistoryPage(filters);

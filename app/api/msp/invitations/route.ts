@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { canModifyRole, hasPermission, type MspRole } from '@/lib/msp-permissions';
-import { invitationSchema, validateMspInput } from '@/lib/validators/msp';
+import { invitationSchema, validateMspInput, isValidUuid } from '@/lib/validators/msp';
 import {
   applyRateLimit,
   getUserKey,
@@ -19,6 +19,11 @@ import { checkCanAddMember } from '@/lib/usage-limits';
 import { logMemberInvited } from '@/lib/audit-logger';
 import { sendTeamInvitationEmail, isEmailConfigured } from '@/lib/email/service';
 import type { Database } from '@/types/database';
+
+function invitationAcceptUrl(token: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+  return `${baseUrl.replace(/\/$/, '')}/msp/invite/accept?token=${token}`;
+}
 
 // Token expiry: 7 days
 const INVITATION_EXPIRY_DAYS = 7;
@@ -333,8 +338,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate accept URL for fallback/manual sharing
-    const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-    const acceptUrl = `${baseUrl.replace(/\/$/, '')}/msp/invite/accept?token=${token}`;
+    const acceptUrl = invitationAcceptUrl(token);
 
     // Cast invitation to typed interface
     const typedInvitation = invitation as CreatedInvitation;
@@ -459,5 +463,47 @@ export async function DELETE(request: NextRequest) {
       { error: 'Internal server error' },
       { status: 500 }
     );
+  }
+}
+
+/** Resend an existing pending invitation without replacing its token or expiry. */
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await parseAccessToken(request.headers.get('Authorization'));
+    if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const limited = await applyRateLimit(getUserKey(user.userId), COMMUNITY_RATE_LIMIT);
+    if (limited) return limited;
+    const { id } = await request.json();
+    if (typeof id !== 'string' || !isValidUuid(id)) return NextResponse.json({ error: 'Valid invitation ID is required' }, { status: 400 });
+    const supabase = createServerClient();
+    const { data: membership, error: membershipError } = await supabase.from('msp_user_memberships')
+      .select('*, msp_organizations!inner(*)').eq('user_id', user.userId).single();
+    if (membershipError || !membership) return NextResponse.json({ error: 'MSP organization not found' }, { status: 404 });
+    const member = membership as unknown as MembershipWithOrganization;
+    if (!hasPermission(member.role, 'invite_members')) return NextResponse.json({ error: 'You do not have permission to invite members' }, { status: 403 });
+    const { data: row, error: invitationError } = await supabase.from('msp_invitations')
+      .select('id, email, role, access_mode, expires_at, created_at, token')
+      .eq('id', id).eq('organization_id', member.msp_organization_id)
+      .is('accepted_at', null).gt('expires_at', new Date().toISOString()).single();
+    if (invitationError || !row) return NextResponse.json({ error: 'Invitation not found, expired or already accepted' }, { status: 404 });
+    if (!canModifyRole(member.role, row.role)) return NextResponse.json({ error: 'You can only invite members to a role below your own' }, { status: 403 });
+    if (member.access_mode === 'customer_only' && row.access_mode === 'full') return NextResponse.json({ error: 'Your access is limited to customer tenants, so you can only invite members with customer tenant access' }, { status: 403 });
+    const limit = await checkCanAddMember(member.msp_organization_id);
+    if (!limit.allowed) return NextResponse.json({ error: limit.reason, upgradeRecommended: limit.upgradeRecommended, recommendedTier: limit.recommendedTier }, { status: 403 });
+    let emailSent = false;
+    if (isEmailConfigured()) {
+      try {
+        const sent = await sendTeamInvitationEmail(row.email, {
+          inviter_name: user.userName || user.userEmail, inviter_email: user.userEmail,
+          organization_name: member.msp_organizations.name, role: row.role,
+          token: row.token, expires_at: new Date(row.expires_at),
+        });
+        emailSent = sent.success;
+      } catch { /* Preserve the existing invitation and allow manual sharing. */ }
+    }
+    const { token, ...invitation } = row;
+    return NextResponse.json({ invitation, emailSent, ...(emailSent ? {} : { acceptUrl: invitationAcceptUrl(token) }) });
+  } catch {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -40,19 +40,30 @@ interface AuditLogFilters {
   end_date?: string;
 }
 
-const actionLabels: Record<string, { label: string; tone: StatusTone }> = {
+const actionLabels: Record<AuditAction, { label: string; tone: StatusTone }> = {
   'tenant.created': { label: 'Tenant Created', tone: 'success' },
+  'tenant.updated': { label: 'Tenant Updated', tone: 'info' },
   'tenant.removed': { label: 'Tenant Removed', tone: 'error' },
   'tenant.consent_granted': { label: 'Consent Granted', tone: 'success' },
   'tenant.consent_revoked': { label: 'Consent Revoked', tone: 'warning' },
   'deployment.started': { label: 'Deployment Started', tone: 'info' },
   'deployment.completed': { label: 'Deployment Completed', tone: 'success' },
   'deployment.failed': { label: 'Deployment Failed', tone: 'error' },
+  'deployment.cancelled': { label: 'Deployment Cancelled', tone: 'neutral' },
   'member.invited': { label: 'Member Invited', tone: 'violet' },
   'member.joined': { label: 'Member Joined', tone: 'success' },
   'member.removed': { label: 'Member Removed', tone: 'error' },
   'member.role_changed': { label: 'Role Changed', tone: 'warning' },
+  'organization.created': { label: 'Organization Created', tone: 'success' },
+  'organization.settings_updated': { label: 'Organization Settings Updated', tone: 'info' },
   'organization.updated': { label: 'Org Updated', tone: 'info' },
+  'batch.deployment_completed': { label: 'Batch Deploy Completed', tone: 'success' },
+  'batch.deployment_failed': { label: 'Batch Deploy Failed', tone: 'error' },
+  'batch.deployment_cancelled': { label: 'Batch Deploy Cancelled', tone: 'neutral' },
+  'webhook.created': { label: 'Webhook Created', tone: 'success' },
+  'webhook.updated': { label: 'Webhook Updated', tone: 'info' },
+  'webhook.deleted': { label: 'Webhook Deleted', tone: 'warning' },
+  'webhook.tested': { label: 'Webhook Tested', tone: 'info' },
   'batch.deployment_started': { label: 'Batch Deploy Started', tone: 'violet' },
 };
 
@@ -69,6 +80,7 @@ export function AuditLogTable() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<AuditLogFilters>({});
@@ -125,72 +137,55 @@ export function AuditLogTable() {
   }, [isAuthenticated, fetchLogs]);
 
   const exportToCsv = useCallback(async () => {
-    if (!isAuthenticated) return;
-
+    if (!isAuthenticated || isInitializing) return;
     setIsExporting(true);
-
+    setExportError(null);
     try {
       const accessToken = await getAccessToken();
-      if (!accessToken) return;
-
-      // Fetch all logs (up to 1000) for export
-      const params = new URLSearchParams({
-        page: '1',
-        limit: '1000',
-      });
-
+      if (!accessToken) throw new Error('Audit access token unavailable');
+      const params = new URLSearchParams({ page: '1', limit: '100' });
       if (filters.action) params.set('action', filters.action);
       if (filters.resource_type) params.set('resource_type', filters.resource_type);
-
-      const response = await fetch(`/api/msp/audit-logs?${params}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const allLogs: AuditLog[] = data.logs;
-
-        // Build CSV content
-        const headers = ['Date', 'Action', 'User', 'Resource Type', 'Resource ID', 'Details'];
-        const rows = allLogs.map((log) => {
-          const date = new Date(log.created_at).toISOString();
-          const actionInfo = getActionInfo(log.action);
-          const details = log.details ? JSON.stringify(log.details) : '';
-          return [
-            date,
-            actionInfo.label,
-            log.user_email,
-            log.resource_type || '',
-            log.resource_id || '',
-            details,
-          ];
+      const allLogs: AuditLog[] = [];
+      let exportPages = 1;
+      for (let exportPage = 1; exportPage <= exportPages; exportPage += 1) {
+        params.set('page', String(exportPage));
+        const response = await fetch(`/api/msp/audit-logs?${params}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
         });
-
-        // encodeCsvRow quotes every cell and neutralises formulas
-        const csvContent = [
-          encodeCsvRow(headers),
-          ...rows.map((row) => encodeCsvRow(row)),
-        ].join('\n');
-
-        // Download file
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `audit-logs-${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        if (!response.ok) throw new Error('Audit export request failed');
+        const data = await response.json();
+        if (!Array.isArray(data.logs) || !Number.isSafeInteger(data.total_pages) || data.total_pages < 0) {
+          throw new Error('Invalid audit export response');
+        }
+        if (exportPage === 1) exportPages = data.total_pages;
+        allLogs.push(...data.logs);
       }
-    } catch (error) {
-      console.error('Error exporting audit logs:', error);
+      const headers = ['Date', 'Action', 'User', 'Resource Type', 'Resource ID', 'Details'];
+      const rows = allLogs.map(log => [
+        new Date(log.created_at).toISOString(),
+        getActionInfo(log.action).label,
+        log.user_email,
+        log.resource_type || '',
+        log.resource_id || '',
+        log.details ? JSON.stringify(log.details) : '',
+      ]);
+      const csvContent = [encodeCsvRow(headers), ...rows.map(row => encodeCsvRow(row))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `audit-logs-${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError('Could not export audit logs. Please try again.');
     } finally {
       setIsExporting(false);
     }
-  }, [getAccessToken, isAuthenticated, filters]);
+  }, [getAccessToken, isAuthenticated, isInitializing, filters]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -205,7 +200,7 @@ export function AuditLogTable() {
   };
 
   const getActionInfo = (action: string) => {
-    return actionLabels[action] || { label: action, tone: 'neutral' as StatusTone };
+    return actionLabels[action as AuditAction] || { label: action, tone: 'neutral' as StatusTone };
   };
 
   const getResourceIcon = (resourceType: string | null) => {
@@ -278,6 +273,8 @@ export function AuditLogTable() {
           </Button>
         </div>
       </div>
+
+      {exportError && <p role="alert" className="text-sm text-status-error">{exportError}</p>}
 
       {/* Filters */}
       {showFilters && (

@@ -49,6 +49,12 @@ import type { PackageAssignment } from '@/types/upload';
 import type { CustomerQaStatus } from '@/types/customer-qa';
 import { CustomerWaitOptions } from '@/components/CustomerWaitOptions';
 import { customerJobSnapshotKey, type CustomerJobSnapshot } from '@/lib/customer-wait-options';
+import {
+  ACTIVE_DEPLOYMENT_STATUSES,
+  SUCCEEDED_DEPLOYMENT_STATUSES,
+  FAILED_DEPLOYMENT_STATUSES,
+  TERMINAL_DEPLOYMENT_STATUSES,
+} from '@/lib/deployment-status-groups';
 
 interface PackagingJob {
   qa_status?: CustomerQaStatus;
@@ -110,7 +116,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 const PROGRESS_JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIVE_JOB_STATUSES: readonly string[] = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'];
+const ACTIVE_JOB_STATUSES = ACTIVE_DEPLOYMENT_STATUSES;
 
 export default function UploadsPage() {
   const searchParams = useSearchParams();
@@ -124,6 +130,7 @@ export default function UploadsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const cancellingJob = useRef<string | null>(null);
   const [redeployingJobId, setRedeployingJobId] = useState<string | null>(null);
   const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -284,36 +291,41 @@ export default function UploadsPage() {
   };
 
   const handleCancelJob = async (jobId: string, dismiss?: boolean) => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return;
-
-    // Optimistic UI update: immediately update state so the dialog closes fast
-    const previousJobs = jobs;
-    if (dismiss) {
-      // For dismiss, remove the job from the list immediately
-      setJobs((prev) => prev.filter((j) => j.id !== jobId));
-    } else {
-      // For cancel, mark as cancelled immediately
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === jobId
-            ? { ...j, status: 'cancelled' as const, cancelled_at: new Date().toISOString() }
-            : j
-        )
-      );
+    const job = jobs.find((candidate) => candidate.id === jobId);
+    if (!user?.id || job?.user_id !== user.id) {
+      setError('Only the deployment owner can cancel or dismiss this job.');
+      return;
     }
-
-    // Fire the API call in the background
+    if (cancellingJob.current) {
+      setError('Wait for the current deployment action to finish before starting another.');
+      return;
+    }
+    const requestScopeKey = customerJobSnapshotKey(redeployScope.current);
+    if (!requestScopeKey || jobsSnapshotKey !== requestScopeKey) {
+      setError('Refresh deployments before cancelling or dismissing a job in this view.');
+      return;
+    }
+    const isCurrentScope = () => customerJobSnapshotKey(redeployScope.current) === requestScopeKey;
+    cancellingJob.current = jobId;
+    setCancellingJobId(jobId);
     try {
+      const accessToken = await getAccessToken();
+      if (!isCurrentScope()) {
+        setError('The deployment view changed. Refresh deployments before trying again.');
+        return;
+      }
+      if (!accessToken) {
+        setSessionExpired(true);
+        return;
+      }
+      // Keep server rows intact while the action is pending. Polling can update
+      // them in the meantime, and failures must never restore an older list.
       const response = await fetch('/api/package/cancel', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ jobId, dismiss }),
       });
-
+      if (!isCurrentScope()) return;
       if (!response.ok) {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
@@ -322,15 +334,18 @@ export default function UploadsPage() {
         }
         throw new Error(`Failed to cancel job (${response.status})`);
       }
-
-      if (dismiss) progressJobs.current.delete(jobId);
-      // Silently sync with server to pick up any fields set by the backend
+      if (dismiss) {
+        progressJobs.current.delete(jobId);
+        setJobs((currentJobs) => currentJobs.filter((candidate) => candidate.id !== jobId));
+      }
       fetchJobs();
     } catch (err) {
-      // Revert optimistic update on failure
-      setJobs(previousJobs);
+      if (!isCurrentScope()) return;
       console.error('Failed to cancel job:', err);
       setError(err instanceof Error ? err.message : `Failed to ${dismiss ? 'dismiss' : 'cancel'} job`);
+    } finally {
+      cancellingJob.current = null;
+      setCancellingJobId(null);
     }
   };
 
@@ -430,11 +445,11 @@ export default function UploadsPage() {
   const filteredJobs = jobs.filter((job) => {
     switch (filter) {
       case 'active':
-        return ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+        return ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
       case 'completed':
-        return ['completed', 'deployed', 'duplicate_skipped'].includes(job.status);
+        return SUCCEEDED_DEPLOYMENT_STATUSES.includes(job.status);
       case 'failed':
-        return ['failed', 'cancelled'].includes(job.status);
+        return FAILED_DEPLOYMENT_STATUSES.includes(job.status);
       default:
         return true;
     }
@@ -443,10 +458,10 @@ export default function UploadsPage() {
   const stats = {
     total: jobs.length,
     active: jobs.filter((j) =>
-      ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(j.status)
+      ACTIVE_DEPLOYMENT_STATUSES.includes(j.status)
     ).length,
-    completed: jobs.filter((j) => ['completed', 'deployed', 'duplicate_skipped'].includes(j.status)).length,
-    failed: jobs.filter((j) => ['qa_failed', 'failed'].includes(j.status)).length,
+    completed: jobs.filter((j) => SUCCEEDED_DEPLOYMENT_STATUSES.includes(j.status)).length,
+    failed: jobs.filter((j) => FAILED_DEPLOYMENT_STATUSES.includes(j.status)).length,
   };
 
   const filterButtons = ['all', 'active', 'completed', 'failed'] as const;
@@ -479,7 +494,7 @@ export default function UploadsPage() {
         badge={stats.active > 0 ? { text: <T>Live</T>, variant: 'success' as const } : undefined}
         actions={
           <div className="flex items-center gap-2">
-            {(stats.completed + stats.failed) > 0 && (
+            {jobs.some(job => TERMINAL_DEPLOYMENT_STATUSES.includes(job.status)) && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -499,7 +514,7 @@ export default function UploadsPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle><T>Clear Upload History?</T></AlertDialogTitle>
                     <AlertDialogDescription>
-                      <T>This hides completed, failed, cancelled, and deployed jobs from this page. Deployment audit and update records are preserved. Active jobs are not affected.</T>
+                      <T>This hides completed, stopped, failed, cancelled, and deployed jobs from this page. Deployment audit and update records are preserved. Active jobs are not affected.</T>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -710,6 +725,7 @@ export default function UploadsPage() {
               <UploadJobCard
                 key={job.id}
                 job={job}
+                currentUserId={user?.id}
                 index={index}
                 isHighlighted={highlightedJobIds.includes(job.id)}
                 onCancel={handleCancelJob}
@@ -730,6 +746,7 @@ export default function UploadsPage() {
 
 function UploadJobCard({
   job,
+  currentUserId,
   index,
   isHighlighted,
   onCancel,
@@ -741,6 +758,7 @@ function UploadJobCard({
   tenantLabel,
 }: {
   job: PackagingJob;
+  currentUserId?: string;
   index: number;
   isHighlighted?: boolean;
   onCancel: (jobId: string, dismiss?: boolean) => void;
@@ -839,12 +857,12 @@ function UploadJobCard({
 
   const config = statusConfig[job.status] || statusConfig.queued;
   const StatusIcon = config.icon;
-  const isActive = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isActive = ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
   const isStale = !['blocked_upstream', 'awaiting_qa'].includes(job.status) && isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
   // Allow cancelling active jobs or dismissing completed/failed jobs
-  const isCancellable = ['blocked_upstream', 'awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isCancellable = ACTIVE_DEPLOYMENT_STATUSES.includes(job.status);
   const isDismissable = ['qa_failed', 'completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
-  const canRemove = isCancellable || isDismissable;
+  const canRemove = !!currentUserId && job.user_id === currentUserId && (isCancellable || isDismissable);
 
   const itemVariants = {
     hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 20 },
@@ -1145,11 +1163,12 @@ function UploadJobCard({
                         <T>View existing app</T>
                       </a>
                     )}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
                     <Button
                       size="sm"
                       variant="outline"
                       className="border-accent-cyan/30 text-accent-cyan hover:bg-accent-cyan/10 hover:border-accent-cyan/50 text-xs"
-                      onClick={() => onRedeploy(job, true)}
                       disabled={isRedeploying}
                     >
                       {isRedeploying ? (
@@ -1159,6 +1178,20 @@ function UploadJobCard({
                       )}
                       <T>Deploy as new app anyway</T>
                     </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle><T>Create a second Intune app?</T></AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <T><Var>{job.display_name}</Var> already exists in this tenant. Deploying it again creates a separate app with its own assignments.</T>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel><T>Keep existing app</T></AlertDialogCancel>
+                          <AlertDialogAction onClick={() => onRedeploy(job, true)}><T>Deploy as new app</T></AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               </div>

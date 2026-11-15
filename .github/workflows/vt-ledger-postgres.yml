@@ -29,3 +29,25 @@ jobs:
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: python3 scripts/qa-automation/vt-ledger-postgres.test.py
+      - name: Check catalog history capacity and indexed app plans
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/catalog-release-history-capacity-postgres.py
+      - name: Check optional backfill timeout isolation
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/qa-backfill-timeout-postgres.py
+      - name: Check customer demand failure index
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/qa-demand-index-postgres.py
+      - name: Check global history plan and response parity
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/catalog-history-global-postgres.py
+      - name: Check recent count regression and mixed history load
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          python3 scripts/ci/catalog-recent-probe.test.py
+          python3 scripts/ci/catalog-recent-update-count-postgres.py

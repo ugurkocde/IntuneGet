@@ -173,22 +173,34 @@ async function buildCachedAppsResponse(
       const status = claimedMap.get(app.discovered_app_id);
       return status !== 'deployed';
     })
-    .map(cached => ({
-      id: cached.id,
-      discoveredAppId: cached.discovered_app_id,
-      displayName: cached.display_name,
-      version: cached.version,
-      publisher: cached.publisher,
-      deviceCount: cached.device_count,
-      platform: cached.platform,
-      matchStatus: cached.match_status as MatchStatus,
-      matchedPackageId: cached.matched_package_id,
-      matchedPackageName: null,
-      matchConfidence: cached.match_confidence,
-      isClaimed: claimedMap.has(cached.discovered_app_id),
-      claimStatus: claimedMap.get(cached.discovered_app_id) as UnmanagedApp['claimStatus'],
-      lastSynced: cached.last_synced,
-    }));
+    .map(cached => {
+      const match = matchDiscoveredApp({
+        id: cached.discovered_app_id,
+        displayName: cached.display_name,
+        version: cached.version,
+        publisher: cached.publisher,
+        deviceCount: cached.device_count,
+        platform: cached.platform as GraphUnmanagedApp['platform'],
+      });
+      const sameMatch = match.status === cached.match_status && match.wingetId === cached.matched_package_id;
+      return {
+        id: cached.id,
+        discoveredAppId: cached.discovered_app_id,
+        displayName: cached.display_name,
+        version: cached.version,
+        publisher: cached.publisher,
+        deviceCount: cached.device_count,
+        platform: cached.platform,
+        matchStatus: cached.match_status as MatchStatus,
+        matchedPackageId: cached.matched_package_id,
+        matchedPackageName: null,
+        matchConfidence: cached.match_confidence,
+        partialMatches: sameMatch ? match.partialMatches : [],
+        isClaimed: claimedMap.has(cached.discovered_app_id),
+        claimStatus: claimedMap.get(cached.discovered_app_id) as UnmanagedApp['claimStatus'],
+        lastSynced: cached.last_synced,
+      };
+    });
 
   const lastSynced = cachedApps[0].last_synced;
 

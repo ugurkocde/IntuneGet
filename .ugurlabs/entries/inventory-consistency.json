@@ -1,0 +1,5 @@
+{
+  "title": "Keep discovered app claims and catalog searches consistent",
+  "summary": "Inventory catalog links retain their search. All Users assignments show their name, and discovered apps preserve claim status and match suggestions after reload.",
+  "type": "fixed"
+}
