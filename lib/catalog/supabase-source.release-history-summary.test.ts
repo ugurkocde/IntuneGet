@@ -27,6 +27,26 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 const lastUrl = () => String(fetchMock.mock.calls.at(-1)![0]);
 
+it.each(['total', 'metadata'])('keeps overlapping page results bound to their own summary (%s)', async change => {
+  const source = new SupabaseCatalogSource();
+  const first = { ...summary, total: 80 };
+  const second = change === 'total' ? { ...first, total: 120 }
+    : { ...first, apps: 9100, months: ['2026-10', '2026-11'] };
+  let release!: (response: Response) => void;
+  let started!: () => void;
+  const began = new Promise<void>(resolve => { started = resolve; });
+  fetchMock.mockImplementationOnce(async () => {
+    started();
+    return new Promise<Response>(resolve => { release = resolve; });
+  });
+  const pending = source.getReleaseHistory({ ...filters, page: 2 }, first);
+  await began;
+  const overlapping = source.getReleaseHistory({ ...filters, page: 2 }, second);
+  release(Response.json([]));
+  expect(await pending).toEqual(first);
+  expect(await overlapping).toEqual(second);
+});
+
 it('reuses a global summary for the observed deep page with the existing RPC transport', async () => {
   const source = new SupabaseCatalogSource();
   await source.getReleaseHistory(filters);

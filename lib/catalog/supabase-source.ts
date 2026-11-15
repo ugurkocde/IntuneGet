@@ -84,10 +84,12 @@ export class SupabaseCatalogSource implements CatalogSource {
     pending: Map<string, Promise<T>>,
     filters: ReleaseHistoryFilters,
     load: () => Promise<T>,
+    summary?: Omit<ReleaseHistoryResult, 'rows'>,
   ): Promise<T> {
     const key = JSON.stringify([
       filters.app ?? '', filters.query, filters.month, filters.kind, filters.page,
       filters.from || null, filters.to || null, filters.architecture ?? '',
+      summary ?? null,
     ]);
     const existing = pending.get(key);
     if (existing) return existing;
@@ -220,7 +222,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       return (summary ? Promise.resolve(summary) : this.globalHistorySummary()).then(summary => {
         const lastPage = Math.max(1, Math.ceil(summary.total / 40));
         const bounded = filters.page > lastPage ? { ...filters, page: lastPage } : filters;
-        return this.shareHistoryRead(this.historyReads, bounded, () => this.loadReleaseHistory(bounded, summary));
+        return this.shareHistoryRead(this.historyReads, bounded, () => this.loadReleaseHistory(bounded, summary), summary);
       });
     }
     const lastPage = knownLastHistoryPage(filters);
