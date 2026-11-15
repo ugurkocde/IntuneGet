@@ -84,7 +84,7 @@ function BatchProgress({ batchId }: BatchProgressTrackerProps) {
     refetchInterval: (query) => {
       const batch = query.state.data?.batch;
       // Poll more frequently if the batch is in progress
-      if (batch?.status === 'in_progress' || batch?.status === 'pending') {
+      if (batch?.status === 'in_progress' || batch?.status === 'pending' || batch?.items.some(item => item.status === 'in_progress')) {
         return 5000; // 5 seconds
       }
       return false; // Stop polling when complete
@@ -105,14 +105,13 @@ function BatchProgress({ batchId }: BatchProgressTrackerProps) {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (!mounted.current) return;
       if (!response.ok) {
-        setCancelError(response.status === 403
+        if (mounted.current) setCancelError(response.status === 403
           ? 'You do not have permission to cancel this batch'
           : 'Failed to cancel batch deployment');
         return;
       }
-      setConfirmOpen(false);
+      if (mounted.current) setConfirmOpen(false);
       await Promise.all([
         client.invalidateQueries({ queryKey: ['batch-deployment', id] }),
         client.invalidateQueries({ queryKey: ['batch-deployments'] }),

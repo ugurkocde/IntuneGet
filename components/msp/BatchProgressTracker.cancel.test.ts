@@ -8,12 +8,13 @@ vi.mock('gt-next', () => ({ T: ({ children }: { children: React.ReactNode }) => 
 import { BatchProgressTracker } from './BatchProgressTracker';
 const batch = (id = 'fixture-batch', status = 'in_progress') => ({ id, status, display_name: 'Fixture app', winget_id: 'Fixture.App', version: '1', total_tenants: 2, completed_tenants: 0, failed_tenants: 0, created_at: '2026-01-01', items: [] });
 afterEach(() => vi.unstubAllGlobals());
-async function setup(status = 'in_progress', response = Response.json({ success: true })) {
+async function setup(status = 'in_progress', response = Response.json({ success: true }), activeItem = false) {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   let cancelled = false;
   const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === 'DELETE') { cancelled = response.ok; return response; }
-    return Response.json({ batch: batch(url.split('/').at(-1), cancelled ? 'cancelled' : status) });
+    const result = batch(url.split('/').at(-1), cancelled ? 'cancelled' : status);
+    return Response.json({ batch: { ...result, items: activeItem ? [{ id: 'fixture-item', status: 'in_progress', tenant_display_name: 'Fixture tenant' }] : [] } });
   });
   vi.stubGlobal('fetch', fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -23,7 +24,7 @@ async function setup(status = 'in_progress', response = Response.json({ success:
   await render();
   const button = (text: string) => [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === text);
   const click = async (text: string) => { expect(button(text), text).toBeDefined(); await act(async () => { button(text)!.click(); await new Promise(r => setTimeout(r, 30)); }); };
-  return { fetcher, invalidation, button, click, render, close: async () => { await act(async () => root.unmount()); client.clear(); node.remove(); } };
+  return { client, fetcher, invalidation, button, click, render, close: async () => { await act(async () => root.unmount()); client.clear(); node.remove(); } };
 }
 it('requires confirmation, dismisses without cancelling, then sends one authorized cancellation and refreshes both views', async () => {
   const t = await setup();try {
@@ -54,6 +55,22 @@ it('disables duplicate confirmation and does not refresh the new batch after an 
     expect(t.button('Cancel batch')?.disabled).toBe(true);expect(t.button('Confirm cancellation')?.disabled).toBe(true);
     t.button('Confirm cancellation')!.click();expect(t.fetcher.mock.calls.filter(([, x]) => x?.method === 'DELETE')).toHaveLength(1);
     await t.render('other-batch');expect(t.button('Confirm cancellation')).toBeUndefined();
-    await act(async () => { resolve(Response.json({success:true}));await pending; });expect(t.invalidation).not.toHaveBeenCalled();
+    await act(async () => { resolve(Response.json({success:true}));await pending; });
+    expect(t.invalidation).toHaveBeenCalledWith({ queryKey: ['batch-deployment', 'fixture-batch'] });
+    expect(t.invalidation).toHaveBeenCalledWith({ queryKey: ['batch-deployments'] });
+    expect(t.invalidation).not.toHaveBeenCalledWith({ queryKey: ['batch-deployment', 'other-batch'] });
   }finally{await t.close();}
+});
+
+it('keeps observing an active item after cancellation and stops when it finishes', async () => {
+  const t = await setup('cancelled', Response.json({ success: true }), true);
+  try {
+    const query = t.client.getQueryCache().find({ queryKey: ['batch-deployment', 'fixture-batch'] })!;
+    const interval = query.options.refetchInterval;
+    expect(typeof interval).toBe('function');
+    if (typeof interval !== 'function') throw new Error('Expected polling decision');
+    expect(interval(query)).toBe(5000);
+    await act(async () => { t.client.setQueryData(['batch-deployment', 'fixture-batch'], { batch: { ...batch('fixture-batch', 'cancelled'), items: [{ id: 'fixture-item', status: 'completed' }] } }); });
+    expect(interval(query)).toBe(false);
+  } finally { await t.close(); }
 });
