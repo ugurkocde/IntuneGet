@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ReleaseHistoryResult } from './release-history';
 Object.assign(globalThis, { AsyncLocalStorage });
 const { SupabaseCatalogSource } = await import('./supabase-source');
+const { unstable_cache } = await import('next/cache');
 const { workAsyncStorage } = await import('next/dist/server/app-render/work-async-storage.external');
 const filters = { query: '', month: '', kind: 'all' as const, page: 2 };
 const summary = { total: 800, apps: 10, firstTracked: 10, months: ['2026-11'], coverageStart: '2026-01-01', sync: null };
@@ -70,4 +72,16 @@ it('fails a cold summary error without caching an empty success', async () => {
   await expect(read()).rejects.toThrow('Catalog history unavailable');
   expect(cacheSet).not.toHaveBeenCalled();
   expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+it('uses the shared summary inside the actual outer page cache scope', async () => {
+  vi.stubGlobal('__incrementalCache', {
+    generateSimpleCacheKey: async (key: string) => key,
+    get: vi.fn(async (key: string) => key.includes('catalog-release-history-global-summary-v1')
+      ? ({ isStale: false, value: { kind: 'FETCH', data: { body: JSON.stringify(summary) } } }) : null),
+    set: cacheSet,
+  });
+  const source = new SupabaseCatalogSource();
+  const outer = unstable_cache((prepared: Omit<ReleaseHistoryResult, 'rows'> | undefined) => source.getReleaseHistory(filters, prepared), ['fixture-outer-history'], { revalidate: 300 });
+  const store = { nextFetchId: 1, route: '/apps/releases', pendingRevalidates: {}, isStaticGeneration: false };
+  await expect(workAsyncStorage.run(store as never, async () => outer(await source.getReleaseHistorySummary(filters)))).resolves.toEqual({ ...summary, rows: [] });
 });

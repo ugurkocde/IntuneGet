@@ -207,13 +207,19 @@ export class SupabaseCatalogSource implements CatalogSource {
     });
   }
 
-  getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  getReleaseHistorySummary(filters: ReleaseHistoryFilters): Promise<Omit<ReleaseHistoryResult, 'rows'> | undefined> {
+    const global = !filters.app && !filters.query && !filters.month && !filters.from
+      && !filters.to && !filters.architecture && filters.kind === 'all';
+    return global && process.env.SUPABASE_SERVICE_ROLE_KEY ? this.globalHistorySummary() : Promise.resolve(undefined);
+  }
+
+  getReleaseHistory(filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>): Promise<ReleaseHistoryResult> {
     const lastPage = knownLastHistoryPage(filters);
     if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
     const global = !filters.app && !filters.query && !filters.month && !filters.from
       && !filters.to && !filters.architecture && filters.kind === 'all';
     if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return this.globalHistorySummary().then(summary =>
+      return (summary ? Promise.resolve(summary) : this.globalHistorySummary()).then(summary =>
         this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters, summary)));
     }
     return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
