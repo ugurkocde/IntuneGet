@@ -5,11 +5,13 @@ const migration = readFileSync('supabase/migrations/20261115144200_qa_demand_fai
 const old = readFileSync('supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql', 'utf8').replace(/\r\n/g, '\n');
 const timeout = readFileSync('supabase/migrations/20261115020254_qa_optional_backfill_timeout.sql', 'utf8');
 const fixture = readFileSync('scripts/ci/qa-demand-index-postgres.py', 'utf8').split('FIXTURE = """')[1].split('insert into curated_apps')[0];
+const stubLiteral = readFileSync('scripts/ci/qa-demand-index-postgres.py', 'utf8').match(/run\(("create function public\.qa_idle_catalog_backfill_ids[^\r\n]+")\)/)?.[1];
+if (!stubLiteral) throw new Error('Missing CI timeout fixture functions');
 it.each([false, true])('preserves existing timeout configuration: %s', async hasTimeout => {
   const db = new PGlite();
   try {
     await db.exec('CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;'+fixture+old);
-    await db.exec("CREATE FUNCTION public.qa_idle_catalog_backfill_ids(integer) RETURNS SETOF text LANGUAGE sql AS $$SELECT NULL::text WHERE false$$;CREATE FUNCTION public.qa_toolchain_backfill_page(text,integer,text[]) RETURNS SETOF text LANGUAGE sql AS $$SELECT NULL::text WHERE false$$;");
+    await db.exec(JSON.parse(stubLiteral));
     if (hasTimeout) await db.exec(timeout);
     const snapshot = async () => (await db.query("SELECT proacl::text,proconfig,prosecdef,provolatile FROM pg_proc WHERE oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure")).rows[0];
     const before = await snapshot();

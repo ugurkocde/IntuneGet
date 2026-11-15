@@ -131,7 +131,7 @@ def early_demand_contracts(sql, with_timeout=False):
         old = (ROOT/'supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql').read_text().replace('\r\n','\n')
         run(old)
         if with_timeout:
-            run("create function public.qa_idle_catalog_backfill_ids(integer) returns setof text language sql as $select null::text where false$;create function public.qa_toolchain_backfill_page(text,integer,text[]) returns setof text language sql as $select null::text where false$;")
+            run("create function public.qa_idle_catalog_backfill_ids(integer) returns setof text language sql as 'select null::text where false';create function public.qa_toolchain_backfill_page(text,integer,text[]) returns setof text language sql as 'select null::text where false';")
             run((ROOT/'supabase/migrations/20261115020254_qa_optional_backfill_timeout.sql').read_text())
         before = snap()
         expected = results()
