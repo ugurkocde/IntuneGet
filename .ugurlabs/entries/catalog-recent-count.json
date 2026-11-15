@@ -1,0 +1,1 @@
+{"title":"Use a dedicated recent catalog update count","summary":"The catalog updates tile counts recent releases without constructing a full history page. Existing release history and cached page behavior stay the same.","type":"fixed"}

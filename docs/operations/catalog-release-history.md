@@ -75,3 +75,12 @@ The app-specific RPC branch uses the case-insensitive curated-app index. The glo
 branch retains its previous SQL. The database change requires real Postgres 17
 plan, parity and concurrency evidence before deployment; fixture timings alone
 are not evidence of production recovery.
+
+
+## Recent update count
+
+The server uses `get_catalog_recent_update_count(date)` for the unfiltered seven day updates tile when its existing service key is configured. This count uses the same visible catalog rows, UTC date boundary and predecessor ordering as the history total. It does not construct pages, months or metadata. The existing history function and its grants are unchanged. The new function permits service_role only; anonymous only installations retain the previous history RPC path.
+
+Apply the additive count migration before the server change. It refreshes the PostgREST schema cache. No new credential is needed. Roll back the server source before dropping the additive function; the existing history body must remain `69204a947d44d31b8a4924c73ff14d4a` with the same ACL. Existing complete cache admission and error logging are unchanged.
+
+The PG17 contract stops with an honest block if the old recent count passes eight concurrent sessions at a three second statement timeout and p95 below two seconds. It never escalates load. Candidate and mixed history tests require p95 below two seconds, zero statement timeouts and the existing one second unrelated query limit. CI evidence is not production recovery: count recent SQL timeouts and client aborts separately from the remaining history page failures.
