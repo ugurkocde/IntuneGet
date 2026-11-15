@@ -55,3 +55,23 @@ Validation: run the catalog TypeScript tests and `supabase/tests/catalog_release
 Metadata batches have a three-second request timeout. An aborted request skips the batch retry when individual recovery is available; other transient errors receive one retry. The website then falls back to indexed app/version equality lookups with at most four concurrent requests. Each fallback request has a three-second timeout and all fallback work shares an eight-second deadline. Only records whose requests still fail show unavailable details; missing optional vendor metadata is not a request failure.
 
 Incomplete history responses are thrown out of the page-cache callback, preserving the previous complete response during background revalidation. On a cold request the available records can still render without storing the partial result. History links do not depend on enrichment. The displayed full-catalog check timestamp is explicitly labelled to distinguish it from incremental updates.
+
+### History work capacity
+
+Each server instance admits at most four complete history reads, including their
+metadata lookups, across all filter keys and recent-count reads. Up to eight
+additional reads wait for at most five seconds. Admission failure remains a
+Catalog history unavailable error; it is never a successful empty result. A slot
+is released only when the underlying work settles. This is an instance limit,
+not a fleet limit, and HTTP abort does not prove cancellation in Postgres.
+
+The existing five minute page-cache callbacks and keys are unchanged. Failed
+background revalidation keeps the last complete cached value. Cold requests keep
+the existing unavailable or partial-data presentation. A bounded recent-total map
+uses successful RPC counts for at most five minutes to redirect known out of range
+pages before another cached load; unknown totals retain the existing cold path.
+
+The app-specific RPC branch uses the case-insensitive curated-app index. The global
+branch retains its previous SQL. The database change requires real Postgres 17
+plan, parity and concurrency evidence before deployment; fixture timings alone
+are not evidence of production recovery.
