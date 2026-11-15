@@ -1,0 +1,5 @@
+{
+  "title": "Cancel pending batch deployments",
+  "summary": "Batch progress offers a confirmation before cancelling work that has not started. Deployments already in progress continue, and both batch views refresh after cancellation.",
+  "type": "fixed"
+}
