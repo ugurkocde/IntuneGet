@@ -36,7 +36,10 @@ insert into qa_candidates values
  ('Fixture.9','2','1','psadt-package','passed','{"profileKind":"catalog-default"}',now()),
  ('Fixture.10','1','2','psadt-package','error','{"profileKind":"catalog-default"}',now()),
  ('Fixture.11','2','2','psadt-package','superseded','{"profileKind":"catalog-default"}',now()),
- ('Fixture.12','2','2','psadt-package','passed','{"profileKind":"custom"}',now());
+ ('Fixture.12','2','2','psadt-package','passed','{"profileKind":"custom"}',now()),
+ -- Eligible custom profiles must retain current-version failure priority.
+ ('Fixture.11','2','1','psadt-package','failed','{"profileKind":"custom"}','2026-02-01T00:00:00Z'),
+ ('Fixture.12','1','2','psadt-package','error','{"profileKind":"custom"}','2026-02-02T00:00:00Z');
 analyze;
 """
 
@@ -72,6 +75,8 @@ def contracts(sql):
         before = snapshot()
         limits = ['NULL', '0', '1', '3', '100', '101']
         expected = [results(limit) for limit in limits]
+        assert expected[0][:2] == ['Fixture.12', 'Fixture.11'], expected[0]
+        assert expected[1] == ['Fixture.12'] and expected[2] == ['Fixture.12']
         assert not set(expected[-1]).intersection('Fixture.' + str(n) for n in range(1, 11))
         old_plan = plan()
         assert not any(n.get('Index Name') == INDEX for n in executed_nodes(old_plan))
