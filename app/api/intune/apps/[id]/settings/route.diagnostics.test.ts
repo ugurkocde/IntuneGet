@@ -46,11 +46,18 @@ describe('settings failure phase diagnostics', () => {
       mocks[method].mockImplementationOnce(() => { throw new Error('private-fixture-secret user@example.invalid https://fixture.invalid/?token=private'); });
       const response = await call();
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: 'private-fixture-secret user@example.invalid https://fixture.invalid/?token=private' });
+      expect(await response.json()).toEqual({ error: 'Failed to update app settings' });
       expect(console.error).toHaveBeenCalledExactlyOnceWith('[intune-app-settings] Update failed', { phase, errorKind: 'Error' });
       expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('private');
     });
   }
+  for (const value of ['private-fixture-secret', { message: 'private-fixture-secret' }]) it('keeps a non Error exception private', async () => {
+    mocks.assign.mockRejectedValueOnce(value);
+    const response = await call();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to update app settings' });
+    expect(console.error).toHaveBeenCalledExactlyOnceWith('[intune-app-settings] Update failed', { phase: 'assignments', errorKind: 'other' });
+  });
   it('identifies a missing Graph token without attempting an app update', async () => {
     mocks.token.mockResolvedValueOnce(null);
     const response = await call();
@@ -61,13 +68,17 @@ describe('settings failure phase diagnostics', () => {
     expect(mocks.assign).not.toHaveBeenCalled();
   });
   it('identifies malformed body without making Graph writes', async () => {
-    expect((await call('{')).status).toBe(500);
+    const response = await call('{');
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to update app settings' });
     expect(console.error).toHaveBeenCalledExactlyOnceWith('[intune-app-settings] Update failed', { phase: 'request-body', errorKind: 'SyntaxError' });
     expect(mocks.assign).not.toHaveBeenCalled();
   });
   it('distinguishes a config write exception after assignments succeeded', async () => {
     mocks.job.mockResolvedValueOnce({ data: { id: 'fixture', package_config: {} }, error: null }).mockRejectedValueOnce(new Error('private-save-error'));
-    expect((await call()).status).toBe(500);
+    const response = await call();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to update app settings' });
     expect(console.error).toHaveBeenCalledExactlyOnceWith('[intune-app-settings] Update failed', { phase: 'config-save', errorKind: 'Error' });
     expect(mocks.assign).toHaveBeenCalledOnce();
   });
@@ -76,7 +87,9 @@ describe('settings failure phase diagnostics', () => {
     it(`allowlists error kind ${name}`, async () => {
       const error = new Error('private-fixture-secret'); error.name = name;
       mocks.assign.mockRejectedValueOnce(error);
-      expect((await call()).status).toBe(500);
+      const response = await call();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to update app settings' });
       expect(console.error).toHaveBeenCalledExactlyOnceWith('[intune-app-settings] Update failed', { phase: 'assignments', errorKind: name === 'private-error-name' ? 'other' : name });
       const output = JSON.stringify(vi.mocked(console.error).mock.calls);
       expect(output).not.toContain('private');

@@ -229,9 +229,8 @@ export async function PATCH(
     const errorKind = err instanceof Error && ['Error', 'TypeError', 'SyntaxError', 'AbortError'].includes(err.name)
       ? err.name : 'other';
     console.error('[intune-app-settings] Update failed', { phase, errorKind });
-    const message = err instanceof Error ? err.message : 'Failed to update app settings';
     return NextResponse.json(
-      { error: message },
+      { error: 'Failed to update app settings' },
       { status: 500 }
     );
   }
