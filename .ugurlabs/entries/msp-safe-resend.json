@@ -1,0 +1,5 @@
+{
+  "title": "Keep team invitations when email cannot be sent",
+  "summary": "Resending a team invitation preserves its existing link and expiry. If email is unavailable, a link remains visible for manual sharing.",
+  "type": "fixed"
+}
