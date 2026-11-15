@@ -1,0 +1,5 @@
+{
+  "type": "fixed",
+  "title": "Show readable deployment statuses across MSP tenants",
+  "summary": "Successful, cancelled, duplicate and configuring jobs now show labels, colors and icons that match their deployment state."
+}
