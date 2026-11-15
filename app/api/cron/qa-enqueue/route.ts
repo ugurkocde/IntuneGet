@@ -427,7 +427,7 @@ type BackfillTimingContext = {
   routeStartMono: number;
 };
 type BackfillRpcResult = {data: unknown; error: {message: string; code?: string} | null; status?: number};
-type BackfillSettledBy = 'data' | 'pg_error' | 'race_timer' | 'abort_signal' | 'thrown';
+type BackfillSettledBy = 'data' | 'pg_error' | 'transport_error' | 'race_timer' | 'abort_signal' | 'thrown';
 
 async function boundedBackfillRpc(
   query: PromiseLike<BackfillRpcResult>,
@@ -440,7 +440,7 @@ async function boundedBackfillRpc(
   let result: BackfillRpcResult | undefined;
   try {
     const winner = await Promise.race([Promise.resolve(query).then(r => ({
-      by: (r.error ? (telemetry?.signal.aborted ? 'abort_signal' : 'pg_error') : 'data') as BackfillSettledBy,
+      by: (r.error ? (telemetry?.signal.aborted ? 'abort_signal' : r.status === 0 ? 'transport_error' : 'pg_error') : 'data') as BackfillSettledBy,
       r,
     })), new Promise<{by: BackfillSettledBy; r: BackfillRpcResult}>(resolve => {
       timer = setTimeout(() => resolve({by: 'race_timer', r: {data: null, error: {message: 'The operation was aborted due to timeout'}}}), 2_500);

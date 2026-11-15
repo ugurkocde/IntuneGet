@@ -134,6 +134,7 @@ function createSupabaseStub(options: {
   slowDemand?: boolean;
   demandDelayMs?: number;
   privateDemandError?: boolean;
+  transportDemandError?: boolean;
   optionalSkip?: boolean;
   slowSkipRead?: boolean;
   slowSkipWrite?: boolean;
@@ -181,6 +182,7 @@ function createSupabaseStub(options: {
       if (name === 'qa_missing_demand_backfill_ids' && options.slowDemand) return new Promise<{data: null; error: null}>(() => {});
       if (name === 'qa_missing_demand_backfill_ids' && options.demandDelayMs) return new Promise<{data: unknown[]; error: null}>(resolve => setTimeout(() => resolve({data: [{winget_id: 'SECRET_ROW'}], error: null}), options.demandDelayMs));
       if (name === 'qa_missing_demand_backfill_ids' && options.privateDemandError) return Promise.resolve({data: null, error: {code: '57014', message: 'statement timeout SECRET_ERROR'}, status: 500, headers: {secret: 'SECRET_HEADER'}});
+      if (name === 'qa_missing_demand_backfill_ids' && options.transportDemandError) return Promise.resolve({data: null, error: {code: '', message: 'TypeError: fetch failed SECRET_ERROR'}, status: 0, headers: {secret: 'SECRET_HEADER'}});
       if (name === 'qa_missing_demand_backfill_ids' && options.demandError) return Promise.resolve({data: null, error: {code: '57014', message: 'canceling statement due to statement timeout'}});
       if (name !== 'qa_missing_demand_backfill_ids') {
         throw new Error(`Unexpected RPC: ${name}`);
@@ -2051,6 +2053,23 @@ describe('optional backfill budget', () => {
     checkRecord(records[0]);
     expect(JSON.stringify(records)).not.toMatch(/SECRET_ERROR|SECRET_HEADER/);
   });
+  it.each([false, true])('classifies status zero with aborted signal %s without changing the result', async aborted => {
+    const signalMock = aborted ? vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort()) : undefined;
+    try {
+      const {client, checkpoints} = createSupabaseStub({transportDemandError: true});
+      createServerClientMock.mockReturnValue(client);
+      const response = await GET(cronRequest());
+      expect(response.status).toBe(207);
+      expect((await response.json()).errors.join(' ')).toContain('TypeError: fetch failed SECRET_ERROR');
+      expect(checkpoints).not.toContainEqual(expect.objectContaining({id: 'qa-optional-backfill-skip', value: {skipNext: true}}));
+      const record = settleRecords().find(r => r.lane === 'demand-backfill');
+      expect(record).toMatchObject({settledBy: aborted ? 'abort_signal' : 'transport_error', httpStatus: 0});
+      checkRecord(record);
+      expect(record.pgCode).toBeUndefined();
+      expect(JSON.stringify(record)).not.toMatch(/SECRET_ERROR|SECRET_HEADER/);
+    } finally { signalMock?.mockRestore(); }
+  });
+
   it('bounds waiting even if the SDK never settles after abort', async () => {
     vi.useFakeTimers();
     try {
