@@ -422,23 +422,68 @@ function recordPollError(summary: QaPollSummary, scope: string, error: unknown):
 
 // The client deadline bounds waiting, not database cancellation. PostgREST must
 // hoist the reviewed function statement_timeout to enforce the database budget.
-async function boundedBackfillRpc(query: PromiseLike<{data: unknown; error: {message: string; code?: string} | null}>) {
+type BackfillTimingContext = {
+  pollRequestId: string | null;
+  routeStartMono: number;
+};
+type BackfillRpcResult = {data: unknown; error: {message: string; code?: string} | null; status?: number};
+type BackfillSettledBy = 'data' | 'pg_error' | 'race_timer' | 'abort_signal' | 'thrown';
+
+async function boundedBackfillRpc(
+  query: PromiseLike<BackfillRpcResult>,
+  telemetry?: BackfillTimingContext & {lane: 'demand-backfill' | 'catalog-backfill'; signal: AbortSignal}
+) {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const callStart = performance.now();
+  const wallStartIso = new Date().toISOString();
+  let settledBy: BackfillSettledBy = 'thrown';
+  let result: BackfillRpcResult | undefined;
   try {
-    return await Promise.race([Promise.resolve(query), new Promise<{data: null; error: {message: string}}>(resolve => {
-      timer = setTimeout(() => resolve({data: null, error: {message: 'The operation was aborted due to timeout'}}), 2_500);
+    const winner = await Promise.race([Promise.resolve(query).then(r => ({
+      by: (r.error ? (telemetry?.signal.aborted ? 'abort_signal' : 'pg_error') : 'data') as BackfillSettledBy,
+      r,
+    })), new Promise<{by: BackfillSettledBy; r: BackfillRpcResult}>(resolve => {
+      timer = setTimeout(() => resolve({by: 'race_timer', r: {data: null, error: {message: 'The operation was aborted due to timeout'}}}), 2_500);
     })]);
+    settledBy = winner.by;
+    result = winner.r;
+    return result;
   } catch (error) {
-    return {data: null, error: {message: errorMessage(error)}};
-  } finally { if (timer) clearTimeout(timer); }
+    result = {data: null, error: {message: errorMessage(error)}};
+    return result;
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (telemetry) {
+      try {
+        const boundedTag = (value: string | undefined) => value && /^[\w-]{1,64}$/.test(value) ? value : null;
+        const code = result?.error?.code;
+        // Fresh literal only: never serialize RPC arguments, rows, messages or headers.
+        structuredQaPollLog('info', 'qa_backfill_rpc_settled', {
+          lane: telemetry.lane,
+          pollRequestId: telemetry.pollRequestId,
+          deployment: boundedTag(process.env.VERCEL_DEPLOYMENT_ID),
+          region: boundedTag(process.env.VERCEL_REGION),
+          startOffsetMs: Math.max(0, callStart - telemetry.routeStartMono),
+          elapsedMs: Math.max(0, performance.now() - callStart),
+          settledBy,
+          httpStatus: typeof result?.status === 'number' ? result.status : undefined,
+          pgCode: typeof code === 'string' && /^(?:[0-9A-Z]{5}|PGRST\d{3})$/.test(code) ? code : undefined,
+          rowCount: Array.isArray(result?.data) ? result.data.length : undefined,
+          wallStartIso,
+        });
+      } catch { /* Observability must not change the RPC result. */ }
+    }
+  }
 }
 
 async function findDemandBackfillIds(
-  supabase: ReturnType<typeof createServerClient>
+  supabase: ReturnType<typeof createServerClient>,
+  timing?: BackfillTimingContext
 ): Promise<string[]> {
+  const signal = AbortSignal.timeout(2_500);
   const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_missing_demand_backfill_ids', {
     p_limit: DEMAND_BACKFILL_BATCH_SIZE,
-  }).abortSignal(AbortSignal.timeout(2_500)));
+  }).abortSignal(signal), timing ? {pollRequestId: timing.pollRequestId, routeStartMono: timing.routeStartMono, lane: 'demand-backfill', signal} : undefined);
   if (error) throw new Error(`Could not select demanded-app QA backfill: ${error.message}`);
   return Array.from(
     new Set(
@@ -450,11 +495,13 @@ async function findDemandBackfillIds(
 }
 
 async function findIdleCatalogBackfillIds(
-  supabase: ReturnType<typeof createServerClient>
+  supabase: ReturnType<typeof createServerClient>,
+  timing?: BackfillTimingContext
 ): Promise<string[]> {
+  const signal = AbortSignal.timeout(2_500);
   const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_idle_catalog_backfill_ids', {
     p_limit: IDLE_CATALOG_BACKFILL_BATCH_SIZE,
-  }).abortSignal(AbortSignal.timeout(2_500)));
+  }).abortSignal(signal), timing ? {pollRequestId: timing.pollRequestId, routeStartMono: timing.routeStartMono, lane: 'catalog-backfill', signal} : undefined);
   if (error) throw new Error(`Could not select idle catalog QA backfill: ${error.message}`);
   return Array.from(
     new Set(
@@ -510,6 +557,7 @@ export async function GET(request: Request) {
 
   const startedAt = new Date().toISOString();
   const startedAtMs = Date.now();
+  const routeStartMono = performance.now();
   const requestId = request.headers.get('x-vercel-id');
   const summary: QaPollSummary = {
     checked: 0,
@@ -712,9 +760,9 @@ export async function GET(request: Request) {
             }
           }
         };
-        await lane('demand-backfill', async () => { demandBackfillIds = await findDemandBackfillIds(backfillClient); });
+        await lane('demand-backfill', async () => { demandBackfillIds = await findDemandBackfillIds(backfillClient, {pollRequestId: requestId, routeStartMono}); });
         await lane('toolchain-backfill', async () => { backfill = await findToolchainBackfillIds(backfillClient); });
-        await lane('catalog-backfill', async () => { catalogBackfillIds = await findIdleCatalogBackfillIds(backfillClient); });
+        await lane('catalog-backfill', async () => { catalogBackfillIds = await findIdleCatalogBackfillIds(backfillClient, {pollRequestId: requestId, routeStartMono}); });
       }
     }
     toolchainBackfillPagesScanned = backfill.pagesScanned;
