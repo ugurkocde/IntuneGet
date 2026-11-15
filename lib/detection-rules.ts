@@ -276,7 +276,7 @@ function getBasePath(scope?: WingetScope, architecture?: string): string {
  * Generate MSIX detection script
  * MSIX apps are detected via Get-AppxPackage
  */
-function generateMsixDetectionScript(
+export function generateMsixDetectionScript(
   packageFamilyName: string,
   scope?: WingetScope
 ): string {
