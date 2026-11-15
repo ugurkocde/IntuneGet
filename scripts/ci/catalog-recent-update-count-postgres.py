@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OLD = ROOT/'supabase/migrations/20261114230100_bound_catalog_history_app_plan.sql'
 NEW = ROOT/'supabase/migrations/20261115050439_catalog_recent_update_count.sql'
 
-def contracts(sql):
+def contracts(sql, transport):
     database = 'recent_count_' + uuid.uuid4().hex
     def run(text, role='fixture_owner', check=True):
         return sql(text, database=database, role=role, check=check)
@@ -53,6 +53,72 @@ def contracts(sql):
                 raise AssertionError('Concurrent unrelated probe precondition not observed; no responsiveness claim')
             results = [f.result(timeout=20) for f in calls]
         return {'mode':mode,'sessions':8,'p95_ms':round(max(t for t,_ in results),2),'timeouts57014':sum(f for _,f in results),'unrelated_ms':round(unrelated,2) if unrelated is not None else None,'active_at_probe':active,'statement_timeout':'3s'}
+    def gated_burst(mode):
+        # Park clients before timing; only timestamps around real queries prove load.
+        holder = transport['subprocess'].Popen(
+            transport['command'](database, 'recent-count-gate'),
+            stdin=transport['subprocess'].PIPE, stdout=transport['subprocess'].PIPE,
+            stderr=transport['subprocess'].PIPE, text=True, env=transport['ENV'])
+        def gate_count(granted):
+            return int(sql("select count(*) from pg_locks l join pg_stat_activity a on a.pid=l.pid "
+                "where a.datname=current_database() and l.locktype='advisory' and l.objid=19160 "
+                "and l.granted=" + ('true' if granted else 'false') + " and a.application_name "
+                + ("='recent-count-gate'" if granted else "in ('recent-count-load','recent-count-probe')"),
+                database=database, role=None).stdout.strip())
+        def wait_for_gate(count, granted):
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if holder.poll() is not None:
+                    raise AssertionError('Gate holder exited; infrastructure failure')
+                if gate_count(granted) == count:
+                    return
+            raise AssertionError('Gate precondition not observed; no concurrency claim')
+        try:
+            holder.stdin.write('select pg_advisory_lock(19160);\n')
+            holder.stdin.flush()
+            wait_for_gate(1, True)
+            released = threading.Event()
+            release_time = [None]
+            def call(i):
+                probe = i == 8
+                query = ("select winget_id from public.curated_apps where winget_id='Fixture.1'" if probe
+                    else "select public.get_catalog_release_history_v2()" if mode == 'mixed' and i % 2
+                    else new_call)
+                result = run("set application_name='recent-count-" + ('probe' if probe else 'load')
+                    + "';set lock_timeout='15s';set statement_timeout='15s';"
+                    "select pg_advisory_lock_shared(19160);set statement_timeout='3s';"
+                    "set plan_cache_mode=force_generic_plan;\n\\set VERBOSITY verbose\n"
+                    "select 't0='||extract(epoch from clock_timestamp());" + query + ";"
+                    "select 't1='||extract(epoch from clock_timestamp());", role='service_role', check=False)
+                finished = time.monotonic()
+                if result.returncode:
+                    raise AssertionError('Gated query failed; infrastructure/query failure, no GREEN')
+                assert released.is_set(), 'Query bypassed gate'
+                t0, t1 = query_interval(result.stdout)
+                return {'start':t0,'end':t1,'client_ms':(finished-release_time[0])*1000}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+                calls = [pool.submit(call, i) for i in range(9)]
+                try:
+                    wait_for_gate(9, False)
+                    release_time[0] = time.monotonic()
+                    released.set()
+                    holder.stdin.write('select pg_advisory_unlock(19160);\n\\q\n')
+                    holder.stdin.flush()
+                finally:
+                    # Release even on an observation failure so executor cleanup is bounded.
+                    if not released.is_set():
+                        holder.terminate()
+                results = [f.result(timeout=20) for f in calls]
+            workers, probe = results[:8], results[8]
+            return measure_overlap(workers, probe)
+        finally:
+            if holder.poll() is None:
+                holder.terminate()
+            try:
+                holder.communicate(timeout=5)
+            except transport['subprocess'].TimeoutExpired:
+                holder.kill()
+                holder.communicate(timeout=5)
     sql('create database ' + database + ' owner fixture_owner',role=None,database='postgres')
     try:
         run('alter database '+database+" set work_mem='3500kB';alter database "+database+" set max_parallel_workers_per_gather=1;")
@@ -106,9 +172,10 @@ def contracts(sql):
         attrs=value("select json_build_object('invoker',not prosecdef,'stable',provolatile='s','strict',proisstrict,'config',proconfig,'anon',has_function_privilege('anon',oid,'EXECUTE'),'auth',has_function_privilege('authenticated',oid,'EXECUTE'),'service',has_function_privilege('service_role',oid,'EXECUTE'),'public',exists(select 1 from aclexplode(proacl) where grantee=0)) from pg_proc where oid='public.get_catalog_recent_update_count(date)'::regprocedure")
         assert attrs=={'invoker':True,'stable':True,'strict':True,'config':['search_path=""'],'anon':False,'auth':False,'service':True,'public':False},attrs
         for mode in ['candidate','mixed']:
-            timing=burst(mode)
+            timing=gated_burst(mode)
             print('GREEN real PG17 '+json.dumps(timing),flush=True)
-            assert timing['p95_ms']<2000 and timing['timeouts57014']==0 and timing['unrelated_ms']<1000,timing
+            assert timing['max_server_ms']<2000 and timing['max_client_ms']<2000,timing
+            assert timing['unrelated_server_ms']<1000 and timing['unrelated_client_ms']<1000,timing
         run('drop function public.get_catalog_recent_update_count(date)')
         after=value("select json_build_object('body',md5(prosrc),'acl',proacl::text) from pg_proc where oid='"+signature+"'::regprocedure")
         assert after==pin
@@ -116,10 +183,31 @@ def contracts(sql):
     finally:
         sql('drop database '+database+' with(force)',database='postgres',role=None)
 
+def query_interval(stdout):
+    starts = [float(line[3:]) for line in stdout.splitlines() if line.startswith('t0=')]
+    ends = [float(line[3:]) for line in stdout.splitlines() if line.startswith('t1=')]
+    assert len(starts) == len(ends) == 1 and ends[0] >= starts[0], 'Missing query interval'
+    return starts[0], ends[0]
+
+
+def measure_overlap(workers, probe):
+    assert len(workers) == 8, 'Eight workers required'
+    latest_start = max(w['start'] for w in workers)
+    earliest_end = min(w['end'] for w in workers)
+    assert latest_start < earliest_end, '8-way overlap not achieved; no concurrency claim'
+    assert probe['start'] < earliest_end and probe['end'] > latest_start, 'Probe did not overlap all eight queries'
+    return {'sessions':8,'parked_at_gate':9,'overlap8':True,'timeouts57014':0,
+        'max_server_ms':round(max(w['end']-w['start'] for w in workers)*1000,2),
+        'max_client_ms':round(max(w['client_ms'] for w in workers),2),
+        'unrelated_server_ms':round((probe['end']-probe['start'])*1000,2),
+        'unrelated_client_ms':round(probe['client_ms'],2),
+        'timing':'server query intervals and client completion since gate release; not comparable to informational OLD process wall time'}
+
+
 if __name__=='__main__':
     t=runpy.run_path(str(ROOT/'scripts/qa-automation/vt-ledger-postgres.test.py'))
     if not t['re'].fullmatch(r'[a-f0-9]{12,64}',t['CONTAINER']):
         raise ValueError('Only existing pinned Actions PG17 service accepted')
     ports=t['subprocess'].run(['docker','inspect','--format','{{json .HostConfig.PortBindings}}',t['CONTAINER']],capture_output=True,text=True,check=True,env=t['ENV'],timeout=10)
     assert json.loads(ports.stdout) in (None,{})
-    contracts(t['sql'])
+    contracts(t['sql'], t)
