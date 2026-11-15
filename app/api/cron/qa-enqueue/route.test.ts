@@ -105,6 +105,7 @@ function query(result: QueryResult) {
     'limit',
     'or',
     'contains',
+    'abortSignal',
   ]) {
     builder[method] = vi.fn(() => builder);
   }
@@ -132,6 +133,8 @@ function createSupabaseStub(options: {
   demandError?: boolean;
   slowDemand?: boolean;
   optionalSkip?: boolean;
+  slowSkipRead?: boolean;
+  slowSkipWrite?: boolean;
   catalogBackfillApps?: string[];
   deployedApps?: string[];
   customerQaJobs?: string[];
@@ -186,8 +189,10 @@ function createSupabaseStub(options: {
     from: vi.fn((table: string) => {
       if (table === 'qa_automation_state') {
         const builder = query({ data: { value: options.optionalSkip ? {skipNext: true} : options.backfillCheckpoint || {} }, error: null });
+        if (options.slowSkipRead) builder.maybeSingle = vi.fn(() => new Promise<QueryResult>(() => {}));
         builder.upsert = vi.fn((value: Record<string, unknown>) => {
           checkpoints.push(value);
+          if (options.slowSkipWrite && value.id === 'qa-optional-backfill-skip') { const pending = query({data: null, error: null}); pending.then = () => new Promise(() => {}); return pending; }
           return query({ data: null, error: null });
         });
         return builder;
@@ -2018,6 +2023,22 @@ describe('optional backfill budget', () => {
       expect(response.status).toBe(207);
       expect(rpcCalls.map(c => c.name)).toEqual(['qa_missing_demand_backfill_ids']);
       expect(checkpoints).toContainEqual(expect.objectContaining({id: 'qa-optional-backfill-skip', value: expect.objectContaining({skipNext: true})}));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(['read', 'write'] as const)('bounds a stalled optional checkpoint %s', async kind => {
+    vi.useFakeTimers();
+    try {
+      const {client, rpcCalls} = createSupabaseStub({slowSkipRead: kind === 'read', slowSkipWrite: kind === 'write', demandError: kind === 'write'});
+      createServerClientMock.mockReturnValue(client);
+      let settled = false;
+      const request = GET(cronRequest()).then(response => { settled = true; return response; });
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(settled).toBe(true);
+      const response = await request;
+      expect(response.status).toBe(207);
+      expect(detectWingetChangesMock).toHaveBeenCalled();
+      expect(rpcCalls.some(c => ['qa_idle_catalog_backfill_ids', 'qa_toolchain_backfill_page'].includes(c.name))).toBe(false);
     } finally { vi.useRealTimers(); }
   });
 

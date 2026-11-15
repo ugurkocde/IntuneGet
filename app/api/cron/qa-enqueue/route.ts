@@ -428,6 +428,8 @@ async function boundedBackfillRpc(query: PromiseLike<{data: unknown; error: {mes
     return await Promise.race([Promise.resolve(query), new Promise<{data: null; error: {message: string}}>(resolve => {
       timer = setTimeout(() => resolve({data: null, error: {message: 'The operation was aborted due to timeout'}}), 2_500);
     })]);
+  } catch (error) {
+    return {data: null, error: {message: errorMessage(error)}};
   } finally { if (timer) clearTimeout(timer); }
 }
 
@@ -685,17 +687,17 @@ export async function GET(request: Request) {
     if (!targetedRecovery) {
       const backfillClient = supabase;
       const skipId = 'qa-optional-backfill-skip';
-      const {data: savedSkip, error: skipReadError} = await backfillClient.from('qa_automation_state')
-        .select('value').eq('id', skipId).maybeSingle();
+      const {data: savedSkip, error: skipReadError} = await boundedBackfillRpc(backfillClient.from('qa_automation_state')
+        .select('value').eq('id', skipId).abortSignal(AbortSignal.timeout(2_500)).maybeSingle());
       const saveSkip = async (skipNext: boolean) => {
-        const {error} = await backfillClient.from('qa_automation_state').upsert({
+        const {error} = await boundedBackfillRpc(backfillClient.from('qa_automation_state').upsert({
           id: skipId, value: {skipNext}, updated_at: new Date().toISOString(),
-        });
+        }).abortSignal(AbortSignal.timeout(2_500)));
         if (error) recordPollError(summary, 'system', `Could not save QA backfill budget: ${error.message}`);
       };
       if (skipReadError) {
         recordPollError(summary, 'system', `Could not read QA backfill budget: ${skipReadError.message}`);
-      } else if (object(savedSkip?.value).skipNext === true) {
+      } else if (object(object(savedSkip).value).skipNext === true) {
         await saveSkip(false);
       } else {
         let timedOut = false;
