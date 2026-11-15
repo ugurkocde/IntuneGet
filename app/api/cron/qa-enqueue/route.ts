@@ -58,18 +58,18 @@ const INITIAL_LOOKBACK_MINUTES = 30;
 const MAX_RECORDED_ERRORS = 100;
 const MAX_ERROR_LENGTH = 1_000;
 const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
-const TOOLCHAIN_BACKFILL_PAGE_SIZE = 100;
+const TOOLCHAIN_BACKFILL_PAGE_SIZE = 25;
 const TOOLCHAIN_BACKFILL_MAX_PAGES = 2;
 // Reconciliation is metadata-only until an immutable installer payload is
 // found without a prior pass. Keep VM execution serialized, but scan enough
 // deployed-app demand per poll to avoid spending hours reclassifying known
 // payloads three at a time.
-const DEMAND_BACKFILL_BATCH_SIZE = 20;
+const DEMAND_BACKFILL_BATCH_SIZE = 5;
 // Many catalog rows cannot currently resolve to a trusted Windows installer.
 // Probe enough idle candidates to keep the serialized VM supplied, while the
 // loop below still resolves manifests in bounded groups of BATCH_SIZE and the
 // database continues to enforce a single active lifecycle.
-const IDLE_CATALOG_BACKFILL_BATCH_SIZE = 20;
+const IDLE_CATALOG_BACKFILL_BATCH_SIZE = 5;
 const MAX_TARGETED_PACKAGE_IDS = 20;
 const TARGETED_QA_PRIORITY = 1_000;
 
@@ -244,10 +244,10 @@ async function findToolchainBackfillIds(
   let pagesScanned = 0;
 
   while (pagesScanned < TOOLCHAIN_BACKFILL_MAX_PAGES) {
-    const { data, error } = await supabase.rpc('qa_toolchain_backfill_page', {
+    const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_toolchain_backfill_page', {
       p_after: after, p_limit: TOOLCHAIN_BACKFILL_PAGE_SIZE,
       p_terminal_retry_ids: [...terminalRetryIds],
-    });
+    }).abortSignal(AbortSignal.timeout(2_500)));
     if (error) throw new Error(`Could not scan prior QA toolchains: ${error.message}`);
     const rows = (data || []) as unknown as QaCandidateProfileRow[];
     pagesScanned++;
@@ -420,12 +420,25 @@ function recordPollError(summary: QaPollSummary, scope: string, error: unknown):
   }
 }
 
+// The client deadline bounds waiting, not database cancellation. PostgREST must
+// hoist the reviewed function statement_timeout to enforce the database budget.
+async function boundedBackfillRpc(query: PromiseLike<{data: unknown; error: {message: string; code?: string} | null}>) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([Promise.resolve(query), new Promise<{data: null; error: {message: string}}>(resolve => {
+      timer = setTimeout(() => resolve({data: null, error: {message: 'The operation was aborted due to timeout'}}), 2_500);
+    })]);
+  } catch (error) {
+    return {data: null, error: {message: errorMessage(error)}};
+  } finally { if (timer) clearTimeout(timer); }
+}
+
 async function findDemandBackfillIds(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<string[]> {
-  const { data, error } = await supabase.rpc('qa_missing_demand_backfill_ids', {
+  const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_missing_demand_backfill_ids', {
     p_limit: DEMAND_BACKFILL_BATCH_SIZE,
-  });
+  }).abortSignal(AbortSignal.timeout(2_500)));
   if (error) throw new Error(`Could not select demanded-app QA backfill: ${error.message}`);
   return Array.from(
     new Set(
@@ -439,9 +452,9 @@ async function findDemandBackfillIds(
 async function findIdleCatalogBackfillIds(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<string[]> {
-  const { data, error } = await supabase.rpc('qa_idle_catalog_backfill_ids', {
+  const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_idle_catalog_backfill_ids', {
     p_limit: IDLE_CATALOG_BACKFILL_BATCH_SIZE,
-  });
+  }).abortSignal(AbortSignal.timeout(2_500)));
   if (error) throw new Error(`Could not select idle catalog QA backfill: ${error.message}`);
   return Array.from(
     new Set(
@@ -668,14 +681,42 @@ export async function GET(request: Request) {
     }
     // Historical reconciliation must not discard successfully discovered updates.
     // A failed lane is retried from its checkpoint on the next poll.
-    const [backfill, demandBackfillIds, catalogBackfillIds] = await Promise.all([
-      targetedRecovery ? { ids: [] as string[], pagesScanned: 0 } : findToolchainBackfillIds(supabase)
-        .catch((error) => { recordPollError(summary, 'toolchain-backfill', error); return { ids: [] as string[], pagesScanned: 0 }; }),
-      targetedRecovery ? [] as string[] : findDemandBackfillIds(supabase)
-        .catch((error) => { recordPollError(summary, 'demand-backfill', error); return [] as string[]; }),
-      targetedRecovery ? [] as string[] : findIdleCatalogBackfillIds(supabase)
-        .catch((error) => { recordPollError(summary, 'catalog-backfill', error); return [] as string[]; }),
-    ]);
+    let backfill = { ids: [] as string[], pagesScanned: 0 };
+    let demandBackfillIds: string[] = [];
+    let catalogBackfillIds: string[] = [];
+    if (!targetedRecovery) {
+      const backfillClient = supabase;
+      const skipId = 'qa-optional-backfill-skip';
+      const {data: savedSkip, error: skipReadError} = await boundedBackfillRpc(backfillClient.from('qa_automation_state')
+        .select('value').eq('id', skipId).abortSignal(AbortSignal.timeout(2_500)).maybeSingle());
+      const saveSkip = async (skipNext: boolean) => {
+        const {error} = await boundedBackfillRpc(backfillClient.from('qa_automation_state').upsert({
+          id: skipId, value: {skipNext}, updated_at: new Date().toISOString(),
+        }).abortSignal(AbortSignal.timeout(2_500)));
+        if (error) recordPollError(summary, 'system', `Could not save QA backfill budget: ${error.message}`);
+      };
+      if (skipReadError) {
+        recordPollError(summary, 'system', `Could not read QA backfill budget: ${skipReadError.message}`);
+      } else if (object(object(savedSkip).value).skipNext === true) {
+        await saveSkip(false);
+      } else {
+        let timedOut = false;
+        const lane = async (scope: string, load: () => Promise<void>) => {
+          if (timedOut) return;
+          try { await load(); }
+          catch (error) {
+            recordPollError(summary, scope, error);
+            if (/statement timeout|timed out|timeout|aborted/i.test(errorMessage(error))) {
+              timedOut = true;
+              await saveSkip(true);
+            }
+          }
+        };
+        await lane('demand-backfill', async () => { demandBackfillIds = await findDemandBackfillIds(backfillClient); });
+        await lane('toolchain-backfill', async () => { backfill = await findToolchainBackfillIds(backfillClient); });
+        await lane('catalog-backfill', async () => { catalogBackfillIds = await findIdleCatalogBackfillIds(backfillClient); });
+      }
+    }
     toolchainBackfillPagesScanned = backfill.pagesScanned;
     demandBackfillRequestedCount = demandBackfillIds.length;
     catalogBackfillRequestedCount = catalogBackfillIds.length;

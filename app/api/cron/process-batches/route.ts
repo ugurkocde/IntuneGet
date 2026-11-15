@@ -5,6 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { processDueWebhookDeliveries } from '@/lib/msp/webhook-service';
 import { isAuthorizedCronRequest } from '@/lib/cron-auth';
 import {
   processPendingBatches,
@@ -34,10 +35,18 @@ export async function GET(request: Request) {
     // Advance in-progress batches (recover stale items, check completion)
     const recoveryResult = await advanceInProgressBatches();
 
+    let webhooks = 0;
+    try {
+      webhooks = await processDueWebhookDeliveries();
+    } catch {
+      console.error('MSP webhook retry processing failed');
+    }
+
     const allErrors = [...batchResult.errors, ...recoveryResult.errors];
 
     return NextResponse.json({
       success: allErrors.length === 0,
+      webhooks,
       processed: batchResult.batchesProcessed,
       started: batchResult.itemsStarted,
       recovered: recoveryResult.staleItemsRecovered,
