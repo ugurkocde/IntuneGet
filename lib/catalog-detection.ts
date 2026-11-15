@@ -2,6 +2,7 @@ import type { DetectionRule } from '@/types/intune';
 import type { WingetScope } from '@/types/winget';
 import {
   generateRegistryMarkerDetectionRules,
+  generateMsixDetectionScript,
   validateDetectionRules,
 } from '@/lib/detection-rules';
 import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
@@ -41,10 +42,10 @@ export function normalizeCatalogDetectionRules({
   const scope: WingetScope = typeof installScope === 'string' && installScope.toLowerCase() === 'user'
     ? 'user'
     : 'machine';
-  const primaryRules = compatibleDetectionRules(detectionRules, installerType);
+  const primaryRules = compatibleDetectionRules(detectionRules, installerType, scope);
   const usableRules = primaryRules.length > 0
     ? primaryRules
-    : compatibleDetectionRules(fallbackDetectionRules, installerType);
+    : compatibleDetectionRules(fallbackDetectionRules, installerType, scope);
   const reconciled = reconcileManagedMarkerDetectionRules({
     detectionRules: usableRules,
     wingetId,
@@ -66,7 +67,8 @@ export function normalizeCatalogDetectionRules({
  */
 function compatibleDetectionRules(
   values: readonly unknown[] | null | undefined,
-  installerType?: string | null
+  installerType: string | null | undefined,
+  scope: WingetScope
 ): DetectionRule[] {
   const rules = usableDetectionRules(values);
   const effectiveType = installerType?.trim().toLowerCase();
@@ -80,7 +82,23 @@ function compatibleDetectionRules(
       return false;
     }
     return true;
-  });
+  }).map((rule) => regenerateScopedMsixRule(rule, scope));
+}
+
+/** Only rewrite an exact generated template with the generator's settings. */
+function regenerateScopedMsixRule(rule: DetectionRule, scope: WingetScope): DetectionRule {
+  if (rule.type !== 'script' || rule.enforceSignatureCheck !== false || rule.runAs32Bit !== false) {
+    return rule;
+  }
+  if (Object.keys(rule).some((key) => !['type', 'scriptContent', 'enforceSignatureCheck', 'runAs32Bit'].includes(key))) {
+    return rule;
+  }
+  const family = /^# Package Family Name: ([\x20-\x7E]+)$/m.exec(rule.scriptContent)?.[1];
+  if (!family) return rule;
+
+  const previousScope = scope === 'user' ? 'machine' : 'user';
+  if (rule.scriptContent !== generateMsixDetectionScript(family, previousScope)) return rule;
+  return { ...rule, scriptContent: generateMsixDetectionScript(family, scope) };
 }
 
 function isGeneratedMsixDetectionRule(rule: DetectionRule): boolean {
