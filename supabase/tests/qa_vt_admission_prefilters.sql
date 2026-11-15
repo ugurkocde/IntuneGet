@@ -14,7 +14,9 @@ select ('71000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
   case when n>300 and n<=2300 and n%3=2 then 'queued' else 'error' end,
   case when n>300 and n<=2300 and n%3=1 then 'preparing_package' else 'publishing' end,
   now()-interval '1 hour',now()-interval '2 hours',1,now()-interval '3 hours'
-from generate_series(1,2309) n;
+-- Keep 300 eligible rows, 200 decoys per class and all nine identity edge cases.
+-- Bound the independent reference query's quadratic work under the existing 10s limit.
+from generate_series(1,2309) n where n<=900 or n>2300;
 update public.qa_candidates set installer_sha256=repeat('0',64) where github_run_id='2301';
 update public.qa_candidates set github_run_id='not-a-run' where github_run_id='2302';
 update public.qa_candidates set package_profile_sha256='invalid' where github_run_id='2303';
