@@ -1,0 +1,1 @@
+{"title":"Avoid catalog wide first release lookups for unfiltered history","summary":"The unfiltered catalog releases page no longer looks up the first release of every catalog app, while filters and app history stay unchanged.","type":"fixed"}
