@@ -41,6 +41,7 @@ interface BatchDeployment {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  cancelled_at: string | null;
   items: BatchDeploymentItem[];
 }
 
@@ -83,6 +84,12 @@ function BatchProgress({ batchId }: BatchProgressTrackerProps) {
     enabled: isAuthenticated && !!batchId,
     refetchInterval: (query) => {
       const batch = query.state.data?.batch;
+      if (batch?.status === 'cancelled') {
+        const cancelledAt = Date.parse(batch.cancelled_at ?? '');
+        const age = Date.now() - cancelledAt;
+        return Number.isFinite(age) && age >= 0 && age < 45 * 60_000
+          && batch.items.some(item => item.status === 'in_progress') ? 5000 : false;
+      }
       // Poll more frequently if the batch is in progress
       if (batch?.status === 'in_progress' || batch?.status === 'pending' || batch?.items.some(item => item.status === 'in_progress')) {
         return 5000; // 5 seconds

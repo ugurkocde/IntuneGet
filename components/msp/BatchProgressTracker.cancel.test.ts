@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('@/hooks/useMicrosoftAuth', () => ({ useMicrosoftAuth: () => ({ isAuthenticated: true, getAccessToken: async () => 'fixture' }) }));
 vi.mock('gt-next', () => ({ T: ({ children }: { children: React.ReactNode }) => children }));
 import { BatchProgressTracker } from './BatchProgressTracker';
-const batch = (id = 'fixture-batch', status = 'in_progress') => ({ id, status, display_name: 'Fixture app', winget_id: 'Fixture.App', version: '1', total_tenants: 2, completed_tenants: 0, failed_tenants: 0, created_at: '2026-01-01', items: [] });
+const batch = (id = 'fixture-batch', status = 'in_progress') => ({ id, status, display_name: 'Fixture app', winget_id: 'Fixture.App', version: '1', total_tenants: 2, completed_tenants: 0, failed_tenants: 0, created_at: '2026-01-01', cancelled_at: status === 'cancelled' ? new Date().toISOString() : null, items: [] });
 afterEach(() => vi.unstubAllGlobals());
 async function setup(status = 'in_progress', response = Response.json({ success: true }), activeItem = false) {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -72,5 +72,19 @@ it('keeps observing an active item after cancellation and stops when it finishes
     expect(interval(query)).toBe(5000);
     await act(async () => { t.client.setQueryData(['batch-deployment', 'fixture-batch'], { batch: { ...batch('fixture-batch', 'cancelled'), items: [{ id: 'fixture-item', status: 'completed' }] } }); });
     expect(interval(query)).toBe(false);
+  } finally { await t.close(); }
+});
+
+it('bounds cancelled polling from the recorded cancellation time', async () => {
+  const t = await setup('cancelled', Response.json({ success: true }), true);
+  try {
+    const query = t.client.getQueryCache().find({ queryKey: ['batch-deployment', 'fixture-batch'] })!;
+    const interval = query.options.refetchInterval;
+    if (typeof interval !== 'function') throw new Error('Expected polling decision');
+    const now = Date.now();
+    for (const [cancelled_at, expected] of [[new Date(now - 44 * 60000).toISOString(), 5000], [new Date(now - 46 * 60000).toISOString(), false], [null, false], ['invalid', false]] as const) {
+      await act(async () => { t.client.setQueryData(['batch-deployment', 'fixture-batch'], { batch: { ...batch('fixture-batch', 'cancelled'), cancelled_at, items: [{ id: 'fixture-item', status: 'in_progress' }] } }); });
+      expect(interval(query)).toBe(expected);
+    }
   } finally { await t.close(); }
 });
