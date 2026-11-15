@@ -25,7 +25,7 @@ def contracts(sql, transport):
     def burst(mode):
         barrier = threading.Barrier(8)
         def call(i):
-            query = old_call if mode == 'old' else ("select public.get_catalog_release_history_v2()" if mode == 'mixed' and i % 2 else new_call)
+            query = old_call
             barrier.wait(timeout=10)
             started = time.monotonic()
             result = run("set application_name='recent-count-load';set statement_timeout='3s';set plan_cache_mode=force_generic_plan;\n\\set VERBOSITY verbose\n" + query + ';', role='service_role', check=False)
@@ -49,10 +49,8 @@ def contracts(sql, transport):
                 point = pool.submit(lambda: run("select winget_id from public.curated_apps where winget_id='Fixture.1'",role='service_role'))
                 point.result(timeout=20)
                 unrelated = (time.monotonic()-started)*1000
-            elif mode != 'old':
-                raise AssertionError('Concurrent unrelated probe precondition not observed; no responsiveness claim')
             results = [f.result(timeout=20) for f in calls]
-        return {'mode':mode,'sessions':8,'p95_ms':round(max(t for t,_ in results),2),'timeouts57014':sum(f for _,f in results),'unrelated_ms':round(unrelated,2) if unrelated is not None else None,'active_at_probe':active,'statement_timeout':'3s'}
+        return {'mode':mode,'sessions':8,'max_ms':round(max(t for t,_ in results),2),'timeouts57014':sum(f for _,f in results),'unrelated_ms':round(unrelated,2) if unrelated is not None else None,'active_at_probe':active,'statement_timeout':'3s'}
     def gated_burst(mode):
         # Park clients before timing; only timestamps around real queries prove load.
         holder = transport['subprocess'].Popen(
@@ -84,11 +82,14 @@ def contracts(sql, transport):
                 query = ("select winget_id from public.curated_apps where winget_id='Fixture.1'" if probe
                     else "select public.get_catalog_release_history_v2()" if mode == 'mixed' and i % 2
                     else new_call)
+                own_key = '' if probe else 'select pg_advisory_lock(' + str(19170+i) + ');'
+                starts_seen = ''.join('select pg_advisory_lock_shared(' + str(19170+k) + ');' for k in range(8)) if probe else ''
+                announce_start = '' if probe else 'select pg_advisory_unlock(' + str(19170+i) + ');'
                 result = run("set application_name='recent-count-" + ('probe' if probe else 'load')
                     + "';set lock_timeout='15s';set statement_timeout='15s';"
-                    "select pg_advisory_lock_shared(19160);set statement_timeout='3s';"
+                    + own_key + "select pg_advisory_lock_shared(19160);" + starts_seen + "set statement_timeout='3s';"
                     "set plan_cache_mode=force_generic_plan;\n\\set VERBOSITY verbose\n"
-                    "select 't0='||extract(epoch from clock_timestamp());" + query + ";"
+                    "select 't0='||extract(epoch from clock_timestamp());" + announce_start + query + ";"
                     "select 't1='||extract(epoch from clock_timestamp());", role='service_role', check=False)
                 finished = time.monotonic()
                 if result.returncode:
@@ -107,11 +108,16 @@ def contracts(sql, transport):
                 finally:
                     # Release even on an observation failure so executor cleanup is bounded.
                     if not released.is_set():
+                        holder.stdin.close()
+                        holder.stdin = None
                         holder.terminate()
                 results = [f.result(timeout=20) for f in calls]
             workers, probe = results[:8], results[8]
             return measure_overlap(workers, probe)
         finally:
+            if holder.stdin is not None:
+                holder.stdin.close()
+                holder.stdin = None
             if holder.poll() is None:
                 holder.terminate()
             try:
@@ -195,6 +201,7 @@ def measure_overlap(workers, probe):
     latest_start = max(w['start'] for w in workers)
     earliest_end = min(w['end'] for w in workers)
     assert latest_start < earliest_end, '8-way overlap not achieved; no concurrency claim'
+    assert probe['start'] >= latest_start, 'Probe started before all workers'
     assert probe['start'] < earliest_end and probe['end'] > latest_start, 'Probe did not overlap all eight queries'
     return {'sessions':8,'parked_at_gate':9,'overlap8':True,'timeouts57014':0,
         'max_server_ms':round(max(w['end']-w['start'] for w in workers)*1000,2),

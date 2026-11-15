@@ -36,6 +36,11 @@ class ProbeEvidence(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'Eight workers'):
             probe.measure_overlap(overlapping[:7], {'start':0, 'end':1, 'client_ms':1})
 
+    def test_probe_must_start_after_every_worker(self):
+        workers = [{'start':i/100, 'end':1, 'client_ms':100} for i in range(8)]
+        with self.assertRaisesRegex(AssertionError, 'Probe started before all workers'):
+            probe.measure_overlap(workers, {'start':0.01, 'end':0.2, 'client_ms':1})
+
 
 if __name__ == '__main__':
     unittest.main()
