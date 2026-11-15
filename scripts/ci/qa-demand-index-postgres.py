@@ -107,6 +107,65 @@ def contracts(sql):
         sql('drop database ' + database + ' with (force)', database='postgres', role=None)
 
 
+def early_demand_contracts(sql):
+    import uuid
+    name = 'demand_keys_' + uuid.uuid4().hex
+    def run(text, role='fixture_owner', check=True):
+        return sql(text, database=name, role=role, check=check)
+    def value(text):
+        return json.loads(run(text).stdout)
+    def snap():
+        return value("select json_build_object('acl',proacl::text,'config',proconfig,'definer',prosecdef,'stable',provolatile) from pg_proc where oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure")
+    def counts(body):
+        prefix = body.split('as $$',1)[1].split('\n  select app.winget_id',1)[0]
+        return value(prefix + ' select to_json(count(*)) from current_version_failures')
+    def results():
+        return [value('select coalesce(json_agg(winget_id),\'[]\'::json) from public.qa_missing_demand_backfill_ids('+limit+')') for limit in ['NULL','0','1','3','5','100','1000']]
+    sql('create database '+name+' owner fixture_owner',database='postgres',role=None)
+    try:
+        fixture = runpy.run_path(str(ROOT/'scripts/ci/qa-demand-index-postgres.py'))['FIXTURE']
+        run(fixture)
+        run('grant select on all tables in schema public to service_role')
+        # Fixed demanded set; unrelated current-version failures have no uploads.
+        run("insert into curated_apps select 'Unrelated.'||g,'2',true,true,'win32',false from generate_series(1,5000)g;insert into qa_candidates select 'Unrelated.'||g,'2','2','psadt-package','failed','{}','2026-01-01' from generate_series(1,5000)g;analyze;")
+        old = (ROOT/'supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql').read_text().replace('\r\n','\n')
+        run(old)
+        before = snap()
+        expected = results()
+        baseline = counts(old)
+        assert baseline > 5000, 'Unrelated aggregation RED not reproduced'
+        try:
+            assert baseline <= 1000, 'Failure groups include unrelated keys'
+        except AssertionError:
+            print('RED early demand key scope: unrelated aggregate groups='+str(baseline),flush=True)
+        else:
+            raise AssertionError('Old function unexpectedly passed the bounded-key regression')
+        run('begin;'+(ROOT/'supabase/migrations/20261115144200_qa_demand_failure_key_scope.sql').read_text()+'commit;')
+        assert snap() == before and results() == expected
+        candidate = counts((ROOT/'supabase/migrations/20261115144200_qa_demand_failure_key_scope.sql').read_text())
+        assert candidate <= 1000 and candidate < baseline
+        for role in ['anon','authenticated']:
+            denied=run('select * from public.qa_missing_demand_backfill_ids(5)',role,False)
+            assert denied.returncode and 'permission denied' in denied.stderr
+        def read(i):
+            started = time.monotonic()
+            run("set statement_timeout='2s';select * from public.qa_missing_demand_backfill_ids(5)", 'service_role')
+            return (time.monotonic()-started)*1000
+        with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+            futures = [pool.submit(read, i) for i in range(8)]
+            started = time.monotonic()
+            run("select * from public.curated_apps where winget_id='Fixture.11';insert into public.qa_candidates values('Fixture.New','1','1','psadt-package','failed','{}',now());")
+            point_ms = (time.monotonic()-started)*1000
+            times = [f.result(timeout=20) for f in futures]
+        assert max(times) < 2000 and point_ms < 1000, (times, point_ms)
+        print('GREEN early demand eight-client max_ms=' + str(round(max(times), 2)) + ' point_insert_ms=' + str(round(point_ms, 2)) + '; client wall timing only', flush=True)
+        # Restore exact source without changing the existing configuration.
+        run(old)
+        assert snap() == before and results() == expected
+        print('GREEN early demand key scope groups='+str(candidate)+' ordered/filter/ACL/config/security parity and rollback; production effect unverified',flush=True)
+    finally:
+        sql('drop database '+name+' with(force)',database='postgres',role=None)
+
 if __name__ == '__main__':
     t = runpy.run_path(str(ROOT/'scripts/qa-automation/vt-ledger-postgres.test.py'))
     if not t['re'].fullmatch(r'[a-f0-9]{12,64}', t['CONTAINER']):
@@ -114,3 +173,4 @@ if __name__ == '__main__':
     ports = t['subprocess'].run(['docker','inspect','--format','{{json .HostConfig.PortBindings}}',t['CONTAINER']], capture_output=True,text=True,check=True,env=t['ENV'],timeout=10)
     assert json.loads(ports.stdout) in (None, {})
     contracts(t['sql'])
+    early_demand_contracts(t['sql'])
