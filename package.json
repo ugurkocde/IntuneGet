@@ -44,7 +44,7 @@
     "framer-motion": "^14.12.0",
     "gt-next": "^11.4.20",
     "jose": "^6.2.17",
-    "lucide-react": "^1.71.0",
+    "lucide-react": "^1.72.0",
     "next": "16.4.6",
     "postprocessing": "^6.39.6",
     "react": "^19.3.1",
@@ -61,7 +61,7 @@
     "zustand": "^5.1.0"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "^13.1.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",
