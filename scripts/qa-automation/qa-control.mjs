@@ -444,7 +444,7 @@ try {
         result.action = health.action;
       }
       if (health.repairRequired) {
-        await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
+        if (!health.candidateOnly) await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
           paused: true, reason: 'QA infrastructure recovery in progress.',
           updated_by: 'qa-execution-watchdog', updated_at: new Date().toISOString(),
         });
