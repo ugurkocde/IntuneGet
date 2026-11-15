@@ -28,19 +28,31 @@ def contracts(sql):
             query = old_call if mode == 'old' else ("select public.get_catalog_release_history_v2()" if mode == 'mixed' and i % 2 else new_call)
             barrier.wait(timeout=10)
             started = time.monotonic()
-            result = run("set statement_timeout='3s';set plan_cache_mode=force_generic_plan;\n\\set VERBOSITY verbose\n" + query + ';', role='service_role', check=False)
+            result = run("set application_name='recent-count-load';set statement_timeout='3s';set plan_cache_mode=force_generic_plan;\n\\set VERBOSITY verbose\n" + query + ';', role='service_role', check=False)
             elapsed = (time.monotonic()-started)*1000
             if result.returncode:
                 assert '57014' in result.stderr and 'statement timeout' in result.stderr, 'Infrastructure/query failure is not a RED'
             return elapsed, result.returncode != 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
             calls = [pool.submit(call,i) for i in range(8)]
-            started = time.monotonic()
-            point = pool.submit(lambda: run("select winget_id from public.curated_apps where winget_id='Fixture.1'",role='service_role'))
-            point.result(timeout=20)
-            unrelated = (time.monotonic()-started)*1000
+            deadline = time.monotonic() + 5
+            active = 0
+            while time.monotonic() < deadline:
+                observed = sql("select count(*) from pg_stat_activity where datname=current_database() and application_name='recent-count-load' and state='active' and query like '%public.get_catalog_%'", database=database, role=None)
+                active = int(observed.stdout.strip())
+                if active == 8 or all(f.done() for f in calls):
+                    break
+                time.sleep(0.01)
+            unrelated = None
+            if active == 8:
+                started = time.monotonic()
+                point = pool.submit(lambda: run("select winget_id from public.curated_apps where winget_id='Fixture.1'",role='service_role'))
+                point.result(timeout=20)
+                unrelated = (time.monotonic()-started)*1000
+            elif mode != 'old':
+                raise AssertionError('Concurrent unrelated probe precondition not observed; no responsiveness claim')
             results = [f.result(timeout=20) for f in calls]
-        return {'mode':mode,'sessions':8,'p95_ms':round(max(t for t,_ in results),2),'timeouts57014':sum(f for _,f in results),'unrelated_ms':round(unrelated,2),'statement_timeout':'3s'}
+        return {'mode':mode,'sessions':8,'p95_ms':round(max(t for t,_ in results),2),'timeouts57014':sum(f for _,f in results),'unrelated_ms':round(unrelated,2) if unrelated is not None else None,'active_at_probe':active,'statement_timeout':'3s'}
     sql('create database ' + database + ' owner fixture_owner',role=None,database='postgres')
     try:
         run('alter database '+database+" set work_mem='3500kB';alter database "+database+" set max_parallel_workers_per_gather=1;")
