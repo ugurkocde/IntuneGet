@@ -7,7 +7,7 @@ BEGIN
  SELECT proconfig INTO existing_config FROM pg_proc
  WHERE oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure
  AND md5(prosrc)='a3942a7adb1935a6ab8213bc01b5c36c';
- IF NOT FOUND OR NOT (existing_config=ARRAY['search_path=""'] OR
+ IF NOT FOUND OR existing_config IS NULL OR NOT (existing_config=ARRAY['search_path=""'] OR
    (cardinality(existing_config)=2 AND existing_config @> ARRAY['search_path=""','statement_timeout=2s'])) THEN
    RAISE EXCEPTION 'Demand function source or configuration changed; review before activation';
  END IF;

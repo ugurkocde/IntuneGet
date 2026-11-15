@@ -20,3 +20,16 @@ it.each([false, true])('preserves existing timeout configuration: %s', async has
     expect((await db.query('SELECT * FROM public.qa_missing_demand_backfill_ids(5)')).rows).toEqual([]);
   } finally { await db.close(); }
 }, 20000);
+it('rejects an unexpected NULL configuration without changing the function', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec('CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;'+fixture+old);
+    await db.exec('ALTER FUNCTION public.qa_missing_demand_backfill_ids(integer) RESET ALL;');
+    const snapshot = async () => (await db.query("SELECT md5(prosrc),proacl::text,proconfig,prosecdef FROM pg_proc WHERE oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure")).rows[0];
+    const before = await snapshot();
+    expect(before.proconfig).toBeNull();
+    await expect(db.exec('BEGIN;'+migration+'COMMIT;')).rejects.toThrow('Demand function source or configuration changed');
+    await db.exec('ROLLBACK;');
+    expect(await snapshot()).toEqual(before);
+  } finally { await db.close(); }
+}, 20000);
