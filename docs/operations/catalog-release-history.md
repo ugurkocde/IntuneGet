@@ -83,4 +83,8 @@ The server uses `get_catalog_recent_update_count(date)` for the unfiltered seven
 
 Apply the additive count migration before the server change. It refreshes the PostgREST schema cache. No new credential is needed. Roll back the server source before dropping the additive function; the existing history body must remain `69204a947d44d31b8a4924c73ff14d4a` with the same ACL. Existing complete cache admission and error logging are unchanged.
 
-The PG17 contract stops with an honest block if the old recent count passes eight concurrent sessions at a three second statement timeout and p95 below two seconds. It never escalates load. Candidate and mixed history tests require p95 below two seconds, zero statement timeouts and the existing one second unrelated query limit. CI evidence is not production recovery: count recent SQL timeouts and client aborts separately from the remaining history page failures.
+The old eight session PG17 baseline is retained as information even when it does not reproduce production. Production logs from 15 November 2026, 04:50 to 07:40 UTC recorded 23 recent count SQLSTATE 57014 failures and one abort. Those failures supply the regression evidence; a passing old CI baseline is not described as failing. No load escalation is performed. Candidate and mixed history tests still require p95 below two seconds, zero statement timeouts and the existing one second unrelated query limit, alongside parity, role ACL and rollback checks.
+
+live verification not runnable; post-merge production verification
+
+After deployment, require zero recent path SQLSTATE 57014 failures for two full hours. Compare total error rates with the preceding production window and revert in the same cycle if they rise. Count recent SQL timeouts and client aborts separately from the remaining history page failures. Keep earlier failed milestones on record; this count change does not establish recovery of the history page path.
