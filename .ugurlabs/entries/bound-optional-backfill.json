@@ -1,1 +1,1 @@
-{"type":"fix","title":"Bound optional QA backfill work","description":"Run optional backfill lanes sequentially and skip the next tick after a timeout."}
+{"type":"fixed","title":"Bound optional QA backfill work","summary":"Run optional backfill lanes sequentially and skip the next tick after a timeout."}
