@@ -1,0 +1,1 @@
+{"title":"Retry MSP webhook deliveries reliably","summary":"Failed webhook events retry through the existing batch worker. Concurrent events keep their own delivery records, with bounded attempts and the same destination checks on every send.","type":"fixed"}
