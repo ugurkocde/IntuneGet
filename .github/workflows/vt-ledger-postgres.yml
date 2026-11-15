@@ -33,3 +33,7 @@ jobs:
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: python3 scripts/ci/catalog-release-history-capacity-postgres.py
+      - name: Check optional backfill timeout isolation
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/qa-backfill-timeout-postgres.py
