@@ -1,0 +1,5 @@
+{
+  "title": "Reduce repeated customer demand lookup work",
+  "summary": "QA scheduling limits failure aggregation to customer demand keys while preserving eligibility and priority.",
+  "type": "improved"
+}
