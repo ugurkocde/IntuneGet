@@ -1,0 +1,1 @@
+{"title": "Bound customer demand failure lookups", "summary": "Customer demand discovery uses a partial failure index without changing eligibility or queue ordering.", "type": "fixed"}

@@ -37,6 +37,10 @@ jobs:
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: python3 scripts/ci/qa-backfill-timeout-postgres.py
+      - name: Check customer demand failure index
+        env:
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: python3 scripts/ci/qa-demand-index-postgres.py
       - name: Check global history plan and response parity
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
