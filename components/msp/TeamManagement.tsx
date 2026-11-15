@@ -301,7 +301,6 @@ export function TeamManagement() {
               actorRole={currentUserRole}
               onInviteSent={() => {
                 fetchInvitations();
-                setShowInviteForm(false);
               }}
               onCancel={() => setShowInviteForm(false)}
             />
