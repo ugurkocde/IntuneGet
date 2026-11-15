@@ -73,12 +73,17 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
+      case 'deployed':
+      case 'duplicate_skipped':
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+      case 'cancelled':
+        return <XCircle className="w-4 h-4 text-text-muted" />;
       case 'failed':
       case 'qa_failed':
         return <XCircle className="w-4 h-4 text-red-500" />;
       case 'packaging':
       case 'uploading':
+      case 'configuring':
         return <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />;
       case 'blocked_upstream':
       case 'awaiting_qa':
@@ -92,6 +97,14 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
     switch (status) {
       case 'completed':
         return 'Completed';
+      case 'deployed':
+        return 'Deployed';
+      case 'duplicate_skipped':
+        return 'Already deployed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'configuring':
+        return 'Configuring';
       case 'failed':
         return 'Failed';
       case 'qa_failed':
@@ -256,10 +269,10 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                       {getStatusIcon(job.status)}
                       <span className={cn(
                         'text-sm',
-                        job.status === 'completed' && 'text-green-500',
+                        ['completed', 'deployed', 'duplicate_skipped'].includes(job.status) && 'text-green-500',
                         (job.status === 'failed' || job.status === 'qa_failed') && 'text-red-500',
-                        (job.status === 'packaging' || job.status === 'uploading') && 'text-accent-cyan',
-                        job.status === 'queued' && 'text-text-muted',
+                        ['packaging', 'uploading', 'configuring'].includes(job.status) && 'text-accent-cyan',
+                        ['queued', 'cancelled'].includes(job.status) && 'text-text-muted',
                         ['blocked_upstream', 'awaiting_qa'].includes(job.status) && 'text-accent-violet'
                       )}>
                         {getStatusText(job.status)}
