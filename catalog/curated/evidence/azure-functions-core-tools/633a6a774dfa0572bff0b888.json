@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "e54e7dd71dd908a22ef45cac1204048b63d8365a",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "088f7396230ca67d74087a01f85601aad78563ce",
+    "runId": "43598520315",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "azure-functions-core-tools",
+    "version": "4.16.1",
+    "installerUrl": "https://github.com/Azure/azure-functions-core-tools/releases/download/4.16.1/func-cli-4.16.1-x64.msi",
+    "vendorSha256": "a1f7afdc4422f10988604d1ad004cac18123e6339856e3efafc446bc93d63838",
+    "releaseNotesUrl": "https://github.com/Azure/azure-functions-core-tools/releases/tag/4.16.1",
+    "discoveredAt": "2026-11-13T22:40:28.415Z",
+    "id": "633a6a774dfa0572bff0b888"
+  },
+  "previous": {
+    "appId": "azure-functions-core-tools",
+    "version": "4.16.0",
+    "installerUrl": "https://github.com/Azure/azure-functions-core-tools/releases/download/4.16.0/func-cli-4.16.0-x64.msi",
+    "vendorSha256": "9c3e4d7628fbc2265d3414d4f93364cf2602d42a3f18daa7169e8b304f79b44d",
+    "releaseNotesUrl": "https://github.com/Azure/azure-functions-core-tools/releases/tag/4.16.0",
+    "discoveredAt": "2026-10-12T17:24:02.246Z",
+    "id": "ca6fae6b5766e23fe4d26559"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "633a6a774dfa0572bff0b888",
+      "installerSha256": "a1f7afdc4422f10988604d1ad004cac18123e6339856e3efafc446bc93d63838",
+      "sourceUrl": "https://github.com/Azure/azure-functions-core-tools/releases/download/4.16.1/func-cli-4.16.1-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "scannedAt": "2026-11-14T13:25:55.0432545Z",
+        "scanner": "defender",
+        "installerSha256": "a1f7afdc4422f10988604d1ad004cac18123e6339856e3efafc446bc93d63838",
+        "status": "clean",
+        "suspicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "signatureVersion": "1.463.296.0"
+      }
+    },
+    "previous": {
+      "candidateId": "ca6fae6b5766e23fe4d26559",
+      "installerSha256": "9c3e4d7628fbc2265d3414d4f93364cf2602d42a3f18daa7169e8b304f79b44d",
+      "sourceUrl": "https://github.com/Azure/azure-functions-core-tools/releases/download/4.16.0/func-cli-4.16.0-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "scannedAt": "2026-11-14T13:27:23.723559Z",
+        "scanner": "defender",
+        "installerSha256": "9c3e4d7628fbc2265d3414d4f93364cf2602d42a3f18daa7169e8b304f79b44d",
+        "status": "clean",
+        "suspicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "signatureVersion": "1.463.296.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "633a6a774dfa0572bff0b888",
+    "packageId": "IntuneGet.Curated.AzureFunctionsCoreTools",
+    "installerUrl": "https://github.com/Azure/azure-functions-core-tools/releases/download/4.16.1/func-cli-4.16.1-x64.msi",
+    "installerSha256": "a1f7afdc4422f10988604d1ad004cac18123e6339856e3efafc446bc93d63838",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.AzureFunctionsCoreTools",
+      "displayName": "Azure Functions Core Tools",
+      "publisher": "Microsoft Corporation",
+      "version": "4.16.1",
+      "architecture": "x64",
+      "installerSha256": "a1f7afdc4422f10988604d1ad004cac18123e6339856e3efafc446bc93d63838",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Azure Functions Core Tools",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureFunctionsCoreTools\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.16.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureFunctionsCoreTools\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.16.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "87BFF92034D060D355FF1F510A07E5119D6D3C8E2326E4FBACEEF04C6FA170DF",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.AzureFunctionsCoreTools\",\"publisher\":\"IntuneGet QA\",\"version\":\"4.16.1\",\"wingetId\":\"IntuneGet.Curated.AzureFunctionsCoreTools\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.16.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureFunctionsCoreTools\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"9FF3633DBC2C75EF9683CCF2E9D73D723D53DD275BFB3945B47F419B864346D9\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"A1F7AFDC4422F10988604D1AD004CAC18123E6339856E3EFAFC446BC93D63838\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Azure Functions Core Tools\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.16.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureFunctionsCoreTools\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"FD0B6ED46B3242C7ECDE4BF7A8F10768CD63EE0B8FF6D9DBE7D229E3CA3943A0\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "fd0b6ed46b3242c7ecde4bf7a8f10768cd63ee0b8ff6d9dbe7d229e3ca3943a0",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionContext": "LocalSystem",
+    "upgradeFromVersion": "4.16.0",
+    "testLevel": "psadt-package",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionProfileSha256": "87BFF92034D060D355FF1F510A07E5119D6D3C8E2326E4FBACEEF04C6FA170DF",
+    "testedAt": "2026-11-14T13:38:31.6723014Z",
+    "installerVersion": "4.16.1",
+    "installerSha256": "a1f7afdc4422f10988604d1ad004cac18123e6339856e3efafc446bc93d63838",
+    "architecture": "x64",
+    "previousInstallerSha256": "9c3e4d7628fbc2265d3414d4f93364cf2602d42a3f18daa7169e8b304f79b44d",
+    "candidateId": "633a6a774dfa0572bff0b888",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409"
+  },
+  "verifiedAt": "2026-11-14T13:38:41.9061803Z",
+  "authenticatedArtifact": {
+    "id": 14116432612,
+    "sha256": "099eb08696bf3c7c5a106c94bc094d80d65b4b9b54770473e8f84f6042ed8a43"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-14T13:41:38.305Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
