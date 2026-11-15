@@ -78,4 +78,4 @@ are not evidence of production recovery.
 
 ### Global release page plan
 
-The unfiltered global page derives counts and month summaries without probing the first release for every catalog app. Only the displayed rows load their predecessors. Filtered global and app specific requests retain their existing bodies. Apply only the reviewed migration for this function, preserving existing grants. Rollback restores the prior function migration; do not apply unrelated pending migrations. Synthetic response parity is separate from Postgres 17 concurrency and production recovery evidence.
+The unfiltered global page derives counts and month summaries without probing the first release for every catalog app. The previous release for each displayed row is loaded as before. Filtered global and app specific requests retain their existing bodies. Apply only the reviewed migration for this function, preserving existing grants. Rollback restores the prior function migration; do not apply unrelated pending migrations. Synthetic response parity is separate from Postgres 17 concurrency and production recovery evidence.

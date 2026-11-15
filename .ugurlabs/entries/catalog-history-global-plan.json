@@ -1,1 +1,1 @@
-{"title":"Load catalog release pages with bounded predecessor lookups","summary":"The unfiltered catalog releases page limits predecessor work to the displayed page while preserving filters and app history.","type":"fixed"}
+{"title":"Avoid catalog wide first release lookups for unfiltered history","summary":"The unfiltered catalog releases page no longer looks up the first release of every catalog app, while filters and app history stay unchanged.","type":"fixed"}

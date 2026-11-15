@@ -1,6 +1,6 @@
 """Global history plan and mixed eight-client contract on disposable PG17.
 
-This proves the bounded predecessor plan and CI latency, not production reproduction or
+This proves the bounded first-row plan and CI latency, not production reproduction or
 fleet-wide capacity. The earlier OLD8 PASS and OLD16 RED are retained separately.
 """
 import concurrent.futures
@@ -113,11 +113,11 @@ def contracts(sql):
         def per_app_loops(plan):
             return max((n['Actual Loops'] for n in plan if n.get('Relation Name')=='version_history' and n['Node Type'] in ('Index Scan','Index Only Scan')), default=0)
         assert per_app_loops(old_global) > 1000, 'Old global first-row probes were not reproduced'
-        print('RED old global query probes predecessors across the full catalog', flush=True)
+        print('RED old global query probes first rows across the full catalog', flush=True)
         run(old.replace('public.get_catalog_release_history_v2(', 'public.history_parity_oracle(', 1))
         run('begin;' + new + 'commit;')
         candidate = plans('')
-        assert per_app_loops(candidate) <= 40, 'Global query still probes all catalog predecessors'
+        assert per_app_loops(candidate) <= 40, 'Global query still performs catalog wide first-row probes'
         assert shape(plans('Fixture.1')) == old_app, 'Per-app executed plan changed'
         assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
         # A representative matrix covers every filter and empty/miss/locale/case/page shape.
@@ -133,13 +133,13 @@ def contracts(sql):
             args = ','.join([quote(search), quote(month), quote(kind), str(page), quote(app), quote(start) + '::date', quote(end) + '::date', quote(architecture)])
             assert value('select to_json(public.get_catalog_release_history_v2(' + args + ') = public.history_parity_oracle(' + args + '))') is True
         timing = burst()
-        print('GREEN global candidate force_generic bounded predecessor plan; ' + json.dumps(timing), flush=True)
+        print('GREEN global candidate force_generic bounded first-row plan; ' + json.dumps(timing), flush=True)
         assert timing['p95_ms'] < 2000, timing
         assert timing['unrelated_ms'] < 1000, timing
         run('begin;' + old + 'commit;')
         assert value("select to_json(md5(prosrc)) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_md5 == '69204a947d44d31b8a4924c73ff14d4a'
         assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
-        print('PASS real PG17 global predecessor plan RED/GREEN, unchanged app plan, full JSON parity, ACL, rollback and mixed eight-session timing; production effect unverified', flush=True)
+        print('PASS real PG17 global first-row plan RED/GREEN, unchanged app plan, full JSON parity, ACL, rollback and mixed eight-session timing; production effect unverified', flush=True)
     finally:
         sql('drop database ' + database + ' with (force)', role=None, database='postgres')
 
