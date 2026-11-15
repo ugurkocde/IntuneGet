@@ -408,7 +408,8 @@ try {
       if (recovery.action === 'publication_candidate_held') {
         requireRepair('Publication evidence is held for this candidate; the queue keeps running without VM replay.', `publication-hold:${recovery.candidateId}`);
       }
-      if (recovery.repairRequired) {
+      if (recovery.candidateOnly) requireRepair(recovery.repairReason, recovery.repairKey);
+      if (recovery.repairRequired && !recovery.candidateOnly) {
         if (!isDryRun) await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
           paused: true, reason: `QA infrastructure recovery requires review for candidate ${recovery.candidateId}.`,
           updated_by: 'qa-infrastructure-recovery', updated_at: new Date().toISOString(),
@@ -444,7 +445,7 @@ try {
         result.action = health.action;
       }
       if (health.repairRequired) {
-        await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
+        if (!health.candidateOnly) await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
           paused: true, reason: 'QA infrastructure recovery in progress.',
           updated_by: 'qa-execution-watchdog', updated_at: new Date().toISOString(),
         });
