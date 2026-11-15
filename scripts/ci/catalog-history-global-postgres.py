@@ -63,12 +63,16 @@ def contracts(sql):
                 if n.get('Relation Name')]
     def indexed(plan):
         return any(n.get('Index Name') == 'idx_curated_apps_history_app_lower' for n in plan)
-    def burst():
+    def burst(rows_only=False):
         barrier = threading.Barrier(8)
         def call(i):
             barrier.wait(timeout=10)
             started = time.monotonic()
-            run("set plan_cache_mode=force_generic_plan;select public.get_catalog_release_history_v2(app_filter=>" + quote('' if i % 2 == 0 else 'Fixture.' + str(i + 1)) + ");")
+            if rows_only:
+                page = [2, 3, 4, 20, 100, 500, 1000, 1813][i]
+                run("set statement_timeout='3s';select public.get_catalog_release_history_global_rows(" + str(page) + ")", 'service_role')
+            else:
+                run("set plan_cache_mode=force_generic_plan;select public.get_catalog_release_history_v2(app_filter=>" + quote('' if i % 2 == 0 else 'Fixture.' + str(i + 1)) + ");")
             return (time.monotonic() - started) * 1000
         with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
             calls = [pool.submit(call, i) for i in range(8)]
@@ -136,6 +140,18 @@ def contracts(sql):
         print('GREEN global candidate force_generic bounded first-row plan; ' + json.dumps(timing), flush=True)
         assert timing['p95_ms'] < 2000, timing
         assert timing['unrelated_ms'] < 1000, timing
+        # Exercise the additive rows RPC on the same real PG17 fixture and roles.
+        v2_before = value("select json_build_array(md5(prosrc),proacl::text) from pg_proc where oid='"+signature+"'::regprocedure")
+        run('begin;' + (ROOT/'supabase/migrations/20261115133712_catalog_history_global_rows.sql').read_text() + 'commit;')
+        for page in [0, 1, 2, 500, 1813, 10000]:
+            assert value("select to_json(public.get_catalog_release_history_global_rows("+str(page)+") = (public.get_catalog_release_history_v2(page_number=>"+str(page)+")->'rows'))") is True
+        assert value("select to_json(not prosecdef and provolatile='s' and proconfig=ARRAY['search_path=\"\"'] and not has_function_privilege('anon',oid,'EXECUTE') and not has_function_privilege('authenticated',oid,'EXECUTE') and has_function_privilege('service_role',oid,'EXECUTE')) from pg_proc where oid='public.get_catalog_release_history_global_rows(integer)'::regprocedure") is True
+        rows_timing = burst(True)
+        print('GREEN real PG17 additive rows RPC eight-session ' + json.dumps(rows_timing), flush=True)
+        assert rows_timing['p95_ms'] < 2000 and rows_timing['unrelated_ms'] < 1000, rows_timing
+        run('drop function public.get_catalog_release_history_global_rows(integer)')
+        assert value("select json_build_array(md5(prosrc),proacl::text) from pg_proc where oid='"+signature+"'::regprocedure") == v2_before
+        print('PASS real PG17 additive rows parity/service ACL/unchanged v2/drop rollback/eight sessions; client wall timing only, production effect unverified', flush=True)
         run('begin;' + old + 'commit;')
         assert value("select to_json(md5(prosrc)) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_md5 == '69204a947d44d31b8a4924c73ff14d4a'
         assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl

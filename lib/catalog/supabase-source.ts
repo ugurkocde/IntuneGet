@@ -66,6 +66,7 @@ let warnedMissingQaServiceRole = false;
 export class SupabaseCatalogSource implements CatalogSource {
   private readonly historyReads = new Map<string, Promise<ReleaseHistoryResult>>();
   private readonly historyCounts = new Map<string, Promise<number>>();
+  private globalHistorySummary: { value: Omit<ReleaseHistoryResult, 'rows'>; at: number } | null = null;
 
   // Only pending work is shared. Next remains responsible for result caching.
   private shareHistoryRead<T>(
@@ -160,11 +161,31 @@ export class SupabaseCatalogSource implements CatalogSource {
   }
 
   private async releaseHistoryPage(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const global = !filters.app && !filters.query && !filters.month && !filters.from
+      && !filters.to && !filters.architecture && filters.kind === 'all';
+    const summary = this.globalHistorySummary;
+    // Page-independent metadata has the same five minute freshness as page
+    // results. Only the service path can use the additive rows-only RPC.
+    if (global && filters.page > 1 && process.env.SUPABASE_SERVICE_ROLE_KEY
+      && summary && Date.now() - summary.at < 300_000) {
+      const rows = await this.historyRpc<unknown>(filters, 'get_catalog_release_history_global_rows', {
+        page_number: filters.page,
+      });
+      if (!Array.isArray(rows)) throw new Error('Catalog history unavailable');
+      const result = { ...summary.value, rows };
+      // Rows-only responses carry no fresh count observation.
+      return result;
+    }
     const result = await this.historyRpc<ReleaseHistoryResult>(filters, 'get_catalog_release_history_v2', {
       app_filter: filters.app ?? '', date_from: filters.from || null, date_to: filters.to || null,
       architecture_filter: filters.architecture ?? '', search_text: filters.query,
       month_filter: filters.month, kind_filter: filters.kind, page_number: filters.page,
     });
+    if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const { rows, ...value } = result;
+      void rows;
+      this.globalHistorySummary = { value, at: Date.now() };
+    }
     rememberHistoryTotal(filters, result.total);
     return result;
   }
