@@ -1,0 +1,5 @@
+{
+  "title": "Match generated MSIX detection to install scope",
+  "summary": "Catalog packages now correct an unchanged generated MSIX detection script when its user or machine scope differs from the selected install scope. Customized detection scripts and historical results remain unchanged.",
+  "type": "fixed"
+}
