@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SupabaseCatalogSource } from './supabase-source';
+import { rememberHistoryTotal } from './release-history-capacity';
 import type { ReleaseHistoryFilters } from './release-history';
 const shared = vi.hoisted(() => ({ value: null as unknown, at: 0 }));
 vi.mock('next/cache', () => ({ unstable_cache: (load: () => Promise<unknown>) => async () => {
@@ -77,7 +78,7 @@ it('rejects malformed rows and RPC errors without replacing the summary', async 
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
 });
 
-it('does not overwrite a fresh pagination total when an older rows response settles', async () => {
+it('uses the refreshed shared total after an older rows response settles', async () => {
   const source = new SupabaseCatalogSource();
   fetchMock.mockImplementationOnce(async () => Response.json({ ...summary, total: 80 }));
   await source.getReleaseHistory(filters);
@@ -91,6 +92,23 @@ it('does not overwrite a fresh pagination total when an older rows response sett
   await source.countReleaseHistory(filters);
   release(Response.json([]));
   await pending;
-  await source.getReleaseHistory({ ...filters, page: 3 });
+  await source.getReleaseHistory({ ...filters, page: 3 }, { ...summary, total: 120 });
   expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body)).page_number).toBe(3);
+});
+
+it.each([true, false])('bounds global rows using the shared total instead of a stale local total (supplied=%s)', async supplied => {
+  rememberHistoryTotal(filters, 80);
+  const fresh = { ...summary, total: 120 };
+  shared.value = fresh; shared.at = now;
+  const source = new SupabaseCatalogSource();
+  const result = await source.getReleaseHistory({ ...filters, page: 3 }, supplied ? fresh : undefined);
+  expect(result.total).toBe(120);
+  expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body))).toEqual({ page_number: 3 });
+});
+it.each([80, 0])('caps global rows with a smaller shared total of %s', async total => {
+  rememberHistoryTotal(filters, 120);
+  const source = new SupabaseCatalogSource();
+  const result = await source.getReleaseHistory({ ...filters, page: 3 }, { ...summary, total });
+  expect(result.total).toBe(total);
+  expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body))).toEqual({ page_number: Math.max(1, Math.ceil(total / 40)) });
 });

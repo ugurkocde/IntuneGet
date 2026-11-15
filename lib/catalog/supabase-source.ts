@@ -214,14 +214,17 @@ export class SupabaseCatalogSource implements CatalogSource {
   }
 
   getReleaseHistory(filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>): Promise<ReleaseHistoryResult> {
-    const lastPage = knownLastHistoryPage(filters);
-    if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
     const global = !filters.app && !filters.query && !filters.month && !filters.from
       && !filters.to && !filters.architecture && filters.kind === 'all';
     if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return (summary ? Promise.resolve(summary) : this.globalHistorySummary()).then(summary =>
-        this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters, summary)));
+      return (summary ? Promise.resolve(summary) : this.globalHistorySummary()).then(summary => {
+        const lastPage = Math.max(1, Math.ceil(summary.total / 40));
+        const bounded = filters.page > lastPage ? { ...filters, page: lastPage } : filters;
+        return this.shareHistoryRead(this.historyReads, bounded, () => this.loadReleaseHistory(bounded, summary));
+      });
     }
+    const lastPage = knownLastHistoryPage(filters);
+    if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
     return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
   }
 
