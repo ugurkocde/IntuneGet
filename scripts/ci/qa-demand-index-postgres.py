@@ -107,7 +107,7 @@ def contracts(sql):
         sql('drop database ' + database + ' with (force)', database='postgres', role=None)
 
 
-def early_demand_contracts(sql):
+def early_demand_contracts(sql, with_timeout=False):
     import uuid
     name = 'demand_keys_' + uuid.uuid4().hex
     def run(text, role='fixture_owner', check=True):
@@ -130,6 +130,9 @@ def early_demand_contracts(sql):
         run("insert into curated_apps select 'Unrelated.'||g,'2',true,true,'win32',false from generate_series(1,5000)g;insert into qa_candidates select 'Unrelated.'||g,'2','2','psadt-package','failed','{}','2026-01-01' from generate_series(1,5000)g;analyze;")
         old = (ROOT/'supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql').read_text().replace('\r\n','\n')
         run(old)
+        if with_timeout:
+            run("create function public.qa_idle_catalog_backfill_ids(integer) returns setof text language sql as $select null::text where false$;create function public.qa_toolchain_backfill_page(text,integer,text[]) returns setof text language sql as $select null::text where false$;")
+            run((ROOT/'supabase/migrations/20261115020254_qa_optional_backfill_timeout.sql').read_text())
         before = snap()
         expected = results()
         baseline = counts(old)
@@ -159,8 +162,10 @@ def early_demand_contracts(sql):
             times = [f.result(timeout=20) for f in futures]
         assert max(times) < 2000 and point_ms < 1000, (times, point_ms)
         print('GREEN early demand eight-client max_ms=' + str(round(max(times), 2)) + ' point_insert_ms=' + str(round(point_ms, 2)) + '; client wall timing only', flush=True)
-        # Restore exact source without changing the existing configuration.
+        # Restore exact source and the starting configuration in both variants.
         run(old)
+        if with_timeout:
+            run((ROOT/'supabase/migrations/20261115020254_qa_optional_backfill_timeout.sql').read_text())
         assert snap() == before and results() == expected
         print('GREEN early demand key scope groups='+str(candidate)+' ordered/filter/ACL/config/security parity and rollback; production effect unverified',flush=True)
     finally:
@@ -174,3 +179,4 @@ if __name__ == '__main__':
     assert json.loads(ports.stdout) in (None, {})
     contracts(t['sql'])
     early_demand_contracts(t['sql'])
+    early_demand_contracts(t['sql'], with_timeout=True)

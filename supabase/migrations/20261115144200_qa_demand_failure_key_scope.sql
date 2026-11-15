@@ -1,11 +1,17 @@
--- Limit failure aggregation to the customer demand keys used by this lookup.
+-- Restrict failure aggregation without changing existing function settings.
 SET LOCAL lock_timeout='1s';
 SET LOCAL statement_timeout='10s';
-DO $guard$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_proc WHERE oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure AND md5(prosrc)='a3942a7adb1935a6ab8213bc01b5c36c' AND proconfig=ARRAY['search_path=""']) THEN
- RAISE EXCEPTION 'Demand function source or configuration changed; review before activation';
+DO $preserve$
+DECLARE existing_config text[];
+BEGIN
+ SELECT proconfig INTO existing_config FROM pg_proc
+ WHERE oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure
+ AND md5(prosrc)='a3942a7adb1935a6ab8213bc01b5c36c';
+ IF NOT FOUND OR NOT (existing_config=ARRAY['search_path=""'] OR
+   (cardinality(existing_config)=2 AND existing_config @> ARRAY['search_path=""','statement_timeout=2s'])) THEN
+   RAISE EXCEPTION 'Demand function source or configuration changed; review before activation';
  END IF;
-END $guard$;
+ EXECUTE $definition$
 create or replace function public.qa_missing_demand_backfill_ids(
   p_limit integer default 3
 )
@@ -101,4 +107,9 @@ as $$
     app.winget_id asc
   limit greatest(1, least(coalesce(p_limit, 3), 100));
 $$;
+ $definition$;
+ IF 'statement_timeout=2s'=ANY(existing_config) THEN
+   ALTER FUNCTION public.qa_missing_demand_backfill_ids(integer) SET statement_timeout='2s';
+ END IF;
+END $preserve$;
 NOTIFY pgrst, 'reload schema';
