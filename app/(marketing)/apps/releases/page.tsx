@@ -35,6 +35,7 @@ import {
   updateSize,
   type CatalogRelease,
   type ReleaseHistoryFilters,
+  type ReleaseHistoryResult,
 } from "@/lib/catalog/release-history";
 
 type Props = {
@@ -42,15 +43,24 @@ type Props = {
 };
 const PAGE_SIZE = 40;
 const loadHistory = unstable_cache(
-  async (filters: ReleaseHistoryFilters) =>
-    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters)),
-  ["catalog-release-history-v8"],
+  async (filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>) =>
+    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters, summary)),
+  ["catalog-release-history-v9"],
   { revalidate: 300 },
 );
 // cache() shares one in-flight load between generateMetadata and the page. Filters are
 // serialized because cache() compares arguments by identity.
-const loadHistoryOrPartial = cache((key: string) =>
-  loadHistory(JSON.parse(key) as ReleaseHistoryFilters).catch(error => error instanceof CompleteHistoryError ? error.result : null));
+const loadHistoryOrPartial = cache(async (key: string) => {
+  try {
+    const filters = JSON.parse(key) as ReleaseHistoryFilters;
+    // Nested unstable_cache calls bypass reads in Next. Resolve the shared
+    // summary before entering the page cache and bind that value to its key.
+    const summary = await getCatalogSource().getReleaseHistorySummary?.(filters);
+    return await loadHistory(filters, summary);
+  } catch (error) {
+    return error instanceof CompleteHistoryError ? error.result : null;
+  }
+});
 const loadRecentUpdates = unstable_cache(
   (from: string) => getCatalogSource().countReleaseHistory({ query: "", month: "", kind: "updated", page: 1, from }),
   ["catalog-release-history-recent-v1"],

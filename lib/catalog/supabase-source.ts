@@ -3,6 +3,7 @@ import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 import { knownLastHistoryPage, rememberHistoryTotal, withHistoryCapacity } from './release-history-capacity';
+import { unstable_cache } from 'next/cache';
 /**
  * Supabase-backed CatalogSource.
  *
@@ -62,21 +63,33 @@ function serviceOrAnonClient() {
 }
 
 let warnedMissingQaServiceRole = false;
+const globalSummaryReads = new Map<string, Promise<Omit<ReleaseHistoryResult, 'rows'>>>();
 
 export class SupabaseCatalogSource implements CatalogSource {
   private readonly historyReads = new Map<string, Promise<ReleaseHistoryResult>>();
   private readonly historyCounts = new Map<string, Promise<number>>();
-  private globalHistorySummary: { value: Omit<ReleaseHistoryResult, 'rows'>; at: number } | null = null;
+  private readonly globalHistorySummary = unstable_cache(async () => {
+    // This admission is separate from the rows read: stale revalidations also
+    // occupy a slot, without nesting admission inside an occupied rows slot.
+    const filters: ReleaseHistoryFilters = { query: '', month: '', kind: 'all', page: 1 };
+    return this.shareHistoryRead(globalSummaryReads, filters, async () => {
+      const { rows, ...summary } = await this.releaseHistoryPage(filters);
+      void rows;
+      return summary;
+    });
+  }, ['catalog-release-history-global-summary-v1'], { revalidate: 300 });
 
   // Only pending work is shared. Next remains responsible for result caching.
   private shareHistoryRead<T>(
     pending: Map<string, Promise<T>>,
     filters: ReleaseHistoryFilters,
     load: () => Promise<T>,
+    summary?: Omit<ReleaseHistoryResult, 'rows'>,
   ): Promise<T> {
     const key = JSON.stringify([
       filters.app ?? '', filters.query, filters.month, filters.kind, filters.page,
       filters.from || null, filters.to || null, filters.architecture ?? '',
+      summary ?? null,
     ]);
     const existing = pending.get(key);
     if (existing) return existing;
@@ -160,19 +173,16 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
   }
 
-  private async releaseHistoryPage(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  private async releaseHistoryPage(filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>): Promise<ReleaseHistoryResult> {
     const global = !filters.app && !filters.query && !filters.month && !filters.from
       && !filters.to && !filters.architecture && filters.kind === 'all';
-    const summary = this.globalHistorySummary;
-    // Page-independent metadata has the same five minute freshness as page
-    // results. Only the service path can use the additive rows-only RPC.
-    if (global && filters.page > 1 && process.env.SUPABASE_SERVICE_ROLE_KEY
-      && summary && Date.now() - summary.at < 300_000) {
+    // Only the service path consumes the shared summary and rows-only RPC.
+    if (global && process.env.SUPABASE_SERVICE_ROLE_KEY && summary) {
       const rows = await this.historyRpc<unknown>(filters, 'get_catalog_release_history_global_rows', {
         page_number: filters.page,
       });
       if (!Array.isArray(rows)) throw new Error('Catalog history unavailable');
-      const result = { ...summary.value, rows };
+      const result = { ...summary, rows };
       // Rows-only responses carry no fresh count observation.
       return result;
     }
@@ -181,11 +191,6 @@ export class SupabaseCatalogSource implements CatalogSource {
       architecture_filter: filters.architecture ?? '', search_text: filters.query,
       month_filter: filters.month, kind_filter: filters.kind, page_number: filters.page,
     });
-    if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const { rows, ...value } = result;
-      void rows;
-      this.globalHistorySummary = { value, at: Date.now() };
-    }
     rememberHistoryTotal(filters, result.total);
     return result;
   }
@@ -204,16 +209,31 @@ export class SupabaseCatalogSource implements CatalogSource {
     });
   }
 
-  getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  getReleaseHistorySummary(filters: ReleaseHistoryFilters): Promise<Omit<ReleaseHistoryResult, 'rows'> | undefined> {
+    const global = !filters.app && !filters.query && !filters.month && !filters.from
+      && !filters.to && !filters.architecture && filters.kind === 'all';
+    return global && process.env.SUPABASE_SERVICE_ROLE_KEY ? this.globalHistorySummary() : Promise.resolve(undefined);
+  }
+
+  getReleaseHistory(filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>): Promise<ReleaseHistoryResult> {
+    const global = !filters.app && !filters.query && !filters.month && !filters.from
+      && !filters.to && !filters.architecture && filters.kind === 'all';
+    if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return (summary ? Promise.resolve(summary) : this.globalHistorySummary()).then(summary => {
+        const lastPage = Math.max(1, Math.ceil(summary.total / 40));
+        const bounded = filters.page > lastPage ? { ...filters, page: lastPage } : filters;
+        return this.shareHistoryRead(this.historyReads, bounded, () => this.loadReleaseHistory(bounded, summary), summary);
+      });
+    }
     const lastPage = knownLastHistoryPage(filters);
     if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
     return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
   }
 
-  private async loadReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  private async loadReleaseHistory(filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
-    const result = await this.releaseHistoryPage(filters);
+    const result = await this.releaseHistoryPage(filters, summary);
     if (!result.rows.length) return result;
     let recoverySignal: AbortSignal | undefined;
     const {metadata, unavailable} = await loadReleaseMetadata(result.rows, batch => {
