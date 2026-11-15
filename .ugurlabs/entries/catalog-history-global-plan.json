@@ -1,0 +1,1 @@
+{"title":"Load catalog release pages with bounded predecessor lookups","summary":"The unfiltered catalog releases page limits predecessor work to the displayed page while preserving filters and app history.","type":"fixed"}
