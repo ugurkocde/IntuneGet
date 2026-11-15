@@ -1,5 +1,0 @@
-{
-  "title": "Reuse catalog totals across release history pages",
-  "summary": "Global release history pages share cached catalog totals while loading their own update rows, reducing repeated database work when serving pages from different servers.",
-  "type": "improved"
-}

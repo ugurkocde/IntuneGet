@@ -55,13 +55,13 @@ describe('history capacity across distinct keys', () => {
     vi.mocked(Date.now).mockReturnValue(301_000);
     expect(knownLastHistoryPage(scoped)).toBeNull();
   });
-  it('binds the prepared summary into the page cache while preserving the recent-count cache', async () => {
+  it('keeps both cache callback definitions and their keys identical to the deployed versions', async () => {
     const {readFileSync} = await import('node:fs');
     const page = readFileSync(new URL('../../app/(marketing)/apps/releases/page.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     expect(page).toContain(`const loadHistory = unstable_cache(
-  async (filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>) =>
-    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters, summary)),
-  ["catalog-release-history-v9"],
+  async (filters: ReleaseHistoryFilters) =>
+    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters)),
+  ["catalog-release-history-v8"],
   { revalidate: 300 },
 );`);
     expect(page).toContain(`const loadRecentUpdates = unstable_cache(

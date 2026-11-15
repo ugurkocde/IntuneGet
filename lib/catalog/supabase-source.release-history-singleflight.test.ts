@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupabaseCatalogSource } from './supabase-source';
 import type { ReleaseHistoryFilters } from './release-history';
 
-const filters: ReleaseHistoryFilters = { app: 'Fixture.App', query: '', month: '', kind: 'all', page: 1 };
+const filters: ReleaseHistoryFilters = { query: '', month: '', kind: 'all', page: 1 };
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://catalog.example.invalid');
@@ -27,7 +27,7 @@ describe('concurrent release history source reads', () => {
       fetchMock.mockImplementation(() => pending.promise.then(r => r.clone()));
       const source = new SupabaseCatalogSource();
       const first = source[method](filters);
-      const second = source[method]({ app: 'Fixture.App', page: 1, kind: 'all', month: '', query: '' });
+      const second = source[method]({ page: 1, kind: 'all', month: '', query: '' });
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
       const calls = fetchMock.mock.calls.length;
       pending.resolve(response());

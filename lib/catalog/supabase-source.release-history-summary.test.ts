@@ -1,19 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SupabaseCatalogSource } from './supabase-source';
-import { rememberHistoryTotal } from './release-history-capacity';
 import type { ReleaseHistoryFilters } from './release-history';
-const shared = vi.hoisted(() => ({ value: null as unknown, at: 0 }));
-vi.mock('next/cache', () => ({ unstable_cache: (load: () => Promise<unknown>) => async () => {
-  if (shared.value && Date.now() - shared.at < 300_000) return shared.value;
-  const value = await load(); shared.value = value; shared.at = Date.now(); return value;
-} }));
 
 const filters: ReleaseHistoryFilters = { query: '', month: '', kind: 'all', page: 1 };
 const summary = { rows: [], total: 100000, apps: 9000, firstTracked: 9000, months: ['2026-11'], coverageStart: '2026-01-01', sync: null };
 let fetchMock: ReturnType<typeof vi.fn>;
 let now: number;
 beforeEach(() => {
-  now = 1000; shared.value = null; shared.at = 0;
+  now = 1000;
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://catalog.example.invalid');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-service-key');
@@ -27,26 +21,6 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 const lastUrl = () => String(fetchMock.mock.calls.at(-1)![0]);
 
-it.each(['total', 'metadata'])('keeps overlapping page results bound to their own summary (%s)', async change => {
-  const source = new SupabaseCatalogSource();
-  const first = { ...summary, total: 80 };
-  const second = change === 'total' ? { ...first, total: 120 }
-    : { ...first, apps: 9100, months: ['2026-10', '2026-11'] };
-  let release!: (response: Response) => void;
-  let started!: () => void;
-  const began = new Promise<void>(resolve => { started = resolve; });
-  fetchMock.mockImplementationOnce(async () => {
-    started();
-    return new Promise<Response>(resolve => { release = resolve; });
-  });
-  const pending = source.getReleaseHistory({ ...filters, page: 2 }, first);
-  await began;
-  const overlapping = source.getReleaseHistory({ ...filters, page: 2 }, second);
-  release(Response.json([]));
-  expect(await pending).toEqual(first);
-  expect(await overlapping).toEqual(second);
-});
-
 it('reuses a global summary for the observed deep page with the existing RPC transport', async () => {
   const source = new SupabaseCatalogSource();
   await source.getReleaseHistory(filters);
@@ -58,20 +32,19 @@ it('reuses a global summary for the observed deep page with the existing RPC tra
   expect(init.signal).toBeInstanceOf(AbortSignal);
 });
 
-it.each([{ app: 'Fixture.App' }, { query: 'fixture' }, { month: '2026-11' },
+it.each([{ page: 1 }, { app: 'Fixture.App' }, { query: 'fixture' }, { month: '2026-11' },
   { kind: 'updated' as const }, { from: '2026-11-01' }, { to: '2026-11-10' }, { architecture: 'x64' }])(
-  'keeps app and filtered requests on v2: %j', async extra => {
+  'keeps page one, app and filtered requests on v2: %j', async extra => {
     const source = new SupabaseCatalogSource();
     await source.getReleaseHistory(filters);
     await source.getReleaseHistory({ ...filters, page: 2, ...extra });
     expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
   },
 );
-it('loads a shared summary on a cold instance and preserves the anon path', async () => {
+it('keeps cold and anon-only instances on v2', async () => {
   const source = new SupabaseCatalogSource();
   await source.getReleaseHistory({ ...filters, page: 2 });
-  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
-  expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/get_catalog_release_history_v2'))).toHaveLength(1);
+  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
   await source.getReleaseHistory({ ...filters, page: 3 });
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
@@ -84,8 +57,7 @@ it('warms from a later page but does not extend summary freshness on rows-only r
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
   now += 1;
   await source.getReleaseHistory({ ...filters, page: 4 });
-  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
-  expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/get_catalog_release_history_v2'))).toHaveLength(2);
+  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
 });
 it('rejects malformed rows and RPC errors without replacing the summary', async () => {
   const source = new SupabaseCatalogSource();
@@ -98,7 +70,7 @@ it('rejects malformed rows and RPC errors without replacing the summary', async 
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
 });
 
-it('uses the refreshed shared total after an older rows response settles', async () => {
+it('does not overwrite a fresh pagination total when an older rows response settles', async () => {
   const source = new SupabaseCatalogSource();
   fetchMock.mockImplementationOnce(async () => Response.json({ ...summary, total: 80 }));
   await source.getReleaseHistory(filters);
@@ -109,26 +81,9 @@ it('uses the refreshed shared total after an older rows response settles', async
   const pending = source.getReleaseHistory({ ...filters, page: 2 });
   await began;
   fetchMock.mockImplementationOnce(async () => Response.json({ ...summary, total: 120 }));
-  await source.countReleaseHistory(filters);
+  await source.getReleaseHistory(filters);
   release(Response.json([]));
   await pending;
-  await source.getReleaseHistory({ ...filters, page: 3 }, { ...summary, total: 120 });
+  await source.getReleaseHistory({ ...filters, page: 3 });
   expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body)).page_number).toBe(3);
-});
-
-it.each([true, false])('bounds global rows using the shared total instead of a stale local total (supplied=%s)', async supplied => {
-  rememberHistoryTotal(filters, 80);
-  const fresh = { ...summary, total: 120 };
-  shared.value = fresh; shared.at = now;
-  const source = new SupabaseCatalogSource();
-  const result = await source.getReleaseHistory({ ...filters, page: 3 }, supplied ? fresh : undefined);
-  expect(result.total).toBe(120);
-  expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body))).toEqual({ page_number: 3 });
-});
-it.each([80, 0])('caps global rows with a smaller shared total of %s', async total => {
-  rememberHistoryTotal(filters, 120);
-  const source = new SupabaseCatalogSource();
-  const result = await source.getReleaseHistory({ ...filters, page: 3 }, { ...summary, total });
-  expect(result.total).toBe(total);
-  expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body))).toEqual({ page_number: Math.max(1, Math.ceil(total / 40)) });
 });

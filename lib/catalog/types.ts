@@ -157,9 +157,7 @@ export type SccmMappingResult = SccmMatchResult;
  * The catalog read surface. Every method maps 1:1 to a former direct query.
  */
 export interface CatalogSource {
-  getReleaseHistory(filters: ReleaseHistoryFilters, summary?: Omit<ReleaseHistoryResult, 'rows'>): Promise<ReleaseHistoryResult>;
-  /** Prepare shared metadata before entering a page's Next cache callback. */
-  getReleaseHistorySummary?(filters: ReleaseHistoryFilters): Promise<Omit<ReleaseHistoryResult, 'rows'> | undefined>;
+  getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult>;
   /** Matching record count only, without per-release metadata or scan enrichment. */
   countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number>;
   // --- search / discovery ---
