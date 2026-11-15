@@ -1,6 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { T } from 'gt-next';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import {
   CheckCircle2,
@@ -45,6 +49,17 @@ interface BatchProgressTrackerProps {
 }
 
 export function BatchProgressTracker({ batchId }: BatchProgressTrackerProps) {
+  return <BatchProgress key={batchId} batchId={batchId} />;
+}
+
+function BatchProgress({ batchId }: BatchProgressTrackerProps) {
+  const client = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const pending = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
 
   const { data, isLoading, error } = useQuery<{ batch: BatchDeployment }>({
@@ -75,6 +90,40 @@ export function BatchProgressTracker({ batchId }: BatchProgressTrackerProps) {
       return false; // Stop polling when complete
     },
   });
+
+  const cancelBatch = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    setCancelling(true);
+    setCancelError(null);
+    const id = batchId;
+    try {
+      const accessToken = await getAccessToken();
+      if (!mounted.current) return;
+      if (!accessToken) throw new Error('Not authenticated');
+      const response = await fetch(`/api/msp/batch-deployments/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!mounted.current) return;
+      if (!response.ok) {
+        setCancelError(response.status === 403
+          ? 'You do not have permission to cancel this batch'
+          : 'Failed to cancel batch deployment');
+        return;
+      }
+      setConfirmOpen(false);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['batch-deployment', id] }),
+        client.invalidateQueries({ queryKey: ['batch-deployments'] }),
+      ]);
+    } catch {
+      if (mounted.current) setCancelError('Failed to cancel batch deployment');
+    } finally {
+      pending.current = false;
+      if (mounted.current) setCancelling(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -111,8 +160,30 @@ export function BatchProgressTracker({ batchId }: BatchProgressTrackerProps) {
             {batch.winget_id} v{batch.version}
           </p>
         </div>
-        <StatusBadge status={batch.status} />
+        <div className="flex items-center gap-3">
+          <StatusBadge status={batch.status} />
+          {(batch.status === 'pending' || batch.status === 'in_progress') && (
+            <Button variant="outline" size="sm" disabled={cancelling} onClick={() => { setCancelError(null); setConfirmOpen(true); }}>
+              <T>Cancel batch</T>
+            </Button>
+          )}
+        </div>
       </div>
+
+      {cancelError && !confirmOpen && <p role="alert" className="text-sm text-red-400">{cancelError}</p>}
+      <AlertDialog open={confirmOpen} onOpenChange={open => { if (!pending.current) setConfirmOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle><T>Cancel this batch?</T></AlertDialogTitle>
+            <AlertDialogDescription><T>Tenants that have not started will be skipped. Deployments already in progress will finish.</T></AlertDialogDescription>
+          </AlertDialogHeader>
+          {cancelError && <p role="alert" className="text-sm text-red-400">{cancelError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelling}><T>Keep batch</T></AlertDialogCancel>
+            <AlertDialogAction disabled={cancelling} onClick={cancelBatch}><T>Confirm cancellation</T></AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Progress bar */}
       <div className="space-y-2">
