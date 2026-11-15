@@ -173,7 +173,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       });
       if (!Array.isArray(rows)) throw new Error('Catalog history unavailable');
       const result = { ...summary.value, rows };
-      rememberHistoryTotal(filters, result.total);
+      // Rows-only responses carry no fresh count observation.
       return result;
     }
     const result = await this.historyRpc<ReleaseHistoryResult>(filters, 'get_catalog_release_history_v2', {

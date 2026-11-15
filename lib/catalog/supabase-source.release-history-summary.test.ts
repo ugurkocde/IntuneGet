@@ -69,3 +69,21 @@ it('rejects malformed rows and RPC errors without replacing the summary', async 
   await expect(source.getReleaseHistory({ ...filters, page: 2 })).resolves.toEqual(summary);
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
 });
+
+it('does not overwrite a fresh pagination total when an older rows response settles', async () => {
+  const source = new SupabaseCatalogSource();
+  fetchMock.mockImplementationOnce(async () => Response.json({ ...summary, total: 80 }));
+  await source.getReleaseHistory(filters);
+  let release!: (r: Response) => void;
+  let started!: () => void;
+  const began = new Promise<void>(r => { started = r; });
+  fetchMock.mockImplementationOnce(async () => { started(); return new Promise<Response>(r => { release = r; }); });
+  const pending = source.getReleaseHistory({ ...filters, page: 2 });
+  await began;
+  fetchMock.mockImplementationOnce(async () => Response.json({ ...summary, total: 120 }));
+  await source.getReleaseHistory(filters);
+  release(Response.json([]));
+  await pending;
+  await source.getReleaseHistory({ ...filters, page: 3 });
+  expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body)).page_number).toBe(3);
+});
