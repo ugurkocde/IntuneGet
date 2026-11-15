@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SupabaseCatalogSource } from './supabase-source';
 import type { ReleaseHistoryFilters } from './release-history';
+const shared = vi.hoisted(() => ({ value: null as unknown, at: 0 }));
+vi.mock('next/cache', () => ({ unstable_cache: (load: () => Promise<unknown>) => async () => {
+  if (shared.value && Date.now() - shared.at < 300_000) return shared.value;
+  const value = await load(); shared.value = value; shared.at = Date.now(); return value;
+} }));
 
 const filters: ReleaseHistoryFilters = { query: '', month: '', kind: 'all', page: 1 };
 const summary = { rows: [], total: 100000, apps: 9000, firstTracked: 9000, months: ['2026-11'], coverageStart: '2026-01-01', sync: null };
 let fetchMock: ReturnType<typeof vi.fn>;
 let now: number;
 beforeEach(() => {
-  now = 1000;
+  now = 1000; shared.value = null; shared.at = 0;
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://catalog.example.invalid');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-service-key');
@@ -32,19 +37,20 @@ it('reuses a global summary for the observed deep page with the existing RPC tra
   expect(init.signal).toBeInstanceOf(AbortSignal);
 });
 
-it.each([{ page: 1 }, { app: 'Fixture.App' }, { query: 'fixture' }, { month: '2026-11' },
+it.each([{ app: 'Fixture.App' }, { query: 'fixture' }, { month: '2026-11' },
   { kind: 'updated' as const }, { from: '2026-11-01' }, { to: '2026-11-10' }, { architecture: 'x64' }])(
-  'keeps page one, app and filtered requests on v2: %j', async extra => {
+  'keeps app and filtered requests on v2: %j', async extra => {
     const source = new SupabaseCatalogSource();
     await source.getReleaseHistory(filters);
     await source.getReleaseHistory({ ...filters, page: 2, ...extra });
     expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
   },
 );
-it('keeps cold and anon-only instances on v2', async () => {
+it('loads a shared summary on a cold instance and preserves the anon path', async () => {
   const source = new SupabaseCatalogSource();
   await source.getReleaseHistory({ ...filters, page: 2 });
-  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
+  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
+  expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/get_catalog_release_history_v2'))).toHaveLength(1);
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
   await source.getReleaseHistory({ ...filters, page: 3 });
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
@@ -57,7 +63,8 @@ it('warms from a later page but does not extend summary freshness on rows-only r
   expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
   now += 1;
   await source.getReleaseHistory({ ...filters, page: 4 });
-  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_v2');
+  expect(lastUrl()).toContain('/rpc/get_catalog_release_history_global_rows');
+  expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/get_catalog_release_history_v2'))).toHaveLength(2);
 });
 it('rejects malformed rows and RPC errors without replacing the summary', async () => {
   const source = new SupabaseCatalogSource();
@@ -81,7 +88,7 @@ it('does not overwrite a fresh pagination total when an older rows response sett
   const pending = source.getReleaseHistory({ ...filters, page: 2 });
   await began;
   fetchMock.mockImplementationOnce(async () => Response.json({ ...summary, total: 120 }));
-  await source.getReleaseHistory(filters);
+  await source.countReleaseHistory(filters);
   release(Response.json([]));
   await pending;
   await source.getReleaseHistory({ ...filters, page: 3 });
