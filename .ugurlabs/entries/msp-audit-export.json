@@ -1,0 +1,5 @@
+{
+  "title": "Export complete MSP audit logs",
+  "summary": "CSV exports include every matching page and show failures. All audit events have readable labels and action filters.",
+  "type": "fixed"
+}
