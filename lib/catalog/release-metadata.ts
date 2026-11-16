@@ -36,8 +36,9 @@ export async function loadReleaseMetadata(
         try { response = await fetchBatch(batch); }
         catch (error) { failed(isAbort(error) ? 'aborted' : 'other'); throw error; }
         if (!response.error && response.data) return response.data;
+        // Status zero also covers transport/body-read failures; it does not prove an abort.
         failed(response.error?.code === '57014' ? 'statementTimeout'
-          : response.status === 0 ? 'aborted' : response.status >= 500 ? 'http5xx' : 'other');
+          : response.status >= 500 ? 'http5xx' : 'other');
         if (fetchSingle && response.status === 0) throw new Error('Release metadata unavailable (request aborted)');
         const transient = response.status === 0 || response.status === 408 || response.status === 429 || response.status >= 500 || response.error?.code === '57014';
         if (!transient || attempt === 1) throw new Error(`Release metadata unavailable (HTTP ${response.status})`);
