@@ -63,6 +63,26 @@ function serviceOrAnonClient() {
 
 let warnedMissingQaServiceRole = false;
 
+// Stage diagnostics pair one history read across its RPC and metadata summaries.
+// Values are counts and timings only; the instance ID is random per module load.
+const historyInstance = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(4)), byte => byte.toString(16).padStart(2, '0')).join('');
+let historySequence = 0;
+let historyInflight = 0;
+// Node exposes eventLoopUtilization on performance; other runtimes report null.
+type Elu = { idle: number; active: number; utilization: number };
+const nodePerformance = () => performance as Performance & { eventLoopUtilization?: (start?: Elu) => Elu };
+const eluStart = (): Elu | null => {
+  try { return nodePerformance().eventLoopUtilization?.() ?? null; } catch { return null; }
+};
+const eluDelta = (start: Elu | null): number | null => {
+  try {
+    const delta = start ? nodePerformance().eventLoopUtilization?.(start) : undefined;
+    return delta ? Math.round(delta.utilization * 1000) / 1000 : null;
+  } catch { return null; }
+};
+const historyRpcLabel = (rpcName: string) =>
+  rpcName === 'get_catalog_release_history_v2' ? 'v2' : rpcName === 'get_catalog_release_history_global_rows' ? 'rows' : 'count';
+
 export class SupabaseCatalogSource implements CatalogSource {
   private readonly historyReads = new Map<string, Promise<ReleaseHistoryResult>>();
   private readonly historyCounts = new Map<string, Promise<number>>();
@@ -115,8 +135,10 @@ export class SupabaseCatalogSource implements CatalogSource {
       return rows.filter(row => row.outcome !== 'Passed');
     }
   }
-  private async historyRpc<T>(filters: ReleaseHistoryFilters, rpcName: string, args: Record<string, unknown>): Promise<T> {
+  private async historyRpc<T>(filters: ReleaseHistoryFilters, rpcName: string, args: Record<string, unknown>, seq = ++historySequence): Promise<T> {
     const started = performance.now();
+    const startedAt = Date.now();
+    const elu = eluStart();
     const elapsed = () => performance.now() - started;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -133,7 +155,11 @@ export class SupabaseCatalogSource implements CatalogSource {
       return response;
     } } });
     const signal = AbortSignal.timeout(15_000);
+    let abortFiredMs: number | null = null;
+    const onAbort = () => { abortFiredMs = elapsed(); };
+    signal.addEventListener('abort', onAbort, { once: true });
     let success = false;
+    const inflightAtStart = historyInflight++;
     try {
       const { data, error } = await client.rpc(rpcName, args).abortSignal(signal);
       if (error) throw new Error('Catalog history unavailable', { cause: error });
@@ -143,10 +169,13 @@ export class SupabaseCatalogSource implements CatalogSource {
       // SDK settlement includes body reading/parsing; headers are not wire first byte.
       // A never-settling SDK operation produces no summary; no watchdog is added.
       const settledMs = elapsed();
+      historyInflight--;
+      signal.removeEventListener('abort', onAbort);
       if (!success || settledMs > 5000) {
         const category = success ? 'success' : 'error';
         // Observed budget expiry does not establish why the RPC failed.
         const budgetExpired = signal.aborted && signal.reason?.name === 'TimeoutError';
+        const emittedAt = Date.now();
         console.warn('Catalog history RPC timing', {
           entryMs: 0, dispatchMs, headersMs, settledMs, category, budgetExpired, status,
           filterShape: {
@@ -155,12 +184,15 @@ export class SupabaseCatalogSource implements CatalogSource {
             kind: filters.kind === 'all' || filters.kind === 'first' || filters.kind === 'updated' ? filters.kind : 'other',
             laterPage: filters.page > 1,
           },
+          inst: historyInstance, seq, rpc: historyRpcLabel(rpcName), startedAt, emittedAt,
+          abortFiredMs, elu: eluDelta(elu), wallMinusMonoMs: Math.round(emittedAt - startedAt - elapsed()),
+          inflightAtStart, inflightAtSettle: historyInflight,
         });
       }
     }
   }
 
-  private async releaseHistoryPage(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  private async releaseHistoryPage(filters: ReleaseHistoryFilters, seq?: number): Promise<ReleaseHistoryResult> {
     const global = !filters.app && !filters.query && !filters.month && !filters.from
       && !filters.to && !filters.architecture && filters.kind === 'all';
     const summary = this.globalHistorySummary;
@@ -170,7 +202,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       && summary && Date.now() - summary.at < 300_000) {
       const rows = await this.historyRpc<unknown>(filters, 'get_catalog_release_history_global_rows', {
         page_number: filters.page,
-      });
+      }, seq);
       if (!Array.isArray(rows)) throw new Error('Catalog history unavailable');
       const result = { ...summary.value, rows };
       // Rows-only responses carry no fresh count observation.
@@ -180,7 +212,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       app_filter: filters.app ?? '', date_from: filters.from || null, date_to: filters.to || null,
       architecture_filter: filters.architecture ?? '', search_text: filters.query,
       month_filter: filters.month, kind_filter: filters.kind, page_number: filters.page,
-    });
+    }, seq);
     if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const { rows, ...value } = result;
       void rows;
@@ -213,16 +245,42 @@ export class SupabaseCatalogSource implements CatalogSource {
   private async loadReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
-    const result = await this.releaseHistoryPage(filters);
+    const seq = ++historySequence;
+    const started = performance.now();
+    const result = await this.releaseHistoryPage(filters, seq);
     if (!result.rows.length) return result;
+    const rpcSettledMs = performance.now() - started;
+    const metadataStarted = performance.now();
+    const metadataElu = eluStart();
+    let firstBatch: { signal: AbortSignal; onAbort: () => void } | null = null;
+    let firstBatchAbortLatenessMs: number | null = null;
     let recoverySignal: AbortSignal | undefined;
-    const {metadata, unavailable} = await loadReleaseMetadata(result.rows, batch => {
+    const {metadata, unavailable, stats} = await loadReleaseMetadata(result.rows, batch => {
       const pairs = batch.map(row => `and(winget_id.eq.${quotePostgrestValue(row.winget_id)},version.eq.${quotePostgrestValue(row.version)})`).join(',');
-      return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(batch.length).abortSignal(AbortSignal.timeout(3000));
+      const signal = AbortSignal.timeout(3000);
+      if (!firstBatch) {
+        // Lateness of the existing 3s budget shows event loop delay; it does not establish a cause.
+        const batchStarted = performance.now();
+        const onAbort = () => { firstBatchAbortLatenessMs = Math.round(performance.now() - batchStarted - 3000); };
+        signal.addEventListener('abort', onAbort, { once: true });
+        firstBatch = { signal, onAbort };
+      }
+      return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(batch.length).abortSignal(signal);
     }, row => {
       recoverySignal ??= AbortSignal.timeout(8000);
       return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').eq('winget_id', row.winget_id).eq('version', row.version).limit(1).abortSignal(AbortSignal.any([recoverySignal, AbortSignal.timeout(3000)]));
     });
+    const metadataMs = performance.now() - metadataStarted;
+    const settledFirstBatch = firstBatch as { signal: AbortSignal; onAbort: () => void } | null;
+    settledFirstBatch?.signal.removeEventListener('abort', settledFirstBatch.onAbort);
+    if (unavailable.size || metadataMs > 3000) {
+      console.warn('Catalog history metadata timing', {
+        inst: historyInstance, seq, rpcSettledMs: Math.round(rpcSettledMs), metadataMs: Math.round(metadataMs),
+        elu: eluDelta(metadataElu), firstBatchAbortLatenessMs, batchFailures: stats.batchFailures,
+        singlesAttempted: stats.singlesAttempted, singlesRecovered: stats.singlesRecovered,
+        recoveryExpired: Boolean(recoverySignal?.aborted), unavailableRows: unavailable.size,
+      });
+    }
     const hashes = [...new Set(result.rows.map(row => enrichRelease(row, metadata, [], Date.now(), filters.architecture).virusTotal?.hash).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
     let reputations: FileReputation[] = [];
     if (hashes.length) {

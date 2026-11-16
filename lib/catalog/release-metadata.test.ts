@@ -61,3 +61,17 @@ it('skips an aborted batch retry when individual recovery is available', async (
   expect(result.metadata).toHaveLength(1);
   warn.mockRestore();
 });
+
+it('counts failed batch attempts by class without changing retries', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const batch = vi.fn()
+    .mockResolvedValueOnce({data:null,error:{code:'57014'},status:500})
+    .mockRejectedValueOnce(new Error('Private transport detail'))
+    .mockResolvedValueOnce({data:null,error:{code:'42501'},status:403});
+  const first = await loadReleaseMetadata(rows.slice(0,1), batch);
+  expect(first.stats.batchFailures).toEqual({aborted:0, http5xx:0, statementTimeout:1, other:1});
+  const second = await loadReleaseMetadata(rows.slice(0,1), batch);
+  expect(batch).toHaveBeenCalledTimes(3);
+  expect(second.stats).toEqual({batchFailures:{aborted:0, http5xx:0, statementTimeout:0, other:1}, singlesAttempted:0, singlesRecovered:0});
+  warn.mockRestore();
+});

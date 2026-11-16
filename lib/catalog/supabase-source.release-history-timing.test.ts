@@ -31,7 +31,10 @@ function check(category: string, budgetExpired: boolean, status: number | null, 
   const timing = warn.mock.calls[0][1];
   expect(timing).toEqual({ entryMs: 0, dispatchMs: expect.any(Number), headersMs: headers ? expect.any(Number) : null,
     settledMs: expect.any(Number), category, budgetExpired, status,
-    filterShape: { app: true, query: false, month: false, from: false, to: false, architecture: false, kind: 'other', laterPage: false } });
+    filterShape: { app: true, query: false, month: false, from: false, to: false, architecture: false, kind: 'other', laterPage: false },
+    inst: expect.stringMatching(/^[0-9a-f]{8}$/), seq: expect.any(Number), rpc: 'v2', startedAt: expect.any(Number),
+    emittedAt: expect.any(Number), abortFiredMs: budgetExpired ? timing.abortFiredMs : null,
+    elu: timing.elu === null ? null : expect.any(Number), wallMinusMonoMs: expect.any(Number), inflightAtStart: 0, inflightAtSettle: 0 });
   expect(timing.dispatchMs).toBeGreaterThanOrEqual(0);
   expect(timing.settledMs).toBeGreaterThanOrEqual(timing.dispatchMs);
   if (headers) expect(timing.headersMs).toBeLessThanOrEqual(timing.settledMs);
@@ -58,11 +61,14 @@ describe('release history RPC diagnostics', () => {
     await expect(run()).rejects.toThrow('Catalog history unavailable');
     check('error', true, null, false);
     expect(warn.mock.calls[0][1].dispatchMs).toBe(15_001);
+    // The budget fired before the listener existed, so no firing time is claimed.
+    expect(warn.mock.calls[0][1].abortFiredMs).toBeNull();
   });
   it('reports a timeout while waiting for response headers', async () => {
     fetchMock.mockImplementation(async () => { timeout(); throw controller.signal.reason; });
     await expect(run()).rejects.toThrow('Catalog history unavailable');
     check('error', true, null, false);
+    expect(warn.mock.calls[0][1].abortFiredMs).toBe(15_001);
   });
   it('retains header status when the SDK body read aborts', async () => {
     fetchMock.mockImplementation(async () => {
