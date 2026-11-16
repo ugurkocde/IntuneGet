@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
-import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
+import { buildStoredJobWorkflowInputs, storedJobItem } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
@@ -20,10 +20,7 @@ import {
 } from '@/lib/github-actions';
 import { getAppConfig } from '@/lib/config';
 import { getFeatureFlags } from '@/lib/features';
-import { extractSilentSwitches } from '@/lib/msp/silent-switches';
-import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
-import type { WorkflowInputs } from '@/lib/github-actions';
 import type {
   TriggerUpdateRequest,
   TriggerUpdateResponse,
@@ -149,7 +146,6 @@ export async function POST(request: NextRequest) {
     }
     const userSettings = (userSettingsRow?.settings as Record<string, unknown> | null) || null;
     const globalCarryOver = Boolean(userSettings?.carryOverAssignments);
-    const supersedePrevious = Boolean(userSettings?.supersedePreviousApp);
 
     for (const req of updateRequests) {
       try {
@@ -312,7 +308,8 @@ export async function POST(request: NextRequest) {
         const triggerResult = await autoUpdateTrigger.triggerAutoUpdate(
           policy as AppUpdatePolicy,
           installerInfo,
-          { skipRateLimits: true, skipPriorDeploymentCheck: true, bypassUpdateScope: true }
+          { skipRateLimits: true, skipPriorDeploymentCheck: true, bypassUpdateScope: true,
+            assignmentMigrationOverride: { carryOverAssignments: globalCarryOver, removeAssignmentsFromPreviousApp: false } }
         );
 
         if (triggerResult.success && triggerResult.packagingJobId) {
@@ -329,73 +326,45 @@ export async function POST(request: NextRequest) {
 
             const deploymentConfig = policy.deployment_config as unknown as DeploymentConfig;
 
-            // Global settings were read once before the loop; the stored
-            // policy value may be stale, so the current setting wins
-            const currentCarryOver = globalCarryOver;
-
-            const workflowInputs: WorkflowInputs = {
-              sourceType: installerInfo.sourceType,
-              curatedReleaseId: installerInfo.curatedReleaseId,
-              jobId: triggerResult.packagingJobId,
-              tenantId: req.tenant_id,
-              wingetId: req.winget_id,
-              displayName: deploymentConfig.displayName || installerInfo.displayName,
-              description: buildIntuneAppDescription({
-                description: deploymentConfig.description,
-                fallback: `Deployed via IntuneGet from Winget: ${req.winget_id}`,
-              }),
-              publisher: deploymentConfig.publisher || 'Unknown Publisher',
-              version: installerInfo.latestVersion,
-              architecture: deploymentConfig.architecture || 'x64',
-              installerUrl: installerInfo.installerUrl,
-              installerSha256: installerInfo.installerSha256 || '',
-              installerType: installerInfo.installerType || deploymentConfig.installerType || 'exe',
-              nestedInstallerType: installerInfo.nestedInstallerType,
-              nestedInstallerPath: installerInfo.nestedInstallerPath,
-              silentSwitches: extractSilentSwitches(
-                deploymentConfig.installCommand || '',
-                installerInfo.installerType || deploymentConfig.installerType || 'exe',
-                installerInfo.nestedInstallerType
-              ),
-              uninstallCommand: deploymentConfig.uninstallCommand || '',
-              callbackUrl,
-              detectionRules: deploymentConfig.detectionRules
-                ? JSON.stringify(deploymentConfig.detectionRules)
-                : undefined,
-              // PSADT settings from the original deployment; triggerAutoUpdate
-              // backfills them onto the policy for pre-existing policies
-              psadtConfig: deploymentConfig.psadtConfig
-                ? JSON.stringify(deploymentConfig.psadtConfig)
-                : undefined,
-              assignments: deploymentConfig.assignments
-                ? JSON.stringify(
-                    sanitizeAssignmentsForDispatch(
-                      deploymentConfig.assignments,
-                      Boolean(deploymentConfig.requirementRules?.length)
-                    )
-                  )
-                : undefined,
-              categories: deploymentConfig.categories
-                ? JSON.stringify(deploymentConfig.categories)
-                : undefined,
-              requirementRules: deploymentConfig.requirementRules
-                ? JSON.stringify(deploymentConfig.requirementRules)
-                : undefined,
-              relationships: deploymentConfig.relationships && deploymentConfig.relationships.length > 0
-                ? JSON.stringify(deploymentConfig.relationships)
-                : undefined,
-              installScope: (deploymentConfig.installScope === 'user' ? 'user' : 'machine') as 'machine' | 'user',
-              forceCreate: deploymentConfig.forceCreateNewApp !== false,
-              sourceIntuneAppId: installerInfo.currentIntuneAppId || undefined,
-              carryOverAssignments: currentCarryOver,
-              removeAssignmentsFromPreviousApp: false,
-              autoSupersede: supersedePrevious,
-              supersedenceType: supersedePrevious ? 'update' : undefined,
-              packageProfileSha256: triggerResult.packageProfileSha256,
-            };
-
+            // First dispatch and resume must hash the same persisted execution input.
+            const { data: job, error: readError } = await supabase.from('packaging_jobs')
+              .select('*').eq('id', triggerResult.packagingJobId)
+              .eq('user_id', user.userId).eq('tenant_id', req.tenant_id)
+              .eq('auto_update_policy_id', policy.id).eq('is_auto_update', true)
+              .in('status', ['queued', 'awaiting_qa'])
+              .is('github_run_id', null).is('callback_run_id', null)
+              .is('cancelled_at', null).is('archived_at', null).maybeSingle();
+            if (readError || !job) {
+              if (readError) {
+                const message = 'Packaging could not start safely. Refresh the deployment status.';
+                const { data: won, error: writeError } = await supabase.from('packaging_jobs')
+                  .update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() })
+                  .eq('id', triggerResult.packagingJobId).eq('user_id', user.userId)
+                  .eq('tenant_id', req.tenant_id).eq('auto_update_policy_id', policy.id)
+                  .eq('is_auto_update', true).in('status', ['queued', 'awaiting_qa'])
+                  .is('github_run_id', null).is('callback_run_id', null)
+                  .is('cancelled_at', null).is('archived_at', null).is('error_details', null)
+                  .select('id').maybeSingle();
+                if (won && !writeError && triggerResult.historyId) {
+                  await supabase.from('auto_update_history').update({ status: 'failed',
+                    error_message: message, completed_at: new Date().toISOString(),
+                  }).eq('id', triggerResult.historyId);
+                }
+              }
+              response.failed++;
+              response.results.push({ winget_id: req.winget_id, tenant_id: req.tenant_id,
+                success: false, packaging_job_id: triggerResult.packagingJobId,
+                error: readError ? 'Packaging could not start safely. Refresh the deployment status.'
+                  : 'Deployment status changed before packaging could start. Refresh the deployment status.',
+              });
+              continue;
+            }
+            const item = storedJobItem(job);
+            const workflowInputs = buildStoredJobWorkflowInputs(job, item, {
+              callbackUrl, qaOverride: false, sanitizeAssignments: true,
+            });
             const isBatch = updateRequests.length > 1;
-            const customSource = deploymentConfig.sourceType === 'custom' || workflowInputs.sourceType === 'custom';
+            const customSource = [deploymentConfig.sourceType, installerInfo.sourceType, item.sourceType].includes('custom');
             try {
               await triggerPackagingWorkflow(workflowInputs, undefined, {
                 skipRunCapture: isBatch,

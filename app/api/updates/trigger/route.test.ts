@@ -86,6 +86,8 @@ function createTriggerSupabaseMocks(
   options?: {
     latestUploadIntuneAppId?: string;
     userSettings?: Record<string, unknown>;
+    storedJob?: Record<string, unknown>;
+    readError?: boolean;
   }
 ): TriggerSupabaseMocks {
   const policyUpdatePayloads: Array<Record<string, unknown>> = [];
@@ -98,7 +100,10 @@ function createTriggerSupabaseMocks(
       eq: vi.fn(),
       single: vi.fn(),
     };
-    chain.eq.mockImplementation(() => chain);
+    chain.eq.mockImplementation((key: string, value: unknown) => {
+      if (key === 'tenant_id' && data && typeof data === 'object' && 'tenant_id' in data) Object.assign(data, { tenant_id: value });
+      return chain;
+    });
     chain.single.mockResolvedValue({ data, error: null });
     return chain;
   };
@@ -147,6 +152,43 @@ function createTriggerSupabaseMocks(
           }
         }
         return { select: uploadChain.select };
+      }
+
+      if (table === 'packaging_jobs') {
+        return { select: () => {
+          const filters: Array<(row: Record<string, unknown>) => boolean> = [];
+          const query = {
+            eq: (key: string, value: unknown) => { filters.push(row => row[key] === value); return query; },
+            is: (key: string, value: unknown) => { filters.push(row => (row[key] ?? null) === value); return query; },
+            in: (key: string, values: unknown[]) => { filters.push(row => values.includes(row[key])); return query; },
+            maybeSingle: async () => {
+              const info = (await getLatestInstallerInfoMock.mock.results.at(-1)?.value)?.info ?? {};
+              const config = policy.deployment_config ?? {};
+              const id = (await triggerAutoUpdateMock.mock.results.at(-1)?.value)?.packagingJobId;
+              const row = { id, user_id: policy.user_id, tenant_id: triggerAutoUpdateMock.mock.calls.at(-1)?.[0]?.tenant_id ?? policy.tenant_id,
+                auto_update_policy_id: policy.id, is_auto_update: true, status: 'queued',
+                winget_id: policy.winget_id, version: info.latestVersion,
+                display_name: config.displayName || info.displayName, publisher: config.publisher,
+                architecture: config.architecture, installer_type: info.installerType || config.installerType,
+                installer_url: info.installerUrl, installer_sha256: info.installerSha256,
+                install_command: info.installCommand || config.installCommand, uninstall_command: config.uninstallCommand,
+                install_scope: info.installScope || config.installScope, detection_rules: config.detectionRules,
+                package_config: { ...config, sourceType: info.sourceType || config.sourceType,
+                  installerSuccessCodes: info.installerSuccessCodes, nestedInstallerType: info.nestedInstallerType,
+                  nestedInstallerPath: info.nestedInstallerPath, forceCreate: config.forceCreateNewApp !== false,
+                  sourceIntuneAppId: options?.latestUploadIntuneAppId,
+                  autoSupersede: Boolean(options?.userSettings?.supersedePreviousApp && options?.latestUploadIntuneAppId),
+                  supersedenceType: options?.userSettings?.supersedePreviousApp && options?.latestUploadIntuneAppId ? 'update' : undefined,
+                  assignmentMigration: { carryOverAssignments: options?.userSettings?.carryOverAssignments ?? false },
+                  // The production snapshot keeps the refreshed command on the row.
+                  installCommand: undefined,
+                }, ...options?.storedJob };
+              return { data: !options?.readError && filters.every(f => f(row)) ? row : null,
+                error: options?.readError ? { message: 'synthetic private read error' } : null };
+            },
+          };
+          return query;
+        } };
       }
 
       if (table === 'user_settings') {
@@ -471,6 +513,7 @@ describe('POST /api/updates/trigger', () => {
         installerUrl: 'https://example.com/edge.exe',
         installerSha256: 'abc123',
         installerType: 'exe',
+        installerSuccessCodes: [0, 3010],
       },
     });
     triggerAutoUpdateMock.mockResolvedValue({
@@ -504,6 +547,7 @@ describe('POST /api/updates/trigger', () => {
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 'pkg-job-1',
+        installerSuccessCodes: [0, 3010],
         relationships: JSON.stringify(relationships),
         sourceIntuneAppId: 'prev-app-1',
         carryOverAssignments: true,
@@ -626,7 +670,7 @@ describe('POST /api/updates/trigger', () => {
     const from = supabase.from;
     supabase.from = ((table: string) => {
       if (!['packaging_jobs', 'auto_update_history'].includes(table)) return from(table);
-      return { update: (patch: Record<string, unknown>) => {
+      return { ...(table === 'packaging_jobs' ? from(table) : {}), update: (patch: Record<string, unknown>) => {
         const guards: Record<string, unknown> = {};
         writes.push({ table, patch, guards });
         const result = { data: kind === 'miss' ? null : { id: 'pkg-job-2' }, error: kind === 'write error' ? { message: 'synthetic write failure' } : null };
@@ -719,6 +763,45 @@ describe('POST /api/updates/trigger', () => {
       if (success) expect(body.results[0]).toMatchObject({ success: true, packaging_job_id: 'pkg-job-2', code: error.code });
       else expect(body.results[0].error).toMatch(kind === 'miss' ? /status changed/ : /Could not schedule/);
     }
+  });
+
+  it.each(['user_id', 'tenant_id', 'auto_update_policy_id', 'is_auto_update', 'status',
+    'github_run_id', 'callback_run_id', 'cancelled_at', 'archived_at', 'read error'])
+  ('does not dispatch a stored job with a changed ownership guard: %s', async field => {
+    const policy = { id: 'policy-1', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Microsoft.Edge',
+      policy_type: 'auto_update', is_enabled: true, deployment_config: {} } as AppUpdatePolicy;
+    const { supabase } = createTriggerSupabaseMocks(policy, {
+      storedJob: field === 'read error' ? {} : { [field]: field === 'is_auto_update' ? false : 'changed' },
+      readError: field === 'read error',
+    });
+    const writes: Array<{ table: string; patch: Record<string, unknown> }> = [];
+    const from = supabase.from;
+    supabase.from = ((table: string) => {
+      if (!['packaging_jobs', 'auto_update_history'].includes(table)) return from(table);
+      return { ...(table === 'packaging_jobs' ? from(table) : {}), update: (patch: Record<string, unknown>) => {
+        writes.push({ table, patch });
+        const query = { eq: () => query, is: () => query, in: () => query, select: () => query,
+          maybeSingle: async () => ({ data: { id: 'job-guard' }, error: null }),
+          then: (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve) };
+        return query;
+      } };
+    }) as typeof supabase.from;
+    createServerClientMock.mockReturnValue(supabase);
+    triggerAutoUpdateMock.mockResolvedValue({ success: true, packagingJobId: 'job-guard', historyId: 'history-guard' });
+    getLatestInstallerInfoMock.mockResolvedValue({ ok: true, info: { latestVersion: '2.0.0' } });
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    isGitHubActionsConfiguredMock.mockReturnValue(true);
+    getAppConfigMock.mockReturnValue({ app: { url: 'https://example.test' } });
+    const response = await POST(new NextRequest('https://example.test/api/updates/trigger', {
+      method: 'POST', headers: { authorization: 'Bearer test-token' },
+      body: JSON.stringify({ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }),
+    }));
+    const body = await response.json();
+    expect(body).toMatchObject({ failed: 1, triggered: 0 });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(writes.map(w => [w.table, w.patch.status])).toEqual(field === 'read error'
+      ? [['packaging_jobs', 'failed'], ['auto_update_history', 'failed']] : []);
+    expect(JSON.stringify(body)).not.toContain('synthetic private');
   });
 
 });

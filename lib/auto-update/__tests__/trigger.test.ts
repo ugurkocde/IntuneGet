@@ -169,6 +169,22 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
+  it.each([true, false])('persists the manual carry-over snapshot before dispatch: %s', async carryOverAssignments => {
+    const insert = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({
+      packaging_jobs: { insertSpy: insert, singleResult: { data: { id: 'snapshot-job' }, error: null } },
+    }));
+    const policy = makePolicy({ assignmentMigration: {
+      carryOverAssignments: !carryOverAssignments, removeAssignmentsFromPreviousApp: false,
+    } });
+    await trigger['createPackagingJob'](policy, UPDATE_INFO, 'snapshot-history', undefined, false, {
+      carryOverAssignments, removeAssignmentsFromPreviousApp: false,
+    });
+    expect(insert.mock.calls[0][0].package_config.assignmentMigration).toEqual({
+      carryOverAssignments, removeAssignmentsFromPreviousApp: false,
+    });
+    expect(policy.deployment_config.assignmentMigration?.carryOverAssignments).toBe(!carryOverAssignments);
+  });
   it.each([true, false])('routes passed cron work through QA resume while preserving the manual default: %s', async admitViaQaResume => {
     const insert = vi.fn();
     const trigger = makeTrigger(createSupabaseMock({
