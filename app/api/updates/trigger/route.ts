@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, WorkflowDispatchRetryStopped } from '@/lib/workflow-dispatch-rate-limit';
 import { buildStoredJobWorkflowInputs, storedJobItem } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
@@ -27,7 +27,7 @@ import type {
   AppUpdatePolicy,
   DeploymentConfig,
 } from '@/types/update-policies';
-import type { Json } from '@/types/database';
+import type { Json, Database } from '@/types/database';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
 import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 
@@ -345,10 +345,15 @@ export async function POST(request: NextRequest) {
                   .is('github_run_id', null).is('callback_run_id', null)
                   .is('cancelled_at', null).is('archived_at', null).is('error_details', null)
                   .select('id').maybeSingle();
-                if (won && !writeError && triggerResult.historyId) {
-                  await supabase.from('auto_update_history').update({ status: 'failed',
-                    error_message: message, completed_at: new Date().toISOString(),
-                  }).eq('id', triggerResult.historyId);
+                if (won && !writeError) {
+                  await supabase.from('app_update_policies').update({ last_auto_update_version: null, updated_at: new Date().toISOString() })
+                    .eq('id', policy.id).eq('user_id', user.userId).eq('tenant_id', req.tenant_id)
+                    .eq('last_auto_update_version', installerInfo.latestVersion);
+                  if (triggerResult.historyId) {
+                    await supabase.from('auto_update_history').update({ status: 'failed',
+                      error_message: message, completed_at: new Date().toISOString(),
+                    }).eq('id', triggerResult.historyId);
+                  }
                 }
               }
               response.failed++;
@@ -365,29 +370,62 @@ export async function POST(request: NextRequest) {
             });
             const isBatch = updateRequests.length > 1;
             const customSource = [deploymentConfig.sourceType, installerInfo.sourceType, item.sourceType].includes('custom');
+            let claimedAt: string | null = null;
+            const ownedWrite = (patch: Database['public']['Tables']['packaging_jobs']['Update'], afterClaim = false) => {
+              let query = supabase.from('packaging_jobs').update(patch)
+                .eq('id', job.id).eq('user_id', user.userId).eq('tenant_id', req.tenant_id)
+                .eq('auto_update_policy_id', policy.id).eq('is_auto_update', true)
+                .eq('status', afterClaim ? 'packaging' : job.status)
+                .is('github_run_id', null).is('callback_run_id', null)
+                .is('cancelled_at', null).is('archived_at', null).is('error_details', null);
+              for (const field of ['qa_candidate_id', 'installer_sha256', 'architecture'] as const) {
+                query = job[field] == null ? query.is(field, null) : query.eq(field, job[field]);
+              }
+              if (afterClaim) query = query.eq('packaging_started_at', claimedAt!);
+              else if (job.status === 'awaiting_qa') query = job.qa_resume_due_at == null
+                ? query.is('qa_resume_due_at', null) : query.eq('qa_resume_due_at', job.qa_resume_due_at);
+              return query.select('id').maybeSingle();
+            };
             try {
               await triggerPackagingWorkflow(workflowInputs, undefined, {
                 skipRunCapture: isBatch,
                 requireQaPass: true,
                 newJobAdmission: !customSource,
+                beforeDispatch: async () => {
+                  if (job.status !== 'awaiting_qa') return;
+                  const now = new Date().toISOString();
+                  const { data: won, error } = await ownedWrite({ status: 'packaging',
+                    status_message: 'Installation test passed; packaging started',
+                    packaging_started_at: now, qa_completed_at: job.qa_completed_at ?? now });
+                  if (error) throw new Error('Could not claim packaging safely. Refresh the deployment status.');
+                  if (!won) throw new WorkflowDispatchRetryStopped();
+                  claimedAt = now;
+                },
               });
             } catch (error) {
+              if (error instanceof WorkflowDispatchRetryStopped) {
+                response.failed++;
+                response.results.push({ winget_id: req.winget_id, tenant_id: req.tenant_id,
+                  success: false, packaging_job_id: job.id,
+                  error: 'Deployment status changed before packaging could start. Refresh the deployment status.' });
+                continue;
+              }
               if (error instanceof WorkflowDispatchUnconfirmedError) {
                 // Only a fresh ownerless admission can be deferred. The resume
                 // path checks the exact payload pin before claiming or posting.
                 const hold = customSource ? null : dispatchRateLimitHold(error, null);
-                const { data: won, error: writeError } = await supabase
-                  .from('packaging_jobs')
-                  .update(hold ?? {
-                    status: 'failed', error_code: error.code, error_stage: 'authenticate',
-                    error_category: 'network', error_message: error.message,
-                    completed_at: new Date().toISOString(),
-                  })
-                  .eq('id', triggerResult.packagingJobId)
-                  .in('status', hold ? ['queued', 'awaiting_qa'] : ['queued'])
-                  .is('github_run_id', null).is('callback_run_id', null)
-                  .is('cancelled_at', null).is('archived_at', null).is('error_details', null)
-                  .select('id').maybeSingle();
+                const patch: Database['public']['Tables']['packaging_jobs']['Update'] = hold ?? {
+                  status: 'failed', error_code: error.code, error_stage: 'authenticate',
+                  error_category: 'network', error_message: error.message,
+                  completed_at: new Date().toISOString(),
+                };
+                const { data: won, error: writeError } = claimedAt
+                  ? await ownedWrite(patch, true)
+                  : await supabase.from('packaging_jobs').update(patch)
+                    .eq('id', job.id).in('status', hold ? ['queued', 'awaiting_qa'] : ['queued'])
+                    .is('github_run_id', null).is('callback_run_id', null)
+                    .is('cancelled_at', null).is('archived_at', null).is('error_details', null)
+                    .select('id').maybeSingle();
                 if (won && !writeError && hold) {
                   response.triggered++;
                   response.results.push({
@@ -413,24 +451,28 @@ export async function POST(request: NextRequest) {
                 });
                 continue;
               }
-              if (!isQaGateError(error)) throw error;
+              if (!isQaGateError(error)) {
+                if (claimedAt) {
+                  const hold = error instanceof WorkflowDispatchRateLimitError ? dispatchRateLimitHold(error, job.error_details) : null;
+                  await ownedWrite(hold ?? { status: 'awaiting_qa', packaging_started_at: null,
+                    qa_resume_due_at: new Date(Date.now() + 60_000).toISOString() }, true);
+                }
+                throw error;
+              }
 
               // The status can change between the pre-job auto-update gate and
               // the final dispatch gate. Make that race an explicit safety
               // cancellation rather than leaving a queued/failed mystery job.
               const message = describeQaGateError(error);
               const completedAt = new Date().toISOString();
-              await supabase
-                .from('packaging_jobs')
-                .update({
+              const { data: cancelled, error: cancelError } = await ownedWrite({
                   status: 'cancelled',
                   status_message: 'Waiting for the installation test to finish',
                   error_message: message,
                   cancelled_at: completedAt,
                   completed_at: completedAt,
-                })
-                .eq('id', triggerResult.packagingJobId);
-              if (triggerResult.historyId) {
+                });
+              if (cancelled && !cancelError && triggerResult.historyId) {
                 await supabase
                   .from('auto_update_history')
                   .update({
@@ -448,7 +490,7 @@ export async function POST(request: NextRequest) {
                 success: false,
                 skipped: true,
                 code: error.code,
-                error: message,
+                error: cancelled && !cancelError ? message : 'Deployment status changed before packaging could start. Refresh the deployment status.',
               });
               continue;
             }
