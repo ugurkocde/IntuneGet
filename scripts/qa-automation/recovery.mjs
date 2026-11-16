@@ -27,12 +27,25 @@ export function rateLimitUntil(response, now = Date.now()) {
 
 /** Release a stranded publisher, retaining the VM job and candidate run ID. */
 export async function recoverStalledPublication({ candidate: c, github, patch, now = Date.now() }) {
-  if (c.status !== 'running' || c.phase !== 'publishing' || !/^[1-9][0-9]*$/.test(c.github_run_id || '')) return null;
+  if (c.status !== 'running' || !['publishing', 'preparing_package'].includes(c.phase) || !/^[1-9][0-9]*$/.test(c.github_run_id || '')) return null;
   const runId = c.github_run_id;
   const validRun = run => run && String(run.id) === runId && run.path === '.github/workflows/intune-qa.yml' &&
     run.head_branch === 'main' && run.event === 'workflow_dispatch';
   const run = await github(`/actions/runs/${runId}`);
   if (!validRun(run)) throw new Error('QA workflow identity mismatch');
+  if (c.phase === 'preparing_package') {
+    if (run.status !== 'in_progress' || run.run_attempt !== 1) return null;
+    const payload = await github(`/actions/runs/${runId}/jobs?filter=latest&per_page=100`);
+    if (!payload || !Array.isArray(payload.jobs) || payload.total_count !== payload.jobs.length || payload.total_count > 100) return null;
+    const qa = payload.jobs.filter(j => j.name === 'qa');
+    if (qa.length !== 1 || qa[0].status !== 'in_progress' || !Array.isArray(qa[0].steps)) return null;
+    const executing = qa[0].steps.filter(s => s.status === 'in_progress');
+    const execute = qa[0].steps.filter(s => s.name === 'Execute isolated QA test');
+    if (executing.length !== 1 || !['Prepare package from catalog candidate', 'Prepare package from repository definition'].includes(executing[0].name) ||
+        execute.length !== 1 || execute[0].status !== 'pending' || execute[0].started_at != null) return null;
+    return { action: 'preparation_candidate_stalled', candidateOnly: true, repairRequired: true,
+      repairKey: `preparation-stall:${c.id}`, repairReason: 'One candidate preparation is stalled before Execute. Preserve runner ownership; use the bounded preparation timeout and qualify terminal cleanup before isolation. Do not globally pause or replay it.' };
+  }
   if (!['queued', 'completed'].includes(run.status)) return null;
   const payload = await github(`/actions/runs/${runId}/jobs?filter=latest&per_page=100`);
   if (!payload || !Array.isArray(payload.jobs) || !Number.isInteger(payload.total_count) ||
@@ -132,6 +145,11 @@ export async function publicationJob(runId, github) {
       !steps.slice(reputationIndex + 1).some(step => step.conclusion === 'cancelled')) {
     return { preExecutionRefusal: true };
   }
+  const preparation = Array.isArray(steps) ? steps.filter(s => ['Prepare package from catalog candidate', 'Prepare package from repository definition'].includes(s.name) && ['failure', 'cancelled', 'timed_out'].includes(s.conclusion)) : [];
+  const execute = Array.isArray(steps) ? steps.filter(s => s.name === 'Execute isolated QA test') : [];
+  if (run.run_attempt === 1 && payload.total_count === payload.jobs.length && payload.jobs.every(j => j.status === 'completed') &&
+      qa?.status === 'completed' && ['failure', 'cancelled', 'timed_out'].includes(qa.conclusion) && preparation.length === 1 &&
+      execute.length === 1 && execute[0].conclusion === 'skipped' && execute[0].started_at == null) return { preparationFailed: true };
   const merged = publisher?.steps?.some(step => step.name === 'Merge result through protected branch' && step.conclusion === 'success');
   const replaySafe = publisher?.steps?.some(step => step.name === 'Commit or reuse the compact result');
   const legacyCommitFailed = publisher?.steps?.some(step => step.name === 'Commit the compact result' && step.conclusion === 'failure');
@@ -197,9 +215,24 @@ export async function recoverInfrastructure({ rows, patch, github, now = Date.no
       continue;
     }
     let job = null;
-    if (kind === 'publication' && !dryRun) {
+    if ((kind === 'publication' || (kind === 'lifecycle' && c.phase === 'preparing_package')) && !dryRun) {
       job = await publicationJob(c.github_run_id, github);
       if (job.waiting) continue;
+      if (job.preparationFailed) {
+        const held = await rows('qa_candidates', { select: 'winget_id', status: 'eq.error', next_retry_at: 'eq.infinity',
+          failure_summary: 'like.Candidate-only preparation hold:*', winget_id: `neq.${c.winget_id}`,
+          updated_at: `gte.${new Date(now - 24 * 60 * 60_000).toISOString()}`, limit: '100' });
+        if (held.length >= 100 || new Set(held.map(r => r.winget_id.toLowerCase())).size >= 2) return {
+          action: 'repair_required', repairRequired: true, repairKey: 'qa-preparation-systemic', candidateId: c.id,
+          repairReason: 'Preparation failures affect at least three distinct applications; inspect shared preparation infrastructure.' };
+        const changed = await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error', github_run_id: `eq.${c.github_run_id}`, failure_summary: `eq.${c.failure_summary}` }, {
+          next_retry_at: 'infinity', updated_at: new Date(now).toISOString(),
+          failure_summary: 'Candidate-only preparation hold: preparation failed before Execute. Installer remains untested; repair required before retry.',
+        });
+        return { action: changed.length === 1 ? 'preparation_candidate_held' : 'recovery_claim_lost', candidateId: c.id,
+          ...(changed.length === 1 ? { repairRequired: true, candidateOnly: true, repairKey: `preparation-stall:${c.id}`,
+            repairReason: 'Preparation failed before Execute. Candidate is held without replay; repair its preparation before any retry. Other candidates remain eligible.' } : {}) };
+      }
       if (job.preExecutionRefusal) {
         await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error',
           failure_summary: `eq.${PUBLICATION_FAILURE}`, github_run_id: `eq.${c.github_run_id}` }, {
