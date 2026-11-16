@@ -71,6 +71,13 @@ export async function GET(request: NextRequest) {
       count: profiles.length,
     });
   } catch (err) {
+    if (err instanceof EspProfileListError && err.status === 401) {
+      console.warn('[ESP Profiles] list denied', { status: 401 });
+      return NextResponse.json(
+        { error: 'Intune could not authenticate the ESP profile request. Please try again.', code: 'esp_graph_unauthorized' },
+        { status: 401 }
+      );
+    }
     if (err instanceof EspProfilePermissionError) {
       console.warn('[ESP Profiles] list denied', { status: 403 });
       return NextResponse.json(

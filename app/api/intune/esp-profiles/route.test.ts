@@ -30,6 +30,24 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('ESP access error responses', () => {
   const request = () => new NextRequest('http://localhost/api/intune/esp-profiles');
+  it('reports upstream authentication rejection without exposing Graph details or retrying', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const json = vi.fn().mockResolvedValue({ error: { message: 'private-tenant fixture@example.invalid' } });
+    const fetch = vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized', json });
+    vi.stubGlobal('fetch', fetch);
+    const response = await GET(request());
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      code: 'esp_graph_unauthorized',
+      error: 'Intune could not authenticate the ESP profile request. Please try again.',
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(json).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith('[ESP Profiles] list denied', { status: 401 });
+    expect(JSON.stringify([...error.mock.calls, ...warn.mock.calls])).not.toMatch(/private-tenant|fixture@example/);
+  });
   it('returns actionable 403 without exposing or logging Graph details', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
