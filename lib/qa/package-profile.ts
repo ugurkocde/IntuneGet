@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import curatedDefinitions from '@/lib/curated-catalog/definitions.json';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { assertPackagingContract } from '@/lib/packaging-contract';
 import { inferSavedCustomMarkerPath } from '@/lib/registry-marker';
@@ -1292,6 +1293,12 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
   const dependenciesSha256 = packageDependencies.length > 0
     ? qaSha256(canonicalQaJson(packageDependencies))
     : '';
+  // Signed curated releases already bind these real execution inputs through
+  // their reviewed definition and committed workflow evidence. Preserve their
+  // canonical bytes only for that exact identity; altered metadata hashes anew.
+  const curatedIdentity = input.profileKind === 'deployment-config'
+    && curatedDefinitions.some(app => app.packageId === input.wingetId
+      && app.name === input.displayName && app.publisher === input.publisher);
   const profile = {
     schemaVersion: QA_PACKAGE_PROFILE_SCHEMA_VERSION,
     testLevel: 'psadt-package',
@@ -1299,8 +1306,10 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
     toolchain: QA_PSADT_TOOLCHAIN,
     app: {
       wingetId: input.wingetId,
-      displayName: input.profileKind === 'deployment-config' ? input.wingetId : input.displayName,
-      publisher: input.profileKind === 'deployment-config' ? 'IntuneGet QA' : input.publisher,
+      // The shared packager uses both fields to select the installed registry
+      // identity. They affect execution even when the profile is customer configured.
+      displayName: curatedIdentity ? input.wingetId : input.displayName,
+      publisher: curatedIdentity ? PRESENTATION_PLACEHOLDER : input.publisher,
       version: input.version,
       architecture: input.architecture.toLowerCase(),
     },
