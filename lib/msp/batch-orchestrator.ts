@@ -174,9 +174,9 @@ export async function advanceInProgressBatches(): Promise<RecoverySummary> {
           }
           const staleIds = staleItems.filter(item => {
             const job = linked.data?.find(job => job.id === item.packaging_job_id);
-            // Resume owns held jobs. After dispatch, measure the packaging
-            // timeout from its actual start rather than the earlier hold.
-            return !['awaiting_qa', 'blocked_upstream'].includes(job?.status ?? '') && !(['packaging', 'uploading'].includes(job?.status ?? '')
+            // Resume owns held jobs and stale-job cleanup owns the local queue.
+            // Measure running jobs from their actual packaging start.
+            return !['queued', 'awaiting_qa', 'blocked_upstream'].includes(job?.status ?? '') && !(['packaging', 'uploading'].includes(job?.status ?? '')
               && job?.packaging_started_at && job.packaging_started_at >= staleThreshold);
           }).map(item => item.id);
           if (staleIds.length) {
@@ -322,6 +322,8 @@ async function startBatchItems(batchId: string): Promise<number> {
 
   for (const item of pendingItems) {
     let jobId: string | null = null;
+    let linked = false;
+    let dispatched = false;
     try {
       // If no installer details, fail the item
       if (!installerDetails) {
@@ -431,12 +433,28 @@ async function startBatchItems(batchId: string): Promise<number> {
         continue;
       }
 
+      // Claim the batch slot before any worker can report a dispatch result.
+      const { data: claimed, error: linkError } = await supabase.from('msp_batch_deployment_items')
+        .update({ packaging_job_id: jobId, status: 'in_progress', started_at: new Date().toISOString() })
+        .eq('id', item.id).eq('status', 'pending').select('id').maybeSingle();
+      if (linkError || !claimed) {
+        await supabase.from('packaging_jobs').update({
+          status: 'failed', error_code: 'BATCH_ITEM_LINK_FAILED',
+          error_message: 'Could not claim the batch item before dispatch', completed_at: new Date().toISOString(),
+        }).eq('id', jobId).eq('status', 'queued').is('github_run_id', null).is('callback_run_id', null)
+          .is('cancelled_at', null).is('archived_at', null);
+        continue;
+      }
+      linked = true;
+
       // Trigger GitHub Actions workflow
       const workflowInputs = buildStoredJobWorkflowInputs(
         jobRecord as Parameters<typeof buildStoredJobWorkflowInputs>[0], packageConfig,
         { callbackUrl, qaOverride: isQaMaintenanceMode(), sanitizeAssignments: false },
       );
       const triggerResult = await triggerPackagingWorkflow(workflowInputs, undefined, { newJobAdmission: true });
+
+      dispatched = true;
 
       // Update job with run info
       const jobUpdate: Record<string, unknown> = {
@@ -449,18 +467,15 @@ async function startBatchItems(batchId: string): Promise<number> {
       }
       await db.jobs.update(jobId, jobUpdate);
 
-      // Link job to batch item and mark in_progress
-      await supabase
-        .from('msp_batch_deployment_items')
-        .update({
-          packaging_job_id: jobId,
-          status: 'in_progress',
-          started_at: new Date().toISOString(),
-        })
-        .eq('id', item.id);
-
       started++;
     } catch (err) {
+      // A confirmed dispatch is owned by its callbacks even if saving run
+      // metadata failed. Keep the item linked for callback and sweep recovery.
+      if (dispatched) {
+        console.error('[BatchOrchestrator] Could not persist dispatched job metadata');
+        started++;
+        continue;
+      }
       if (jobId && (err instanceof WorkflowDispatchUnconfirmedError || err instanceof WorkflowDispatchRateLimitError)) {
         const hold = err instanceof WorkflowDispatchRateLimitError
           ? err.dispatchIdentity === undefined ? null : dispatchRateLimitHold(err, { [DISPATCH_IDENTITY_KEY]: err.dispatchIdentity })
@@ -471,14 +486,12 @@ async function startBatchItems(batchId: string): Promise<number> {
           .eq('id', jobId).eq('status', 'queued').is('github_run_id', null).is('callback_run_id', null)
           .is('cancelled_at', null).is('archived_at', null).is('error_details', null).select('id').maybeSingle();
         if (hold && won && !writeError) {
-          await supabase.from('msp_batch_deployment_items').update({ packaging_job_id: jobId,
-            status: 'in_progress', started_at: new Date().toISOString() }).eq('id', item.id);
           started++;
           continue;
         }
       }
       const isQaSkip = isQaGateError(err);
-      const msg = isQaSkip
+      let msg = isQaSkip
         ? describeQaGateError(err)
         : err instanceof Error ? err.message : 'Failed to trigger packaging workflow';
       if (isQaSkip && jobId) {
@@ -491,15 +504,32 @@ async function startBatchItems(batchId: string): Promise<number> {
         });
       }
       if (!isQaSkip && jobId) {
-        await supabase.from('packaging_jobs').update({
+        const { data: failed, error: failError } = await supabase.from('packaging_jobs').update({
           status: 'failed', error_code: 'WORKFLOW_DISPATCH_FAILED',
           error_stage: 'authenticate', error_category: 'network', error_message: msg,
           completed_at: new Date().toISOString(),
         }).eq('id', jobId).eq('status', 'queued')
           .is('github_run_id', null).is('callback_run_id', null)
-          .is('cancelled_at', null).is('archived_at', null);
+          .is('cancelled_at', null).is('archived_at', null).select('id').maybeSingle();
+        if (failError) continue;
+        if (!failed) {
+          try {
+            const current = await db.jobs.getById(jobId);
+            if (current && ['completed', 'failed', 'duplicate_skipped'].includes(current.status)) continue;
+            if (current && (current.callback_run_id || current.github_run_id
+              || (!current.cancelled_at && current.status !== 'cancelled'))) {
+              // Another worker, callback or cleanup owns this job state.
+              started++;
+              continue;
+            }
+            if (current?.cancelled_at || current?.status === 'cancelled') msg = 'Packaging was cancelled';
+          } catch {
+            // An unavailable read cannot disprove a concurrent worker's claim.
+            continue;
+          }
+        }
       }
-      await supabase
+      const itemFailure = supabase
         .from('msp_batch_deployment_items')
         .update({
           status: isQaSkip ? 'skipped' : 'failed',
@@ -507,6 +537,7 @@ async function startBatchItems(batchId: string): Promise<number> {
           completed_at: new Date().toISOString(),
         })
         .eq('id', item.id);
+      await (linked && jobId ? itemFailure.eq('packaging_job_id', jobId).eq('status', 'in_progress') : itemFailure);
     }
   }
 
