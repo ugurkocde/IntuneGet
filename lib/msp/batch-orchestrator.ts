@@ -12,11 +12,13 @@ import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
-  type WorkflowInputs,
 } from '@/lib/github-actions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { getAppConfig } from '@/lib/config';
-import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
+import { DISPATCH_IDENTITY_KEY, dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
+import type { Win32CartItem } from '@/types/upload';
+import type { Json } from '@/types/database';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { queueWebhookDelivery } from '@/lib/msp/webhook-service';
@@ -151,7 +153,7 @@ export async function advanceInProgressBatches(): Promise<RecoverySummary> {
         // Find stale items (in_progress for too long)
         const { data: staleItems, error: staleError } = await supabase
           .from('msp_batch_deployment_items')
-          .select('id')
+          .select('id, packaging_job_id')
           .eq('batch_id', batch.id)
           .eq('status', 'in_progress')
           .lt('started_at', staleThreshold);
@@ -163,17 +165,32 @@ export async function advanceInProgressBatches(): Promise<RecoverySummary> {
 
         // Mark stale items as failed
         if (staleItems && staleItems.length > 0) {
-          const staleIds = staleItems.map((item) => item.id);
-          await supabase
-            .from('msp_batch_deployment_items')
-            .update({
-              status: 'failed',
-              error_message: 'Timed out waiting for packaging',
-              completed_at: new Date().toISOString(),
-            })
-            .in('id', staleIds);
+          const linkedIds = staleItems.flatMap(item => item.packaging_job_id ? [item.packaging_job_id] : []);
+          const linked = linkedIds.length ? await supabase.from('packaging_jobs')
+            .select('id, status, packaging_started_at').in('id', linkedIds) : { data: [], error: null };
+          if (linked.error) {
+            summary.errors.push(`Could not verify held batch jobs for ${batch.id}`);
+            continue;
+          }
+          const staleIds = staleItems.filter(item => {
+            const job = linked.data?.find(job => job.id === item.packaging_job_id);
+            // Resume owns held jobs. After dispatch, measure the packaging
+            // timeout from its actual start rather than the earlier hold.
+            return job?.status !== 'awaiting_qa' && !(job?.status === 'packaging'
+              && job.packaging_started_at && job.packaging_started_at >= staleThreshold);
+          }).map(item => item.id);
+          if (staleIds.length) {
+            await supabase
+              .from('msp_batch_deployment_items')
+              .update({
+                status: 'failed',
+                error_message: 'Timed out waiting for packaging',
+                completed_at: new Date().toISOString(),
+              })
+              .in('id', staleIds).eq('status', 'in_progress');
 
-          summary.staleItemsRecovered += staleIds.length;
+            summary.staleItemsRecovered += staleIds.length;
+          }
         }
 
         // Try to start more items and check completion
@@ -373,6 +390,14 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       // Create packaging job
       jobId = crypto.randomUUID();
+      const packageConfig = {
+        id: jobId, wingetId: batch.winget_id, displayName: batch.display_name,
+        publisher: '', version: batch.version, architecture: installerDetails.architecture,
+        installerUrl: installerDetails.installer_url, installerSha256: installerDetails.installer_sha256,
+        installerType: installerDetails.installer_type, installCommand: installerDetails.silent_args,
+        uninstallCommand: '', installScope: installerDetails.installer_scope,
+        description: appDescription ?? undefined,
+      } as Win32CartItem;
       const jobRecord = await db.jobs.create({
         id: jobId,
         user_id: batch.created_by_user_id,
@@ -382,6 +407,10 @@ async function startBatchItems(batchId: string): Promise<number> {
         version: batch.version,
         display_name: batch.display_name,
         publisher: null,
+        architecture: installerDetails.architecture,
+        install_command: installerDetails.silent_args,
+        uninstall_command: '',
+        package_config: packageConfig as unknown as Json,
         installer_type: installerDetails.installer_type,
         installer_url: installerDetails.installer_url,
         installer_sha256: installerDetails.installer_sha256,
@@ -403,28 +432,11 @@ async function startBatchItems(batchId: string): Promise<number> {
       }
 
       // Trigger GitHub Actions workflow
-      const workflowInputs: WorkflowInputs = {
-        qaOverride: isQaMaintenanceMode(),
-        jobId,
-        tenantId: item.tenant_id,
-        wingetId: batch.winget_id,
-        displayName: batch.display_name,
-        description: buildIntuneAppDescription({
-          description: appDescription,
-          fallback: `Deployed via IntuneGet from Winget: ${batch.winget_id}`,
-        }),
-        publisher: '',
-        version: batch.version,
-        installerUrl: installerDetails.installer_url,
-        installerSha256: installerDetails.installer_sha256,
-        installerType: installerDetails.installer_type,
-        silentSwitches: installerDetails.silent_args,
-        uninstallCommand: '',
-        callbackUrl,
-        installScope: (installerDetails.installer_scope as 'machine' | 'user') || undefined,
-      };
-
-      const triggerResult = await triggerPackagingWorkflow(workflowInputs);
+      const workflowInputs = buildStoredJobWorkflowInputs(
+        jobRecord as Parameters<typeof buildStoredJobWorkflowInputs>[0], packageConfig,
+        { callbackUrl, qaOverride: isQaMaintenanceMode(), sanitizeAssignments: false },
+      );
+      const triggerResult = await triggerPackagingWorkflow(workflowInputs, undefined, { newJobAdmission: true });
 
       // Update job with run info
       const jobUpdate: Record<string, unknown> = {
@@ -449,6 +461,22 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       started++;
     } catch (err) {
+      if (jobId && (err instanceof WorkflowDispatchUnconfirmedError || err instanceof WorkflowDispatchRateLimitError)) {
+        const hold = err instanceof WorkflowDispatchRateLimitError
+          ? err.dispatchIdentity === undefined ? null : dispatchRateLimitHold(err, { [DISPATCH_IDENTITY_KEY]: err.dispatchIdentity })
+          : dispatchRateLimitHold(err, null);
+        const { data: won, error: writeError } = await supabase.from('packaging_jobs')
+          .update(hold ?? { status: 'failed', error_code: err.code, error_stage: 'authenticate',
+            error_category: 'network', error_message: err.message, completed_at: new Date().toISOString() })
+          .eq('id', jobId).eq('status', 'queued').is('github_run_id', null).is('callback_run_id', null)
+          .is('cancelled_at', null).is('archived_at', null).is('error_details', null).select('id').maybeSingle();
+        if (hold && won && !writeError) {
+          await supabase.from('msp_batch_deployment_items').update({ packaging_job_id: jobId,
+            status: 'in_progress', started_at: new Date().toISOString() }).eq('id', item.id);
+          started++;
+          continue;
+        }
+      }
       const isQaSkip = isQaGateError(err);
       const msg = isQaSkip
         ? describeQaGateError(err)
@@ -461,6 +489,15 @@ async function startBatchItems(batchId: string): Promise<number> {
           cancelled_at: new Date().toISOString(),
           completed_at: new Date().toISOString(),
         });
+      }
+      if (!isQaSkip && jobId) {
+        await supabase.from('packaging_jobs').update({
+          status: 'failed', error_code: 'WORKFLOW_DISPATCH_FAILED',
+          error_stage: 'authenticate', error_category: 'network', error_message: msg,
+          completed_at: new Date().toISOString(),
+        }).eq('id', jobId).eq('status', 'queued')
+          .is('github_run_id', null).is('callback_run_id', null)
+          .is('cancelled_at', null).is('archived_at', null);
       }
       await supabase
         .from('msp_batch_deployment_items')
