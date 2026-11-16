@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import curatedDefinitions from '@/lib/curated-catalog/definitions.json';
 import {
   buildQaPackageIdentity,
   buildQaPackageIdentityFromWorkflowInput,
@@ -35,6 +36,20 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('preserves signed curated identity bytes only for exact reviewed definition metadata', () => {
+    const app = curatedDefinitions[0];
+    const curatedInput = { ...input, profileKind: 'deployment-config' as const,
+      wingetId: app.packageId, displayName: app.name, publisher: app.publisher };
+    const curated = buildQaPackageIdentity(curatedInput);
+    expect(curated.profile.app.displayName).toBe(app.packageId);
+    expect(curated.profile.app.publisher).toBe('IntuneGet QA');
+    for (const mismatch of [{ displayName: app.name + ' changed' }, { publisher: app.publisher + ' changed' }]) {
+      const changed = buildQaPackageIdentity({ ...curatedInput, ...mismatch });
+      expect(changed.packageProfileSha256).not.toBe(curated.packageProfileSha256);
+      expect(changed.profile.app.displayName).toBe(mismatch.displayName ?? app.name);
+      expect(changed.profile.app.publisher).toBe(mismatch.publisher ?? app.publisher);
+    }
+  });
   it('gives LegendCTL a new capture profile without changing installer or toolchain', () => {
     const legend = { ...input, wingetId: 'EvilHumphrey.LegendCTL', displayName: 'LegendCTL',
       publisher: 'EvilHumphrey', version: '2.6.6', uninstallCommand: 'REGISTRY_UNINSTALL:LegendCTL' };
@@ -280,13 +295,11 @@ describe('PSADT QA package identity', () => {
     );
   });
 
-  it('reuses execution QA when only presentation changes', () => {
+  it('reuses execution QA when only PSADT branding changes', () => {
     const deploymentInput = { ...input, profileKind: 'deployment-config' as const };
     const baseline = buildQaPackageIdentity(deploymentInput);
     const branded = buildQaPackageIdentity({
       ...deploymentInput,
-      displayName: 'Customer-facing Example',
-      publisher: 'Customer Publisher',
       psadtConfig: {
         ...DEFAULT_PSADT_CONFIG,
         brandingCompanyName: 'Contoso',
@@ -305,6 +318,18 @@ describe('PSADT QA package identity', () => {
     expect(branded.presentationProfileSha256).not.toBe(
       baseline.presentationProfileSha256
     );
+  });
+
+  it('binds deployment app identity metadata because the packager uses it for registry selection', () => {
+    const deployment = { ...input, profileKind: 'deployment-config' as const };
+    const baseline = buildQaPackageIdentity(deployment);
+    expect(JSON.parse(baseline.canonicalJson).app).toMatchObject({
+      displayName: input.displayName, publisher: input.publisher,
+    });
+    for (const change of [{ publisher: 'Other Vendor' }, { displayName: 'Other Product' }]) {
+      expect(buildQaPackageIdentity({ ...deployment, ...change }).executionProfileSha256)
+        .not.toBe(baseline.executionProfileSha256);
+    }
   });
 
   it('keeps interaction timing and custom command changes in the execution profile', () => {
