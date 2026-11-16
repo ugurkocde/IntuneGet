@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
@@ -394,12 +395,55 @@ export async function POST(request: NextRequest) {
             };
 
             const isBatch = updateRequests.length > 1;
+            const customSource = deploymentConfig.sourceType === 'custom' || workflowInputs.sourceType === 'custom';
             try {
               await triggerPackagingWorkflow(workflowInputs, undefined, {
                 skipRunCapture: isBatch,
                 requireQaPass: true,
+                newJobAdmission: !customSource,
               });
             } catch (error) {
+              if (error instanceof WorkflowDispatchUnconfirmedError) {
+                // Only a fresh ownerless admission can be deferred. The resume
+                // path checks the exact payload pin before claiming or posting.
+                const hold = customSource ? null : dispatchRateLimitHold(error, null);
+                const { data: won, error: writeError } = await supabase
+                  .from('packaging_jobs')
+                  .update(hold ?? {
+                    status: 'failed', error_code: error.code, error_stage: 'authenticate',
+                    error_category: 'network', error_message: error.message,
+                    completed_at: new Date().toISOString(),
+                  })
+                  .eq('id', triggerResult.packagingJobId)
+                  .in('status', hold ? ['queued', 'awaiting_qa'] : ['queued'])
+                  .is('github_run_id', null).is('callback_run_id', null)
+                  .is('cancelled_at', null).is('archived_at', null).is('error_details', null)
+                  .select('id').maybeSingle();
+                if (won && !writeError && hold) {
+                  response.triggered++;
+                  response.results.push({
+                    winget_id: req.winget_id, tenant_id: req.tenant_id,
+                    success: true, packaging_job_id: triggerResult.packagingJobId,
+                    code: error.code,
+                  });
+                  continue;
+                }
+                if (won && !writeError && triggerResult.historyId) {
+                  await supabase.from('auto_update_history').update({
+                    status: 'failed', error_message: error.message,
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', triggerResult.historyId);
+                }
+                response.failed++;
+                response.results.push({
+                  winget_id: req.winget_id, tenant_id: req.tenant_id, success: false,
+                  packaging_job_id: triggerResult.packagingJobId, code: error.code,
+                  error: writeError ? 'Could not schedule the automatic retry. Refresh the deployment status.'
+                    : won ? 'Packaging could not start safely. Refresh the deployment status.'
+                    : 'Deployment status changed before the retry could be scheduled. Refresh the deployment status.',
+                });
+                continue;
+              }
               if (!isQaGateError(error)) throw error;
 
               // The status can change between the pre-job auto-update gate and

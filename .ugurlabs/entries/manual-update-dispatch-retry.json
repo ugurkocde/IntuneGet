@@ -1,0 +1,5 @@
+{
+  "title": "Keep uncertain app updates in deployment tracking",
+  "summary": "Manual app updates now preserve uncertain packaging starts for a guarded automatic retry instead of reporting failure while the deployment may still be running. Changed deployment inputs stop safely before another attempt.",
+  "type": "fixed"
+}
