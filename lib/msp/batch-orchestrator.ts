@@ -476,6 +476,7 @@ async function startBatchItems(batchId: string): Promise<number> {
         started++;
         continue;
       }
+      let failedByThisAttempt = false;
       if (jobId && (err instanceof WorkflowDispatchUnconfirmedError || err instanceof WorkflowDispatchRateLimitError)) {
         const hold = err instanceof WorkflowDispatchRateLimitError
           ? err.dispatchIdentity === undefined ? null : dispatchRateLimitHold(err, { [DISPATCH_IDENTITY_KEY]: err.dispatchIdentity })
@@ -485,6 +486,7 @@ async function startBatchItems(batchId: string): Promise<number> {
             error_category: 'network', error_message: err.message, completed_at: new Date().toISOString() })
           .eq('id', jobId).eq('status', 'queued').is('github_run_id', null).is('callback_run_id', null)
           .is('cancelled_at', null).is('archived_at', null).is('error_details', null).select('id').maybeSingle();
+        failedByThisAttempt = !hold && !!won && !writeError;
         if (hold && won && !writeError) {
           started++;
           continue;
@@ -503,7 +505,7 @@ async function startBatchItems(batchId: string): Promise<number> {
           completed_at: new Date().toISOString(),
         });
       }
-      if (!isQaSkip && jobId) {
+      if (!isQaSkip && jobId && !failedByThisAttempt) {
         const { data: failed, error: failError } = await supabase.from('packaging_jobs').update({
           status: 'failed', error_code: 'WORKFLOW_DISPATCH_FAILED',
           error_stage: 'authenticate', error_category: 'network', error_message: msg,

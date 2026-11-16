@@ -26,31 +26,49 @@ describe('MSP dispatch admission retries', () => {
   it.each([
     { status: 403, identity: true }, { status: 429, identity: true }, { status: 503, identity: true },
     { status: 403, identity: false }, { status: 503, identity: false }, { status: 401, identity: false },
-  ])('persists a bounded disposition for $status with identity=$identity', async ({ status, identity: hasIdentity }) => {
+    { status: 429, identity: true, longDelay: true },
+    { status: 503, identity: false, callbackWins: true },
+  ])('persists a bounded disposition for $status with identity=$identity', async ({ status, identity: hasIdentity, longDelay = false, callbackWins = false }) => {
     const batch = { id: 'batch', winget_id: 'Vendor.App', version: '2', display_name: 'App', architecture: 'x64', concurrency_limit: 1,
       created_by_user_id: 'msp-user', created_by_email: null };
     const item = { id: 'item', tenant_id: 'customer' };
     const itemChanges: Array<Record<string, unknown>> = [];
     const jobChanges: Array<Record<string, unknown>> = [];
+    let savedJob: Record<string, unknown> | undefined;
+    const itemRow: Record<string, unknown> = { ...item, status: 'pending' };
     createServerClient.mockReturnValue({ from: (table: string) => {
-      const result = { data: table === 'msp_batch_deployments' ? [batch] : [item], error: null, count: 0 };
+      let change: Record<string, unknown> | undefined;
+      const filters: Array<[string, unknown]> = [];
+      const execute = () => {
+        if (!change) return { data: table === 'msp_batch_deployments' ? [batch] : [itemRow], error: null, count: 0 };
+        const row: Record<string, unknown> | undefined = table === 'packaging_jobs' ? savedJob : table === 'msp_batch_deployment_items' ? itemRow : batch;
+        if (!row || !filters.every(([key, value]) => (row[key] ?? null) === value)) return { data: null, error: null };
+        Object.assign(row, change);
+        if (table === 'msp_batch_deployment_items') itemChanges.push(change);
+        if (table === 'packaging_jobs') jobChanges.push(change);
+        return { data: { id: row.id }, error: null };
+      };
       const builder = {
-        select: () => builder, order: () => builder, limit: () => builder, eq: () => builder, is: () => builder,
-        update: (value: Record<string, unknown>) => { if (table === 'msp_batch_deployment_items') itemChanges.push(value); if (table === 'packaging_jobs') jobChanges.push(value); return builder; },
+        select: () => builder, order: () => builder, limit: () => builder,
+        eq: (key: string, value: unknown) => { filters.push([key, value]); return builder; },
+        is: (key: string, value: unknown) => { filters.push([key, value]); return builder; },
+        update: (value: Record<string, unknown>) => { change = value; return builder; },
         single: async () => ({ data: batch, error: null }),
-        maybeSingle: async () => ({ data: item, error: null }),
-        then: (resolve: (r: unknown) => unknown) => Promise.resolve(result).then(resolve),
+        maybeSingle: async () => execute(),
+        then: (resolve: (r: unknown) => unknown) => Promise.resolve(execute()).then(resolve),
       };
       return builder;
     } });
-    const create = vi.fn(async value => value);
+    const create = vi.fn(async value => { savedJob = { ...value }; return value; });
     const update = vi.fn(async () => true);
-    getDatabase.mockReturnValue({ jobs: { getApprovalFailures: vi.fn(async () => []), create, update } });
+    const getById = vi.fn(async () => savedJob);
+    getDatabase.mockReturnValue({ jobs: { getApprovalFailures: vi.fn(async () => []), create, update, getById } });
     const identity = hasIdentity ? 'a'.repeat(64) : undefined;
     triggerPackagingWorkflow.mockImplementation(async () => {
+      if (callbackWins && savedJob) savedJob.callback_run_id = '123';
       if (status === 401) throw new Error('GitHub rejected the dispatch (401)');
       if (status === 503) throw new WorkflowDispatchUnconfirmedError(503, Date.now(), identity);
-      throw new WorkflowDispatchRateLimitError(status, new Date(Date.now() + 120_000).toISOString(), identity);
+      throw new WorkflowDispatchRateLimitError(status, new Date(Date.now() + (longDelay ? 66 * 60_000 : 120_000)).toISOString(), identity);
     });
 
     await processPendingBatches();
@@ -58,9 +76,19 @@ describe('MSP dispatch admission retries', () => {
     expect(create).toHaveBeenCalledTimes(1);
     const jobId = create.mock.calls[0][0].id;
     expect(triggerPackagingWorkflow).toHaveBeenCalledTimes(1);
-    if (!hasIdentity) {
+    if (callbackWins) {
+      expect(itemRow.status).toBe('in_progress');
+      expect(itemChanges.some(change => change.status === 'failed')).toBe(false);
+      expect(jobChanges).toEqual([]);
+      expect(getById).toHaveBeenCalledTimes(1);
+      return;
+    }
+    if (!hasIdentity || longDelay) {
       expect(jobChanges).toContainEqual(expect.objectContaining({ status: 'failed' }));
       expect(itemChanges).toContainEqual(expect.objectContaining({ status: 'failed' }));
+      expect(itemRow.status).toBe('failed');
+      expect(getById).not.toHaveBeenCalled();
+      expect(jobChanges.filter(change => change.status === 'failed')).toHaveLength(1);
       expect(jobChanges.some(change => change.status === 'awaiting_qa')).toBe(false);
       return;
     }
