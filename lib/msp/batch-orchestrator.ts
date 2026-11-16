@@ -176,8 +176,8 @@ export async function advanceInProgressBatches(): Promise<RecoverySummary> {
             const job = linked.data?.find(job => job.id === item.packaging_job_id);
             // Resume owns held jobs. After dispatch, measure the packaging
             // timeout from its actual start rather than the earlier hold.
-            return job?.status !== 'awaiting_qa' && !(job?.status === 'packaging'
-              && job.packaging_started_at && job.packaging_started_at >= staleThreshold);
+            return !['awaiting_qa', 'blocked_upstream'].includes(job?.status ?? '') && !(['packaging', 'uploading'].includes(job?.status ?? '')
+              && job?.packaging_started_at && job.packaging_started_at >= staleThreshold);
           }).map(item => item.id);
           if (staleIds.length) {
             await supabase

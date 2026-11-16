@@ -78,7 +78,14 @@ describe('MSP dispatch admission retries', () => {
     })).toEqual(triggerPackagingWorkflow.mock.calls[0][0]);
   });
 
-  it.each(['awaiting_qa', 'packaging', 'failed'])('reconciles stale batch items against linked %s jobs', async status => {
+  it.each([
+    { status: 'awaiting_qa', old: false, fails: false },
+    { status: 'packaging', old: false, fails: false },
+    { status: 'failed', old: false, fails: true },
+    { status: 'uploading', old: false, fails: false },
+    { status: 'uploading', old: true, fails: true },
+    { status: 'blocked_upstream', old: false, fails: false },
+  ])('reconciles stale batch items against linked $status jobs with old=$old', async ({ status, old, fails }) => {
     const failedIds: string[] = [];
     createServerClient.mockReturnValue({ from: (table: string) => {
       let stale = false;
@@ -91,7 +98,7 @@ describe('MSP dispatch admission retries', () => {
         single: async () => ({ data: { id: 'batch', concurrency_limit: 1 }, error: null }),
         then: (resolve: (r: unknown) => unknown) => Promise.resolve({ error: null, count: 1,
           data: table === 'msp_batch_deployments' ? [{ id: 'batch' }]
-            : table === 'packaging_jobs' ? [{ id: 'job', status, packaging_started_at: new Date().toISOString() }]
+            : table === 'packaging_jobs' ? [{ id: 'job', status, packaging_started_at: new Date(Date.now() - (old ? 60 * 60_000 : 0)).toISOString() }]
               : stale ? [{ id: 'item', packaging_job_id: 'job' }] : [{ id: 'item', status: 'in_progress' }],
         }).then(resolve),
       };
@@ -101,8 +108,8 @@ describe('MSP dispatch admission retries', () => {
     const result = await advanceInProgressBatches();
 
     expect(result.errors).toEqual([]);
-    expect(failedIds).toEqual(status === 'failed' ? ['item'] : []);
-    expect(result.staleItemsRecovered).toBe(status === 'failed' ? 1 : 0);
+    expect(failedIds).toEqual(fails ? ['item'] : []);
+    expect(result.staleItemsRecovered).toBe(fails ? 1 : 0);
     expect(triggerPackagingWorkflow).not.toHaveBeenCalled();
   });
 });
