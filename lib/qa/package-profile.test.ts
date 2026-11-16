@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import curatedDefinitions from '@/lib/curated-catalog/definitions.json';
 import {
   buildQaPackageIdentity,
   buildQaPackageIdentityFromWorkflowInput,
@@ -35,6 +36,20 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('preserves signed curated identity bytes only for exact reviewed definition metadata', () => {
+    const app = curatedDefinitions[0];
+    const curatedInput = { ...input, profileKind: 'deployment-config' as const,
+      wingetId: app.packageId, displayName: app.name, publisher: app.publisher };
+    const curated = buildQaPackageIdentity(curatedInput);
+    expect(curated.profile.app.displayName).toBe(app.packageId);
+    expect(curated.profile.app.publisher).toBe('IntuneGet QA');
+    for (const mismatch of [{ displayName: app.name + ' changed' }, { publisher: app.publisher + ' changed' }]) {
+      const changed = buildQaPackageIdentity({ ...curatedInput, ...mismatch });
+      expect(changed.packageProfileSha256).not.toBe(curated.packageProfileSha256);
+      expect(changed.profile.app.displayName).toBe(mismatch.displayName ?? app.name);
+      expect(changed.profile.app.publisher).toBe(mismatch.publisher ?? app.publisher);
+    }
+  });
   it('gives LegendCTL a new capture profile without changing installer or toolchain', () => {
     const legend = { ...input, wingetId: 'EvilHumphrey.LegendCTL', displayName: 'LegendCTL',
       publisher: 'EvilHumphrey', version: '2.6.6', uninstallCommand: 'REGISTRY_UNINSTALL:LegendCTL' };
