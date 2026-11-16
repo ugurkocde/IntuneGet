@@ -590,7 +590,7 @@ describe('POST /api/updates/trigger', () => {
     expect(workflowInputs.supersedenceType).toBeUndefined();
     expect(workflowInputs.relationships).toBeUndefined();
   });
-  it.each(['503', 'network', 'miss', 'write error', 'stored custom', 'custom', 'missing pin', 'invalid pin', 'rate limit', 'batch'])('handles a manual update dispatch with %s safely', async kind => {
+  it.each(['503', 'network', 'miss', 'write error', 'stored custom', 'custom', 'missing pin', 'invalid pin', 'rate limit', 'batch', 'awaiting QA'])('handles a manual update dispatch with %s safely', async kind => {
     const policy: AppUpdatePolicy = {
       id: 'policy-1',
       user_id: 'user-1',
@@ -633,7 +633,12 @@ describe('POST /api/updates/trigger', () => {
         const query = {
           eq: (key: string, value: unknown) => { guards[key] = value; return query; },
           is: (key: string, value: unknown) => { guards[key] = value; return query; },
-          select: () => query, maybeSingle: vi.fn(async () => result),
+          in: (key: string, value: unknown) => { guards[key] = value; return query; },
+          select: () => query, maybeSingle: vi.fn(async () => {
+            const status = kind === 'awaiting QA' ? 'awaiting_qa' : 'queued';
+            const accepted = Array.isArray(guards.status) ? guards.status.includes(status) : guards.status === status;
+            return accepted ? result : { data: null, error: null };
+          }),
           then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
         };
         return query;
@@ -695,7 +700,7 @@ describe('POST /api/updates/trigger', () => {
     }
     const terminal = ['stored custom', 'custom', 'missing pin', 'invalid pin'].includes(kind);
     expect(writes[0]).toMatchObject({ table: 'packaging_jobs', guards: {
-      id: 'pkg-job-2', status: 'queued', github_run_id: null, callback_run_id: null,
+      id: 'pkg-job-2', github_run_id: null, callback_run_id: null,
       cancelled_at: null, archived_at: null, error_details: null,
     } });
     if (terminal) {
@@ -708,7 +713,7 @@ describe('POST /api/updates/trigger', () => {
       expect(writes[0].patch).toMatchObject({ status: 'awaiting_qa', completed_at: null, error_code: error.code,
         error_details: { workflow_dispatch_unconfirmed_identity: 'a'.repeat(64), workflow_dispatch_rate_limit_attempts: 1 } });
       expect(Date.parse(writes[0].patch.qa_resume_due_at as string)).toBeGreaterThanOrEqual(requestedAt + 60_000);
-      const success = ['503', 'network', 'batch'].includes(kind);
+      const success = ['503', 'network', 'batch', 'awaiting QA'].includes(kind);
       expect(body.failed).toBe(success ? 0 : 1);
       expect(body.triggered).toBe(kind === 'batch' ? 2 : success ? 1 : 0);
       if (success) expect(body.results[0]).toMatchObject({ success: true, packaging_job_id: 'pkg-job-2', code: error.code });

@@ -414,7 +414,8 @@ export async function POST(request: NextRequest) {
                     error_category: 'network', error_message: error.message,
                     completed_at: new Date().toISOString(),
                   })
-                  .eq('id', triggerResult.packagingJobId).eq('status', 'queued')
+                  .eq('id', triggerResult.packagingJobId)
+                  .in('status', hold ? ['queued', 'awaiting_qa'] : ['queued'])
                   .is('github_run_id', null).is('callback_run_id', null)
                   .is('cancelled_at', null).is('archived_at', null).is('error_details', null)
                   .select('id').maybeSingle();
