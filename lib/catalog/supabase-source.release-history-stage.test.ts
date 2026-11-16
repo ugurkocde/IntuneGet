@@ -103,7 +103,7 @@ describe('release history stage diagnostics', () => {
     expectPrivate();
   });
 
-  it('classifies aborted batches and expired recovery', async () => {
+  it('keeps normalized status-zero failures ambiguous and reports expired recovery', async () => {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.includes('/rpc/')) return Response.json(rpcResult);
@@ -113,7 +113,7 @@ describe('release history stage diagnostics', () => {
     });
     await new SupabaseCatalogSource().getReleaseHistory(filters);
     const [metadata] = logged('Catalog history metadata timing');
-    expect(metadata).toMatchObject({ batchFailures: { aborted: 1, http5xx: 0, statementTimeout: 0, other: 0 },
+    expect(metadata).toMatchObject({ batchFailures: { aborted: 0, http5xx: 0, statementTimeout: 0, other: 1 },
       singlesAttempted: 2, singlesRecovered: 0, recoveryExpired: true, unavailableRows: 2, firstBatchAbortLatenessMs: null });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(timerCounts()).toEqual({ 15000: 1, 3000: 3, 8000: 1 });
