@@ -232,7 +232,8 @@ export interface TriggerUpdateResponse {
       | 'CURATED_CONFIG_VERIFICATION_FAILED'
         | 'UPDATE_SCOPE_HELD'
       | 'RATE_LIMIT_UNVERIFIED'
-      | 'PSADT_BACKFILL_UNAVAILABLE';
+      | 'PSADT_BACKFILL_UNAVAILABLE'
+      | 'WORKFLOW_DISPATCH_UNCONFIRMED';
     packaging_job_id?: string;
     error?: string;
   }[];
