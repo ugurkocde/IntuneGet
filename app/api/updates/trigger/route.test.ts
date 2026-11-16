@@ -1,3 +1,4 @@
+import { WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
 import { NextRequest } from 'next/server';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import { canAutoUpdate } from '@/types/update-policies';
@@ -589,4 +590,135 @@ describe('POST /api/updates/trigger', () => {
     expect(workflowInputs.supersedenceType).toBeUndefined();
     expect(workflowInputs.relationships).toBeUndefined();
   });
+  it.each(['503', 'network', 'miss', 'write error', 'stored custom', 'custom', 'missing pin', 'invalid pin', 'rate limit', 'batch', 'awaiting QA'])('handles a manual update dispatch with %s safely', async kind => {
+    const policy: AppUpdatePolicy = {
+      id: 'policy-1',
+      user_id: 'user-1',
+      tenant_id: 'tenant-1',
+      winget_id: 'Microsoft.Edge',
+      policy_type: 'auto_update',
+      pinned_version: null,
+      deployment_config: {
+        displayName: 'Microsoft Edge',
+        publisher: 'Microsoft',
+        architecture: 'x64',
+        installerType: 'exe',
+        installCommand: 'setup.exe /silent',
+        uninstallCommand: '',
+        installScope: 'system',
+        detectionRules: [],
+        assignments: [],
+      } as DeploymentConfig,
+      original_upload_history_id: null,
+      last_auto_update_at: null,
+      last_auto_update_version: null,
+      is_enabled: true,
+      consecutive_failures: 0,
+      created_at: '2026-02-01T00:00:00Z',
+      updated_at: '2026-02-01T00:00:00Z',
+    };
+
+    const { supabase } = createTriggerSupabaseMocks(policy, {
+      latestUploadIntuneAppId: 'prev-app-1',
+    });
+    if (kind === 'stored custom') policy.deployment_config = { ...policy.deployment_config, sourceType: 'custom' } as DeploymentConfig;
+    const writes: Array<{ table: string; patch: Record<string, unknown>; guards: Record<string, unknown> }> = [];
+    const from = supabase.from;
+    supabase.from = ((table: string) => {
+      if (!['packaging_jobs', 'auto_update_history'].includes(table)) return from(table);
+      return { update: (patch: Record<string, unknown>) => {
+        const guards: Record<string, unknown> = {};
+        writes.push({ table, patch, guards });
+        const result = { data: kind === 'miss' ? null : { id: 'pkg-job-2' }, error: kind === 'write error' ? { message: 'synthetic write failure' } : null };
+        const query = {
+          eq: (key: string, value: unknown) => { guards[key] = value; return query; },
+          is: (key: string, value: unknown) => { guards[key] = value; return query; },
+          in: (key: string, value: unknown) => { guards[key] = value; return query; },
+          select: () => query, maybeSingle: vi.fn(async () => {
+            const status = kind === 'awaiting QA' ? 'awaiting_qa' : 'queued';
+            const accepted = Array.isArray(guards.status) ? guards.status.includes(status) : guards.status === status;
+            return accepted ? result : { data: null, error: null };
+          }),
+          then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
+        };
+        return query;
+      } };
+    }) as typeof supabase.from;
+    createServerClientMock.mockReturnValue(supabase);
+    getLatestInstallerInfoMock.mockResolvedValue({
+      ok: true,
+      info: {
+        sourceType: kind === 'custom' ? 'custom' : undefined,
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+        displayName: 'Microsoft Edge',
+        installerUrl: 'https://example.com/edge.exe',
+        installerSha256: 'abc123',
+        installerType: 'exe',
+      },
+    });
+    triggerAutoUpdateMock.mockResolvedValue({
+      success: true,
+      packagingJobId: 'pkg-job-2', historyId: 'history-2',
+    });
+    getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: false });
+    isGitHubActionsConfiguredMock.mockReturnValue(true);
+    getAppConfigMock.mockReturnValue({ app: { url: 'http://localhost:3000' } });
+    const error = kind === 'rate limit'
+      ? new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString())
+      : new WorkflowDispatchUnconfirmedError(kind === 'network' ? null : 503, Date.now(), kind === 'missing pin' ? undefined : kind === 'invalid pin' ? 'bad' : 'a'.repeat(64));
+    triggerPackagingWorkflowMock.mockRejectedValue(error);
+    if (kind === 'batch') {
+      triggerAutoUpdateMock.mockResolvedValueOnce({ success: true, packagingJobId: 'pkg-job-2', historyId: 'history-2' })
+        .mockResolvedValueOnce({ success: true, packagingJobId: 'pkg-job-3', historyId: 'history-3' });
+      triggerPackagingWorkflowMock.mockRejectedValueOnce(error).mockResolvedValueOnce({ success: true });
+    }
+
+    const request = new NextRequest('http://localhost:3000/api/updates/trigger', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...(kind === 'batch' ? { updates: [{ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }, { winget_id: 'Microsoft.Edge', tenant_id: 'tenant-2' }] } : { winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }),
+      }),
+    });
+
+    const requestedAt = Date.now();
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(kind === 'batch' ? 2 : 1);
+    expect(triggerPackagingWorkflowMock.mock.calls[0][2]).toMatchObject({ requireQaPass: true, newJobAdmission: !['stored custom', 'custom'].includes(kind) });
+    const body = await response.json();
+    if (kind === 'rate limit') {
+      expect(writes).toEqual([]);
+      expect(body.failed).toBe(1);
+      return;
+    }
+    const terminal = ['stored custom', 'custom', 'missing pin', 'invalid pin'].includes(kind);
+    expect(writes[0]).toMatchObject({ table: 'packaging_jobs', guards: {
+      id: 'pkg-job-2', github_run_id: null, callback_run_id: null,
+      cancelled_at: null, archived_at: null, error_details: null,
+    } });
+    if (terminal) {
+      expect(writes[0].patch).toMatchObject({ status: 'failed', error_code: error.code });
+      expect(writes[0].patch.error_details).toBeUndefined();
+      expect(writes[1]).toMatchObject({ table: 'auto_update_history', patch: { status: 'failed' }, guards: { id: 'history-2' } });
+      expect(body.failed).toBe(1);
+    } else {
+      expect(writes).toHaveLength(1);
+      expect(writes[0].patch).toMatchObject({ status: 'awaiting_qa', completed_at: null, error_code: error.code,
+        error_details: { workflow_dispatch_unconfirmed_identity: 'a'.repeat(64), workflow_dispatch_rate_limit_attempts: 1 } });
+      expect(Date.parse(writes[0].patch.qa_resume_due_at as string)).toBeGreaterThanOrEqual(requestedAt + 60_000);
+      const success = ['503', 'network', 'batch', 'awaiting QA'].includes(kind);
+      expect(body.failed).toBe(success ? 0 : 1);
+      expect(body.triggered).toBe(kind === 'batch' ? 2 : success ? 1 : 0);
+      if (success) expect(body.results[0]).toMatchObject({ success: true, packaging_job_id: 'pkg-job-2', code: error.code });
+      else expect(body.results[0].error).toMatch(kind === 'miss' ? /status changed/ : /Could not schedule/);
+    }
+  });
+
 });
