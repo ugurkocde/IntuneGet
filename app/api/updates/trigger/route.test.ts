@@ -1,4 +1,5 @@
 import { WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError } from '@/lib/workflow-dispatch-rate-limit';
+import { QaGateNotPassedError } from '@/lib/qa/gate';
 import { NextRequest } from 'next/server';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import { canAutoUpdate } from '@/types/update-policies';
@@ -86,6 +87,8 @@ function createTriggerSupabaseMocks(
   options?: {
     latestUploadIntuneAppId?: string;
     userSettings?: Record<string, unknown>;
+    storedJob?: Record<string, unknown>;
+    readError?: boolean;
   }
 ): TriggerSupabaseMocks {
   const policyUpdatePayloads: Array<Record<string, unknown>> = [];
@@ -98,7 +101,10 @@ function createTriggerSupabaseMocks(
       eq: vi.fn(),
       single: vi.fn(),
     };
-    chain.eq.mockImplementation(() => chain);
+    chain.eq.mockImplementation((key: string, value: unknown) => {
+      if (key === 'tenant_id' && data && typeof data === 'object' && 'tenant_id' in data) Object.assign(data, { tenant_id: value });
+      return chain;
+    });
     chain.single.mockResolvedValue({ data, error: null });
     return chain;
   };
@@ -121,9 +127,8 @@ function createTriggerSupabaseMocks(
           select: vi.fn(() => createSingleResultChain({ ...policy })),
           update: vi.fn((payload: Record<string, unknown>) => {
             policyUpdatePayloads.push(payload);
-            return {
-              eq: vi.fn(async () => ({ data: null, error: null })),
-            };
+            const query = { eq: vi.fn(() => query), then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve) };
+            return query;
           }),
         };
       }
@@ -147,6 +152,43 @@ function createTriggerSupabaseMocks(
           }
         }
         return { select: uploadChain.select };
+      }
+
+      if (table === 'packaging_jobs') {
+        return { select: () => {
+          const filters: Array<(row: Record<string, unknown>) => boolean> = [];
+          const query = {
+            eq: (key: string, value: unknown) => { filters.push(row => row[key] === value); return query; },
+            is: (key: string, value: unknown) => { filters.push(row => (row[key] ?? null) === value); return query; },
+            in: (key: string, values: unknown[]) => { filters.push(row => values.includes(row[key])); return query; },
+            maybeSingle: async () => {
+              const info = (await getLatestInstallerInfoMock.mock.results.at(-1)?.value)?.info ?? {};
+              const config = policy.deployment_config ?? {};
+              const id = (await triggerAutoUpdateMock.mock.results.at(-1)?.value)?.packagingJobId;
+              const row = { id, user_id: policy.user_id, tenant_id: triggerAutoUpdateMock.mock.calls.at(-1)?.[0]?.tenant_id ?? policy.tenant_id,
+                auto_update_policy_id: policy.id, is_auto_update: true, status: 'queued',
+                winget_id: policy.winget_id, version: info.latestVersion,
+                display_name: config.displayName || info.displayName, publisher: config.publisher,
+                architecture: config.architecture, installer_type: info.installerType || config.installerType,
+                installer_url: info.installerUrl, installer_sha256: info.installerSha256,
+                install_command: info.installCommand || config.installCommand, uninstall_command: config.uninstallCommand,
+                install_scope: info.installScope || config.installScope, detection_rules: config.detectionRules,
+                package_config: { ...config, sourceType: info.sourceType || config.sourceType,
+                  installerSuccessCodes: info.installerSuccessCodes, nestedInstallerType: info.nestedInstallerType,
+                  nestedInstallerPath: info.nestedInstallerPath, forceCreate: config.forceCreateNewApp !== false,
+                  sourceIntuneAppId: options?.latestUploadIntuneAppId,
+                  autoSupersede: Boolean(options?.userSettings?.supersedePreviousApp && options?.latestUploadIntuneAppId),
+                  supersedenceType: options?.userSettings?.supersedePreviousApp && options?.latestUploadIntuneAppId ? 'update' : undefined,
+                  assignmentMigration: { carryOverAssignments: options?.userSettings?.carryOverAssignments ?? false },
+                  // The production snapshot keeps the refreshed command on the row.
+                  installCommand: undefined,
+                }, ...options?.storedJob };
+              return { data: !options?.readError && filters.every(f => f(row)) ? row : null,
+                error: options?.readError ? { message: 'synthetic private read error' } : null };
+            },
+          };
+          return query;
+        } };
       }
 
       if (table === 'user_settings') {
@@ -471,6 +513,7 @@ describe('POST /api/updates/trigger', () => {
         installerUrl: 'https://example.com/edge.exe',
         installerSha256: 'abc123',
         installerType: 'exe',
+        installerSuccessCodes: [0, 3010],
       },
     });
     triggerAutoUpdateMock.mockResolvedValue({
@@ -504,6 +547,7 @@ describe('POST /api/updates/trigger', () => {
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 'pkg-job-1',
+        installerSuccessCodes: [0, 3010],
         relationships: JSON.stringify(relationships),
         sourceIntuneAppId: 'prev-app-1',
         carryOverAssignments: true,
@@ -590,7 +634,7 @@ describe('POST /api/updates/trigger', () => {
     expect(workflowInputs.supersedenceType).toBeUndefined();
     expect(workflowInputs.relationships).toBeUndefined();
   });
-  it.each(['503', 'network', 'miss', 'write error', 'stored custom', 'custom', 'missing pin', 'invalid pin', 'rate limit', 'batch', 'awaiting QA'])('handles a manual update dispatch with %s safely', async kind => {
+  it.each(['503', 'network', 'miss', 'write error', 'stored custom', 'custom', 'missing pin', 'invalid pin', 'rate limit', 'rate limit no pin', 'rate limit invalid pin', 'rate limit custom', 'rate limit miss', 'rate limit write error', 'batch', 'awaiting QA'])('handles a manual update dispatch with %s safely', async kind => {
     const policy: AppUpdatePolicy = {
       id: 'policy-1',
       user_id: 'user-1',
@@ -621,15 +665,15 @@ describe('POST /api/updates/trigger', () => {
     const { supabase } = createTriggerSupabaseMocks(policy, {
       latestUploadIntuneAppId: 'prev-app-1',
     });
-    if (kind === 'stored custom') policy.deployment_config = { ...policy.deployment_config, sourceType: 'custom' } as DeploymentConfig;
+    if (['stored custom', 'rate limit custom'].includes(kind)) policy.deployment_config = { ...policy.deployment_config, sourceType: 'custom' } as DeploymentConfig;
     const writes: Array<{ table: string; patch: Record<string, unknown>; guards: Record<string, unknown> }> = [];
     const from = supabase.from;
     supabase.from = ((table: string) => {
       if (!['packaging_jobs', 'auto_update_history'].includes(table)) return from(table);
-      return { update: (patch: Record<string, unknown>) => {
+      return { ...(table === 'packaging_jobs' ? from(table) : {}), update: (patch: Record<string, unknown>) => {
         const guards: Record<string, unknown> = {};
         writes.push({ table, patch, guards });
-        const result = { data: kind === 'miss' ? null : { id: 'pkg-job-2' }, error: kind === 'write error' ? { message: 'synthetic write failure' } : null };
+        const result = { data: ['miss', 'rate limit miss'].includes(kind) ? null : { id: 'pkg-job-2' }, error: ['write error', 'rate limit write error'].includes(kind) ? { message: 'synthetic write failure' } : null };
         const query = {
           eq: (key: string, value: unknown) => { guards[key] = value; return query; },
           is: (key: string, value: unknown) => { guards[key] = value; return query; },
@@ -665,8 +709,8 @@ describe('POST /api/updates/trigger', () => {
     getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: false });
     isGitHubActionsConfiguredMock.mockReturnValue(true);
     getAppConfigMock.mockReturnValue({ app: { url: 'http://localhost:3000' } });
-    const error = kind === 'rate limit'
-      ? new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString())
+    const error = kind.startsWith('rate limit')
+      ? Object.assign(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()), { dispatchIdentity: kind === 'rate limit no pin' ? undefined : kind === 'rate limit invalid pin' ? 'bad' : 'a'.repeat(64) })
       : new WorkflowDispatchUnconfirmedError(kind === 'network' ? null : 503, Date.now(), kind === 'missing pin' ? undefined : kind === 'invalid pin' ? 'bad' : 'a'.repeat(64));
     triggerPackagingWorkflowMock.mockRejectedValue(error);
     if (kind === 'batch') {
@@ -691,14 +735,9 @@ describe('POST /api/updates/trigger', () => {
 
     expect(response.status).toBe(200);
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(kind === 'batch' ? 2 : 1);
-    expect(triggerPackagingWorkflowMock.mock.calls[0][2]).toMatchObject({ requireQaPass: true, newJobAdmission: !['stored custom', 'custom'].includes(kind) });
+    expect(triggerPackagingWorkflowMock.mock.calls[0][2]).toMatchObject({ requireQaPass: true, newJobAdmission: !['stored custom', 'custom', 'rate limit custom'].includes(kind) });
     const body = await response.json();
-    if (kind === 'rate limit') {
-      expect(writes).toEqual([]);
-      expect(body.failed).toBe(1);
-      return;
-    }
-    const terminal = ['stored custom', 'custom', 'missing pin', 'invalid pin'].includes(kind);
+    const terminal = ['stored custom', 'custom', 'missing pin', 'invalid pin', 'rate limit no pin', 'rate limit invalid pin', 'rate limit custom'].includes(kind);
     expect(writes[0]).toMatchObject({ table: 'packaging_jobs', guards: {
       id: 'pkg-job-2', github_run_id: null, callback_run_id: null,
       cancelled_at: null, archived_at: null, error_details: null,
@@ -713,12 +752,148 @@ describe('POST /api/updates/trigger', () => {
       expect(writes[0].patch).toMatchObject({ status: 'awaiting_qa', completed_at: null, error_code: error.code,
         error_details: { workflow_dispatch_unconfirmed_identity: 'a'.repeat(64), workflow_dispatch_rate_limit_attempts: 1 } });
       expect(Date.parse(writes[0].patch.qa_resume_due_at as string)).toBeGreaterThanOrEqual(requestedAt + 60_000);
-      const success = ['503', 'network', 'batch', 'awaiting QA'].includes(kind);
+      const success = ['503', 'network', 'batch', 'awaiting QA', 'rate limit'].includes(kind);
       expect(body.failed).toBe(success ? 0 : 1);
       expect(body.triggered).toBe(kind === 'batch' ? 2 : success ? 1 : 0);
       if (success) expect(body.results[0]).toMatchObject({ success: true, packaging_job_id: 'pkg-job-2', code: error.code });
-      else expect(body.results[0].error).toMatch(kind === 'miss' ? /status changed/ : /Could not schedule/);
+      else expect(body.results[0].error).toMatch(['miss', 'rate limit miss'].includes(kind) ? /status changed/ : /Could not schedule/);
     }
+  });
+
+  it.each(['user_id', 'tenant_id', 'auto_update_policy_id', 'is_auto_update', 'status',
+    'github_run_id', 'callback_run_id', 'cancelled_at', 'archived_at', 'read error', 'read error lost', 'read error write error'])
+  ('does not dispatch a stored job with a changed ownership guard: %s', async field => {
+    const policy = { id: 'policy-1', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Microsoft.Edge',
+      policy_type: 'auto_update', is_enabled: true, deployment_config: {} } as AppUpdatePolicy;
+    const { supabase, policyUpdatePayloads } = createTriggerSupabaseMocks(policy, {
+      storedJob: field.startsWith('read error') ? {} : { [field]: field === 'is_auto_update' ? false : 'changed' },
+      readError: field.startsWith('read error'),
+    });
+    const writes: Array<{ table: string; patch: Record<string, unknown> }> = [];
+    const from = supabase.from;
+    const policyFilters: Record<string, unknown> = {};
+    supabase.from = ((table: string) => {
+      if (table === 'app_update_policies') return { ...from(table), update: (patch: Record<string, unknown>) => {
+        policyUpdatePayloads.push(patch);
+        const query = { eq: (key: string, value: unknown) => { policyFilters[key] = value; return query; },
+          then: (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve) };
+        return query;
+      } };
+      if (!['packaging_jobs', 'auto_update_history'].includes(table)) return from(table);
+      return { ...(table === 'packaging_jobs' ? from(table) : {}), update: (patch: Record<string, unknown>) => {
+        writes.push({ table, patch });
+        const query = { eq: () => query, is: () => query, in: () => query, select: () => query,
+          maybeSingle: async () => ({ data: field === 'read error lost' ? null : { id: 'job-guard' }, error: field === 'read error write error' ? { message: 'synthetic write error' } : null }),
+          then: (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve) };
+        return query;
+      } };
+    }) as typeof supabase.from;
+    createServerClientMock.mockReturnValue(supabase);
+    triggerAutoUpdateMock.mockResolvedValue({ success: true, packagingJobId: 'job-guard', historyId: 'history-guard' });
+    getLatestInstallerInfoMock.mockResolvedValue({ ok: true, info: { latestVersion: '2.0.0' } });
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    isGitHubActionsConfiguredMock.mockReturnValue(true);
+    getAppConfigMock.mockReturnValue({ app: { url: 'https://example.test' } });
+    const response = await POST(new NextRequest('https://example.test/api/updates/trigger', {
+      method: 'POST', headers: { authorization: 'Bearer test-token' },
+      body: JSON.stringify({ updates: [{ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }] }),
+    }));
+    const body = await response.json();
+    expect(body).toMatchObject({ failed: 1, triggered: 0 });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(writes.map(w => [w.table, w.patch.status])).toEqual(field === 'read error'
+      ? [['packaging_jobs', 'failed'], ['auto_update_history', 'failed']] : field.startsWith('read error') ? [['packaging_jobs', 'failed']] : []);
+    expect(response.status).toBe(200);
+    if (field === 'read error') {
+      expect(policyUpdatePayloads).toContainEqual(expect.objectContaining({ last_auto_update_version: null }));
+      expect(policyFilters).toEqual({ id: 'policy-1', user_id: 'user-1', tenant_id: 'tenant-1', last_auto_update_version: '2.0.0' });
+    } else expect(policyUpdatePayloads).toHaveLength(0);
+    expect(JSON.stringify(body)).not.toContain('synthetic private');
+  });
+
+
+  it.each(['lost', 'won', 'claim error', '503', 'custom 503', '429', '429 no pin', '429 invalid pin', 'custom 429', '429 lost', '400', 'queued', 'gate stale'])('guards the manual dispatch claim: %s', async mode => {
+    const policy = { id: 'policy-1', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Microsoft.Edge',
+      policy_type: 'auto_update', is_enabled: true, deployment_config: {} } as AppUpdatePolicy;
+    const row: Record<string, unknown> = { id: 'job-race', user_id: 'user-1', tenant_id: 'tenant-1',
+      auto_update_policy_id: 'policy-1', is_auto_update: true, status: mode === 'queued' ? 'queued' : 'awaiting_qa',
+      qa_resume_due_at: '2026-01-01T00:00:00Z', qa_candidate_id: 'candidate', installer_sha256: 'a'.repeat(64), architecture: 'x64' };
+    const { supabase } = createTriggerSupabaseMocks(policy, { storedJob: { ...row } });
+    const from = supabase.from;
+    const writes: Array<{ patch: Record<string, unknown>; filters: Record<string, unknown>; won: boolean }> = [];
+    supabase.from = ((table: string) => {
+      if (table !== 'packaging_jobs') return from(table);
+      return { ...from(table), update: (patch: Record<string, unknown>) => {
+        const filters: Record<string, unknown> = {};
+        const predicates: Array<() => boolean> = [];
+        const query = {
+          eq: (k: string, v: unknown) => { filters[k] = v; predicates.push(() => row[k] === v); return query; },
+          is: (k: string, v: unknown) => { filters[k] = v; predicates.push(() => (row[k] ?? null) === v); return query; },
+          in: (k: string, v: unknown[]) => { filters[k] = v; predicates.push(() => v.includes(row[k])); return query; },
+          select: () => query,
+          maybeSingle: async () => {
+            if (mode === 'claim error') return { data: null, error: { message: 'synthetic claim error' } };
+            const won = predicates.every(f => f());
+            writes.push({ patch, filters, won });
+            if (won) Object.assign(row, patch);
+            return { data: won ? { id: row.id } : null, error: null };
+          },
+        };
+        return query;
+      } };
+    }) as typeof supabase.from;
+    createServerClientMock.mockReturnValue(supabase);
+    triggerAutoUpdateMock.mockResolvedValue({ success: true, packagingJobId: 'job-race' });
+    getLatestInstallerInfoMock.mockResolvedValue({ ok: true, info: { latestVersion: '2.0.0', displayName: 'Microsoft Edge',
+      installerUrl: 'https://example.test/edge.exe', installerSha256: 'a'.repeat(64), installerType: 'exe',
+      sourceType: mode.startsWith('custom ') ? 'custom' : 'winget' } });
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    isGitHubActionsConfiguredMock.mockReturnValue(true);
+    getAppConfigMock.mockReturnValue({ app: { url: 'https://example.test' } });
+    let posts = 0;
+    triggerPackagingWorkflowMock.mockImplementation(async (_inputs, _ref, options) => {
+      if (mode === 'gate stale') {
+        row.status = 'packaging';
+        throw new QaGateNotPassedError({ wingetId: 'Microsoft.Edge', version: '2.0.0', architecture: 'x64',
+          installerSha256: 'a'.repeat(64), packageProfileSha256: 'b'.repeat(64), reason: 'missing' });
+      }
+      if (mode === 'lost') row.status = 'packaging'; // cron wins during preparation
+      await options?.beforeDispatch?.({} as never);
+      expect(row.status).toBe(mode === 'queued' ? 'queued' : 'packaging');
+      posts++;
+      if (mode.includes('503')) throw new WorkflowDispatchUnconfirmedError(503, Date.now(), 'b'.repeat(64));
+      if (mode.includes('429')) {
+        if (mode === '429 lost') row.packaging_started_at = 'new-owner';
+        throw Object.assign(new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60_000).toISOString()), { dispatchIdentity: mode === '429 no pin' ? undefined : mode === '429 invalid pin' ? 'bad' : 'b'.repeat(64) });
+      }
+      if (mode === '400') throw new Error('Definite GitHub 400 rejection');
+      return undefined as never;
+    });
+    const response = await POST(new NextRequest('https://example.test/api/updates/trigger', {
+      method: 'POST', headers: { authorization: 'Bearer test-token' },
+      body: JSON.stringify({ updates: [{ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }] }),
+    }));
+    const body = await response.json();
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+    expect(posts).toBe(['lost', 'claim error', 'gate stale'].includes(mode) ? 0 : 1);
+    if (mode === 'queued') { expect(writes).toHaveLength(0); return; }
+    if (mode === 'claim error') { expect(writes).toHaveLength(0); expect(body.triggered).toBe(0); return; }
+    expect(writes[0].filters).toMatchObject({ id: 'job-race', user_id: 'user-1', tenant_id: 'tenant-1',
+      auto_update_policy_id: 'policy-1', is_auto_update: true, status: 'awaiting_qa',
+      qa_resume_due_at: '2026-01-01T00:00:00Z', qa_candidate_id: 'candidate',
+      installer_sha256: 'a'.repeat(64), architecture: 'x64', github_run_id: null, callback_run_id: null,
+      cancelled_at: null, archived_at: null, error_details: null });
+    if (mode === 'lost' || mode === 'gate stale') { expect(writes).toHaveLength(1); expect(writes[0].won).toBe(false); expect(body.triggered).toBe(0); return; }
+    if (['503', 'custom 503', '429', '429 no pin', '429 invalid pin', 'custom 429', '429 lost', '400'].includes(mode)) {
+      expect(writes).toHaveLength(2);
+      expect(writes[1].filters).toMatchObject({ status: 'packaging', packaging_started_at: writes[0].patch.packaging_started_at });
+      if (mode === '429 lost') { expect(writes[1].won).toBe(false); expect(body.results[0].error).toMatch(/status changed/); expect(row.packaging_started_at).toBe('new-owner'); return; }
+      expect(writes[1].won).toBe(true);
+      const terminal = ['custom 503', '429 no pin', '429 invalid pin', 'custom 429'].includes(mode);
+      expect(row.status).toBe(terminal ? 'failed' : 'awaiting_qa');
+      if (mode === '503' || mode === '429') { expect(row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_identity', 'b'.repeat(64)); expect(body.triggered).toBe(1); }
+      if (terminal) expect(body.failed).toBe(1);
+    } else { expect(writes).toHaveLength(1); expect(body.triggered).toBe(1); }
   });
 
 });

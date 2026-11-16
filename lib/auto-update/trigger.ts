@@ -222,7 +222,7 @@ export class AutoUpdateTrigger {
   async triggerAutoUpdate(
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
-    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean; admitViaQaResume?: boolean }
+    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean; admitViaQaResume?: boolean; assignmentMigrationOverride?: DeploymentConfig['assignmentMigration'] }
   ): Promise<TriggerResult> {
     let historyId: string | undefined;
     try {
@@ -438,7 +438,8 @@ export class AutoUpdateTrigger {
         updateInfo,
         historyRecord.id,
         qaDemand,
-        options?.admitViaQaResume === true
+        options?.admitViaQaResume === true,
+        options?.assignmentMigrationOverride
       );
 
       // Update history with job reference
@@ -832,7 +833,8 @@ export class AutoUpdateTrigger {
     updateInfo: UpdateInfo,
     historyId: string,
     qaDemand?: QaDemandResult,
-    admitViaQaResume = false
+    admitViaQaResume = false,
+    assignmentMigrationOverride?: DeploymentConfig['assignmentMigration']
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
     const assignments = normalizeAssignments(config);
@@ -844,7 +846,7 @@ export class AutoUpdateTrigger {
     // flow's App Updates checkbox) wins over the global value.
     const { carryOverAssignments: globalCarryOver, supersedePreviousApp } =
       await this.getUserUpdateSettings(policy.user_id);
-    const assignmentMigration = config.assignmentMigration ?? {
+    const assignmentMigration = assignmentMigrationOverride ?? config.assignmentMigration ?? {
       carryOverAssignments: globalCarryOver,
       removeAssignmentsFromPreviousApp: false,
     };

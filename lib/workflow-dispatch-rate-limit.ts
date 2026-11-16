@@ -25,14 +25,14 @@ export class WorkflowDispatchUnconfirmedError extends Error {
 
 export class WorkflowDispatchRateLimitError extends Error {
   readonly code = 'WORKFLOW_DISPATCH_RATE_LIMITED';
-  constructor(readonly status: number, readonly retryAt: string) {
+  constructor(readonly status: number, readonly retryAt: string, readonly dispatchIdentity?: string) {
     super('GitHub temporarily refused to start packaging because its request limit was reached.');
     this.name = 'WorkflowDispatchRateLimitError';
   }
 }
 
 /** A response must explicitly reject dispatch before it may be sent again. */
-export function dispatchRateLimitError(response: Response, detail: string, now = Date.now()) {
+export function dispatchRateLimitError(response: Response, detail: string, now = Date.now(), dispatchIdentity?: string) {
   const remaining = response.headers.get('x-ratelimit-remaining');
   const retryAfter = response.headers.get('retry-after');
   if (response.status !== 429 && !(response.status === 403 &&
@@ -48,7 +48,7 @@ export function dispatchRateLimitError(response: Response, detail: string, now =
     Number.isFinite(retryTime) ? retryTime : 0, Number.isFinite(resetTime) ? resetTime : 0);
   // Never shorten a server supplied delay to fit a local retry budget.
   const retryAt = proposed <= 8.64e15 ? new Date(proposed).toISOString() : null;
-  return retryAt ? new WorkflowDispatchRateLimitError(response.status, retryAt) : null;
+  return retryAt ? new WorkflowDispatchRateLimitError(response.status, retryAt, dispatchIdentity) : null;
 }
 
 /** Persist the bounded budget in existing job error metadata on both databases. */

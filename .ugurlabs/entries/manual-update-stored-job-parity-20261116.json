@@ -1,0 +1,5 @@
+{
+  "title": "Keep manual update retries consistent",
+  "summary": "Manual app update retries now use the same saved packaging settings as their first attempt, including installer success codes, refreshed commands and selected assignment groups. Temporary GitHub rate limits defer safely with the original payload pinned. Updates whose ownership or settings changed stop before another dispatch.",
+  "type": "fixed"
+}

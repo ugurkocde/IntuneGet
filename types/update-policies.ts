@@ -233,7 +233,8 @@ export interface TriggerUpdateResponse {
         | 'UPDATE_SCOPE_HELD'
       | 'RATE_LIMIT_UNVERIFIED'
       | 'PSADT_BACKFILL_UNAVAILABLE'
-      | 'WORKFLOW_DISPATCH_UNCONFIRMED';
+      | 'WORKFLOW_DISPATCH_UNCONFIRMED'
+      | 'WORKFLOW_DISPATCH_RATE_LIMITED';
     packaging_job_id?: string;
     error?: string;
   }[];
