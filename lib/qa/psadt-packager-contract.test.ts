@@ -19,8 +19,58 @@ import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalo
 import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
 import { JobProcessor } from '@/packager/src/job-processor';
 import type { PackagingJob } from '@/packager/src/job-poller';
+import { buildQaPackageIdentity } from './package-profile';
 
 describe('bounded registration evidence', () => {
+  it.runIf(process.platform === 'win32')('selects SSMS from deployment profile metadata without selecting bundled products', () => {
+    const identity = buildQaPackageIdentity({
+      profileKind: 'deployment-config', wingetId: 'Microsoft.SQLServerManagementStudio.22',
+      displayName: 'Microsoft SQL Server Management Studio 22', publisher: 'Microsoft',
+      version: '22.12.0', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceInstallerType: 'exe', silentArgs: '--quiet --wait --campaign "winget"',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft SQL Server Management Studio 22',
+      installScope: 'machine', nestedInstallerType: '', nestedInstallerFiles: [],
+      psadtConfig: DEFAULT_PSADT_CONFIG, detectionRules: [],
+    });
+    const profile = JSON.parse(identity.canonicalJson);
+    const generated = generateRegistryUninstallPackage('exe', profile.app.displayName, [], {}, [],
+      profile.app.wingetId, profile.app.displayName, profile.app.version,
+      profile.installer.uninstallCommand, profile.installer.silentArgs, 'machine', '', '',
+      undefined, false, profile.app.publisher).replace(/\r\n/g, '\n');
+    const identityLines = generated.split('\n').filter(line =>
+      /^\s*\$configuredUninstall(?:ProductCode|DisplayName|LocaleHint) =/.test(line)).join('\n');
+    const start = generated.indexOf('    # Capture the registry uninstall entry');
+    const end = generated.indexOf('\n    if ($selectedApplications.Count -eq 1) {\n', start) + 1;
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const selector = generated.slice(start, end);
+    const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+      '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { encoding: 'utf8', timeout: 30_000, input: `
+$ErrorActionPreference = 'Stop'
+${identityLines}
+$adtSession = [pscustomobject]@{ AppVersion = '22.12.0' }
+$preInstallApplications = @()
+$multiProductInstallationVerified = $false
+function Get-ADTApplication { $fixtureApplications }
+function Start-Sleep { param($Seconds) }
+$ssms = [pscustomobject]@{ PSChildName = 'ssms'; PSPath = 'ssms'; DisplayName = 'SQL Server Management Studio 22'; DisplayVersion = '22.12.0'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $false; SystemComponent = $false }
+$helpers = @(
+  [pscustomobject]@{ PSChildName = 'installer'; PSPath = 'installer'; DisplayName = 'Microsoft Visual Studio Installer'; DisplayVersion = '4.12'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $false; SystemComponent = $false },
+  [pscustomobject]@{ PSChildName = 'vc'; PSPath = 'vc'; DisplayName = 'Microsoft Visual C++ 2022 X86 Runtime'; DisplayVersion = '14.52'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $false; SystemComponent = $false },
+  [pscustomobject]@{ PSChildName = 'msi'; PSPath = 'msi'; DisplayName = 'vs_minshellx64msi'; DisplayVersion = '18.12'; Publisher = 'Microsoft Corporation'; WindowsInstaller = $true; SystemComponent = $true }
+)
+$fixtureApplications = @($ssms) + $helpers
+${selector}
+if ($selectedApplications.Count -ne 1 -or $selectedApplications[0].PSChildName -ne 'ssms') { throw 'SSMS identity not selected' }
+$fixtureApplications = $helpers
+${selector}
+if ($selectedApplications.Count -ne 0) { throw 'Bundled product selected' }
+$fixtureApplications = @($ssms, $ssms) + $helpers
+${selector}
+if ($selectedApplications.Count -ne 0) { throw 'Ambiguous SSMS identities selected' }
+` });
+    expect(result.status, result.stderr || result.error?.message).toBe(0);
+  }, 60_000);
   for (const shell of ['pwsh', 'powershell']) {
     it.runIf(process.platform === 'win32')(`captures only the exact Breitbandmessung key through the complete selector in ${shell}`, () => {
       const key = '14607473-30db-509f-94f0-bb7c085c619e';
@@ -470,7 +520,8 @@ function generateRegistryUninstallPackage(
   nestedInstallerType = '',
   nestedInstallerPath = '',
   verifyPackage?: (packageDirectory: string) => void,
-  divergeProcessDirectory = false
+  divergeProcessDirectory = false,
+  publisher = 'IntuneGet'
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -521,7 +572,7 @@ function generateRegistryUninstallPackage(
         INPUT_JOB_ID: 'contract-test',
         INPUT_CALLBACK_URL: 'https://example.invalid/callback',
         INPUT_DISPLAY_NAME: displayName,
-        INPUT_PUBLISHER: 'IntuneGet',
+        INPUT_PUBLISHER: publisher,
         INPUT_VERSION: version,
         INPUT_WINGET_ID: wingetId,
         INPUT_INSTALLER_TYPE: installerType,
