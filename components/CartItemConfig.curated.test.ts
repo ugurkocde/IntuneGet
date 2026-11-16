@@ -84,3 +84,19 @@ describe('curated deployment settings choice', () => {
         statusMessage: 'Installing Firefox ESR', windowLocation: 'Center' } } });
   });
 });
+
+
+describe('copying update assignments', () => {
+  it.each(['tested-defaults', 'custom'] as const)('preserves old assignments when saving %s', async (mode) => {
+    const cart = item();
+    cart.curatedSettingsMode = mode;
+    cart.updatePolicy = 'auto_update';
+    cart.assignmentMigration = { carryOverAssignments: true, removeAssignmentsFromPreviousApp: false };
+    await render(cart);
+    await act(async () => save());
+    expect(useCartStore.getState().items[0]).toMatchObject({
+      updatePolicy: 'auto_update',
+      assignmentMigration: { carryOverAssignments: true, removeAssignmentsFromPreviousApp: false },
+    });
+  });
+});

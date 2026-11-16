@@ -124,3 +124,22 @@ it('places a saved configuration refresh notice inside the editor focus boundary
   await act(async () => button.click()); expect(retry).toHaveBeenCalledTimes(1);
   expect(useCartStore.getState().items).toBe(before);
 });
+
+
+it('keeps copy assignments non-destructive when adding an automatic update policy', async () => {
+  useCartStore.setState({ items: [] });
+  await act(async () => root.render(createElement(PackageConfig, {
+    package: { id: oldItem.wingetId, name: oldItem.displayName, publisher: oldItem.publisher, version: '3.0' },
+    installers: [installer], versions: ['3.0'],
+    deployedConfig: { ...oldItem, version: '3.0', updatePolicy: 'auto_update',
+      assignmentMigration: { carryOverAssignments: true, removeAssignmentsFromPreviousApp: false } },
+    onClose: vi.fn(),
+  })));
+  const add = [...document.querySelectorAll('button')].find(button => button.textContent?.includes('Add to Selection'))!;
+  expect(add.disabled).toBe(false);
+  await act(async () => add.click());
+  expect(useCartStore.getState().items[0]).toMatchObject({
+    updatePolicy: 'auto_update',
+    assignmentMigration: { carryOverAssignments: true, removeAssignmentsFromPreviousApp: false },
+  });
+});
