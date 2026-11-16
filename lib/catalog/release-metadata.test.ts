@@ -61,3 +61,38 @@ it('skips an aborted batch retry when individual recovery is available', async (
   expect(result.metadata).toHaveLength(1);
   warn.mockRestore();
 });
+
+it('counts failed batch attempts by class without changing retries', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const batch = vi.fn()
+    .mockResolvedValueOnce({data:null,error:{code:'57014'},status:500})
+    .mockRejectedValueOnce(new Error('Private transport detail'))
+    .mockResolvedValueOnce({data:null,error:{code:'42501'},status:403});
+  const first = await loadReleaseMetadata(rows.slice(0,1), batch);
+  expect(first.stats.batchFailures).toEqual({aborted:0, http5xx:0, statementTimeout:1, other:1});
+  const second = await loadReleaseMetadata(rows.slice(0,1), batch);
+  expect(batch).toHaveBeenCalledTimes(3);
+  expect(second.stats).toEqual({batchFailures:{aborted:0, http5xx:0, statementTimeout:0, other:1}, singlesAttempted:0, singlesRecovered:0});
+  warn.mockRestore();
+});
+
+it('counts ambiguous status-zero failures as other while preserving single-row recovery', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const batch = vi.fn(async () => ({data:null, error:{}, status:0}));
+  const single = vi.fn(async () => ({data:null, error:{}, status:0}));
+  const result = await loadReleaseMetadata(rows.slice(0,1), batch, single);
+  expect(result.stats.batchFailures).toEqual({aborted:0, http5xx:0, statementTimeout:0, other:1});
+  expect(batch).toHaveBeenCalledTimes(1);
+  expect(single).toHaveBeenCalledTimes(1);
+  expect(result.unavailable.size).toBe(1);
+  warn.mockRestore();
+});
+
+it.each(['AbortError', 'TimeoutError'])('counts a thrown %s as a confirmed abort', async name => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const batch = vi.fn(async () => { throw Object.assign(new Error('Synthetic cancellation'), {name}); });
+  const result = await loadReleaseMetadata(rows.slice(0,1), batch);
+  expect(batch).toHaveBeenCalledTimes(2);
+  expect(result.stats.batchFailures).toEqual({aborted:2, http5xx:0, statementTimeout:0, other:0});
+  warn.mockRestore();
+});
