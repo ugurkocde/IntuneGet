@@ -1,0 +1,5 @@
+{
+  "title": "Retry managed tenant packaging dispatches",
+  "summary": "Managed tenant batch deployments now keep the saved packaging request pending when GitHub temporarily refuses a dispatch. Automatic retries preserve the request settings, and batch timeouts allow active retry holds to finish.",
+  "type": "fixed"
+}
