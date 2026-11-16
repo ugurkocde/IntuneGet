@@ -26,6 +26,7 @@ export interface PackagingJob {
   install_scope: string;
   detection_rules: unknown[];
   package_config: unknown;
+  is_auto_update?: boolean | number | null;
   status: string;
   progress_percent: number;
   progress_message?: string;

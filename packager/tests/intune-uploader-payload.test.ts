@@ -10,6 +10,7 @@ type GraphMock = {
 };
 
 type TestableUploader = {
+  applyAssignments(graphClient: GraphMock, appId: string, job: PackagingJob): Promise<void>;
   createWin32App(graphClient: GraphMock, job: PackagingJob, packageFileName: string): Promise<{ id: string }>;
   addRequirementRules(graphClient: GraphMock, appId: string, job: PackagingJob): Promise<void>;
 };
@@ -163,4 +164,45 @@ describe('IntuneUploader Win32 app payload', () => {
     expect(graph.get).not.toHaveBeenCalled();
     expect(graph.patch).not.toHaveBeenCalled();
   });
+});
+
+
+describe('IntuneUploader legacy automatic assignment copies', () => {
+  for (const marker of [true, 1, false, 0, undefined] as const) {
+    for (const nested of [true, false]) {
+      it(`preserves source assignments only for automatic jobs marker=${marker} nested=${nested}`, async () => {
+        const graph = graphMock();
+        graph.get.mockResolvedValue({ value: [{ intent: 'available', target: {
+          '@odata.type': '#microsoft.graph.groupAssignmentTarget', groupId: 'fixture-group',
+        } }] });
+        const uploader = new IntuneUploader(config) as unknown as TestableUploader;
+        const job = packagingJob({
+          ...({ is_auto_update: marker } as Partial<PackagingJob>),
+          package_config: {
+            sourceIntuneAppId: 'source-app',
+            ...(nested ? { assignmentMigration: {
+              carryOverAssignments: true, removeAssignmentsFromPreviousApp: true,
+            } } : { carryOverAssignments: true, removeAssignmentsFromPreviousApp: true }),
+          },
+        });
+        const original = structuredClone(job);
+        await uploader.applyAssignments(graph, 'new-app', job);
+        expect(graph.get).toHaveBeenCalledWith('/deviceAppManagement/mobileApps/source-app/assignments');
+        expect(graph.post).toHaveBeenCalledWith('/deviceAppManagement/mobileApps/new-app/assign', {
+          mobileAppAssignments: [expect.objectContaining({ intent: 'available', target: {
+            '@odata.type': '#microsoft.graph.groupAssignmentTarget', groupId: 'fixture-group',
+          } })],
+        });
+        if (marker === true || marker === 1) {
+          expect(graph.post).toHaveBeenCalledTimes(1);
+        } else {
+          expect(graph.post).toHaveBeenCalledTimes(2);
+          expect(graph.post).toHaveBeenLastCalledWith('/deviceAppManagement/mobileApps/source-app/assign', {
+            mobileAppAssignments: [],
+          });
+        }
+        expect(job).toEqual(original);
+      });
+    }
+  }
 });

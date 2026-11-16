@@ -120,7 +120,7 @@ describe('approval holds and fair QA release', () => {
       jobId: row.id, wingetId: 'Vendor.App', version: '1.0', installerSha256: 'A'.repeat(64),
       assignments: JSON.stringify([{ target: { groupId: 'synthetic-group' } }]),
       detectionRules: JSON.stringify(explicitCartRules ? [] : row.detection_rules), sourceIntuneAppId: 'synthetic-previous-app',
-      autoSupersede: true, supersedenceType: 'update', carryOverAssignments: true, removeAssignmentsFromPreviousApp: true,
+      autoSupersede: true, supersedenceType: 'update', carryOverAssignments: true, removeAssignmentsFromPreviousApp: false,
       silentSwitches: '/S',
     }), undefined, undefined);
     expect(mocks.demand).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({

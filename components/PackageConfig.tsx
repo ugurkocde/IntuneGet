@@ -560,7 +560,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
             updatePolicy === 'auto_update'
               ? {
                   carryOverAssignments,
-                  removeAssignmentsFromPreviousApp: carryOverAssignments,
+                  removeAssignmentsFromPreviousApp: false,
                 }
               : undefined,
           ...(isDeployed ? { forceCreate: true } : {}),

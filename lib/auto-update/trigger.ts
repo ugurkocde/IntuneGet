@@ -846,7 +846,7 @@ export class AutoUpdateTrigger {
       await this.getUserUpdateSettings(policy.user_id);
     const assignmentMigration = config.assignmentMigration ?? {
       carryOverAssignments: globalCarryOver,
-      removeAssignmentsFromPreviousApp: globalCarryOver,
+      removeAssignmentsFromPreviousApp: false,
     };
     const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
     const autoSupersede = supersedePreviousApp && Boolean(sourceIntuneAppId);
@@ -901,9 +901,8 @@ export class AutoUpdateTrigger {
         supersedenceType: autoSupersede ? 'update' : undefined,
         assignmentMigration: {
           carryOverAssignments: Boolean(assignmentMigration.carryOverAssignments),
-          removeAssignmentsFromPreviousApp: Boolean(
-            assignmentMigration.removeAssignmentsFromPreviousApp
-          ),
+          // Older copy policies derived removal from the copy checkbox.
+          removeAssignmentsFromPreviousApp: false,
         },
         description: config.description,
         notes: config.notes,

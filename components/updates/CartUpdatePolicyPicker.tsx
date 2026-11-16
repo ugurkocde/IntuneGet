@@ -79,7 +79,7 @@ export function CartUpdatePolicyPicker({
               Carry over assignments
             </span>
             <span className="block text-xs text-text-muted mt-0.5">
-              Move this app&apos;s group assignments to each new version and remove them from the previous one.
+              Copy this app&apos;s group assignments to each new version while keeping them on the previous one.
             </span>
           </span>
         </label>
