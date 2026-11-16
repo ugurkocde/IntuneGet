@@ -280,13 +280,11 @@ describe('PSADT QA package identity', () => {
     );
   });
 
-  it('reuses execution QA when only presentation changes', () => {
+  it('reuses execution QA when only PSADT branding changes', () => {
     const deploymentInput = { ...input, profileKind: 'deployment-config' as const };
     const baseline = buildQaPackageIdentity(deploymentInput);
     const branded = buildQaPackageIdentity({
       ...deploymentInput,
-      displayName: 'Customer-facing Example',
-      publisher: 'Customer Publisher',
       psadtConfig: {
         ...DEFAULT_PSADT_CONFIG,
         brandingCompanyName: 'Contoso',
@@ -305,6 +303,18 @@ describe('PSADT QA package identity', () => {
     expect(branded.presentationProfileSha256).not.toBe(
       baseline.presentationProfileSha256
     );
+  });
+
+  it('binds deployment app identity metadata because the packager uses it for registry selection', () => {
+    const deployment = { ...input, profileKind: 'deployment-config' as const };
+    const baseline = buildQaPackageIdentity(deployment);
+    expect(JSON.parse(baseline.canonicalJson).app).toMatchObject({
+      displayName: input.displayName, publisher: input.publisher,
+    });
+    for (const change of [{ publisher: 'Other Vendor' }, { displayName: 'Other Product' }]) {
+      expect(buildQaPackageIdentity({ ...deployment, ...change }).executionProfileSha256)
+        .not.toBe(baseline.executionProfileSha256);
+    }
   });
 
   it('keeps interaction timing and custom command changes in the execution profile', () => {

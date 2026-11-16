@@ -1299,8 +1299,10 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
     toolchain: QA_PSADT_TOOLCHAIN,
     app: {
       wingetId: input.wingetId,
-      displayName: input.profileKind === 'deployment-config' ? input.wingetId : input.displayName,
-      publisher: input.profileKind === 'deployment-config' ? 'IntuneGet QA' : input.publisher,
+      // The shared packager uses both fields to select the installed registry
+      // identity. They affect execution even when the profile is customer configured.
+      displayName: input.displayName,
+      publisher: input.publisher,
       version: input.version,
       architecture: input.architecture.toLowerCase(),
     },
