@@ -1309,6 +1309,28 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       expect(jobData.package_config.supersedenceType).toBe('update');
     });
 
+    it.each([true, false])('preserves old assignments for stored copy choice %s with legacy removal enabled', async (carryOverAssignments) => {
+      const insertSpy = vi.fn();
+      const supabase = createSupabaseMock({
+        user_profiles: { singleResult: { data: { email: 'user@example.com' }, error: null } },
+        user_settings: { maybeSingleResult: { data: { settings: { carryOverAssignments: !carryOverAssignments } }, error: null } },
+        packaging_jobs: { insertSpy, singleResult: { data: { id: 'job-legacy' }, error: null } },
+      });
+      const trigger = makeTrigger(supabase);
+      const policy = makePolicy({ assignmentMigration: {
+        carryOverAssignments,
+        removeAssignmentsFromPreviousApp: true,
+      } });
+      await (trigger as unknown as {
+        createPackagingJob: (p: AppUpdatePolicy, u: typeof UPDATE_INFO, h: string) => Promise<{ id: string }>;
+      }).createPackagingJob(policy, UPDATE_INFO, 'history-legacy');
+      expect(insertSpy.mock.calls[0][0].package_config.assignmentMigration).toEqual({
+        carryOverAssignments,
+        removeAssignmentsFromPreviousApp: false,
+      });
+      expect(policy.deployment_config.assignmentMigration?.removeAssignmentsFromPreviousApp).toBe(true);
+    });
+
     it('does not flag auto-supersedence when the user setting is off', async () => {
       const insertSpy = vi.fn();
       const supabase = createSupabaseMock({

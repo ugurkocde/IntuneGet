@@ -314,7 +314,7 @@ describe('sqlite auto-update check', () => {
     expect(job.package_config).toMatchObject({ sourceIntuneAppId: 'app-1', autoSupersede: true, supersedenceType: 'update' });
     const config = job.package_config as { assignmentMigration?: { carryOverAssignments?: boolean; removeAssignmentsFromPreviousApp?: boolean } };
     expect(config.assignmentMigration?.carryOverAssignments ?? false).toBe(Boolean(choice));
-    expect(config.assignmentMigration?.removeAssignmentsFromPreviousApp ?? false).toBe(Boolean(choice));
+    expect(config.assignmentMigration?.removeAssignmentsFromPreviousApp).toBe(false);
   });
 
   it('removes a stored detection once the app is no longer behind', async () => {

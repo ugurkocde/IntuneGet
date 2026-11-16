@@ -901,9 +901,8 @@ export class AutoUpdateTrigger {
         supersedenceType: autoSupersede ? 'update' : undefined,
         assignmentMigration: {
           carryOverAssignments: Boolean(assignmentMigration.carryOverAssignments),
-          removeAssignmentsFromPreviousApp: Boolean(
-            assignmentMigration.removeAssignmentsFromPreviousApp
-          ),
+          // Older copy policies derived removal from the copy checkbox.
+          removeAssignmentsFromPreviousApp: false,
         },
         description: config.description,
         notes: config.notes,
