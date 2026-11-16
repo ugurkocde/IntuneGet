@@ -386,7 +386,7 @@ export async function triggerPackagingWorkflow(
   if (!response.ok) {
     if (response.status >= 500) throw new WorkflowDispatchUnconfirmedError(response.status, Date.now(), newAdmissionIdentity);
     const errorText = await response.text();
-    const rateLimit = dispatchRateLimitError(response, errorText);
+    const rateLimit = dispatchRateLimitError(response, errorText, Date.now(), newAdmissionIdentity);
     if (rateLimit) throw rateLimit;
     throw new Error(
       `Failed to trigger GitHub Actions workflow: HTTP ${response.status}`

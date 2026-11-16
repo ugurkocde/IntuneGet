@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, WorkflowDispatchRetryStopped } from '@/lib/workflow-dispatch-rate-limit';
+import { DISPATCH_IDENTITY_KEY, dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, WorkflowDispatchRetryStopped } from '@/lib/workflow-dispatch-rate-limit';
 import { buildStoredJobWorkflowInputs, storedJobItem } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
@@ -410,10 +410,13 @@ export async function POST(request: NextRequest) {
                   error: 'Deployment status changed before packaging could start. Refresh the deployment status.' });
                 continue;
               }
-              if (error instanceof WorkflowDispatchUnconfirmedError) {
+              if (error instanceof WorkflowDispatchUnconfirmedError || error instanceof WorkflowDispatchRateLimitError) {
                 // Only a fresh ownerless admission can be deferred. The resume
                 // path checks the exact payload pin before claiming or posting.
-                const hold = customSource ? null : dispatchRateLimitHold(error, null);
+                const hold = customSource ? null : error instanceof WorkflowDispatchRateLimitError
+                  ? error.dispatchIdentity === undefined ? null
+                    : dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: error.dispatchIdentity })
+                  : dispatchRateLimitHold(error, null);
                 const patch: Database['public']['Tables']['packaging_jobs']['Update'] = hold ?? {
                   status: 'failed', error_code: error.code, error_stage: 'authenticate',
                   error_category: 'network', error_message: error.message,
@@ -453,8 +456,7 @@ export async function POST(request: NextRequest) {
               }
               if (!isQaGateError(error)) {
                 if (claimedAt) {
-                  const hold = error instanceof WorkflowDispatchRateLimitError ? dispatchRateLimitHold(error, job.error_details) : null;
-                  await ownedWrite(hold ?? { status: 'awaiting_qa', packaging_started_at: null,
+                  await ownedWrite({ status: 'awaiting_qa', packaging_started_at: null,
                     qa_resume_due_at: new Date(Date.now() + 60_000).toISOString() }, true);
                 }
                 throw error;
