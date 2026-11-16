@@ -144,6 +144,12 @@ export async function POST(request: NextRequest) {
     if (!consentResult.verified) {
       const isPermissionError = consentResult.error === 'insufficient_intune_permissions';
       const isTransient = consentResult.error === 'network_error' || consentResult.error === 'missing_credentials';
+      if (isTransient) {
+        console.error('[package-unavailable]', {
+          stage: 'consent',
+          reason: consentResult.error === 'network_error' ? 'network_error' : 'missing_credentials',
+        });
+      }
 
       const errorTitle = isPermissionError
         ? 'Intune permissions required'
@@ -409,6 +415,9 @@ export async function POST(request: NextRequest) {
             code: error.code,
             retryable: error.retryable,
           });
+          if (error.retryable) {
+            console.error('[package-unavailable]', { stage: 'manifest', reason: 'retryable_installer_validation' });
+          }
           return NextResponse.json({
             error: 'Installer validation blocked this deployment',
             message: error.message,
@@ -468,6 +477,9 @@ export async function POST(request: NextRequest) {
         const failedItem = win32Items[i + failedIndex];
         const error = failed.reason;
         if (error instanceof InstallerPreflightError) {
+          if (error.retryable) {
+            console.error('[package-unavailable]', { stage: 'installer_preflight', reason: 'retryable_installer_validation' });
+          }
           return NextResponse.json({
             error: 'Installer validation blocked this deployment',
             message: error.message,

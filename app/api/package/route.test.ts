@@ -2283,6 +2283,69 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it.each(['network_error', 'missing_credentials'] as const)(
+    'records a private stage diagnostic for consent 503: %s', async reason => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        checkStoredConsentMock.mockResolvedValueOnce(false);
+        verifyTenantConsentMock.mockResolvedValueOnce({ verified: false, error: reason });
+        const response = await postSingleItem();
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ retryable: true });
+        expect(log.mock.calls).toEqual([['[package-unavailable]', { stage: 'consent', reason }]]);
+        expect(createMock).not.toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      } finally { log.mockRestore(); }
+    },
+  );
+
+  it.each(['manifest', 'installer_preflight'] as const)(
+    'records only a static stage diagnostic for retryable %s 503', async stage => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const error = new InstallerPreflightError('private-code', 'https://private.invalid/?token=private-token', true);
+        if (stage === 'manifest') getLiveInstallersMock.mockRejectedValueOnce(error);
+        else enforceInstallerPreflightMock.mockRejectedValueOnce(error);
+        const response = await postSingleItem();
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ code: 'private-code', retryable: true });
+        expect(log.mock.calls).toEqual([['[package-unavailable]', { stage, reason: 'retryable_installer_validation' }]]);
+        expect(JSON.stringify(log.mock.calls)).not.toMatch(/private|tenant-1|user@example|Test.App|test-token/);
+        expect(createMock).not.toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      } finally { log.mockRestore(); warn.mockRestore(); }
+    },
+  );
+
+  it.each(['manifest', 'installer_preflight'] as const)(
+    'does not report a nonretryable %s rejection as a packaging 503', async stage => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const error = new InstallerPreflightError('HASH_MISMATCH', 'Installer remains quarantined', false);
+        if (stage === 'manifest') getLiveInstallersMock.mockRejectedValueOnce(error);
+        else enforceInstallerPreflightMock.mockRejectedValueOnce(error);
+        const response = await postSingleItem();
+        expect(response.status).toBe(409);
+        expect(await response.json()).toMatchObject({ code: 'HASH_MISMATCH', retryable: false });
+        expect(log).not.toHaveBeenCalled();
+        expect(createMock).not.toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      } finally { log.mockRestore(); warn.mockRestore(); }
+    },
+  );
+
+  it('does not report a normal consent rejection as a packaging 503', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      checkStoredConsentMock.mockResolvedValueOnce(false);
+      verifyTenantConsentMock.mockResolvedValueOnce({ verified: false, error: 'consent_not_granted' });
+      expect((await postSingleItem()).status).toBe(403);
+      expect(log).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
+  });
+
   it('blocks a quarantined installer before creating a job or dispatching an Action', async () => {
     enforceInstallerPreflightMock.mockRejectedValueOnce(new InstallerPreflightError(
       'HASH_MISMATCH',
