@@ -672,7 +672,8 @@ export async function GET(request: Request) {
         forceCreate: item.forceCreate,
         sourceIntuneAppId: autoUpdate?.sourceIntuneAppId,
         carryOverAssignments: autoUpdate?.assignmentMigration?.carryOverAssignments,
-        removeAssignmentsFromPreviousApp: autoUpdate?.assignmentMigration?.removeAssignmentsFromPreviousApp,
+        // Queued policies may still contain the old implicit copy/removal flag.
+        removeAssignmentsFromPreviousApp: autoUpdate ? false : undefined,
         autoSupersede: autoUpdate?.autoSupersede,
         supersedenceType: autoUpdate?.supersedenceType,
         sourceType: item.sourceType,

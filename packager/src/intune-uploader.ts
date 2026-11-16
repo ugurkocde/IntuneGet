@@ -1032,7 +1032,10 @@ export class IntuneUploader {
       (nested?.carryOverAssignments as boolean | undefined) ??
         packageConfig.carryOverAssignments
     );
-    const removeAssignmentsFromPreviousApp = Boolean(
+    // Automatic updates copy assignments, including jobs queued by older versions.
+    // SQLite returns 1 while hosted storage returns true. Manual moves stay supported.
+    const isAutomaticUpdate = job.is_auto_update === true || job.is_auto_update === 1;
+    const removeAssignmentsFromPreviousApp = !isAutomaticUpdate && Boolean(
       (nested?.removeAssignmentsFromPreviousApp as boolean | undefined) ??
         packageConfig.removeAssignmentsFromPreviousApp
     );

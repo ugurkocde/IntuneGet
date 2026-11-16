@@ -271,7 +271,8 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
           supersedenceType: autoSupersede ? 'update' : undefined,
           assignmentMigration: {
             carryOverAssignments: Boolean(migration?.carryOverAssignments),
-            removeAssignmentsFromPreviousApp: Boolean(migration?.removeAssignmentsFromPreviousApp),
+            // Copying an update must preserve the original assignments.
+            removeAssignmentsFromPreviousApp: false,
           },
           description: config.description,
           notes: config.notes,

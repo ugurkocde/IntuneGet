@@ -460,7 +460,7 @@ export default function SettingsPage() {
                       <div>
                         <p className="text-text-primary font-medium"><T>Carry over assignments on app updates</T></p>
                         <p className="text-sm text-text-muted">
-                          <T>When enabled, assignments from the previous app version are copied to the new version and removed from the old app. When disabled, new app versions are created without assignments.</T>
+                          <T>When enabled, assignments from the previous app version are copied to the new version and kept on the old app. When disabled, new app versions are created without assignments.</T>
                         </p>
                       </div>
                       <div className="flex min-w-28 flex-col items-end gap-1">
