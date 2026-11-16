@@ -457,7 +457,7 @@ describe('POST /api/updates/trigger', () => {
 
     const { supabase } = createTriggerSupabaseMocks(policy, {
       latestUploadIntuneAppId: 'prev-app-1',
-      userSettings: { supersedePreviousApp: true },
+      userSettings: { carryOverAssignments: true, supersedePreviousApp: true },
     });
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
@@ -505,6 +505,8 @@ describe('POST /api/updates/trigger', () => {
         jobId: 'pkg-job-1',
         relationships: JSON.stringify(relationships),
         sourceIntuneAppId: 'prev-app-1',
+        carryOverAssignments: true,
+        removeAssignmentsFromPreviousApp: false,
         autoSupersede: true,
         supersedenceType: 'update',
       }),

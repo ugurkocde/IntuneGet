@@ -846,7 +846,7 @@ export class AutoUpdateTrigger {
       await this.getUserUpdateSettings(policy.user_id);
     const assignmentMigration = config.assignmentMigration ?? {
       carryOverAssignments: globalCarryOver,
-      removeAssignmentsFromPreviousApp: globalCarryOver,
+      removeAssignmentsFromPreviousApp: false,
     };
     const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
     const autoSupersede = supersedePreviousApp && Boolean(sourceIntuneAppId);

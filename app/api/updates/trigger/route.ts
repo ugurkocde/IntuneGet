@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
               forceCreate: deploymentConfig.forceCreateNewApp !== false,
               sourceIntuneAppId: installerInfo.currentIntuneAppId || undefined,
               carryOverAssignments: currentCarryOver,
-              removeAssignmentsFromPreviousApp: currentCarryOver,
+              removeAssignmentsFromPreviousApp: false,
               autoSupersede: supersedePrevious,
               supersedenceType: supersedePrevious ? 'update' : undefined,
               packageProfileSha256: triggerResult.packageProfileSha256,

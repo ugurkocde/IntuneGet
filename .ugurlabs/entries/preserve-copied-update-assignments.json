@@ -1,0 +1,5 @@
+{
+  "title": "Keep original assignments when copying app updates",
+  "summary": "Copying assignments to a new app version now preserves the previous version's assignments, including those needed for Company Portal automatic updates.",
+  "type": "fixed"
+}

@@ -1261,7 +1261,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
         user_profiles: { singleResult: { data: { email: 'user@example.com' }, error: null } },
         user_settings: {
           maybeSingleResult: {
-            data: { settings: { supersedePreviousApp: true } },
+            data: { settings: { carryOverAssignments: true, supersedePreviousApp: true } },
             error: null,
           },
         },
@@ -1300,6 +1300,10 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
         package_config: Record<string, unknown>;
       };
       expect(jobData.package_config.relationships).toEqual(relationships);
+      expect(jobData.package_config.assignmentMigration).toEqual({
+        carryOverAssignments: true,
+        removeAssignmentsFromPreviousApp: false,
+      });
       expect(jobData.package_config.autoSupersede).toBe(true);
       expect(jobData.package_config.sourceIntuneAppId).toBe('prev-app-1');
       expect(jobData.package_config.supersedenceType).toBe('update');
