@@ -1,0 +1,5 @@
+{
+  "title": "Improve catalog release history diagnostics",
+  "summary": "Improve diagnosis of interrupted catalog release history requests while keeping search values and app details out of diagnostic identifiers.",
+  "type": "improved"
+}

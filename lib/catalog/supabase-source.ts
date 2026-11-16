@@ -148,8 +148,12 @@ export class SupabaseCatalogSource implements CatalogSource {
     let status: number | null = null;
     // This hook is local to this RPC. Follow-up metadata reads keep their client.
     const client = createClient(url, key, { global: { fetch: async (input, init) => {
+      // Match even aborted reads to existing edge logs without filter values.
+      const headers = new Headers(init?.headers);
+      const clientInfo = headers.get('x-client-info');
+      headers.set('x-client-info', `${clientInfo ? `${clientInfo}; ` : ''}ig-hist=${historyInstance}.${seq}.${historyRpcLabel(rpcName)}`);
       dispatchMs = elapsed();
-      const response = await globalThis.fetch(input, init);
+      const response = await globalThis.fetch(input, { ...init, headers });
       headersMs = elapsed();
       status = response.status;
       return response;
