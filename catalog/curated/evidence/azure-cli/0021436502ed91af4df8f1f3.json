@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "c38730eeadc0117fd5a69f92aa1d652e1c405ab5",
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "5718e53661fcc729b603632f111bc1b67a445106",
+    "runId": "43862796305"
+  },
+  "candidate": {
+    "appId": "azure-cli",
+    "version": "2.93.0",
+    "installerUrl": "https://github.com/Azure/azure-cli/releases/download/azure-cli-2.93.0/azure-cli-2.93.0-x64.msi",
+    "vendorSha256": "66c7241d1a10d7c27110e4b434b4ecd3b850db4ddfce12c2e1f0b0d00071e45e",
+    "releaseNotesUrl": "https://github.com/Azure/azure-cli/releases/tag/azure-cli-2.93.0",
+    "discoveredAt": "2026-11-16T01:45:28.576Z",
+    "id": "0021436502ed91af4df8f1f3"
+  },
+  "previous": {
+    "appId": "azure-cli",
+    "version": "2.92.0",
+    "installerUrl": "https://github.com/Azure/azure-cli/releases/download/azure-cli-2.92.0/azure-cli-2.92.0-x64.msi",
+    "vendorSha256": "adae8646ce0e3b322e33229268c686703560ba865d4fd8546154d4c940b289e8",
+    "releaseNotesUrl": "https://github.com/Azure/azure-cli/releases/tag/azure-cli-2.92.0",
+    "discoveredAt": "2026-11-03T00:49:40.316Z",
+    "id": "59cecf13885b5a54bcead807"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "0021436502ed91af4df8f1f3",
+      "installerSha256": "66c7241d1a10d7c27110e4b434b4ecd3b850db4ddfce12c2e1f0b0d00071e45e",
+      "sourceUrl": "https://github.com/Azure/azure-cli/releases/download/azure-cli-2.93.0/azure-cli-2.93.0-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "suspicious": 0,
+        "scannedAt": "2026-11-16T12:15:05.9333862Z",
+        "scanner": "defender",
+        "malicious": 0,
+        "signatureVersion": "1.463.328.0",
+        "installerSha256": "66c7241d1a10d7c27110e4b434b4ecd3b850db4ddfce12c2e1f0b0d00071e45e",
+        "engineVersion": "1.1.26100.4"
+      }
+    },
+    "previous": {
+      "candidateId": "59cecf13885b5a54bcead807",
+      "installerSha256": "adae8646ce0e3b322e33229268c686703560ba865d4fd8546154d4c940b289e8",
+      "sourceUrl": "https://github.com/Azure/azure-cli/releases/download/azure-cli-2.92.0/azure-cli-2.92.0-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "suspicious": 0,
+        "scannedAt": "2026-11-16T12:15:11.7154962Z",
+        "scanner": "defender",
+        "malicious": 0,
+        "signatureVersion": "1.463.328.0",
+        "installerSha256": "adae8646ce0e3b322e33229268c686703560ba865d4fd8546154d4c940b289e8",
+        "engineVersion": "1.1.26100.4"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "0021436502ed91af4df8f1f3",
+    "packageId": "IntuneGet.Curated.AzureCLI",
+    "installerUrl": "https://github.com/Azure/azure-cli/releases/download/azure-cli-2.93.0/azure-cli-2.93.0-x64.msi",
+    "installerSha256": "66c7241d1a10d7c27110e4b434b4ecd3b850db4ddfce12c2e1f0b0d00071e45e",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.AzureCLI",
+      "displayName": "Azure CLI",
+      "publisher": "Microsoft Corporation",
+      "version": "2.93.0",
+      "architecture": "x64",
+      "installerSha256": "66c7241d1a10d7c27110e4b434b4ecd3b850db4ddfce12c2e1f0b0d00071e45e",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Azure CLI",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureCLI\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.93.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureCLI\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.93.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "F42FC8AD2E41DB9F1F57454C35AC567E9FD0665B351509668071AD22773563CC",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.AzureCLI\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.93.0\",\"wingetId\":\"IntuneGet.Curated.AzureCLI\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.93.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureCLI\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"E72C0032BDB1745C15889B674877220C186211948DDF6B560DB8C245A13491CD\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"66C7241D1A10D7C27110E4B434B4ECD3B850DB4DDFCE12C2E1F0B0D00071E45E\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Azure CLI\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.93.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AzureCLI\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"06C1790DCA320F90E9E5826F4D855A46B38DDF047A5EB775B70F354834ADA19C\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "06c1790dca320f90e9e5826f4d855a46b38ddf047a5eb775b70f354834ada19c",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "installerVersion": "2.93.0",
+    "previousInstallerSha256": "adae8646ce0e3b322e33229268c686703560ba865d4fd8546154d4c940b289e8",
+    "testedAt": "2026-11-16T12:31:34.7977428Z",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "candidateId": "0021436502ed91af4df8f1f3",
+    "executionProfileSha256": "F42FC8AD2E41DB9F1F57454C35AC567E9FD0665B351509668071AD22773563CC",
+    "installerSha256": "66c7241d1a10d7c27110e4b434b4ecd3b850db4ddfce12c2e1f0b0d00071e45e",
+    "executionContext": "LocalSystem",
+    "testLevel": "psadt-package",
+    "architecture": "x64",
+    "upgradeFromVersion": "2.92.0"
+  },
+  "verifiedAt": "2026-11-16T12:31:45.2997278Z",
+  "authenticatedArtifact": {
+    "id": 14225023599,
+    "sha256": "39c05efc4b353d47e7af0205337a07fe349159e39682440389bbae569cd52adf"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-16T13:36:09.283Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
