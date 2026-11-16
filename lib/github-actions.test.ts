@@ -188,6 +188,17 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it.each(['winget', 'custom', 'ordinary'])('carries a rate limit identity only for a safe new admission: %s', async mode => {
+    const request = vi.fn().mockResolvedValue(new Response('', {status: 429}));
+    vi.stubGlobal('fetch', request);
+    const input = workflowInputs({sourceType: mode === 'custom' ? 'custom' : 'winget', wingetId: 'Example.App', installerSha256: 'A'.repeat(64), hashValidationMode: 'strict'});
+    const error = await triggerPackagingWorkflow(input, config, {skipRunCapture: true, newJobAdmission: mode !== 'ordinary'}).catch(error => error);
+    expect(error).toBeInstanceOf(WorkflowDispatchRateLimitError);
+    if (mode === 'winget') expect(error.dispatchIdentity).toMatch(/^[a-f0-9]{64}$/);
+    else expect(error.dispatchIdentity).toBeUndefined();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it('exposes a rejected dispatch as a typed hold without sending a second POST', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('secondary rate limit exceeded: private details', {
       status: 403, headers: { 'retry-after': '120' },

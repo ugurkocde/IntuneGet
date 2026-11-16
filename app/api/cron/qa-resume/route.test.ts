@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { NextRequest } from 'next/server';
 const securityHoldsMock = vi.hoisted(() => vi.fn().mockResolvedValue(new Map()));
 vi.mock('@/lib/qa/installer-security-holds', async importOriginal => ({ ...(await importOriginal<typeof import('@/lib/qa/installer-security-holds')>()), loadInstallerSecurityHolds: securityHoldsMock }));
 vi.mock('@/lib/customer-upstream-recovery', () => ({ holdCustomerUpstreamJob: vi.fn(async () => false), reopenCustomerUpstreamJobs: vi.fn(async () => 0) }));
@@ -40,10 +42,10 @@ vi.mock('@/lib/curated-catalog/server', async (importOriginal) => ({
 
 vi.mock('@/lib/intune-approval-guard', () => ({ findPendingApprovalBlocks: findPendingApprovalBlocksMock }));
 vi.mock('@/lib/db', () => ({ getDatabase: () => ({}) }));
-vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
+vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock, isSupabaseServerConfigured: () => true }));
 vi.mock('@/lib/features', () => ({ getFeatureFlags: getFeatureFlagsMock }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
-vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: triggerPackagingWorkflowMock }));
+vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: triggerPackagingWorkflowMock, isGitHubActionsConfigured: () => true }));
 vi.mock('@/lib/auto-update/cleanup', () => ({
   handleAutoUpdateJobCompletion: handleAutoUpdateJobCompletionMock,
 }));
@@ -63,6 +65,13 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
   reconcileCatalogInstaller: reconcileCatalogInstallerMock,
 }));
 
+const manualMocks = vi.hoisted(() => ({ installer: vi.fn(), trigger: vi.fn() }));
+vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: async () => ({ userId: 'user-test', tenantId: 'tenant-test' }) }));
+vi.mock('@/lib/msp/tenant-resolution', () => ({ resolveTargetTenantId: async () => ({ tenantId: 'tenant-test', errorResponse: null }) }));
+vi.mock('@/lib/auto-update/trigger', () => ({
+  AutoUpdateTrigger: class { triggerAutoUpdate = manualMocks.trigger; }, getLatestInstallerInfo: manualMocks.installer,
+}));
+import { POST } from '@/app/api/updates/trigger/route';
 import { GET } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
@@ -124,10 +133,12 @@ function jobStore(initial: Record<string, unknown>) {
     builder.update = vi.fn((value) => { patch = value; return builder; });
     builder.eq = vi.fn((column, value) => { filters.push([column, value]); return builder; });
     builder.is = vi.fn((column, value) => { filters.push([column, value]); return builder; });
+    builder.in = vi.fn((column, values) => { filters.push([column, { values }]); return builder; });
     builder.maybeSingle = vi.fn(async () => {
       const matches = filters.every(([column, value]) => {
         const [field, key] = column.split('->>');
         const actual = key ? (row[field] as Record<string, unknown> | null)?.[key] : row[field];
+        if (value && typeof value === 'object' && 'values' in value) return (value.values as unknown[]).includes(actual);
         return (actual ?? null) === value;
       });
       if (!matches) return { data: null, error: null };
@@ -1275,6 +1286,76 @@ describe('GET /api/cron/qa-resume', () => {
       };
       return { store, run };
     }
+
+    it.each([false, true])('matches the real manual handler input on pinned resume, payload changed: %s', async changed => {
+      const { store, run } = setup();
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fixture.invalid');
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-fixture-key');
+      const policy = { id: 'policy-test', user_id: 'user-test', tenant_id: 'tenant-test',
+        winget_id: 'Example.App', policy_type: 'auto_update', is_enabled: true,
+        deployment_config: { architecture: 'x64', installCommand: 'old.exe /old',
+          assignedGroups: ['group-test'], assignmentMigration: { carryOverAssignments: false } },
+      };
+      Object.assign(store.row, { user_id: 'user-test', auto_update_policy_id: policy.id,
+        is_auto_update: true, status: 'queued', error_details: null,
+        package_config: { architecture: 'x64', installerSuccessCodes: [0, 3010],
+          forceCreate: true, sourceIntuneAppId: null, autoSupersede: false,
+          assignmentMigration: { carryOverAssignments: true },
+          assignments: [{ target: { '@odata.type': '#microsoft.graph.groupAssignmentTarget', groupId: 'group-test' }, intent: 'required' }],
+        },
+      });
+      let phase = 'manual';
+      const resumeClient = createServerClientMock.getMockImplementation()!();
+      createServerClientMock.mockReturnValue({ from: (table: string) => {
+        if (phase !== 'manual') return resumeClient.from(table);
+        if (table === 'packaging_jobs') return {
+          select: () => chain({ data: structuredClone(store.row), error: null }),
+          update: (patch: unknown) => (store.updateQuery().update as (v: unknown) => unknown)(patch),
+        };
+        if (table === 'user_settings') return chain({ data: { settings: { carryOverAssignments: true, supersedePreviousApp: true } }, error: null });
+        if (table === 'upload_history') return chain({ data: null, error: null });
+        throw new Error('Unexpected manual table ' + table);
+      } });
+      const client = createServerClientMock.getMockImplementation()!();
+      const originalFrom = client.from;
+      client.from = (table: string) => {
+        if (phase === 'manual' && ['app_update_policies', 'update_check_results'].includes(table)) {
+          const q = { eq: () => q, single: async () => ({ data: table === 'app_update_policies' ? policy : { current_version: '0.9' }, error: null }) };
+          return { select: () => q };
+        }
+        return originalFrom(table);
+      };
+      manualMocks.installer.mockResolvedValue({ ok: true, info: { wingetId: 'Example.App', latestVersion: '1.0', installerType: 'exe' } });
+      manualMocks.trigger.mockImplementation(async (_policy, _info, options) => {
+        expect(options.assignmentMigrationOverride).toEqual({ carryOverAssignments: true, removeAssignmentsFromPreviousApp: false });
+        return { success: true, packagingJobId: store.row.id };
+      });
+      const captured: unknown[] = [];
+      let posted = 0;
+      triggerPackagingWorkflowMock.mockImplementation(async (inputs, _config, options) => {
+        captured.push(inputs);
+        const canonical = (v: unknown): unknown => v && typeof v === 'object'
+          ? Array.isArray(v) ? v.map(canonical) : Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).filter(([, x]) => x !== undefined).map(([k, x]) => [k, canonical(x)])) : v;
+        const identity = createHash('sha256').update(JSON.stringify(canonical(inputs))).digest('hex');
+        if (phase === 'manual') throw new WorkflowDispatchUnconfirmedError(503, Date.now(), identity);
+        await options.beforeDispatch(identity);
+        posted++;
+        return { success: true };
+      });
+      const response = await POST(new NextRequest('https://example.test/api/updates/trigger', {
+        method: 'POST', headers: { authorization: 'Bearer fixture' },
+        body: JSON.stringify({ winget_id: 'Example.App', tenant_id: 'tenant-test' }),
+      }));
+      expect(await response.json()).toMatchObject({ triggered: 1, failed: 0 });
+      expect(store.row.status).toBe('awaiting_qa');
+      if (changed) store.row.install_command = 'installer.exe /different';
+      phase = 'resume';
+      expect(await (await run()).json()).toMatchObject({ resumed: changed ? 0 : 1, failed: changed ? 1 : 0 });
+      expect(captured).toHaveLength(2);
+      if (!changed) expect(captured[1]).toEqual(captured[0]);
+      else expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+      expect(posted).toBe(changed ? 0 : 1);
+    });
 
     it('holds a fresh unconfirmed dispatch and shares the existing bounded retry budget', async () => {
       const { store, run } = setup();
