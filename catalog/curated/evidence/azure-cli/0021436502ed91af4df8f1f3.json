@@ -141,7 +141,7 @@
   },
   "automatedApproval": {
     "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
-    "approvedAt": "2026-11-16T12:55:49.055Z",
+    "approvedAt": "2026-11-16T13:36:09.283Z",
     "unsignedException": null,
     "upgradeException": null
   }
