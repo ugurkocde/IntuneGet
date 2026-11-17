@@ -29,6 +29,7 @@ describe('MSP approval checkpoints', () => {
         eq: (key: string, value: string) => { if (key === 'id' && current) current.id = value; return builder; },
         update: (value: Record<string, unknown>) => { current = { value }; if (table === 'msp_batch_deployment_items') changes.push(current); return builder; },
         single: async () => ({ data: batch, error: null }),
+        maybeSingle: async () => ({ data: { id: current?.id }, error: null }),
         then: (resolve: (r: unknown) => unknown) => Promise.resolve(result).then(resolve),
       };
       return builder;
