@@ -1287,6 +1287,26 @@ describe('GET /api/cron/qa-resume', () => {
       return { store, run };
     }
 
+    it('preserves the scheduled custom rate limit hold without a manual dispatch identity', async () => {
+      const { store, run } = setup();
+      Object.assign(store.row, { is_auto_update: true, error_code: 'WORKFLOW_DISPATCH_RATE_LIMITED',
+        error_details: { workflow_dispatch_rate_limit_attempts: 1 },
+        package_config: { sourceType: 'custom', installerSha256: 'A'.repeat(64), architecture: 'x64' },
+      });
+      let posted = 0;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _ref, options) => {
+        expect(options).toBeUndefined();
+        posted++;
+        return { runId: 123 };
+      });
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(posted).toBe(1);
+      expect(store.row.status).toBe('packaging');
+      expect(store.row.error_code).toBeNull();
+      expect(store.row.error_details).not.toHaveProperty('workflow_dispatch_unconfirmed_identity');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+
     it.each(['success', '429', '503', 'network', 'invalid', 'local', 'changed', 'callback', 'due', 'budget', 'unconfirmed'])('resumes custom payload without QA work: %s', async mode => {
       const { store, run } = setup();
       Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null, is_auto_update: true,

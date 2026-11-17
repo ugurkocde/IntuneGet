@@ -82,8 +82,7 @@ export async function GET(request: Request) {
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = storedJobItem(job);
     const customRetry = job.is_auto_update && item?.sourceType === 'custom' &&
-      (['WORKFLOW_DISPATCH_RATE_LIMITED', 'WORKFLOW_DISPATCH_UNCONFIRMED'].includes(job.error_code ?? '') ||
-        Boolean(job.error_details && typeof job.error_details === 'object' && Object.hasOwn(job.error_details, DISPATCH_IDENTITY_KEY)));
+      Boolean(job.error_details && typeof job.error_details === 'object' && Object.hasOwn(job.error_details, DISPATCH_IDENTITY_KEY));
     const skipCandidateQa = customRetry || skipCustomerQa;
     let observed = {
       qa_candidate_id: job.qa_candidate_id,
