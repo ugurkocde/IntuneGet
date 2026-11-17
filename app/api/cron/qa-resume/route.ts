@@ -81,6 +81,10 @@ export async function GET(request: Request) {
     }
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = storedJobItem(job);
+    const customRetry = job.is_auto_update && item?.sourceType === 'custom' &&
+      (['WORKFLOW_DISPATCH_RATE_LIMITED', 'WORKFLOW_DISPATCH_UNCONFIRMED'].includes(job.error_code ?? '') ||
+        Boolean(job.error_details && typeof job.error_details === 'object' && Object.hasOwn(job.error_details, DISPATCH_IDENTITY_KEY)));
+    const skipCandidateQa = customRetry || skipCustomerQa;
     let observed = {
       qa_candidate_id: job.qa_candidate_id,
       installer_sha256: job.installer_sha256,
@@ -96,7 +100,7 @@ export async function GET(request: Request) {
       package_profile_sha256: string | null;
       winget_id: string | null; version: string | null; architecture: string | null; installer_sha256: string | null;
     } | null = null;
-    if (job.qa_candidate_id && !skipCustomerQa) {
+    if (job.qa_candidate_id && !skipCandidateQa) {
       const { data, error: candidateError } = await supabase
         .from('qa_candidates')
         .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256, winget_id, version, architecture, installer_sha256')
@@ -111,7 +115,7 @@ export async function GET(request: Request) {
     let appVersionAlreadyPassed = false;
     let demandWasEvaluated = false;
 
-    if (!skipCustomerQa && (!candidate || candidateStatus === 'superseded')) {
+    if (!skipCandidateQa && (!candidate || candidateStatus === 'superseded')) {
       // A waiting job can outlive the catalog metadata and packager revision
       // that created it. Reconcile the exact version against the trusted live
       // manifest before rebuilding QA demand, then persist that refreshed
@@ -315,7 +319,7 @@ export async function GET(request: Request) {
     }
 
 
-    const unavailable = !skipCustomerQa && demandWasEvaluated && candidateStatus === 'failed' && !observed.qa_candidate_id
+    const unavailable = !skipCandidateQa && demandWasEvaluated && candidateStatus === 'failed' && !observed.qa_candidate_id
       ? knownUnavailableDisposition(candidateFailureSummary) : null;
     if (unavailable) {
       const { data: changed, error: unavailableError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
@@ -331,7 +335,7 @@ export async function GET(request: Request) {
     // A completed VM run may still be awaiting result publication. Keep its
     // customer jobs waiting for normal QA reconciliation, including during
     // continuity, without treating publication failure as installer failure.
-    if (!skipCustomerQa && candidateStatus === 'error' &&
+    if (!skipCandidateQa && candidateStatus === 'error' &&
         candidate?.phase === 'publishing' && candidate.github_run_id) {
       waitingIds.push(job.id);
       waiting++;
@@ -340,7 +344,7 @@ export async function GET(request: Request) {
 
 
     let pretestSecurityRefusal: string | null = null;
-    if (!skipCustomerQa && isExactPretestCandidate(candidate, {
+    if (!skipCandidateQa && isExactPretestCandidate(candidate, {
       candidateId: observed.qa_candidate_id, wingetId: job.winget_id, version: job.version,
       architecture: observedConfig?.architecture || observed.architecture || 'x64',
       hash: observedConfig?.installerSha256 || observed.installer_sha256 || '', profile: job.execution_profile_sha256,
@@ -389,7 +393,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
+    if (!skipCandidateQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
       const now = new Date().toISOString();
       const failureReason = candidateFailureSummary?.trim() || 'The required installation test could not complete.';
       const { data: updated } = await supabase
@@ -418,7 +422,7 @@ export async function GET(request: Request) {
       }
       continue;
     }
-    const qaDeferred = skipCustomerQa || (
+    const qaDeferred = customRetry || skipCustomerQa || (
       !job.is_auto_update && isDeferredCustomerQaEnabled() &&
       Boolean(candidateStatus && ['queued', 'dispatched', 'running'].includes(candidateStatus))
     );
@@ -563,17 +567,17 @@ export async function GET(request: Request) {
     const retryDetails = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
       ? job.error_details : {};
     const retryIdentity = retryDetails[DISPATCH_IDENTITY_KEY];
-    const deferredClaim = Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
+    const deferredClaim = customRetry || Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
     let claimedPackaging = false;
     const claimForDispatch = async () => {
       const claim = guardObservedIdentity(supabase
       .from('packaging_jobs')
       .update({
         status: nextStatus,
-        status_message: qaDeferred
+        status_message: customRetry ? 'Preparing deployment' : qaDeferred
           ? skipCustomerQa ? 'Preparing deployment' : 'Preparing deployment while installation validation remains scheduled'
           : 'Installation test passed; packaging started automatically',
-        qa_completed_at: qaDeferred ? null : now,
+        qa_completed_at: customRetry ? job.qa_completed_at ?? null : qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
         ...(['WORKFLOW_DISPATCH_RATE_LIMITED', 'WORKFLOW_DISPATCH_UNCONFIRMED'].includes(job.error_code ?? '') ? {
           error_code: null, error_message: null, error_stage: null, error_category: null,
@@ -619,7 +623,7 @@ export async function GET(request: Request) {
         }
         throw new WorkflowDispatchRetryStopped();
       };
-      if (deferredClaim && (features.localPackager || typeof retryIdentity !== 'string' || !/^[a-f0-9]{64}$/i.test(retryIdentity))) {
+      if (deferredClaim && ((customRetry && job.error_code !== 'WORKFLOW_DISPATCH_RATE_LIMITED') || features.localPackager || typeof retryIdentity !== 'string' || !/^[a-f0-9]{64}$/i.test(retryIdentity))) {
         await rejectChangedRetry();
       }
       const workflowInputs = buildStoredJobWorkflowInputs(job, item, {
@@ -646,7 +650,8 @@ export async function GET(request: Request) {
       const failureStatus = claimedPackaging ? 'packaging' : 'awaiting_qa';
       const licenceRequired = error instanceof CuratedLicenceError;
       const rateLimit = error instanceof WorkflowDispatchRateLimitError || error instanceof WorkflowDispatchUnconfirmedError ? error : null;
-      const rateHold = rateLimit ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
+      const rateHold = rateLimit && (!customRetry || rateLimit instanceof WorkflowDispatchRateLimitError)
+        ? dispatchRateLimitHold(rateLimit, job.error_details) : null;
       if (rateLimit) {
         const { data: heldJob, error: holdError } = await guardObservedIdentity(supabase
           .from('packaging_jobs')

@@ -1287,7 +1287,45 @@ describe('GET /api/cron/qa-resume', () => {
       return { store, run };
     }
 
-    it.each([false, true])('matches the real manual handler input on pinned resume, payload changed: %s', async changed => {
+    it.each(['success', '429', '503', 'network', 'invalid', 'local', 'changed', 'callback', 'due', 'budget', 'unconfirmed'])('resumes custom payload without QA work: %s', async mode => {
+      const { store, run } = setup();
+      Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null, is_auto_update: true,
+        error_code: mode === 'unconfirmed' ? 'WORKFLOW_DISPATCH_UNCONFIRMED' : 'WORKFLOW_DISPATCH_RATE_LIMITED',
+        qa_resume_due_at: '2026-01-01T00:00:00Z',
+        error_details: { workflow_dispatch_unconfirmed_identity: mode === 'invalid' ? 'bad' : 'b'.repeat(64),
+          workflow_dispatch_rate_limit_attempts: mode === 'budget' ? 5 : 1 },
+        package_config: { sourceType: 'custom', installerSha256: 'A'.repeat(64), architecture: 'x64' },
+      });
+      if (mode === 'local') getFeatureFlagsMock.mockReturnValue({ localPackager: true });
+      let posted = 0;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _ref, options) => {
+        if (mode === 'callback') store.row.callback_run_id = 'new-owner';
+        if (mode === 'due') store.row.qa_resume_due_at = '2030-01-01T00:00:00Z';
+        await options.beforeDispatch(mode === 'changed' ? 'c'.repeat(64) : 'b'.repeat(64));
+        posted++;
+        if (['429', 'budget'].includes(mode)) throw new WorkflowDispatchRateLimitError(429, new Date(Date.now()+60000).toISOString());
+        if (['503', 'network'].includes(mode)) throw new WorkflowDispatchUnconfirmedError(mode === '503' ? 503 : null);
+        return { runId: 123 };
+      });
+      const client = createServerClientMock.getMockImplementation()!();
+      await run();
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(reconcileCatalogInstallerMock).not.toHaveBeenCalled();
+      expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
+      expect(client.from).not.toHaveBeenCalledWith('qa_package_results');
+      expect(posted).toBe(['invalid','local','changed','callback','due','unconfirmed'].includes(mode) ? 0 : 1);
+      expect(store.row.qa_completed_at).toBeNull();
+      if (['invalid','local','changed','unconfirmed'].includes(mode)) expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+      else if (mode === '429') {
+        expect(store.row.status).toBe('awaiting_qa');
+        expect(store.row.error_details).toMatchObject({ workflow_dispatch_rate_limit_attempts: 2, workflow_dispatch_unconfirmed_identity: 'b'.repeat(64) });
+      } else if (['503','network','budget'].includes(mode)) {
+        expect(store.row.status).toBe('failed');
+        expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalled();
+      } else if (mode === 'success') expect(store.row.status).toBe('packaging');
+    });
+
+    it.each([{ custom: false, changed: false }, { custom: false, changed: true }, { custom: true, changed: false }, { custom: true, changed: true }])('matches the real manual handler input on pinned resume: %j', async ({ custom, changed }) => {
       const { store, run } = setup();
       vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fixture.invalid');
       vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-fixture-key');
@@ -1298,7 +1336,7 @@ describe('GET /api/cron/qa-resume', () => {
       };
       Object.assign(store.row, { user_id: 'user-test', auto_update_policy_id: policy.id,
         is_auto_update: true, status: 'queued', error_details: null,
-        package_config: { architecture: 'x64', installerSuccessCodes: [0, 3010],
+        package_config: { sourceType: custom ? 'custom' : 'winget', architecture: 'x64', installerSuccessCodes: [0, 3010],
           forceCreate: true, sourceIntuneAppId: null, autoSupersede: false,
           assignmentMigration: { carryOverAssignments: true },
           assignments: [{ target: { '@odata.type': '#microsoft.graph.groupAssignmentTarget', groupId: 'group-test' }, intent: 'required' }],
@@ -1337,7 +1375,10 @@ describe('GET /api/cron/qa-resume', () => {
         const canonical = (v: unknown): unknown => v && typeof v === 'object'
           ? Array.isArray(v) ? v.map(canonical) : Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).filter(([, x]) => x !== undefined).map(([k, x]) => [k, canonical(x)])) : v;
         const identity = createHash('sha256').update(JSON.stringify(canonical(inputs))).digest('hex');
-        if (phase === 'manual') throw new WorkflowDispatchUnconfirmedError(503, Date.now(), identity);
+        if (phase === 'manual') {
+          if (custom) { await options.beforeDispatch(identity); throw new WorkflowDispatchRateLimitError(429, new Date(Date.now()+60000).toISOString()); }
+          throw new WorkflowDispatchUnconfirmedError(503, Date.now(), identity);
+        }
         await options.beforeDispatch(identity);
         posted++;
         return { success: true };
@@ -1350,10 +1391,12 @@ describe('GET /api/cron/qa-resume', () => {
       expect(store.row.status).toBe('awaiting_qa');
       if (changed) store.row.install_command = 'installer.exe /different';
       phase = 'resume';
+      ensureQaDemandMock.mockClear();
       expect(await (await run()).json()).toMatchObject({ resumed: changed ? 0 : 1, failed: changed ? 1 : 0 });
       expect(captured).toHaveLength(2);
       if (!changed) expect(captured[1]).toEqual(captured[0]);
       else expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+      if (custom) expect(ensureQaDemandMock).not.toHaveBeenCalled();
       expect(posted).toBe(changed ? 0 : 1);
     });
 
