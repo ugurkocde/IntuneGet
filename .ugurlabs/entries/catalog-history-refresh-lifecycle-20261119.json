@@ -1,0 +1,5 @@
+{
+  "title": "Keep catalog history refreshes running after pages render",
+  "summary": "Catalog history refreshes now stay attached to the request lifecycle while their existing reads finish, helping stale pages refresh without changing query limits or caching incomplete results.",
+  "type": "fixed"
+}

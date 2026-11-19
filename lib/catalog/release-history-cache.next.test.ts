@@ -5,7 +5,7 @@ import { withHistoryCapacity } from './release-history-capacity';
 Object.assign(globalThis, { AsyncLocalStorage });
 const { unstable_cache } = await import('next/cache');
 const { workAsyncStorage } = await import('next/dist/server/app-render/work-async-storage.external');
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 it.each(['rejected', 'wait_timeout'] as const)('keeps the actual Next stale value and no-cache error on %s', async admission => {
   if (admission === 'wait_timeout') vi.useFakeTimers();
@@ -38,4 +38,42 @@ it.each(['rejected', 'wait_timeout'] as const)('keeps the actual Next stale valu
     await rejected;
     expect(cache.set).not.toHaveBeenCalled();
   } finally { release(); await Promise.all([...active, ...queued]); vi.useRealTimers(); }
+});
+
+it.each(['getReleaseHistory', 'countReleaseHistory'] as const)('keeps a late stale %s refresh alive after the render snapshot', async method => {
+  const { SupabaseCatalogSource } = await import('./supabase-source');
+  const { executeRevalidates } = await import('next/dist/server/revalidation-utils');
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://catalog.example.invalid');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-fixture-key');
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const fetchMock = vi.fn(async () => { await gate; return Response.json({ rows: [], total: 7 }); });
+  vi.stubGlobal('fetch', fetchMock);
+  const lastGood = method === 'getReleaseHistory' ? { rows: [], total: 3 } : 3;
+  const incrementalCache = { generateSimpleCacheKey: async (key: string) => key,
+    get: vi.fn(async () => ({ isStale: true, value: { kind: 'FETCH', data: { body: JSON.stringify(lastGood) } } })),
+    set: vi.fn(async () => {}) };
+  vi.stubGlobal('__incrementalCache', incrementalCache);
+  const source = new SupabaseCatalogSource();
+  const callback = unstable_cache(() => source[method]({query: '', month: '', kind: 'all', page: 1}), ['fixture-late-history', method], {revalidate: 300});
+  const after = vi.fn();
+  const store = { nextFetchId: 1, route: '/apps/releases', pendingRevalidates: {}, isStaticGeneration: false, afterContext: { after } };
+  try {
+    // Streaming can snapshot the background work before the stale hit occurs.
+    await executeRevalidates(store as never);
+    expect(await workAsyncStorage.run(store as never, () => callback())).toEqual(lastGood);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(after).toHaveBeenCalledOnce();
+    const keptAlive = after.mock.calls[0][0] as Promise<void>;
+    let settled = false;
+    void keptAlive.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    await keptAlive;
+    expect(settled).toBe(true);
+  } finally {
+    release();
+    await Promise.all(Object.values(store.pendingRevalidates));
+  }
 });
