@@ -371,6 +371,7 @@ export async function POST(request: NextRequest) {
             const isBatch = updateRequests.length > 1;
             const customSource = [deploymentConfig.sourceType, installerInfo.sourceType, item.sourceType].includes('custom');
             let claimedAt: string | null = null;
+            let sentIdentity: string | undefined;
             const ownedWrite = (patch: Database['public']['Tables']['packaging_jobs']['Update'], afterClaim = false) => {
               let query = supabase.from('packaging_jobs').update(patch)
                 .eq('id', job.id).eq('user_id', user.userId).eq('tenant_id', req.tenant_id)
@@ -391,12 +392,13 @@ export async function POST(request: NextRequest) {
                 skipRunCapture: isBatch,
                 requireQaPass: true,
                 newJobAdmission: !customSource,
-                beforeDispatch: async () => {
+                beforeDispatch: async identity => {
+                  sentIdentity = identity;
                   if (job.status !== 'awaiting_qa') return;
                   const now = new Date().toISOString();
                   const { data: won, error } = await ownedWrite({ status: 'packaging',
-                    status_message: 'Installation test passed; packaging started',
-                    packaging_started_at: now, qa_completed_at: job.qa_completed_at ?? now });
+                    status_message: customSource ? 'Preparing deployment' : 'Installation test passed; packaging started',
+                    packaging_started_at: now, qa_completed_at: job.qa_completed_at ?? (customSource ? null : now) });
                   if (error) throw new Error('Could not claim packaging safely. Refresh the deployment status.');
                   if (!won) throw new WorkflowDispatchRetryStopped();
                   claimedAt = now;
@@ -413,7 +415,11 @@ export async function POST(request: NextRequest) {
               if (error instanceof WorkflowDispatchUnconfirmedError || error instanceof WorkflowDispatchRateLimitError) {
                 // Only a fresh ownerless admission can be deferred. The resume
                 // path checks the exact payload pin before claiming or posting.
-                const hold = customSource ? null : error instanceof WorkflowDispatchRateLimitError
+                const hold = customSource
+                  ? error instanceof WorkflowDispatchRateLimitError && item.sourceType === 'custom' &&
+                    typeof sentIdentity === 'string' && /^[a-f0-9]{64}$/i.test(sentIdentity)
+                    ? dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: sentIdentity }) : null
+                  : error instanceof WorkflowDispatchRateLimitError
                   ? error.dispatchIdentity === undefined ? null
                     : dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: error.dispatchIdentity })
                   : dispatchRateLimitHold(error, null);
