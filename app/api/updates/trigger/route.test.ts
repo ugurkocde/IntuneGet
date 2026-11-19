@@ -817,6 +817,7 @@ describe('POST /api/updates/trigger', () => {
       policy_type: 'auto_update', is_enabled: true, deployment_config: {} } as AppUpdatePolicy;
     const row: Record<string, unknown> = { id: 'job-race', user_id: 'user-1', tenant_id: 'tenant-1',
       auto_update_policy_id: 'policy-1', is_auto_update: true, status: mode === 'queued' ? 'queued' : 'awaiting_qa',
+      package_config: mode.startsWith('custom ') ? { sourceType: 'custom' } : {},
       qa_resume_due_at: '2026-01-01T00:00:00Z', qa_candidate_id: 'candidate', installer_sha256: 'a'.repeat(64), architecture: 'x64' };
     const { supabase } = createTriggerSupabaseMocks(policy, { storedJob: { ...row } });
     const from = supabase.from;
@@ -858,7 +859,7 @@ describe('POST /api/updates/trigger', () => {
           installerSha256: 'a'.repeat(64), packageProfileSha256: 'b'.repeat(64), reason: 'missing' });
       }
       if (mode === 'lost') row.status = 'packaging'; // cron wins during preparation
-      await options?.beforeDispatch?.({} as never);
+      await options?.beforeDispatch?.('b'.repeat(64));
       expect(row.status).toBe(mode === 'queued' ? 'queued' : 'packaging');
       posts++;
       if (mode.includes('503')) throw new WorkflowDispatchUnconfirmedError(503, Date.now(), 'b'.repeat(64));
@@ -889,9 +890,9 @@ describe('POST /api/updates/trigger', () => {
       expect(writes[1].filters).toMatchObject({ status: 'packaging', packaging_started_at: writes[0].patch.packaging_started_at });
       if (mode === '429 lost') { expect(writes[1].won).toBe(false); expect(body.results[0].error).toMatch(/status changed/); expect(row.packaging_started_at).toBe('new-owner'); return; }
       expect(writes[1].won).toBe(true);
-      const terminal = ['custom 503', '429 no pin', '429 invalid pin', 'custom 429'].includes(mode);
+      const terminal = ['custom 503', '429 no pin', '429 invalid pin'].includes(mode);
       expect(row.status).toBe(terminal ? 'failed' : 'awaiting_qa');
-      if (mode === '503' || mode === '429') { expect(row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_identity', 'b'.repeat(64)); expect(body.triggered).toBe(1); }
+      if (mode === '503' || mode === '429' || mode === 'custom 429') { expect(row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_identity', 'b'.repeat(64)); expect(body.triggered).toBe(1); }
       if (terminal) expect(body.failed).toBe(1);
     } else { expect(writes).toHaveLength(1); expect(body.triggered).toBe(1); }
   });
