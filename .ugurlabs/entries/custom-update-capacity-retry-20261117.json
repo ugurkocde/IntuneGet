@@ -1,0 +1,5 @@
+{
+  "title": "Retry custom app updates when GitHub is busy",
+  "summary": "Custom app updates now wait and retry when GitHub explicitly refuses a packaging request because its request limit was reached. Retries preserve the saved deployment settings and stop if those settings change.",
+  "type": "fixed"
+}
