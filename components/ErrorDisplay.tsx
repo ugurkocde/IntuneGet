@@ -1,5 +1,6 @@
 'use client';
 
+import { HASH_QUARANTINE_MESSAGE } from '@/lib/installer-hash-quarantine';
 import Link from 'next/link';
 import { T } from 'gt-next';
 import {
@@ -155,20 +156,21 @@ export function ErrorDisplay({
     );
   }
 
+  const hashQuarantined = errorCode === 'INSTALLER_HASH_QUARANTINED';
   const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
   const blockedBeforeTest = qaFailed && securityBlocked;
-  const displayErrorMessage = blockedBeforeTest
+  const displayErrorMessage = hashQuarantined ? HASH_QUARANTINE_MESSAGE : blockedBeforeTest
     ? 'A security check stopped this deployment before the installation test ran.' : errorMessage;
   const architectureUnavailable = errorCode === 'ARCHITECTURE_UNAVAILABLE';
   const unavailable = errorCode === 'VERSION_UNAVAILABLE' || errorCode === 'PACKAGE_UNAVAILABLE' || architectureUnavailable;
   const unsupportedDependency = errorCode === 'DEPENDENCY_NOT_SUPPORTED';
   const terminalManifestFailure = ['MANIFEST_UNAVAILABLE', 'INSTALLER_TYPE_UNAVAILABLE', 'INSTALL_SCOPE_UNAVAILABLE', 'SILENT_INSTALL_UNAVAILABLE'].includes(errorCode || '');
-  const stage = unavailable ? { ...stageConfig.validation, label: architectureUnavailable ? <T>Architecture not available</T> : 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
+  const stage = hashQuarantined ? { ...stageConfig.validation, label: 'Installer source blocked' } : unavailable ? { ...stageConfig.validation, label: architectureUnavailable ? <T>Architecture not available</T> : 'Not available' } : unsupportedDependency ? { ...stageConfig.validation, label: 'Not supported yet' }
     : qaFailed ? { ...stageConfig.validation, label: blockedBeforeTest ? 'Security check' : <T>Deployment validation</T> } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
   // describes package creation. The QA code alone does not prove a test ran.
-  const hint = qaFailed ? {
+  const hint = hashQuarantined ? { message: 'Choose a newer version after the catalog updates. This deployment stopped before testing or packaging.', showReVerify: false } : qaFailed ? {
     message: blockedBeforeTest
       ? 'A security check stopped this deployment before the installation test ran.'
       : errorMessage?.includes('MANIFEST_CHANGED')
