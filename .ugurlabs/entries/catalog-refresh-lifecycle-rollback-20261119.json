@@ -1,0 +1,1 @@
+{"title": "Restore the previous catalog refresh lifecycle", "summary": "Restored the previous catalog history refresh lifecycle after new runtime timeouts appeared. History refresh reliability remains under investigation.", "type": "fixed"}
