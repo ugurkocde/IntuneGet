@@ -3,6 +3,7 @@ import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 import { knownLastHistoryPage, rememberHistoryTotal, withHistoryCapacity } from './release-history-capacity';
+import { after } from 'next/server';
 /**
  * Supabase-backed CatalogSource.
  *
@@ -104,6 +105,10 @@ export class SupabaseCatalogSource implements CatalogSource {
       if (pending.get(key) === read) pending.delete(key);
     });
     pending.set(key, read);
+    // A streamed stale hit can start after Next snapshots pending revalidates.
+    // Keep the actual read alive through settlement without logging its error twice.
+    try { after(read.then(() => undefined, () => undefined)); }
+    catch { /* Scripts and local source consumers have no request lifecycle. */ }
     return read;
   }
 
