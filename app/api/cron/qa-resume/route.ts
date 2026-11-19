@@ -730,10 +730,19 @@ export async function GET(request: Request) {
   }
 
   if (waitingIds.length) {
-    const { error: waitError } = await supabase.from('packaging_jobs').update({
-      qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(),
-    }).in('id', waitingIds).eq('status', 'awaiting_qa');
-    if (waitError) throw new Error('Could not schedule waiting QA jobs');
+    const waiting = new Set(waitingIds);
+    for (const job of jobs ?? []) {
+      if (!waiting.has(job.id)) continue;
+      // Preserve a newer retry or approval hold saved by another invocation.
+      let reschedule = supabase.from('packaging_jobs').update({
+        qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(),
+      }).eq('id', job.id).eq('status', 'awaiting_qa');
+      reschedule = job.qa_resume_due_at == null
+        ? reschedule.is('qa_resume_due_at', null)
+        : reschedule.eq('qa_resume_due_at', job.qa_resume_due_at);
+      const { error: waitError } = await reschedule;
+      if (waitError) throw new Error('Could not schedule waiting QA jobs');
+    }
   }
   // Existing waiting jobs get the full batch first. Recovered failures enter the
   // same guarded path on the next invocation, never a separate dispatch path.

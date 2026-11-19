@@ -378,8 +378,10 @@ describe('GET /api/cron/qa-resume', () => {
     }));
     expect.soft(await response.json()).toEqual({ success: true, scanned: jobCount, resumed: 0, failed: 0, waiting: jobCount,
       held: 0, deferred: 0, budgetExhausted: false, reopened: 0, recoveryDeferred: false });
-    expect.soft(updates.update).toHaveBeenCalledExactlyOnceWith({ qa_resume_due_at: expect.any(String) });
-    expect.soft(updates.in).toHaveBeenCalledWith('id', jobs.map(job => job.id));
+    expect.soft(updates.update).toHaveBeenCalledTimes(jobCount);
+    expect.soft(updates.update).toHaveBeenCalledWith({ qa_resume_due_at: expect.any(String) });
+    for (const job of jobs) expect.soft(updates.eq).toHaveBeenCalledWith('id', job.id);
+    expect.soft(updates.is).toHaveBeenCalledWith('qa_resume_due_at', null);
     expect.soft(updates.eq).toHaveBeenCalledWith('status', 'awaiting_qa');
     expect.soft(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
@@ -571,9 +573,14 @@ describe('GET /api/cron/qa-resume', () => {
       architecture: 'x64', installer_sha256: 'A'.repeat(64), package_config: {},
     }));
     const update = chain({ data: { id: 'verified' }, error: null });
+    const waitingUpdate = chain({ data: null, error: null });
     let packagingCalls = 0;
     createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
-      if (table === 'packaging_jobs') return ++packagingCalls === 1 ? chain({ data: jobs, error: null }) : update;
+      if (table === 'packaging_jobs') {
+        packagingCalls++;
+        return packagingCalls === 1 ? chain({ data: jobs, error: null })
+          : packagingCalls === 2 ? update : waitingUpdate;
+      }
       if (table === 'qa_candidates') return chain({ data: { status: 'passed', package_profile_sha256: 'C'.repeat(64) }, error: null });
       if (table === 'qa_package_results') return chain({ data: { outcome: 'Passed' }, error: null });
       throw new Error(`Unexpected table ${table}`);
@@ -582,6 +589,8 @@ describe('GET /api/cron/qa-resume', () => {
     expect(await response.json()).toMatchObject({ resumed: 1, failed: 0, waiting: 1 });
     expect(update.eq).toHaveBeenCalledWith('id', 'verified');
     expect(update.eq).not.toHaveBeenCalledWith('id', 'unverified');
+    expect(waitingUpdate.eq).toHaveBeenCalledWith('id', 'unverified');
+    expect(waitingUpdate.is).toHaveBeenCalledWith('qa_resume_due_at', null);
     expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
   });
 
@@ -1286,6 +1295,30 @@ describe('GET /api/cron/qa-resume', () => {
       };
       return { store, run };
     }
+
+    it.each([null, '2026-01-01T00:00:00Z'])('keeps a newer hold when preflight waits after reading due time %s', async dueAt => {
+      const { store, run } = setup();
+      Object.assign(store.row, { qa_candidate_id: null, qa_resume_due_at: dueAt });
+      const newerHold = '2030-01-01T00:00:00Z';
+      reconcileCatalogInstallerMock.mockImplementationOnce(async () => {
+        store.row.qa_resume_due_at = newerHold;
+        throw new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'synthetic timeout', true);
+      });
+      expect(await (await run()).json()).toMatchObject({ waiting: 1, resumed: 0, failed: 0 });
+      expect(store.row.qa_resume_due_at).toBe(newerHold);
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    });
+
+    it.each([null, '2026-01-01T00:00:00Z'])('reschedules an unchanged waiting due time %s', async dueAt => {
+      const { store, run } = setup();
+      Object.assign(store.row, { qa_candidate_id: null, qa_resume_due_at: dueAt });
+      reconcileCatalogInstallerMock.mockRejectedValueOnce(new InstallerPreflightError('PREFLIGHT_UNAVAILABLE', 'synthetic timeout', true));
+      const started = Date.now();
+      expect(await (await run()).json()).toMatchObject({ waiting: 1, resumed: 0, failed: 0 });
+      expect(Date.parse(store.row.qa_resume_due_at as string)).toBeGreaterThanOrEqual(started + 60_000);
+      expect(Date.parse(store.row.qa_resume_due_at as string)).toBeLessThanOrEqual(Date.now() + 60_000);
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    });
 
     it('preserves the scheduled custom rate limit hold without a manual dispatch identity', async () => {
       const { store, run } = setup();
