@@ -843,7 +843,7 @@ export async function POST(request: NextRequest) {
               }),
               publisher: item.publisher,
               version: item.version,
-              architecture: item.architecture,
+              architecture: item.sourceType === 'custom' ? item.architecture || 'x64' : item.architecture,
               installerUrl: item.installerUrl,
               installerSha256,
               hashValidationMode: installerSha256 ? 'strict' : 'calculate',

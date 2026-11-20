@@ -979,7 +979,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     }), expect.objectContaining({ status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null }));
   });
 
-  it('rebuilds the same real dispatch identity from the held custom cart row', async () => {
+  it.each(['explicit x64', 'omitted architecture', 'padded hash'])('rebuilds the same real dispatch identity from the held custom cart row: %s', async variant => {
     let sent: Parameters<typeof buildStoredJobWorkflowInputs>[2] | undefined;
     let original: Parameters<NonNullable<typeof actualDispatch.run>>[0] | undefined;
     triggerPackagingWorkflowMock.mockImplementationOnce(async (input, _config, options) => {
@@ -990,7 +990,10 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
     await POST(new NextRequest('http://localhost/api/package', {
       method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', forceCreate: false })], forceCreate: true }),
+      body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', forceCreate: false,
+        ...(variant === 'omitted architecture' ? { architecture: undefined } : {}),
+        ...(variant === 'padded hash' ? { installerSha256: `  ${'A'.repeat(64)}  ` } : {}),
+      })], forceCreate: true }),
     }));
     const held = { ...createMock.mock.calls[0][0], ...updateMock.mock.calls[0][1] };
     const rebuilt = buildStoredJobWorkflowInputs(held, held.package_config, sent!);

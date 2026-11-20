@@ -22,7 +22,8 @@ export function buildStoredJobWorkflowInputs(
     callbackUrl: string; qaOverride: boolean; sanitizeAssignments: boolean;
   }
 ): WorkflowInputs {
-  const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
+  const selectedHash = item.installerSha256 || job.installer_sha256 || '';
+  const installerSha256 = item.sourceType === 'custom' ? selectedHash.trim() : selectedHash;
   const autoUpdate = job.is_auto_update ? item as Win32CartItem & {
     sourceIntuneAppId?: string; autoSupersede?: boolean; supersedenceType?: string;
   } : undefined;
