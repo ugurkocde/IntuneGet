@@ -144,6 +144,13 @@ const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
   {
+    // Lansweeper's Intune deployment guide documents this removal mode for
+    // the registered LsAgent uninstaller; installation switches are separate.
+    // https://www.lansweeper.com/blog/pro-tips/deploying-lsagent-with-intune/
+    wingetId: 'Lansweeper.LsAgent',
+    reviewedUninstallArguments: ['--mode', 'unattended'],
+  },
+  {
     // WithSecure's Intune deployment guide requires --silent for the registered
     // OneClient uninstaller. QA run 34599096712 captured fs_uninstall_32.exe
     // without arguments and correctly failed while its exact ARP key remained.
