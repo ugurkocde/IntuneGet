@@ -1,0 +1,1 @@
+{"title":"Explain installer source checks before testing","summary":"Deployments blocked by an installer source integrity check now explain that the installation test never ran, while keeping the source quarantine in place.","type":"fixed"}
