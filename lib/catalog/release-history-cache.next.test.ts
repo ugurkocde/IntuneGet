@@ -39,3 +39,76 @@ it.each(['rejected', 'wait_timeout'] as const)('keeps the actual Next stale valu
     expect(cache.set).not.toHaveBeenCalled();
   } finally { release(); await Promise.all([...active, ...queued]); vi.useRealTimers(); }
 });
+
+
+it.each(['getReleaseHistory', 'countReleaseHistory'] as const)('cancels late %s body within the total budget and releases capacity for another route', async method => {
+  vi.useFakeTimers();
+  const { SupabaseCatalogSource } = await import('./supabase-source');
+  const { executeRevalidates } = await import('next/dist/server/revalidation-utils');
+  const { AfterContext } = await import('next/dist/server/after/after-context');
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://catalog.example.invalid');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-fixture-key');
+  const signals: AbortSignal[] = [];
+  let stopped = false;
+  let stopBody: (() => void) | undefined;
+  vi.stubGlobal('fetch', vi.fn(async (_input, init) => {
+    const signal = init.signal as AbortSignal; signals.push(signal);
+    return new Response(new ReadableStream({start(controller) {
+      const stop = () => {stopped = true; controller.error(signal.reason ?? new DOMException("Fixture cleanup", "AbortError"));};
+      stopBody = stop;
+      if (signal.aborted) stop(); else signal.addEventListener('abort', stop, {once:true});
+    }}));
+  }));
+  const lastGood = method === 'getReleaseHistory' ? {rows:[],total:3} : 3;
+  const cache = {generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:true,value:{kind:'FETCH',data:{body:JSON.stringify(lastGood)}}})),set:vi.fn(async()=>{})};
+  vi.stubGlobal('__incrementalCache',cache);
+  const kept: Promise<unknown>[] = [];
+  const source = new SupabaseCatalogSource();
+  const afterContext = new AfterContext({waitUntil:(p:Promise<unknown>)=>{kept.push(p);},onClose:()=>{},onTaskError:()=>{}});
+  const store = {nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false,afterContext};
+  const callback = unstable_cache(()=>source[method]({query:'',month:'',kind:'all',page:1}),['bounded-late',method],{revalidate:300});
+  vi.spyOn(console,'warn').mockImplementation(()=>{});vi.spyOn(console,'error').mockImplementation(()=>{});
+  try {
+    await executeRevalidates(store as never);
+    expect(await workAsyncStorage.run(store as never,()=>callback())).toEqual(lastGood);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(signals).toHaveLength(1);expect(kept).toHaveLength(1);
+    const join = Promise.allSettled([workAsyncStorage.run({...store,route:'/feed',pendingRevalidates:{}} as never,()=>source[method]({query:'',month:'',kind:'all',page:1}))]);
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(stopped).toBe(true);expect(signals[0].aborted).toBe(true);
+    expect((await join)[0].status).toBe('rejected');await Promise.all(kept);
+    expect(await Promise.all(Array.from({length:4},()=>withHistoryCapacity(async()=>'other route')))).toEqual(Array(4).fill('other route'));
+    expect(cache.set).not.toHaveBeenCalled();
+  } finally {
+    if (!stopped) stopBody?.();
+    await vi.advanceTimersByTimeAsync(20000);
+    await Promise.allSettled(Object.values(store.pendingRevalidates));
+    vi.useRealTimers();vi.unstubAllEnvs();
+  }
+});
+
+
+it('bounds keepalive even for an abort-ignoring transport without releasing its live capacity slot', async () => {
+  vi.useFakeTimers();
+  const {SupabaseCatalogSource} = await import('./supabase-source');
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','https://catalog.example.invalid');vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY','synthetic-fixture-key');
+  let finish!: (r:Response)=>void;
+  vi.stubGlobal('fetch',vi.fn(()=>new Promise<Response>(r=>{finish=r;})));
+  vi.spyOn(console,'warn').mockImplementation(()=>{});
+  let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
+  const occupied=Array.from({length:3},()=>withHistoryCapacity(()=>gate));
+  const kept: Promise<unknown>[]=[];
+  const source=new SupabaseCatalogSource();
+  const pending=workAsyncStorage.run({afterContext:{after:(p:Promise<unknown>)=>kept.push(p)}} as never,()=>source.countReleaseHistory({query:'',month:'',kind:'all',page:1}));
+  const settled=Promise.allSettled([pending]);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect((await settled)[0].status).toBe('rejected');await Promise.all(kept);
+  let admitted=false;
+  const next=withHistoryCapacity(async()=>{admitted=true;});
+  await vi.advanceTimersByTimeAsync(0);expect(admitted).toBe(false);
+  finish(Response.json({rows:[],total:1}));
+  await vi.advanceTimersByTimeAsync(0);await next;expect(admitted).toBe(true);
+  release();await Promise.all(occupied);vi.useRealTimers();vi.unstubAllEnvs();
+});

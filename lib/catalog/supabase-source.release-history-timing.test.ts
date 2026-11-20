@@ -52,7 +52,9 @@ function check(category: string, budgetExpired: boolean, status: number | null, 
   expect(correlation).toMatch(/^[0-9a-f]{8}\.\d+\.v2$/);
   expect(init.body).toBe(JSON.stringify({ app_filter: filters.app, date_from: null, date_to: null,
     architecture_filter: '', search_text: '', month_filter: '', kind_filter: '', page_number: 1 }));
-  expect(init.signal).toBe(controller.signal);
+  expect(init.signal).toBeInstanceOf(AbortSignal);
+  expect(init.signal.aborted).toBe(controller.signal.aborted);
+  if (controller.signal.aborted) expect(init.signal.reason).toBe(controller.signal.reason);
   expect(timer).toHaveBeenCalledWith(15_000);
   expect(JSON.stringify(warn.mock.calls)).not.toMatch(/private|https|apikey|authorization|cause|url/i);
 }
@@ -78,7 +80,9 @@ describe('release history RPC diagnostics', () => {
       const timing = warn.mock.calls[index][1];
       expect(timing.rpc).toBe(['v2', 'rows', 'count'][index]);
       expect(info).toContain(`; ig-hist=${timing.inst}.${timing.seq}.${timing.rpc}`);
-      expect(init.signal).toBe(controller.signal);
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+  expect(init.signal.aborted).toBe(controller.signal.aborted);
+  if (controller.signal.aborted) expect(init.signal.reason).toBe(controller.signal.reason);
       return info;
     });
     expect(new Set(identifiers).size).toBe(3);
