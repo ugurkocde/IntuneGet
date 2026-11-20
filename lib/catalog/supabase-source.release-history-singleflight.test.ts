@@ -86,5 +86,3 @@ describe('concurrent release history source reads', () => {
     for (const result of results) expect(result.rows).toEqual([{ ...row, detailsUnavailable: true }]);
   });
 });
-
-

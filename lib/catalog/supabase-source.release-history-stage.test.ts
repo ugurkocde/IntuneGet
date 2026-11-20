@@ -150,5 +150,3 @@ describe('release history stage diagnostics', () => {
     expect(JSON.stringify(warn.mock.calls)).not.toMatch(/2044/);
   });
 });
-
-

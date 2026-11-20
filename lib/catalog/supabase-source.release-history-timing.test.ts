@@ -177,5 +177,3 @@ describe('release history RPC diagnostics', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
-
-

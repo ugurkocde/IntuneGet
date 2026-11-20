@@ -88,5 +88,3 @@ it('does not overwrite a fresh pagination total when an older rows response sett
   await source.getReleaseHistory({ ...filters, page: 3 });
   expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body)).page_number).toBe(3);
 });
-
-

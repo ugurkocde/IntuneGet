@@ -117,5 +117,3 @@ describe('history capacity across distinct keys', () => {
     expect(beforeSettle).toBe(4); expect(fetch).toHaveBeenCalledTimes(5);
   });
 });
-
-
