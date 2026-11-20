@@ -1,3 +1,4 @@
+import { isExactHashQuarantine, HASH_QUARANTINE_PREFIX, HASH_QUARANTINE_MESSAGE } from '@/lib/installer-hash-quarantine';
 import { knownUnavailableDisposition, unsupportedDependencyIdentifier } from '@/lib/unsupported-dependency';
 import { COMPATIBILITY_BATCH_LIMIT, PACKAGE_VERSION_UNAVAILABLE_MESSAGE, packageCompatibilityKey } from '@/lib/package-eligibility';
 import type { PackagingJob } from '@/lib/db/types';
@@ -9,7 +10,7 @@ import type { Database } from '@/types/database';
 import { describeQaGateError, QaGateNotPassedError } from '@/lib/qa/gate';
 import { customerUpstreamStatus } from '@/lib/customer-upstream-status';
 
-type Candidate = Pick<Database['public']['Tables']['qa_candidates']['Row'], 'id' | 'winget_id' | 'version' | 'architecture' | 'installer_url' | 'installer_sha256' | 'package_profile_sha256' | 'status' | 'phase' | 'next_retry_at'>;
+type Candidate = Pick<Database['public']['Tables']['qa_candidates']['Row'], 'id' | 'winget_id' | 'version' | 'architecture' | 'installer_url' | 'installer_sha256' | 'package_profile_sha256' | 'status' | 'phase' | 'next_retry_at' | 'github_run_id' | 'started_at' | 'failure_summary'>;
 type Result = Pick<Database['public']['Tables']['qa_package_results']['Row'], 'package_profile_sha256' | 'winget_id' | 'tested_version' | 'architecture' | 'installer_sha256' | 'virustotal_status' | 'virustotal_malicious' | 'virustotal_suspicious' | 'outcome'>;
 const unavailable: CustomerQaStatus = { category: 'unavailable', message: 'Validation status is temporarily unavailable. Next event: updated validation information.', nextEventAt: null };
 const reputationUnknown: CustomerQaStatus = { category: 'reputation_unknown', message: 'Installer reputation is not yet verified. Next event: a verified security verdict.', nextEventAt: null };
@@ -52,7 +53,7 @@ async function enrichExistingCustomerQaStatus<T extends PackagingJob>(jobs: T[])
   });
   const waiting = jobs.filter(job => job.status === 'awaiting_qa');
   const eligibleFailed = jobs.filter(job => job.status === 'qa_failed' && job.error_code === 'QA_FAILED_EXECUTION_PROFILE'
-    && [installerSecurityReason(0), installerSecurityReason(1)].includes(job.error_message || ''));
+    && ([installerSecurityReason(0), installerSecurityReason(1)].includes(job.error_message || '') || !!job.error_message?.startsWith(HASH_QUARANTINE_PREFIX)));
   if (!waiting.length && !eligibleFailed.length) return jobs;
   const fallback = () => jobs.map(job => job.status === 'awaiting_qa' ? { ...job, qa_status: storedReputationHold(job) } : job);
   const ids = [...new Set([...waiting, ...eligibleFailed].map(job => job.qa_candidate_id).filter((id): id is string => typeof id === 'string' && uuid.test(id)))];
@@ -60,7 +61,7 @@ async function enrichExistingCustomerQaStatus<T extends PackagingJob>(jobs: T[])
   try {
     const client = createServerClient();
     const candidates = await client.from('qa_candidates')
-      .select('id,winget_id,version,architecture,installer_url,installer_sha256,package_profile_sha256,status,phase,next_retry_at')
+      .select('id,winget_id,version,architecture,installer_url,installer_sha256,package_profile_sha256,status,phase,next_retry_at,github_run_id,started_at,failure_summary')
       .in('id', ids).limit(ids.length + 1);
     if (candidates.error || (candidates.data?.length ?? 0) > ids.length) return fallback();
     const rows = (candidates.data || []).filter(row => ids.includes(row.id) && digest.test(row.installer_sha256));
@@ -80,6 +81,16 @@ async function enrichExistingCustomerQaStatus<T extends PackagingJob>(jobs: T[])
       if (job.status === 'qa_failed') {
         if (!eligibleFailed.some(row => row.id === job.id)) return job;
         const candidate = rows.find(row => row.id === job.qa_candidate_id);
+        const failedHashResult = (results.data as Result[]).some(row => row.outcome === 'Failed'
+          && same(row.package_profile_sha256, job.execution_profile_sha256) && same(row.winget_id, job.winget_id)
+          && row.tested_version === job.version && same(row.architecture, job.architecture)
+          && same(row.installer_sha256, job.installer_sha256));
+        if (isExactHashQuarantine(candidate, { candidateId: job.qa_candidate_id, wingetId: job.winget_id,
+          version: job.version, architecture: job.architecture, hash: job.installer_sha256,
+          profile: job.execution_profile_sha256, summary: job.error_message }, failedHashResult)) {
+          return { ...job, qa_status: { category: 'unavailable' as const, reasonCode: 'INSTALLER_HASH_QUARANTINED' as const,
+            message: HASH_QUARANTINE_MESSAGE, nextEventAt: null } };
+        }
         if (!candidate || !tupleMatches(job, candidate) || candidate.status !== 'error' || candidate.phase !== 'scanning_installer'
           || !digest.test(job.execution_profile_sha256 || '') || !digest.test(candidate.package_profile_sha256 || '')
           || !same(job.execution_profile_sha256, candidate.package_profile_sha256)) return job;

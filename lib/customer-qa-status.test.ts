@@ -286,3 +286,24 @@ it('does not use matching dependency evidence to reinterpret package or architec
 
 it('does not query current dependency evidence when the server is not configured',async()=>{state.configured=false;state.blocks=[dependencyBlock()];const [actual]=await enrichCustomerQaStatus([unavailableLegacyJob()]);expect(actual.qa_status?.message).toBe(versionUnavailableMessage);expect(from).not.toHaveBeenCalled();});
 it('annotates a bounded authorized batch independently for each exact tuple',async()=>{state.blocks=[dependencyBlock(),dependencyBlock({version:'2.0',detail:'WinGet dependency Microsoft.WindowsAppRuntime.2 is not in the reviewed redistribution allowlist.'})];const inputs=[unavailableLegacyJob(),unavailableLegacyJob({id:'second',version:'2.0'})];const actual=await enrichCustomerQaStatus(inputs);expect(actual[0].qa_status?.message).toBe(currentDependencyMessage);expect(actual[1].qa_status?.message).toBe('This app version currently requires Microsoft.WindowsAppRuntime.2, which is not supported for automated deployment.');expect(from).toHaveBeenCalledExactlyOnceWith('qa_package_blocks');});
+
+it.each(['exact','failed result','run','started','true failure','profile','tuple','summary','read error'])('annotates source quarantine without writing history: %s', async kind => {
+ const summary = 'Installer source quarantined before QA: HASH_MISMATCH. private https://private.test?token=secret';
+ const row = candidate({status:'superseded',phase:'preparing_package',github_run_id:null,started_at:null,failure_summary:summary});
+ if(kind==='run')Object.assign(row,{github_run_id:'42'});
+ if(kind==='started')Object.assign(row,{started_at:'2026-11-10T00:00:00Z'});
+ if(kind==='true failure')row.status='failed';
+ if(kind==='profile')row.package_profile_sha256='c'.repeat(64);
+ if(kind==='tuple')row.version='2.0';
+ if(kind==='summary')Object.assign(row,{failure_summary:summary+' changed'});
+ if(kind==='read error')state.error=true;
+ state.candidates=[row];
+ if(kind==='failed result')state.results=[{...candidate(),tested_version:'1.0',outcome:'Failed'}];
+ const input = job({status:'qa_failed',execution_profile_sha256:profile,error_code:'QA_FAILED_EXECUTION_PROFILE',error_message:summary});
+ const [actual] = await enrichCustomerQaStatus([input]);
+ if(kind==='exact') {
+   expect(actual.qa_status).toEqual({category:'unavailable',reasonCode:'INSTALLER_HASH_QUARANTINED',message:'Installer source checks stopped this deployment before the installation test ran.',nextEventAt:null});
+   const {qa_status,...stored}=actual;expect(stored).toEqual(input);expect(JSON.stringify(qa_status)).not.toMatch(/private|HASH_MISMATCH|[ab]{64}/);
+ } else expect(actual).toEqual(input);
+ for(const call of from.mock.results)expect(Object.keys(call.value)).not.toEqual(expect.arrayContaining(['update']));
+});
