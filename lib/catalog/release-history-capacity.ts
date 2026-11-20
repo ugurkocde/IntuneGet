@@ -1,6 +1,8 @@
 import type { ReleaseHistoryFilters } from './release-history';
 
 // Shared by every key and source in this server instance, not across the fleet.
+// Leave headroom below the observed 15 second runtime ceiling.
+export const HISTORY_TOTAL_MS = 8_000;
 const MAX_ACTIVE = 4;
 const MAX_QUEUED = 8;
 const WAIT_MS = 5_000;

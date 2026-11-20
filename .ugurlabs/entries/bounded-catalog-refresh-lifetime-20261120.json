@@ -1,0 +1,1 @@
+{"title":"Bound catalog refresh background work","summary":"Apply one cancellation budget to release history refresh reads and limit background request lifetime while retaining the last complete cached result.","type":"fixed"}
