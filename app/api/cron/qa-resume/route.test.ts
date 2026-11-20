@@ -85,7 +85,7 @@ import { QaGateNotPassedError, QaGateError, QaSecurityGateError, QaCompatibility
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'is', 'not', 'order', 'limit', 'update', 'lte', 'in']) {
+  for (const method of ['select', 'eq', 'is', 'not', 'order', 'limit', 'update', 'lte', 'in', 'ilike']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -1992,6 +1992,54 @@ describe('GET /api/cron/qa-resume', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
     expect(from.mock.calls.some(([name]) => name === 'qa_installer_security_holds')).toBe(false);
+  });
+
+  it.each(['exact', 'true failure', 'failed result', 'run', 'started', 'profile', 'tuple', 'summary', 'read error', 'race'])('classifies exact pretest source quarantine: %s', async kind => {
+    const hash = 'A'.repeat(64), profile = 'B'.repeat(64);
+    const job = { id: 'quarantine-job', status: 'awaiting_qa', tenant_id: 'tenant-1', winget_id: 'Example.App', version: '1.0',
+      architecture: 'x64', installer_sha256: hash, execution_profile_sha256: profile, qa_candidate_id: 'quarantine-candidate',
+      package_config: { sourceType: 'winget', architecture: 'x64', installerSha256: hash }, is_auto_update: false,
+      cancelled_at: null, archived_at: null, github_run_id: null, intune_app_id: null, updated_at: '2026-11-10T00:00:00Z' };
+    const summary = 'Installer source quarantined before QA: HASH_MISMATCH. private detail';
+    const candidate: Record<string, unknown> = { id: job.qa_candidate_id, status: 'superseded', phase: 'preparing_package', github_run_id: null, started_at: null,
+      failure_summary: summary, winget_id: job.winget_id, version: job.version, architecture: 'x64',
+      installer_sha256: hash, package_profile_sha256: profile };
+    ensureQaDemandMock.mockResolvedValue({ state: 'failed', candidateId: job.qa_candidate_id, identity: {
+      executionProfileSha256: profile, presentationProfileSha256: 'C'.repeat(64) }, failureSummary: summary });
+    const store = jobStore(job); let reads = 0, candidateReads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1 ? chain({ data: [structuredClone(job)], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') {
+        if (++candidateReads > 1) {
+          if(kind === 'true failure') candidate.status = 'failed';
+          if(kind === 'run') candidate.github_run_id = '42';
+          if(kind === 'started') candidate.started_at = '2026-11-10T00:00:00Z';
+          if(kind === 'profile') candidate.package_profile_sha256 = 'D'.repeat(64);
+          if(kind === 'tuple') candidate.version = '2.0';
+          if(kind === 'summary') candidate.failure_summary = summary + ' changed';
+          if(kind === 'read error') return chain({data:null,error:{message:'private read error'}});
+          if(kind === 'race') store.row.installer_sha256 = 'D'.repeat(64);
+        }
+        return candidateQuery([candidate]);
+      }
+      if (table === 'qa_package_results') return chain({ data: kind === 'failed result' ? {outcome:'Failed'} : null, error: null });
+      throw new Error('Unexpected table ' + table);
+    }) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    const result = await response.json();
+    if (kind === 'exact') {
+      expect(result).toMatchObject({ failed: 1, resumed: 0 });
+      expect(store.row).toMatchObject({status:'failed',error_code:'INSTALLER_HASH_QUARANTINED',qa_completed_at:null,
+        error_stage:'validation',error_category:'validation',
+        status_message:'Installer source checks stopped this deployment before the installation test ran.'});
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id,'failed',store.row.status_message);
+    } else if(kind === 'read error' || kind === 'race') {
+      expect(result.failed).toBe(0); expect(store.row.status).toBe('awaiting_qa');
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    } else {
+      expect(store.row.status).toBe('qa_failed'); expect(store.row.error_code).toBe('QA_FAILED_EXECUTION_PROFILE');
+    }
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
 });

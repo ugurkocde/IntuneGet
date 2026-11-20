@@ -1,3 +1,4 @@
+import { loadHashQuarantine, HASH_QUARANTINE_PREFIX, HASH_QUARANTINE_MESSAGE } from '@/lib/installer-hash-quarantine';
 import { storedJobItem, buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
@@ -113,6 +114,7 @@ export async function GET(request: Request) {
     let candidateFailureSummary = candidate?.failure_summary;
     let appVersionAlreadyPassed = false;
     let demandWasEvaluated = false;
+    let demandProfile: string | null = null;
 
     if (!skipCandidateQa && (!candidate || candidateStatus === 'superseded')) {
       // A waiting job can outlive the catalog metadata and packager revision
@@ -193,6 +195,7 @@ export async function GET(request: Request) {
         priority: job.is_auto_update ? QA_PRIORITY_DEMAND : QA_PRIORITY_CUSTOMER,
         demandSource: job.is_auto_update ? 'auto_update' : 'customer',
       });
+      demandProfile = demand.identity.executionProfileSha256;
       candidateStatus = demand.state === 'waiting' ? 'queued' : demand.state;
       candidateFailureSummary = demand.failureSummary || null;
       appVersionAlreadyPassed = demand.state === 'passed';
@@ -390,6 +393,34 @@ export async function GET(request: Request) {
         await handleAutoUpdateJobCompletion(job.id, 'failed', pretestSecurityRefusal);
       }
       continue;
+    }
+
+    if (!skipCandidateQa && demandWasEvaluated && candidateStatus === 'failed'
+      && candidateFailureSummary?.startsWith(HASH_QUARANTINE_PREFIX)) {
+      let quarantined;
+      try {
+        quarantined = await loadHashQuarantine(supabase, {
+          candidateId: observed.qa_candidate_id, wingetId: job.winget_id, version: job.version,
+          architecture: observed.architecture, hash: observed.installer_sha256,
+          profile: demandProfile, summary: candidateFailureSummary,
+        });
+      } catch {
+        waitingIds.push(job.id); waiting++; continue;
+      }
+      if (quarantined) {
+        const { data: refused, error } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
+          status: 'failed', status_message: HASH_QUARANTINE_MESSAGE, error_message: HASH_QUARANTINE_MESSAGE,
+          error_code: 'INSTALLER_HASH_QUARANTINED', error_stage: 'validation', error_category: 'validation',
+          qa_completed_at: null, completed_at: new Date().toISOString(),
+        }).eq('id', job.id).eq('status', 'awaiting_qa')).eq('execution_profile_sha256', demandProfile!)
+          .select('id').maybeSingle();
+        if (error) { waitingIds.push(job.id); waiting++; }
+        else if (refused) {
+          failed++;
+          await handleAutoUpdateJobCompletion(job.id, 'failed', HASH_QUARANTINE_MESSAGE);
+        }
+        continue;
+      }
     }
 
     if (!skipCandidateQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {

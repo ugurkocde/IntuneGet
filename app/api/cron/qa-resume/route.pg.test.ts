@@ -18,6 +18,7 @@ vi.mock('@/lib/curated-catalog/licence', async original => ({ ...(await original
 vi.mock('@/lib/package-eligibility', async original => ({ ...(await original<object>()), getPackageCompatibilityBlock: vi.fn(async () => null) }));
 vi.mock('@/lib/qa/gate', async original => ({ ...(await original<object>()), enforceQaGate: mocks.gate }));
 
+import { ensureQaDemand } from '@/lib/qa/demand';
 import { GET } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 
@@ -37,7 +38,7 @@ function statement(source: string, pattern: RegExp) {
 // The shim translates only this route's query subset. PostgREST transport and
 // multi-connection locking are outside this local PostgreSQL contract test.
 function jobsQuery() {
-  const columns = new Set(['id', 'status', 'status_message', 'qa_candidate_id', 'installer_sha256', 'architecture', 'qa_completed_at', 'packaging_started_at', 'qa_resume_due_at', 'github_run_id', 'github_run_url', 'error_code', 'error_stage', 'error_category', 'error_message', 'completed_at', 'callback_run_id', 'cancelled_at', 'archived_at']);
+  const columns = new Set(['id', 'status', 'status_message', 'qa_candidate_id', 'installer_sha256', 'architecture', 'qa_completed_at', 'packaging_started_at', 'qa_resume_due_at', 'github_run_id', 'github_run_url', 'error_code', 'error_stage', 'error_category', 'error_message', 'completed_at', 'callback_run_id', 'cancelled_at', 'archived_at', 'execution_profile_sha256', 'presentation_profile_sha256', 'qa_requested_at', 'package_config', 'installer_url', 'installer_type', 'install_command', 'uninstall_command', 'install_scope']);
   const ident = (column: string) => {
     if (column === 'package_config->>installerSha256') return "package_config->>'installerSha256'";
     if (column === 'package_config->>architecture') return "package_config->>'architecture'";
@@ -80,10 +81,10 @@ function jobsQuery() {
   return builder;
 }
 
-function fixtureQuery(data: object) {
+function fixtureQuery(data: object | (() => Promise<object>)) {
   const builder = {
-    select: () => builder, eq: () => builder, in: () => builder, order: () => builder, limit: () => builder,
-    maybeSingle: async () => ({ data, error: null }),
+    select: () => builder, eq: () => builder, ilike: () => builder, in: () => builder, order: () => builder, limit: () => builder,
+    maybeSingle: async () => ({ data: typeof data === 'function' ? await data() : data, error: null }),
     then: (resolve: (value: object) => unknown) => Promise.resolve({ data, error: null }).then(resolve),
   };
   return builder;
@@ -96,7 +97,7 @@ describe('qa-resume PostgreSQL dispatch catch', () => {
     pg = new PGlite({ parsers: { 1184: value => value } });
     const base = migration('001_packaging_jobs.sql');
     // The candidate table is only an FK target; QA gate results are fixtures.
-    await pg.exec('create table qa_candidates(id uuid primary key); set timezone=\'UTC\';');
+    await pg.exec('create table qa_candidates(id uuid primary key, payload jsonb); set timezone=\'UTC\';');
     await pg.exec(statement(base, /CREATE TABLE IF NOT EXISTS packaging_jobs \([\s\S]*?\n\);/));
     await pg.exec(statement(base, /CREATE OR REPLACE FUNCTION update_updated_at_column\(\)[\s\S]*?EXECUTE FUNCTION update_updated_at_column\(\);/));
     await pg.exec(statement(migration('007_add_cancelled_status.sql'), /ALTER TABLE packaging_jobs[\s\S]*?;/));
@@ -120,7 +121,7 @@ describe('qa-resume PostgreSQL dispatch catch', () => {
     await pg.query(`insert into packaging_jobs(id,user_id,tenant_id,winget_id,version,display_name,status,installer_type,installer_url,installer_sha256,architecture,qa_candidate_id,execution_profile_sha256,package_config,qa_resume_due_at,updated_at) values($1,'synthetic-user','synthetic-tenant','Example.App','1.0','Example App','awaiting_qa','exe','https://example.test/installer.exe',$2,'x64',$3,$4,$5::jsonb,'2026-01-01','2026-01-01')`, [jobId, 'A'.repeat(64), candidateId, 'B'.repeat(64), JSON.stringify({ installerSha256: 'A'.repeat(64), architecture: 'x64' })]);
     mocks.client.mockReturnValue({ from: (table: string) => {
       if (table === 'packaging_jobs') return jobsQuery();
-      if (table === 'qa_candidates') return fixtureQuery({ id: candidateId, status: 'passed', package_profile_sha256: 'B'.repeat(64) });
+      if (table === 'qa_candidates') return fixtureQuery(async () => (await pg.query<{payload: object | null}>('select payload from qa_candidates where id=$1',[candidateId])).rows[0].payload || { id: candidateId, status: 'passed', package_profile_sha256: 'B'.repeat(64) });
       if (table === 'qa_package_results') return fixtureQuery({ outcome: 'Passed' });
       throw new Error(`Unexpected test table: ${table}`);
     } });
@@ -172,4 +173,19 @@ describe('qa-resume PostgreSQL dispatch catch', () => {
     expect((await stored()).completed_at).not.toBeNull();
     expect(mocks.complete).toHaveBeenCalledOnce();
   });
+  it('stores a pretest hash refusal without a fabricated QA completion', async () => {
+    const before = await stored();
+    const summary = 'Installer source quarantined before QA: HASH_MISMATCH. private detail';
+    const candidate = {id:candidateId,status:'superseded',phase:'preparing_package',github_run_id:null,started_at:null,
+      winget_id:before.winget_id,version:before.version,architecture:before.architecture,installer_sha256:before.installer_sha256,
+      package_profile_sha256:'B'.repeat(64),failure_summary:summary};
+    await pg.query('update qa_candidates set payload=$1 where id=$2',[JSON.stringify(candidate),candidateId]);
+    vi.mocked(ensureQaDemand).mockResolvedValueOnce({state:'failed',candidateId,identity:{
+      executionProfileSha256:'B'.repeat(64),presentationProfileSha256:'C'.repeat(64)} as never,failureSummary:summary});
+    // The result read is scoped to the candidate; a Passed fixture is not a Failed result.
+    expect(await (await run()).json()).toMatchObject({failed:1,resumed:0});
+    expect(await stored()).toMatchObject({status:'failed',error_code:'INSTALLER_HASH_QUARANTINED',qa_completed_at:null,error_category:'validation'});
+    expect(mocks.trigger).not.toHaveBeenCalled();
+  });
+
 });

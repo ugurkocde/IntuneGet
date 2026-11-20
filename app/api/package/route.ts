@@ -1,3 +1,4 @@
+import { loadHashQuarantine, HASH_QUARANTINE_MESSAGE } from '@/lib/installer-hash-quarantine';
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
@@ -713,6 +714,12 @@ export async function POST(request: NextRequest) {
                   priority: QA_PRIORITY_CUSTOMER,
                   demandSource: 'customer',
                 });
+            const hashQuarantined = qaDemand?.state === 'failed' && qaDemand.candidateId
+              ? await loadHashQuarantine(createServerClient(), {
+                  candidateId: qaDemand.candidateId, wingetId: item.wingetId, version: item.version,
+                  architecture: item.architecture, hash: installerSha256,
+                  profile: qaDemand.identity.executionProfileSha256, summary: qaDemand.failureSummary,
+                }).catch(() => false) : false;
             const qaDeferred = qaDemand?.state === 'waiting' && isDeferredCustomerQaEnabled();
             // This is display classification of an existing exact block only.
             // An unavailable lookup retains the original closed QA disposition.
@@ -728,7 +735,7 @@ export async function POST(request: NextRequest) {
               : qaDemand?.state === 'waiting' && !qaDeferred
                 ? 'awaiting_qa'
                 : qaDemand?.state === 'failed'
-                  ? unsupportedMessage || unavailable ? 'failed' : 'qa_failed'
+                  ? hashQuarantined || unsupportedMessage || unavailable ? 'failed' : 'qa_failed'
                   : 'queued';
             const now = new Date().toISOString();
 
@@ -756,7 +763,7 @@ export async function POST(request: NextRequest) {
                   ? 'Preparing deployment while installation validation remains scheduled'
                   : 'Waiting for installation validation before deployment'
                 : qaDemand?.state === 'failed'
-                  ? unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                  ? (hashQuarantined ? HASH_QUARANTINE_MESSAGE : null) || unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                   : null,
               progress_percent: 0,
               execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
@@ -765,12 +772,12 @@ export async function POST(request: NextRequest) {
               qa_requested_at: qaDemand ? now : null,
               qa_completed_at: qaDemand?.state === 'passed' ? now : null,
               error_message: qaDemand?.state === 'failed'
-                ? unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
+                ? (hashQuarantined ? HASH_QUARANTINE_MESSAGE : null) || unsupportedMessage || unavailable?.message || qaDemand.failureSummary?.trim() || 'This app did not pass the isolated installation test.'
                 : null,
-              error_code: qaDemand?.state === 'failed' ? unsupportedMessage ? 'DEPENDENCY_NOT_SUPPORTED' : unavailable?.code || 'QA_FAILED_EXECUTION_PROFILE' : null,
+              error_code: qaDemand?.state === 'failed' ? hashQuarantined ? 'INSTALLER_HASH_QUARANTINED' : unsupportedMessage ? 'DEPENDENCY_NOT_SUPPORTED' : unavailable?.code || 'QA_FAILED_EXECUTION_PROFILE' : null,
               error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
-              error_category: qaDemand?.state === 'failed' ? unsupportedMessage || unavailable ? 'validation' : 'installer' : null,
-              ...(unsupportedMessage || unavailable ? { completed_at: now } : {}),
+              error_category: qaDemand?.state === 'failed' ? hashQuarantined || unsupportedMessage || unavailable ? 'validation' : 'installer' : null,
+              ...(hashQuarantined || unsupportedMessage || unavailable ? { completed_at: now } : {}),
             });
 
             if (!jobRecord) {
