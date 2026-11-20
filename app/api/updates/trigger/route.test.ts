@@ -890,9 +890,9 @@ describe('POST /api/updates/trigger', () => {
       expect(writes[1].filters).toMatchObject({ status: 'packaging', packaging_started_at: writes[0].patch.packaging_started_at });
       if (mode === '429 lost') { expect(writes[1].won).toBe(false); expect(body.results[0].error).toMatch(/status changed/); expect(row.packaging_started_at).toBe('new-owner'); return; }
       expect(writes[1].won).toBe(true);
-      const terminal = ['custom 503', '429 no pin', '429 invalid pin'].includes(mode);
+      const terminal = ['429 no pin', '429 invalid pin'].includes(mode);
       expect(row.status).toBe(terminal ? 'failed' : 'awaiting_qa');
-      if (mode === '503' || mode === '429' || mode === 'custom 429') { expect(row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_identity', 'b'.repeat(64)); expect(body.triggered).toBe(1); }
+      if (mode === '503' || mode === 'custom 503' || mode === '429' || mode === 'custom 429') { expect(row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_identity', 'b'.repeat(64)); expect(body.triggered).toBe(1); }
       if (terminal) expect(body.failed).toBe(1);
     } else { expect(writes).toHaveLength(1); expect(body.triggered).toBe(1); }
   });
