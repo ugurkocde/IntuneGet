@@ -979,7 +979,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     }), expect.objectContaining({ status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null }));
   });
 
-  it.each(['explicit x64', 'omitted architecture', 'padded hash'])('rebuilds the same real dispatch identity from the held custom cart row: %s', async variant => {
+  it.each(['explicit x64', 'omitted architecture', 'padded hash', 'empty publisher', 'omitted publisher'])('rebuilds the same real dispatch identity from the held custom cart row: %s', async variant => {
     let sent: Parameters<typeof buildStoredJobWorkflowInputs>[2] | undefined;
     let original: Parameters<NonNullable<typeof actualDispatch.run>>[0] | undefined;
     triggerPackagingWorkflowMock.mockImplementationOnce(async (input, _config, options) => {
@@ -993,6 +993,8 @@ describe('POST /api/package (workflow dispatch)', () => {
       body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', forceCreate: false,
         ...(variant === 'omitted architecture' ? { architecture: undefined } : {}),
         ...(variant === 'padded hash' ? { installerSha256: `  ${'A'.repeat(64)}  ` } : {}),
+        ...(variant === 'empty publisher' ? { publisher: '' } : {}),
+        ...(variant === 'omitted publisher' ? { publisher: undefined } : {}),
       })], forceCreate: true }),
     }));
     const held = { ...createMock.mock.calls[0][0], ...updateMock.mock.calls[0][1] };
