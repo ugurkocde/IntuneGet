@@ -1,4 +1,5 @@
 import { after } from 'next/server';
+import { isolatedHistoryFetch } from './history-transport';
 import { loadReleaseMetadata, releasePairKey } from './release-metadata';
 import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
@@ -171,7 +172,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       const clientInfo = headers.get('x-client-info');
       headers.set('x-client-info', `${clientInfo ? `${clientInfo}; ` : ''}ig-hist=${historyInstance}.${seq}.${historyRpcLabel(rpcName)}`);
       dispatchMs = elapsed();
-      const response = await globalThis.fetch(input, { ...init, headers });
+      const response = await isolatedHistoryFetch(input, { ...init, headers });
       headersMs = elapsed();
       status = response.status;
       return response;
