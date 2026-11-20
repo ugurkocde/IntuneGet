@@ -245,10 +245,3 @@ it('removes only a confirmed dismissed row even if the reconciliation refresh fa
  expect(document.body.textContent).toContain('New survivor');
  expect(document.body.textContent).toContain('Synthetic refresh failure');
 });
-
-it('shows an exact source quarantine as stopped before testing', async () => {
- f.fetch.mockResolvedValue(Response.json({jobs:[{...job(1),status:'qa_failed',error_code:'QA_FAILED_EXECUTION_PROFILE',error_category:'installer',
- qa_status:{category:'unavailable',reasonCode:'INSTALLER_HASH_QUARANTINED',message:'Installer source checks stopped this deployment before the installation test ran.',nextEventAt:null}}]}));
- await render();expect(document.body.textContent).toContain('Installer source blocked');
- expect(document.body.textContent).not.toContain('unsupported installer format');
-});

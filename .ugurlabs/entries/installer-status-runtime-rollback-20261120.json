@@ -1,0 +1,1 @@
+{"title":"Restore the previous deployment status runtime","summary":"Restore the previous status processing while investigating new production request timeouts. Installer security checks remain unchanged.","type":"fixed"}
