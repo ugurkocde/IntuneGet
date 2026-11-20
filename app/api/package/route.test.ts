@@ -979,6 +979,18 @@ describe('POST /api/package (workflow dispatch)', () => {
     }), expect.objectContaining({ status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null }));
   });
 
+  it('keeps the stored publisher for custom auto-update rows without a config publisher', () => {
+    const item = makeWin32Item({ sourceType: 'custom', publisher: undefined });
+    const job = { id: 'auto-job', tenant_id: 'test-tenant', winget_id: item.wingetId,
+      display_name: item.displayName, publisher: 'Contoso', is_auto_update: true,
+      version: item.version, package_config: item, architecture: item.architecture,
+      installer_url: item.installerUrl, installer_sha256: item.installerSha256,
+      installer_type: item.installerType } as Parameters<typeof buildStoredJobWorkflowInputs>[0];
+    expect(buildStoredJobWorkflowInputs(job, item, {
+      callbackUrl: 'https://fixture.invalid/callback', qaOverride: false, sanitizeAssignments: true,
+    }).publisher).toBe('Contoso');
+  });
+
   it.each(['explicit x64', 'omitted architecture', 'padded hash', 'empty publisher', 'omitted publisher'])('rebuilds the same real dispatch identity from the held custom cart row: %s', async variant => {
     let sent: Parameters<typeof buildStoredJobWorkflowInputs>[2] | undefined;
     let original: Parameters<NonNullable<typeof actualDispatch.run>>[0] | undefined;

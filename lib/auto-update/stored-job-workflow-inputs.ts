@@ -37,7 +37,7 @@ export function buildStoredJobWorkflowInputs(
       description: item.description,
       fallback: `Deployed via IntuneGet from Winget: ${job.winget_id}`,
     }),
-    publisher: item.sourceType === 'custom' ? item.publisher : item.publisher || job.publisher || 'Unknown Publisher',
+    publisher: item.sourceType === 'custom' && !job.is_auto_update ? item.publisher : item.publisher || job.publisher || 'Unknown Publisher',
     version: job.version,
     architecture: item.architecture || job.architecture || 'x64',
     installerUrl: item.installerUrl || job.installer_url || '',
