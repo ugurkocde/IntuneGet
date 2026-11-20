@@ -830,14 +830,14 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock.mock.calls[0][0].relationships).toBeUndefined();
   });
 
-  function postSingleItem() {
+  function postSingleItem(overrides: Record<string, unknown> = {}) {
     return POST(new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer test-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ items: [makeWin32Item()] }),
+      body: JSON.stringify({ items: [makeWin32Item(overrides)] }),
     }));
   }
 
@@ -1108,6 +1108,30 @@ describe('POST /api/package (workflow dispatch)', () => {
       error: 'Packaging could not schedule its automatic retry. Refresh the deployment status.' }]);
     expect(JSON.stringify(body)).not.toContain('private database fault');
     });
+
+  it('stores a no-candidate architecture refusal as unavailable rather than failed QA', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([{ architecture: 'arm64', url: 'https://example.com/setup.exe', sha256: 'A'.repeat(64), type: 'exe', scope: 'machine', silentArgs: '/S' }]);
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) },
+      failureSummary: 'This app is not currently available for deployment.' });
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce(null);
+    const body = await (await postSingleItem({ architecture: 'arm64' })).json();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed',
+      error_code: 'ARCHITECTURE_UNAVAILABLE', error_category: 'validation', qa_completed_at: null,
+      qa_candidate_id: null, completed_at: expect.any(String),
+      status_message: 'This app is not currently available for deployment.' }));
+    expect(body.jobs[0].status).toBe('failed');
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a supported architecture dependency alias on its existing closed QA path', async () => {
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) }, failureSummary: 'This app is not currently available for deployment.' });
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'unsupported_dependency_shape', detail: 'Unsupported dependency.' });
+    await postSingleItem();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'qa_failed', error_code: 'QA_FAILED_EXECUTION_PROFILE' }));
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
 
   it('reports an unreviewed dependency as unsupported without claiming a failed installation test', async () => {
     ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,

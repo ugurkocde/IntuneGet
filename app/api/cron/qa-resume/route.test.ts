@@ -1205,6 +1205,27 @@ describe('GET /api/cron/qa-resume', () => {
       .toBeLessThan(triggerPackagingWorkflowMock.mock.invocationCallOrder[0]);
   });
 
+  it('records an unlinked architecture refusal without a failed QA claim', async () => {
+    const job = { id: 'architecture-refused', status: 'awaiting_qa', tenant_id: 'tenant-fake',
+      qa_candidate_id: null, winget_id: 'Example.App', version: '1.0', architecture: 'arm64',
+      installer_sha256: 'A'.repeat(64), installer_url: 'https://example.test/setup.exe',
+      execution_profile_sha256: 'B'.repeat(64), package_config: { sourceType: 'winget', architecture: 'arm64', installerSha256: 'A'.repeat(64) } };
+    const store = jobStore(job); let reads = 0;
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64) }, failureSummary: 'This app is not currently available for deployment.' });
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1 ? chain({ data: [structuredClone(store.row)], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') return candidateQuery([]);
+      throw new Error('Unexpected table ' + table);
+    }) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: 1 });
+    expect(store.row).toMatchObject({ status: 'failed', error_code: 'ARCHITECTURE_UNAVAILABLE', error_category: 'validation', qa_completed_at: null });
+    expect(store.writes.at(-1)!.eq).toHaveBeenCalledWith('status', 'awaiting_qa');
+    expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id, 'failed', 'This app is not currently available for deployment.');
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('releases an unlinked upload immediately when the app payload already passed QA', async () => {
     const job = {
       tenant_id: 'tenant-1', id: 'job-already-passed',

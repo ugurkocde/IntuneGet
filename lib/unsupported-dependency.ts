@@ -1,5 +1,6 @@
 import { PACKAGE_UNAVAILABLE_MESSAGE, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from './package-eligibility';
 import type { PackageCompatibilityBlock } from './package-eligibility';
+import { isQaRunnerArchitectureSupported } from './qa/candidate';
 
 export function unsupportedDependencyIdentifier(block: Pick<PackageCompatibilityBlock, 'code' | 'detail'> | null): string | null {
   if (block?.code !== 'unreviewed_dependency') return null;
@@ -18,7 +19,8 @@ export function unsupportedDependencyMessage(block: Pick<PackageCompatibilityBlo
     : 'This app requires a dependency that is not supported yet. Automated deployment is blocked.';
 }
 
-export function knownUnavailableDisposition(summary: string | null | undefined): { code: string; message: string } | null {
+export function knownUnavailableDisposition(summary: string | null | undefined, context?: { architecture?: string | null }): { code: string; message: string } | null {
+  if (summary === 'This app is not currently available for deployment.' && !isQaRunnerArchitectureSupported(context?.architecture)) return { code: 'ARCHITECTURE_UNAVAILABLE', message: summary };
   if (summary === PACKAGE_VERSION_UNAVAILABLE_MESSAGE) return { code: 'VERSION_UNAVAILABLE', message: summary };
   if (summary === PACKAGE_UNAVAILABLE_MESSAGE) return { code: 'PACKAGE_UNAVAILABLE', message: summary };
   return null;

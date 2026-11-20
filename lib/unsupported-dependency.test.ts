@@ -44,6 +44,13 @@ describe('unsupported dependency customer wording', () => {
 });
 
 describe("pretest classification boundaries", () => {
+ it("classifies the exact no-candidate architecture refusal without claiming a failed QA run", () => {
+ for (const architecture of ['arm64', ' ARM64 ']) expect(knownUnavailableDisposition('This app is not currently available for deployment.', { architecture })).toEqual({
+ code: 'ARCHITECTURE_UNAVAILABLE', message: 'This app is not currently available for deployment.',
+ });
+ for (const architecture of ['x64', 'x86', undefined, '']) expect(knownUnavailableDisposition('This app is not currently available for deployment.', { architecture })).toBeNull();
+ expect(knownUnavailableDisposition('This app is not currently available for deployment. extra', { architecture: 'arm64' })).toBeNull();
+ });
  it("accepts only exact unavailable producer messages", () => {
  expect(knownUnavailableDisposition("This app version is not available for automated deployment.")?.code).toBe("VERSION_UNAVAILABLE");
  expect(knownUnavailableDisposition("This app is not available for automated deployment.")?.code).toBe("PACKAGE_UNAVAILABLE");
