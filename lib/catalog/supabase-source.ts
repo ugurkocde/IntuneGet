@@ -1,8 +1,9 @@
+import { after } from 'next/server';
 import { loadReleaseMetadata, releasePairKey } from './release-metadata';
 import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
-import { knownLastHistoryPage, rememberHistoryTotal, withHistoryCapacity } from './release-history-capacity';
+import { HISTORY_TOTAL_MS, knownLastHistoryPage, rememberHistoryTotal, withHistoryCapacity } from './release-history-capacity';
 /**
  * Supabase-backed CatalogSource.
  *
@@ -92,7 +93,7 @@ export class SupabaseCatalogSource implements CatalogSource {
   private shareHistoryRead<T>(
     pending: Map<string, Promise<T>>,
     filters: ReleaseHistoryFilters,
-    load: () => Promise<T>,
+    load: (deadline: AbortSignal) => Promise<T>,
   ): Promise<T> {
     const key = JSON.stringify([
       filters.app ?? '', filters.query, filters.month, filters.kind, filters.page,
@@ -100,10 +101,27 @@ export class SupabaseCatalogSource implements CatalogSource {
     ]);
     const existing = pending.get(key);
     if (existing) return existing;
-    const read = withHistoryCapacity(load).finally(() => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new DOMException('History budget expired', 'TimeoutError')), HISTORY_TOTAL_MS);
+    let overrun: ReturnType<typeof setTimeout>;
+    // Capacity follows real transport settlement, never the caller's timeout.
+    const operation = withHistoryCapacity(() => {
+      controller.signal.throwIfAborted();
+      return load(controller.signal);
+    });
+    const read = Promise.race([operation, new Promise<never>((_, reject) => {
+      overrun = setTimeout(() => {
+        console.warn('Catalog history settlement overrun', { budgetMs: HISTORY_TOTAL_MS });
+        reject(new Error('Catalog history unavailable'));
+      }, HISTORY_TOTAL_MS + 1000);
+    })]).finally(() => {
+      clearTimeout(timeout); clearTimeout(overrun);
       if (pending.get(key) === read) pending.delete(key);
     });
     pending.set(key, read);
+    // Late stale refreshes need keepalive, bounded independently of transport.
+    try { after(read.then(() => undefined, () => undefined)); }
+    catch { /* Non-request source consumers have no invocation lifecycle. */ }
     return read;
   }
 
@@ -135,7 +153,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       return rows.filter(row => row.outcome !== 'Passed');
     }
   }
-  private async historyRpc<T>(filters: ReleaseHistoryFilters, rpcName: string, args: Record<string, unknown>, seq = ++historySequence): Promise<T> {
+  private async historyRpc<T>(filters: ReleaseHistoryFilters, rpcName: string, args: Record<string, unknown>, seq = ++historySequence, deadline?: AbortSignal): Promise<T> {
     const started = performance.now();
     const startedAt = Date.now();
     const elu = eluStart();
@@ -158,7 +176,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       status = response.status;
       return response;
     } } });
-    const signal = AbortSignal.timeout(15_000);
+    const signal = AbortSignal.any([AbortSignal.timeout(15_000), ...(deadline ? [deadline] : [])]);
     let abortFiredMs: number | null = null;
     const onAbort = () => { abortFiredMs = elapsed(); };
     signal.addEventListener('abort', onAbort, { once: true });
@@ -166,7 +184,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     const inflightAtStart = historyInflight++;
     try {
       const { data, error } = await client.rpc(rpcName, args).abortSignal(signal);
-      if (error) throw new Error('Catalog history unavailable', { cause: error });
+      if (error || signal.aborted) throw new Error('Catalog history unavailable', { cause: error ?? signal.reason });
       success = true;
       return data as T;
     } finally {
@@ -196,7 +214,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
   }
 
-  private async releaseHistoryPage(filters: ReleaseHistoryFilters, seq?: number): Promise<ReleaseHistoryResult> {
+  private async releaseHistoryPage(filters: ReleaseHistoryFilters, seq?: number, deadline?: AbortSignal): Promise<ReleaseHistoryResult> {
     const global = !filters.app && !filters.query && !filters.month && !filters.from
       && !filters.to && !filters.architecture && filters.kind === 'all';
     const summary = this.globalHistorySummary;
@@ -206,7 +224,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       && summary && Date.now() - summary.at < 300_000) {
       const rows = await this.historyRpc<unknown>(filters, 'get_catalog_release_history_global_rows', {
         page_number: filters.page,
-      }, seq);
+      }, seq, deadline);
       if (!Array.isArray(rows)) throw new Error('Catalog history unavailable');
       const result = { ...summary.value, rows };
       // Rows-only responses carry no fresh count observation.
@@ -216,7 +234,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       app_filter: filters.app ?? '', date_from: filters.from || null, date_to: filters.to || null,
       architecture_filter: filters.architecture ?? '', search_text: filters.query,
       month_filter: filters.month, kind_filter: filters.kind, page_number: filters.page,
-    }, seq);
+    }, seq, deadline);
     if (global && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const { rows, ...value } = result;
       void rows;
@@ -227,13 +245,13 @@ export class SupabaseCatalogSource implements CatalogSource {
   }
 
   countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
-    return this.shareHistoryRead(this.historyCounts, filters, async () => {
+    return this.shareHistoryRead(this.historyCounts, filters, async deadline => {
       // Preserve the legacy public/anon path; the additive count RPC is service only.
       const recent = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY) && !filters.app && !filters.query
         && !filters.month && filters.kind === 'updated' && filters.page === 1
         && Boolean(filters.from) && !filters.to && !filters.architecture;
-      if (!recent) return (await this.releaseHistoryPage(filters)).total;
-      const total = await this.historyRpc<unknown>(filters, 'get_catalog_recent_update_count', { date_from: filters.from });
+      if (!recent) return (await this.releaseHistoryPage(filters, undefined, deadline)).total;
+      const total = await this.historyRpc<unknown>(filters, 'get_catalog_recent_update_count', { date_from: filters.from }, undefined, deadline);
       if (typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0) throw new Error('Catalog history unavailable');
       rememberHistoryTotal(filters, total);
       return total;
@@ -243,15 +261,15 @@ export class SupabaseCatalogSource implements CatalogSource {
   getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const lastPage = knownLastHistoryPage(filters);
     if (lastPage !== null && filters.page > lastPage) filters = { ...filters, page: lastPage };
-    return this.shareHistoryRead(this.historyReads, filters, () => this.loadReleaseHistory(filters));
+    return this.shareHistoryRead(this.historyReads, filters, deadline => this.loadReleaseHistory(filters, deadline));
   }
 
-  private async loadReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+  private async loadReleaseHistory(filters: ReleaseHistoryFilters, deadline: AbortSignal): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
     const seq = ++historySequence;
     const started = performance.now();
-    const result = await this.releaseHistoryPage(filters, seq);
+    const result = await this.releaseHistoryPage(filters, seq, deadline);
     if (!result.rows.length) return result;
     const rpcSettledMs = performance.now() - started;
     const metadataStarted = performance.now();
@@ -260,8 +278,9 @@ export class SupabaseCatalogSource implements CatalogSource {
     let firstBatchAbortLatenessMs: number | null = null;
     let recoverySignal: AbortSignal | undefined;
     const {metadata, unavailable, stats} = await loadReleaseMetadata(result.rows, batch => {
+      deadline.throwIfAborted();
       const pairs = batch.map(row => `and(winget_id.eq.${quotePostgrestValue(row.winget_id)},version.eq.${quotePostgrestValue(row.version)})`).join(',');
-      const signal = AbortSignal.timeout(3000);
+      const signal = AbortSignal.any([deadline, AbortSignal.timeout(3000)]);
       if (!firstBatch) {
         // Lateness of the existing 3s budget shows event loop delay; it does not establish a cause.
         const batchStarted = performance.now();
@@ -271,8 +290,9 @@ export class SupabaseCatalogSource implements CatalogSource {
       }
       return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(batch.length).abortSignal(signal);
     }, row => {
+      deadline.throwIfAborted();
       recoverySignal ??= AbortSignal.timeout(8000);
-      return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').eq('winget_id', row.winget_id).eq('version', row.version).limit(1).abortSignal(AbortSignal.any([recoverySignal, AbortSignal.timeout(3000)]));
+      return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').eq('winget_id', row.winget_id).eq('version', row.version).limit(1).abortSignal(AbortSignal.any([deadline, recoverySignal, AbortSignal.timeout(3000)]));
     });
     const metadataMs = performance.now() - metadataStarted;
     const settledFirstBatch = firstBatch as { signal: AbortSignal; onAbort: () => void } | null;
@@ -287,13 +307,14 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
     const hashes = [...new Set(result.rows.map(row => enrichRelease(row, metadata, [], Date.now(), filters.architecture).virusTotal?.hash).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
     let reputations: FileReputation[] = [];
-    if (hashes.length) {
+    if (hashes.length && !deadline.aborted) {
       // Public history only consumes cached evidence. Never enqueue a lookup.
       try {
-        const cached = await client.from('catalog_file_reputation').select('sha256,status,malicious,suspicious,total_engines,analyzed_at').in('sha256', hashes).abortSignal(AbortSignal.timeout(5000));
+        const cached = await client.from('catalog_file_reputation').select('sha256,status,malicious,suspicious,total_engines,analyzed_at').in('sha256', hashes).abortSignal(AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
         if (!cached.error) reputations = (cached.data ?? []) as FileReputation[];
       } catch { /* Exact-hash links remain available when the cache cannot be read. */ }
     }
+    if (deadline.aborted) throw new Error('Catalog history unavailable', {cause: deadline.reason});
     return {...result, rows: result.rows.map(row => unavailable.has(releasePairKey(row)) ? {...row, detailsUnavailable: true} : enrichRelease(row, metadata, reputations, Date.now(), filters.architecture))};
   }
 
