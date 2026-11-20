@@ -314,6 +314,7 @@ export class SupabaseCatalogSource implements CatalogSource {
         if (!cached.error) reputations = (cached.data ?? []) as FileReputation[];
       } catch { /* Exact-hash links remain available when the cache cannot be read. */ }
     }
+    if (deadline.aborted) throw new Error('Catalog history unavailable', {cause: deadline.reason});
     return {...result, rows: result.rows.map(row => unavailable.has(releasePairKey(row)) ? {...row, detailsUnavailable: true} : enrichRelease(row, metadata, reputations, Date.now(), filters.architecture))};
   }
 
