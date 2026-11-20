@@ -81,7 +81,7 @@ export async function GET(request: Request) {
     }
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = storedJobItem(job);
-    const customRetry = job.is_auto_update && item?.sourceType === 'custom' &&
+    const customRetry = item?.sourceType === 'custom' &&
       Boolean(job.error_details && typeof job.error_details === 'object' && Object.hasOwn(job.error_details, DISPATCH_IDENTITY_KEY));
     const skipCandidateQa = customRetry || skipCustomerQa;
     let observed = {

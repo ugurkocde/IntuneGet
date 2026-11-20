@@ -22,7 +22,8 @@ export function buildStoredJobWorkflowInputs(
     callbackUrl: string; qaOverride: boolean; sanitizeAssignments: boolean;
   }
 ): WorkflowInputs {
-  const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
+  const selectedHash = item.installerSha256 || job.installer_sha256 || '';
+  const installerSha256 = item.sourceType === 'custom' ? selectedHash.trim() : selectedHash;
   const autoUpdate = job.is_auto_update ? item as Win32CartItem & {
     sourceIntuneAppId?: string; autoSupersede?: boolean; supersedenceType?: string;
   } : undefined;
@@ -36,7 +37,7 @@ export function buildStoredJobWorkflowInputs(
       description: item.description,
       fallback: `Deployed via IntuneGet from Winget: ${job.winget_id}`,
     }),
-    publisher: item.publisher || job.publisher || 'Unknown Publisher',
+    publisher: item.sourceType === 'custom' && !job.is_auto_update ? item.publisher : item.publisher || job.publisher || 'Unknown Publisher',
     version: job.version,
     architecture: item.architecture || job.architecture || 'x64',
     installerUrl: item.installerUrl || job.installer_url || '',
