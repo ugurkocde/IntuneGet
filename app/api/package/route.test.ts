@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { STALE_JOB_TIMEOUT_MINUTES, STALE_JOB_ERROR_MESSAGE } from '@/lib/stale-jobs';
 import type { PackagingJob } from '@/lib/db/types';
+import { buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 
 const {
@@ -961,6 +962,66 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(updateMock).toHaveBeenCalledOnce();
     expect(updateMock.mock.calls[0][2]).toMatchObject({ status: 'queued', github_run_id: null });
   });
+  it.each([403, 429])('pins a rejected custom cart dispatch for automatic retry: %s', async status => {
+    triggerPackagingWorkflowMock.mockImplementationOnce(async (_input, _config, options) => {
+      await options.beforeDispatch('b'.repeat(64));
+      throw new WorkflowDispatchRateLimitError(status, new Date(Date.now() + 60000).toISOString());
+    });
+    const response = await POST(new NextRequest('http://localhost/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', forceCreate: false })], forceCreate: true }),
+    }));
+    expect(await response.json()).toMatchObject({ jobs: [{ status: 'awaiting_qa' }] });
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'awaiting_qa', completed_at: null,
+      error_details: { workflow_dispatch_unconfirmed_identity: 'b'.repeat(64), workflow_dispatch_rate_limit_attempts: 1 },
+      package_config: expect.objectContaining({ sourceType: 'custom', forceCreate: true }),
+    }), expect.objectContaining({ status: 'queued', github_run_id: null, callback_run_id: null, cancelled_at: null, archived_at: null }));
+  });
+
+  it('rebuilds the same real dispatch identity from the held custom cart row', async () => {
+    let sent: Parameters<typeof buildStoredJobWorkflowInputs>[2] | undefined;
+    let original: Parameters<NonNullable<typeof actualDispatch.run>>[0] | undefined;
+    triggerPackagingWorkflowMock.mockImplementationOnce(async (input, _config, options) => {
+      original = input;
+      sent = { callbackUrl: input.callbackUrl, qaOverride: Boolean(input.qaOverride), sanitizeAssignments: true };
+      await options.beforeDispatch('b'.repeat(64));
+      throw new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60000).toISOString());
+    });
+    await POST(new NextRequest('http://localhost/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', forceCreate: false })], forceCreate: true }),
+    }));
+    const held = { ...createMock.mock.calls[0][0], ...updateMock.mock.calls[0][1] };
+    const rebuilt = buildStoredJobWorkflowInputs(held, held.package_config, sent!);
+    const identities: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('rate limited', { status: 429, headers: { 'retry-after': '60' } })));
+    try {
+      for (const input of [original!, rebuilt]) {
+        await expect(actualDispatch.run!(input, {
+          token: 'synthetic-only', owner: 'fixture-owner', repo: 'fixture-product', workflowsRepo: 'fixture-workflows', workflowFile: 'fixture.yml', ref: 'main',
+        }, { skipRunCapture: true, beforeDispatch: async identity => { identities.push(identity); } })).rejects.toBeInstanceOf(WorkflowDispatchRateLimitError);
+      }
+      expect(identities).toHaveLength(2);
+      expect(identities[1]).toBe(identities[0]);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it.each(['missing hash', 'missing identity', 'plain403', 'unconfirmed', 'race'])('does not resume an unsafe custom cart dispatch: %s', async mode => {
+    if (mode === 'race') updateMock.mockResolvedValueOnce(null);
+    triggerPackagingWorkflowMock.mockImplementationOnce(async (_input, _config, options) => {
+      if (mode !== 'missing identity') await options.beforeDispatch('b'.repeat(64));
+      if (mode === 'plain403') throw new Error('Forbidden');
+      if (mode === 'unconfirmed') throw new WorkflowDispatchUnconfirmedError(503);
+      throw new WorkflowDispatchRateLimitError(429, new Date(Date.now() + 60000).toISOString());
+    });
+    const response = await POST(new NextRequest('http://localhost/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', installerSha256: mode === 'missing hash' ? '' : 'A'.repeat(64) })] }),
+    }));
+    expect((await response.json()).jobs).toEqual([]);
+  });
+
   it('preserves the uncertainty code for a custom app dispatch without a confirmed response', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new WorkflowDispatchUnconfirmedError(503));
     const response = await POST(new NextRequest('http://localhost/api/package', {
