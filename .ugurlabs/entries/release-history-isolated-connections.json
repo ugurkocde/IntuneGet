@@ -1,0 +1,5 @@
+{
+  "title": "More reliable release history refreshes",
+  "summary": "Release history refreshes use fresh connections while preserving their existing time limits and complete-result caching.",
+  "type": "fixed"
+}

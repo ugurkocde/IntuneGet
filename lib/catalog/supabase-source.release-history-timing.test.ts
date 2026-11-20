@@ -1,3 +1,5 @@
+import { vi as transportVi } from 'vitest';
+transportVi.mock('./history-transport', () => ({ isolatedHistoryFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupabaseCatalogSource } from './supabase-source';
 import type { ReleaseHistoryFilters } from './release-history';
@@ -176,3 +178,4 @@ describe('release history RPC diagnostics', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+

@@ -1,3 +1,5 @@
+import { vi as transportVi } from 'vitest';
+transportVi.mock('./history-transport', () => ({ isolatedHistoryFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args) }));
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SupabaseCatalogSource } from './supabase-source';
 import type { ReleaseHistoryFilters } from './release-history';
@@ -87,3 +89,4 @@ it('does not overwrite a fresh pagination total when an older rows response sett
   await source.getReleaseHistory({ ...filters, page: 3 });
   expect(JSON.parse(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body)).page_number).toBe(3);
 });
+
