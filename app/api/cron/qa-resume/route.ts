@@ -647,7 +647,7 @@ export async function GET(request: Request) {
             const patch = found ? {
               status: 'packaging', github_run_id: String(found.id),
               github_run_url: 'https://github.com/' + githubConfig!.owner + '/' + githubConfig!.workflowsRepo + '/actions/runs/' + found.id,
-              packaging_started_at: originalAt, qa_resume_due_at: null,
+              packaging_started_at: originalAt,
               error_code: null, error_message: null, error_stage: null, error_category: null, error_details: null,
               status_message: 'Preparing deployment',
             } : hold ? { ...hold, status_message: 'Checking whether GitHub started packaging. No retry has been sent.' } : {
