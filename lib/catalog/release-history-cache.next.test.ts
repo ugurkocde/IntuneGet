@@ -1,3 +1,5 @@
+vi.mock('./history-transport', () => ({ isolatedHistoryFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args) }));
+
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { afterEach, expect, it, vi } from 'vitest';
 import { withHistoryCapacity } from './release-history-capacity';
