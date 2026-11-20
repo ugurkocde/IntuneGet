@@ -1,3 +1,5 @@
+vi.mock('./history-transport', () => ({ isolatedHistoryFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args) }));
+
 import {afterEach, expect, it, vi} from 'vitest';
 import {SupabaseCatalogSource} from './supabase-source';
 afterEach(() => {vi.restoreAllMocks();vi.unstubAllGlobals();vi.unstubAllEnvs();});

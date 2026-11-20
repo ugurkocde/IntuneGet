@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
-import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, DISPATCH_IDENTITY_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
@@ -828,6 +828,7 @@ export async function POST(request: NextRequest) {
         // by the workflow concurrency group, preventing Intune URI/SAS bursts.
         const isBatch = pendingDispatches.length > 1;
 
+        const dispatchIdentities = new Map<string, string>();
         const dispatchResults = await Promise.allSettled(
           pendingDispatches.map(async ({ item, jobId, createdAt }) => {
             const installerSha256 = item.installerSha256?.trim() || '';
@@ -842,7 +843,7 @@ export async function POST(request: NextRequest) {
               }),
               publisher: item.publisher,
               version: item.version,
-              architecture: item.architecture,
+              architecture: item.sourceType === 'custom' ? item.architecture || 'x64' : item.architecture,
               installerUrl: item.installerUrl,
               installerSha256,
               hashValidationMode: installerSha256 ? 'strict' : 'calculate',
@@ -883,7 +884,8 @@ export async function POST(request: NextRequest) {
             const triggerResult = await triggerPackagingWorkflow(
               workflowInputs,
               undefined,
-              { skipRunCapture: isBatch, newJobAdmission: item.sourceType !== 'custom' }
+              { skipRunCapture: isBatch, newJobAdmission: item.sourceType !== 'custom',
+                beforeDispatch: async identity => { dispatchIdentities.set(jobId, identity); } }
             );
 
             const updateData: Record<string, unknown> = {
@@ -923,15 +925,18 @@ export async function POST(request: NextRequest) {
             const dispatch = pendingDispatches[idx];
             const uncertainCode = result.reason instanceof WorkflowDispatchUnconfirmedError ? result.reason.code : undefined;
             const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError || result.reason instanceof WorkflowDispatchUnconfirmedError ? result.reason : null;
-            // The ordinary QA resume path rebuilds and revalidates hosted inputs.
-            // Custom uploads do not use that path and must not be enqueued here.
-            const rateHold = rateLimit && dispatch?.item.sourceType !== 'custom'
-              ? dispatchRateLimitHold(rateLimit, null) : null;
+            const custom = dispatch?.item.sourceType === 'custom';
+            const identity = dispatch && dispatchIdentities.get(dispatch.jobId);
+            const pinnedCustom = custom && rateLimit instanceof WorkflowDispatchRateLimitError &&
+              typeof identity === 'string' && /^[a-f0-9]{64}$/i.test(identity) &&
+              Boolean(dispatch.item.installerSha256?.trim());
+            const rateHold = rateLimit && (!custom || pinnedCustom)
+              ? dispatchRateLimitHold(rateLimit, pinnedCustom ? { [DISPATCH_IDENTITY_KEY]: identity } : null) : null;
             if (rateHold && dispatch) {
               let retryWriteFailed = false;
               const held = await db.jobs.update(dispatch.jobId, {
                 ...rateHold,
-                ...(rateLimit instanceof WorkflowDispatchUnconfirmedError && forceCreate && !dispatch.item.forceCreate
+                ...((rateLimit instanceof WorkflowDispatchUnconfirmedError || pinnedCustom) && forceCreate && !dispatch.item.forceCreate
                   ? { package_config: { ...dispatch.item, forceCreate: true } as unknown as import('@/types/database').Json }
                   : {}),
               }, {

@@ -1340,9 +1340,9 @@ describe('GET /api/cron/qa-resume', () => {
       expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     });
 
-    it.each(['success', '429', '503', 'network', 'invalid', 'local', 'changed', 'callback', 'due', 'budget', 'unconfirmed'])('resumes custom payload without QA work: %s', async mode => {
+    it.each([true, false].flatMap(isAuto => ['success', '429', '503', 'network', 'invalid', 'local', 'changed', 'callback', 'due', 'budget', 'unconfirmed'].map(mode => ({ isAuto, mode }))))('resumes custom payload without QA work: %j', async ({ isAuto, mode }) => {
       const { store, run } = setup();
-      Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null, is_auto_update: true,
+      Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null, is_auto_update: isAuto,
         error_code: mode === 'unconfirmed' ? 'WORKFLOW_DISPATCH_UNCONFIRMED' : 'WORKFLOW_DISPATCH_RATE_LIMITED',
         qa_resume_due_at: '2026-01-01T00:00:00Z',
         error_details: { workflow_dispatch_unconfirmed_identity: mode === 'invalid' ? 'bad' : 'b'.repeat(64),
