@@ -3,6 +3,7 @@ import { STALE_JOB_TIMEOUT_MINUTES, STALE_JOB_ERROR_MESSAGE } from '@/lib/stale-
 import type { PackagingJob } from '@/lib/db/types';
 import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 
+const quarantineRead = vi.hoisted(() => ({ client: undefined as unknown }));
 const {
   getDatabaseMock,
   getByUserIdMock,
@@ -115,7 +116,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/supabase', async () => { const { createClient } = await import('@supabase/supabase-js'); return { createServerClient: () => actualDispatch.realSupabase ? createClient('https://database.example.test', 'fake-key', { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: reputationFetch } }) : undefined, isSupabaseServerConfigured: isSupabaseServerConfiguredMock }; });
+vi.mock('@/lib/supabase', async () => { const { createClient } = await import('@supabase/supabase-js'); return { createServerClient: () => quarantineRead.client || (actualDispatch.realSupabase ? createClient('https://database.example.test', 'fake-key', { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: reputationFetch } }) : undefined), isSupabaseServerConfigured: isSupabaseServerConfiguredMock }; });
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
   resolveTargetTenantId: vi.fn(async ({ tokenTenantId }: { tokenTenantId: string }) => ({
@@ -137,7 +138,7 @@ import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
-beforeEach(() => { getApprovalFailuresMock.mockResolvedValue([]); actualDispatch.realSupabase = false; });
+beforeEach(() => { quarantineRead.client = undefined; getApprovalFailuresMock.mockResolvedValue([]); actualDispatch.realSupabase = false; });
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
@@ -1025,6 +1026,28 @@ describe('POST /api/package (workflow dispatch)', () => {
       error: 'Packaging could not schedule its automatic retry. Refresh the deployment status.' }]);
     expect(JSON.stringify(body)).not.toContain('private database fault');
     });
+
+  it.each(['exact', 'read error', 'true failure'])('reports source quarantine without claiming a failed installation: %s', async kind => {
+    ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: 'candidate-quarantined',
+      identity: { executionProfileSha256: 'B'.repeat(64) },
+      failureSummary: 'Installer source quarantined before QA: HASH_MISMATCH. private detail' });
+    const row = { id: 'candidate-quarantined', status: 'superseded', phase: 'preparing_package', github_run_id: null,
+      started_at: null, winget_id: 'Test.App', version: '1.0.0', architecture: 'x64', installer_sha256: 'a'.repeat(64),
+      package_profile_sha256: 'B'.repeat(64), failure_summary: 'Installer source quarantined before QA: HASH_MISMATCH. private detail' };
+    if(kind === 'true failure')row.status = 'failed';
+    quarantineRead.client = { from: (table: string) => {
+      const q = { select: () => q, eq: () => q, ilike: () => q, maybeSingle: async () => ({ data: table === 'qa_candidates' ? row : null, error: kind === 'read error' ? {message:'private read error'} : null }) }; return q;
+    } };
+    await postSingleItem();
+    if(kind !== 'exact') {
+      expect(createMock).toHaveBeenCalledWith(expect.objectContaining({status:'qa_failed',error_code:'QA_FAILED_EXECUTION_PROFILE'}));
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();return;
+    }
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed',
+      error_code: 'INSTALLER_HASH_QUARANTINED', error_category: 'validation', qa_completed_at: null,
+      status_message: 'Installer source checks stopped this deployment before the installation test ran.' }));
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
 
   it('reports an unreviewed dependency as unsupported without claiming a failed installation test', async () => {
     ensureQaDemandMock.mockResolvedValueOnce({ state: 'failed', candidateId: null,
