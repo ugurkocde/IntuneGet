@@ -371,6 +371,7 @@ export async function POST(request: NextRequest) {
             const isBatch = updateRequests.length > 1;
             const customSource = [deploymentConfig.sourceType, installerInfo.sourceType, item.sourceType].includes('custom');
             let claimedAt: string | null = null;
+            let dispatchAttemptAt: string | null = null;
             let sentIdentity: string | undefined;
             const ownedWrite = (patch: Database['public']['Tables']['packaging_jobs']['Update'], afterClaim = false) => {
               let query = supabase.from('packaging_jobs').update(patch)
@@ -394,8 +395,9 @@ export async function POST(request: NextRequest) {
                 newJobAdmission: !customSource,
                 beforeDispatch: async identity => {
                   sentIdentity = identity;
+                  dispatchAttemptAt = new Date().toISOString();
                   if (job.status !== 'awaiting_qa') return;
-                  const now = new Date().toISOString();
+                  const now = dispatchAttemptAt;
                   const { data: won, error } = await ownedWrite({ status: 'packaging',
                     status_message: customSource ? 'Preparing deployment' : 'Installation test passed; packaging started',
                     packaging_started_at: now, qa_completed_at: job.qa_completed_at ?? (customSource ? null : now) });
@@ -418,7 +420,7 @@ export async function POST(request: NextRequest) {
                 const hold = customSource
                   ? item.sourceType === 'custom' &&
                     typeof sentIdentity === 'string' && /^[a-f0-9]{64}$/i.test(sentIdentity)
-                    ? dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: sentIdentity, ...(error instanceof WorkflowDispatchUnconfirmedError ? { [UNCONFIRMED_AT_KEY]: claimedAt ?? new Date().toISOString() } : {}) }) : null
+                    ? dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: sentIdentity, ...(error instanceof WorkflowDispatchUnconfirmedError ? { [UNCONFIRMED_AT_KEY]: dispatchAttemptAt ?? claimedAt ?? new Date().toISOString() } : {}) }) : null
                   : error instanceof WorkflowDispatchRateLimitError
                   ? error.dispatchIdentity === undefined ? null
                     : dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: error.dispatchIdentity })

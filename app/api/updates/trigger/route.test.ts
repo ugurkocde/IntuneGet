@@ -812,11 +812,11 @@ describe('POST /api/updates/trigger', () => {
   });
 
 
-  it.each(['lost', 'won', 'claim error', '503', 'custom 503', '429', '429 no pin', '429 invalid pin', 'custom 429', '429 lost', '400', 'queued', 'gate stale'])('guards the manual dispatch claim: %s', async mode => {
+  it.each(['lost', 'won', 'claim error', '503', 'custom 503', 'custom queued 503 delayed', '429', '429 no pin', '429 invalid pin', 'custom 429', '429 lost', '400', 'queued', 'gate stale'])('guards the manual dispatch claim: %s', async mode => {
     const policy = { id: 'policy-1', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Microsoft.Edge',
       policy_type: 'auto_update', is_enabled: true, deployment_config: {} } as AppUpdatePolicy;
     const row: Record<string, unknown> = { id: 'job-race', user_id: 'user-1', tenant_id: 'tenant-1',
-      auto_update_policy_id: 'policy-1', is_auto_update: true, status: mode === 'queued' ? 'queued' : 'awaiting_qa',
+      auto_update_policy_id: 'policy-1', is_auto_update: true, status: ['queued', 'custom queued 503 delayed'].includes(mode) ? 'queued' : 'awaiting_qa',
       package_config: mode.startsWith('custom ') ? { sourceType: 'custom' } : {},
       qa_resume_due_at: '2026-01-01T00:00:00Z', qa_candidate_id: 'candidate', installer_sha256: 'a'.repeat(64), architecture: 'x64' };
     const { supabase } = createTriggerSupabaseMocks(policy, { storedJob: { ...row } });
@@ -859,8 +859,10 @@ describe('POST /api/updates/trigger', () => {
           installerSha256: 'a'.repeat(64), packageProfileSha256: 'b'.repeat(64), reason: 'missing' });
       }
       if (mode === 'lost') row.status = 'packaging'; // cron wins during preparation
+      if (mode === 'custom queued 503 delayed') { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-20T10:00:00Z')); }
       await options?.beforeDispatch?.('b'.repeat(64));
-      expect(row.status).toBe(mode === 'queued' ? 'queued' : 'packaging');
+      expect(row.status).toBe(['queued', 'custom queued 503 delayed'].includes(mode) ? 'queued' : 'packaging');
+      if (mode === 'custom queued 503 delayed') vi.setSystemTime(new Date('2026-11-20T10:02:00Z'));
       posts++;
       if (mode.includes('503')) throw new WorkflowDispatchUnconfirmedError(503, Date.now(), 'b'.repeat(64));
       if (mode.includes('429')) {
@@ -875,8 +877,14 @@ describe('POST /api/updates/trigger', () => {
       body: JSON.stringify({ updates: [{ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }] }),
     }));
     const body = await response.json();
+    if (mode === 'custom queued 503 delayed') vi.useRealTimers();
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
     expect(posts).toBe(['lost', 'claim error', 'gate stale'].includes(mode) ? 0 : 1);
+    if (mode === 'custom queued 503 delayed') {
+      expect(row.status).toBe('awaiting_qa');
+      expect(row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_at', '2026-11-20T10:00:00.000Z');
+      expect(body.triggered).toBe(1); return;
+    }
     if (mode === 'queued') { expect(writes).toHaveLength(0); return; }
     if (mode === 'claim error') { expect(writes).toHaveLength(0); expect(body.triggered).toBe(0); return; }
     expect(writes[0].filters).toMatchObject({ id: 'job-race', user_id: 'user-1', tenant_id: 'tenant-1',

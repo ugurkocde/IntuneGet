@@ -657,7 +657,9 @@ export async function GET(request: Request) {
             const { data: won, error: writeError } = await guardObservedIdentity(supabase.from('packaging_jobs').update(patch)
               .eq('id', job.id).eq('status', 'awaiting_qa').is('github_run_id', null).is('callback_run_id', null)
               .is('cancelled_at', null).is('archived_at', null), true).select('id').maybeSingle();
-            if (writeError) throw writeError;
+            // Keep the existing due time and pinned identity for the next cron check.
+            // A failed reconciliation write never proves the dispatch failed.
+            if (writeError) throw new WorkflowDispatchRetryStopped();
             if (won && found) resumed++;
             else if (won && hold) held++;
             else if (won) { failed++; await handleAutoUpdateJobCompletion(job.id, 'failed', message); }

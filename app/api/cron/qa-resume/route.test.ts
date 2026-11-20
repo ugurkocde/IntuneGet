@@ -1488,6 +1488,33 @@ describe('GET /api/cron/qa-resume', () => {
       if (['callback','due'].includes(mode)) expect(store.row.status).toBe('awaiting_qa');
     });
 
+    it('retries a temporary reconciliation write failure without terminal cleanup or another POST', async () => {
+      const { store, run } = setup();
+      const original = '2026-11-20T10:00:00Z';
+      Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null, is_auto_update: true,
+        error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED', qa_resume_due_at: '2026-01-01T00:00:00Z',
+        error_details: { workflow_dispatch_unconfirmed_identity: 'b'.repeat(64), workflow_dispatch_unconfirmed_at: original },
+        package_config: { sourceType: 'custom', installerSha256: 'A'.repeat(64), architecture: 'x64' } });
+      findPackagingWorkflowRunMock.mockResolvedValue({ id: 123 });
+      const update = store.updateQuery;
+      let fail = true;
+      store.updateQuery = () => {
+        if (fail) { fail = false; return chain({ data: null, error: { message: 'synthetic transient write error' } }); }
+        return update();
+      };
+      let posts = 0;
+      triggerPackagingWorkflowMock.mockImplementation(async (_input, _ref, options) => {
+        await options.beforeDispatch('b'.repeat(64)); posts++; return { runId: 999 };
+      });
+      expect(await (await run()).json()).toMatchObject({ failed: 0 });
+      expect(store.row).toMatchObject({ status: 'awaiting_qa', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED' });
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
+      expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123', packaging_started_at: original });
+      expect(posts).toBe(0);
+      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    });
+
     it('holds a fresh unconfirmed dispatch and shares the existing bounded retry budget', async () => {
       const { store, run } = setup();
       store.row.error_details = { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) };
