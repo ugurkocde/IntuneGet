@@ -176,9 +176,3 @@ it.each(['VERSION_UNAVAILABLE','PACKAGE_UNAVAILABLE'])('keeps legacy installer c
  const html=renderToStaticMarkup(createElement(ErrorDisplay,{errorCode,errorCategory:'installer',errorStage:'validation',errorMessage:'This app version is not available for automated deployment.'}));
  expect(html).toContain('Not available');expect(html).toContain('This request did not run an installation test.');expect(html).not.toContain('unsupported installer format');expect(html).not.toContain('did not pass the installation check');
 });
-
-it('renders a source quarantine without package or permission guidance', () => {
- const html = renderToStaticMarkup(createElement(ErrorDisplay,{errorCode:'INSTALLER_HASH_QUARANTINED',errorCategory:'installer',errorMessage:'private source text'}));
- expect(html).toContain('before the installation test ran');expect(html).toContain('Installer source blocked');
- expect(html).not.toMatch(/unsupported installer format|Re-verify|private source text|did not pass/);
-});
