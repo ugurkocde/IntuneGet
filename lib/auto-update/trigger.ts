@@ -31,6 +31,7 @@ import {
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
 import { ensureQaDemand, type QaDemandResult } from '@/lib/qa/demand';
+import { knownUnavailableDisposition } from '@/lib/unsupported-dependency';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import {
   generateDetectionRules,
@@ -416,11 +417,16 @@ export class AutoUpdateTrigger {
         demandSource: 'auto_update',
       });
       if (qaDemand.state === 'failed') {
+        const unavailable = !qaDemand.candidateId
+          ? knownUnavailableDisposition(qaDemand.failureSummary, { architecture: deploymentConfig.architecture })
+          : null;
         return {
           success: false,
           skipped: true,
           skipReason: qaDemand.failureSummary,
-          code: 'QA_FAILED_CURRENT_VERSION',
+          code: unavailable?.code === 'ARCHITECTURE_UNAVAILABLE'
+            ? unavailable.code
+            : 'QA_FAILED_CURRENT_VERSION',
           packageProfileSha256: qaDemand.identity.executionProfileSha256,
         };
       }
