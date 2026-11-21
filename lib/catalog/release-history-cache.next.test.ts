@@ -246,7 +246,7 @@ it('renews the cache TTL after a failed refresh without extending the source age
     expect(error).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(HISTORY_RETAINED_MAX_AGE_MS-HISTORY_CACHE_SECONDS*1000);
     const writes=cache.set.mock.calls.length;
-    stale=true;await run();
+    stale=true;await expect(run()).rejects.toThrow('Catalog history retained result expired');
     expect(cache.set).toHaveBeenCalledTimes(writes);
     expect(error).toHaveBeenCalledWith(expect.stringContaining('revalidating cache'),sourceError);
     cold=true;
@@ -255,6 +255,25 @@ it('renews the cache TTL after a failed refresh without extending the source age
     const recovered=await run();
     expect(recovered.loadedAt).toBe(Date.now());
     expect(recovered.refreshFailedAt).toBeUndefined();
+  } finally {vi.useRealTimers();}
+});
+
+it('rejects retained cache hits at the source age boundary despite a fresh TTL', async () => {
+  vi.useFakeTimers();
+  const {createHistoryLoader,HISTORY_RETAINED_MAX_AGE_MS}=await import('./release-history-cache');
+  const loadedAt=Date.now(), result={rows:[],total:1,loadedAt,refreshFailedAt:loadedAt};
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(result)}}})),set:vi.fn(async()=>{})};
+  vi.stubGlobal('__incrementalCache',cache);
+  const load=vi.fn(async()=>{throw new Error('source unavailable');});
+  const callback=createHistoryLoader(load);
+  const run=()=>workAsyncStorage.run({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false} as never,()=>callback({query:'',month:'',kind:'all',page:1}));
+  try {
+    await vi.advanceTimersByTimeAsync(HISTORY_RETAINED_MAX_AGE_MS-1);
+    expect(await run()).toEqual(result);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(run()).rejects.toThrow('Catalog history retained result expired');
+    expect(load).not.toHaveBeenCalled();
   } finally {vi.useRealTimers();}
 });
 
