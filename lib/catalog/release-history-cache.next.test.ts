@@ -119,7 +119,7 @@ it('bounds keepalive even for an abort-ignoring transport without releasing its 
 it('does not cache a refresh when the total deadline interrupts reputation enrichment', async () => {
   vi.useFakeTimers();
   const {SupabaseCatalogSource}=await import('./supabase-source');
-  const {requireCompleteHistory}=await import('./release-history-cache');
+  const {createHistoryLoader}=await import('./release-history-cache');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','https://catalog.example.invalid');vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY','synthetic-fixture-key');
   const row={winget_id:'Fixture.App',version:'1',name:'Fixture',publisher:null,previous_version:null,detected_at:'2026-01-01T00:00:00Z',release_date:null};
   let reputationSignal:AbortSignal|undefined;let cleanup:()=>void=()=>{};
@@ -134,12 +134,208 @@ it('does not cache a refresh when the total deadline interrupts reputation enric
   vi.stubGlobal('__incrementalCache',cache);vi.spyOn(console,'warn').mockImplementation(()=>{});vi.spyOn(console,'error').mockImplementation(()=>{});
   const kept:Promise<unknown>[]=[];const source=new SupabaseCatalogSource();
   const store={nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false,afterContext:{after:(p:Promise<unknown>)=>kept.push(p)}};
-  const callback=unstable_cache(async()=>requireCompleteHistory(await source.getReleaseHistory({query:'',month:'',kind:'all',page:1})),['reputation-budget'],{revalidate:300});
+  const callback=createHistoryLoader(filters => source.getReleaseHistory(filters));
   try {
-    expect(await workAsyncStorage.run(store as never,()=>callback())).toEqual(lastGood);
+    expect(await workAsyncStorage.run(store as never,()=>callback({query:'',month:'',kind:'all',page:1}))).toEqual(lastGood);
     await vi.advanceTimersByTimeAsync(0);expect(reputationSignal).toBeDefined();
     await vi.advanceTimersByTimeAsync(9000);expect(reputationSignal!.aborted).toBe(true);
     await Promise.all(kept);await Promise.all(Object.values(store.pendingRevalidates));
     expect(cache.set).not.toHaveBeenCalled();
   } finally {cleanup();await vi.advanceTimersByTimeAsync(20000);await Promise.allSettled(Object.values(store.pendingRevalidates));vi.useRealTimers();vi.unstubAllEnvs();}
+});
+
+it.each(['partial', 'missing_metadata', 'reputation_failure'] as const)(
+  'stores a %s refresh using the production Next wrapper and recovers on a later refresh', async scenario => {
+    vi.useFakeTimers();
+    const { SupabaseCatalogSource } = await import('./supabase-source');
+    const { createHistoryLoader, HISTORY_CACHE_SECONDS } = await import('./release-history-cache');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://catalog.example.invalid');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-fixture-key');
+    const row = {winget_id:'PrivateFixture.App',version:'1',name:'Fixture',publisher:null,previous_version:null,detected_at:'2026-01-01T00:00:00Z',release_date:null};
+    const filters = {query:'private fixture search',month:'',kind:'all' as const,page:1};
+    let recover = false;
+    const fetch = vi.fn(async (input: unknown) => {
+      if (String(input).includes('/rpc/')) return Response.json({rows:[row],total:1});
+      if (String(input).includes('/version_history')) {
+        if (scenario === 'partial' && !recover) return Response.json({}, {status:500});
+        if (scenario === 'missing_metadata') return Response.json([]);
+        return Response.json([{winget_id:row.winget_id,version:row.version,release_notes_url:null,installer_sha256:'a'.repeat(64)}]);
+      }
+      return scenario === 'reputation_failure' ? Response.json({}, {status:500}) : Response.json([]);
+    });
+    vi.stubGlobal('fetch', fetch);
+    const warn = vi.spyOn(console,'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console,'error').mockImplementation(() => {});
+    const lastGood = {rows:[row],total:1};
+    let body = JSON.stringify(lastGood);
+    let stale = true;
+    const cache = {
+      generateSimpleCacheKey: async (key: string) => key,
+      get: vi.fn(async () => ({isStale:stale,value:{kind:'FETCH',data:{body}}})),
+      set: vi.fn(async (_key: string, value: {data:{body:string};revalidate:number}) => {body=value.data.body;stale=false;}),
+    };
+    vi.stubGlobal('__incrementalCache',cache);
+    const source = new SupabaseCatalogSource();
+    const callback = createHistoryLoader(f => source.getReleaseHistory(f));
+    const run = async () => {
+      const store = {nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false};
+      const result = await workAsyncStorage.run(store as never, () => callback(filters));
+      await Promise.all(Object.values(store.pendingRevalidates));
+      return result;
+    };
+    try {
+      expect(await run()).toEqual(lastGood);
+      expect(cache.set).toHaveBeenCalledTimes(1);
+      expect(cache.set.mock.calls[0][1].revalidate).toBe(HISTORY_CACHE_SECONDS);
+      const refreshed = JSON.parse(body);
+      expect(Boolean(refreshed.rows[0].detailsUnavailable)).toBe(scenario === 'partial');
+      const admissionWarnings = () => warn.mock.calls.filter(([message]) => message === 'Catalog release history details unavailable');
+      expect(admissionWarnings()).toHaveLength(scenario === 'partial' ? 1 : 0);
+      expect(JSON.stringify(admissionWarnings())).not.toContain(row.winget_id);
+      expect(JSON.stringify(admissionWarnings())).not.toContain(filters.query);
+      const calls = fetch.mock.calls.length;
+      expect(await run()).toEqual(refreshed);
+      expect(fetch).toHaveBeenCalledTimes(calls);
+      // Even another refresh within the TTL cannot emit a second admission warning.
+      stale = true;
+      await run();
+      expect(admissionWarnings()).toHaveLength(scenario === 'partial' ? 1 : 0);
+      await vi.advanceTimersByTimeAsync(HISTORY_CACHE_SECONDS * 1000);
+      stale = true;
+      await run();
+      expect(admissionWarnings()).toHaveLength(scenario === 'partial' ? 2 : 0);
+      recover = true;
+      stale = true;
+      await run();
+      expect(JSON.parse(body).rows[0].detailsUnavailable).toBeUndefined();
+      expect(error.mock.calls.some(([message]) => String(message).includes('revalidating cache'))).toBe(false);
+    } finally {vi.useRealTimers();vi.unstubAllEnvs();}
+  },
+);
+
+it('renews the cache TTL after a failed refresh without extending the source age, then expires retained service', async () => {
+  vi.useFakeTimers();
+  const {createHistoryLoader,HISTORY_CACHE_SECONDS,HISTORY_RETAINED_MAX_AGE_MS}=await import('./release-history-cache');
+  const loadedAt=Date.now();
+  const original={rows:[{winget_id:'Fixture.Private',detailsUnavailable:true}],total:1,loadedAt};
+  let body=JSON.stringify(original),stale=false,cold=false,fail=true;
+  const sourceError=new Error('Catalog history unavailable',{cause:new DOMException('History budget expired','TimeoutError')});
+  const load=vi.fn(async()=>{if(fail)throw sourceError;return {rows:[],total:0} as never;});
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>cold?null:({isStale:stale,value:{kind:'FETCH',data:{body}}})),
+    set:vi.fn(async(_key:string,value:{data:{body:string};revalidate:number})=>{body=value.data.body;stale=false;})};
+  vi.stubGlobal('__incrementalCache',cache);
+  const warn=vi.spyOn(console,'warn').mockImplementation(()=>{}),error=vi.spyOn(console,'error').mockImplementation(()=>{});
+  const callback=createHistoryLoader(load),filters={query:'private filter',month:'',kind:'all' as const,page:1};
+  const run=async()=>{const store={nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false};const value=await workAsyncStorage.run(store as never,()=>callback(filters));await Promise.all(Object.values(store.pendingRevalidates));return value;};
+  try {
+    await run(); // The instance learns the source timestamp from a served cache hit.
+    expect(load).not.toHaveBeenCalled();
+    stale=true;await run();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(body)).toMatchObject({...original,refreshFailedAt:loadedAt});
+    expect(cache.set.mock.calls[0][1].revalidate).toBe(HISTORY_CACHE_SECONDS);
+    await run();await run();expect(load).toHaveBeenCalledTimes(1);
+    stale=true;await run();expect(warn).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(HISTORY_CACHE_SECONDS*1000);
+    stale=true;await run();
+    expect(JSON.parse(body).loadedAt).toBe(loadedAt);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(filters.query);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Fixture.Private');
+    expect(error).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(HISTORY_RETAINED_MAX_AGE_MS-HISTORY_CACHE_SECONDS*1000);
+    const writes=cache.set.mock.calls.length;
+    stale=true;await expect(run()).rejects.toThrow('Catalog history retained result expired');
+    expect(cache.set).toHaveBeenCalledTimes(writes);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('revalidating cache'),sourceError);
+    cold=true;
+    await expect(run()).rejects.toBe(sourceError);
+    fail=false;
+    const recovered=await run();
+    expect(recovered.loadedAt).toBe(Date.now());
+    expect(recovered.refreshFailedAt).toBeUndefined();
+  } finally {vi.useRealTimers();}
+});
+
+it('rejects marked known-age cache hits at the boundary', async () => {
+  vi.useFakeTimers();
+  const {createHistoryLoader,HISTORY_RETAINED_MAX_AGE_MS}=await import('./release-history-cache');
+  const loadedAt=Date.now(), result={rows:[],total:1,loadedAt,refreshFailedAt:loadedAt};
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(result)}}})),set:vi.fn(async()=>{})};
+  vi.stubGlobal('__incrementalCache',cache);
+  const load=vi.fn(async()=>{throw new Error('source unavailable');});
+  const callback=createHistoryLoader(load);
+  const run=()=>workAsyncStorage.run({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false} as never,()=>callback({query:'',month:'',kind:'all',page:1}));
+  try {
+    await vi.advanceTimersByTimeAsync(HISTORY_RETAINED_MAX_AGE_MS-1);
+    expect(await run()).toEqual(result);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(run()).rejects.toThrow('Catalog history retained result expired');
+    expect(load).not.toHaveBeenCalled();
+  } finally {vi.useRealTimers();}
+});
+
+it.each([false,true])('serves an unmarked fresh hit across small clock skew and keeps marked future ages fail closed: %s', async marked => {
+  const {createHistoryLoader}=await import('./release-history-cache');
+  const loadedAt=Date.now()+60_000,result={rows:[],total:1,loadedAt,...(marked?{refreshFailedAt:loadedAt}:{})};
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(result)}}})),set:vi.fn()};
+  vi.stubGlobal('__incrementalCache',cache);
+  const load=vi.fn(async()=>{throw new Error('must not load');}),callback=createHistoryLoader(load);
+  const run=()=>workAsyncStorage.run({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false} as never,()=>callback({query:'',month:'',kind:'all',page:1}));
+  if(marked)await expect(run()).rejects.toThrow('Catalog history retained result expired');
+  else expect(await run()).toEqual(result);
+  expect(load).not.toHaveBeenCalled();
+});
+
+it.each(['success', 'immediate', 'failure'] as const)('refreshes an idle 31-minute key in the foreground without duplicating Next background work: %s', async outcome => {
+  vi.useFakeTimers();
+  const {createHistoryLoader}=await import('./release-history-cache');
+  const original={rows:[],total:1,loadedAt:Date.now()-31*60*1000};
+  const fresh={rows:[],total:2};
+  const failure=new Error('idle source unavailable');
+  let release!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const load=vi.fn(async()=>{if(outcome!=='immediate')await gate;if(outcome==='failure')throw failure;return fresh as never;});
+  let body=JSON.stringify(original),stale=true;
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:stale,value:{kind:'FETCH',data:{body}}})),
+    set:vi.fn(async(_key:string,value:{data:{body:string}})=>{body=value.data.body;stale=false;})};
+  vi.stubGlobal('__incrementalCache',cache);
+  vi.spyOn(console,'error').mockImplementation(()=>{});
+  const callback=createHistoryLoader(load),filters={query:'',month:'',kind:'all' as const,page:1};
+  const stores=Array.from({length:2},()=>({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false}));
+  const results=Promise.allSettled(stores.map(store=>workAsyncStorage.run(store as never,()=>callback(filters))));
+  try {
+    await vi.advanceTimersByTimeAsync(0);release();
+    const settled=await results;
+    await Promise.all(stores.flatMap(store=>Object.values(store.pendingRevalidates)));
+    for(const result of settled){
+      if(outcome==='failure')expect(result).toMatchObject({status:'rejected',reason:failure});
+      else expect(result).toMatchObject({status:'fulfilled',value:{...fresh,loadedAt:Date.now()}});
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+    if(outcome==='failure')expect(cache.set).not.toHaveBeenCalled();
+  } finally {release();await results;await Promise.all(stores.flatMap(store=>Object.values(store.pendingRevalidates)));vi.useRealTimers();}
+});
+
+it('does not retain unknown-age entries and bounds remembered filter keys to 200', async () => {
+  const {createHistoryLoader}=await import('./release-history-cache');
+  const original={rows:[],total:1,loadedAt:Date.now()};
+  let cold=false,unknownAge=false;
+  const sourceError=new Error('source failed');
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>cold?null:({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(unknownAge?{rows:[],total:1}:original)}}})),
+    set:vi.fn(async()=>{})};
+  vi.stubGlobal('__incrementalCache',cache);vi.spyOn(console,'warn').mockImplementation(()=>{});
+  const callback=createHistoryLoader(async()=>{throw sourceError;});
+  const run=(query:string)=>workAsyncStorage.run({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false} as never,()=>callback({query,month:'',kind:'all',page:1}));
+  for(let i=0;i<201;i++)await run(String(i));
+  cold=true;
+  await expect(run('0')).rejects.toBe(sourceError);
+  expect((await run('200')).refreshFailedAt).toBeTypeOf('number');
+  cold=false;unknownAge=true;await run('legacy');cold=true;
+  await expect(run('legacy')).rejects.toBe(sourceError);
 });

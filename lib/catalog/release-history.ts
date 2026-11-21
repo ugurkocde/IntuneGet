@@ -30,6 +30,9 @@ export interface CatalogRelease {
   } | null;
 }
 export interface ReleaseHistoryResult {
+  /** Original successful source load; retained refreshes must not reset it. */
+  loadedAt?: number;
+  refreshFailedAt?: number;
   rows: CatalogRelease[];
   total: number;
   apps: number;

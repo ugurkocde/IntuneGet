@@ -1,0 +1,5 @@
+{
+  "title": "Keep release history visible during a failed refresh",
+  "summary": "Release history can retain a recent result when a refresh fails, show when that history was loaded, and retry on its normal refresh interval. Missing details stay visibly marked, and retained results keep their original age.",
+  "type": "fixed"
+}
