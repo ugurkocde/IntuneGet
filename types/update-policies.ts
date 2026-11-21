@@ -235,7 +235,9 @@ export interface TriggerUpdateResponse {
       | 'PSADT_BACKFILL_UNAVAILABLE'
       | 'WORKFLOW_DISPATCH_UNCONFIRMED'
       | 'WORKFLOW_DISPATCH_RATE_LIMITED'
-      | 'ARCHITECTURE_UNAVAILABLE';
+      | 'ARCHITECTURE_UNAVAILABLE'
+      | 'VERSION_UNAVAILABLE'
+      | 'PACKAGE_UNAVAILABLE';
     packaging_job_id?: string;
     error?: string;
   }[];

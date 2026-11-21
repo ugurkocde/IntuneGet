@@ -59,6 +59,8 @@ interface TriggerResult {
   skipReason?: string;
   code?:
     | 'ARCHITECTURE_UNAVAILABLE'
+    | 'VERSION_UNAVAILABLE'
+    | 'PACKAGE_UNAVAILABLE'
     | 'QA_FAILED_CURRENT_VERSION'
     | 'QA_NOT_PASSED_CURRENT_VERSION'
     | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
@@ -426,6 +428,8 @@ export class AutoUpdateTrigger {
           skipped: true,
           skipReason: qaDemand.failureSummary,
           code: unavailable?.code === 'ARCHITECTURE_UNAVAILABLE'
+            || unavailable?.code === 'VERSION_UNAVAILABLE'
+            || unavailable?.code === 'PACKAGE_UNAVAILABLE'
             ? unavailable.code
             : 'QA_FAILED_CURRENT_VERSION',
           packageProfileSha256: qaDemand.identity.executionProfileSha256,
