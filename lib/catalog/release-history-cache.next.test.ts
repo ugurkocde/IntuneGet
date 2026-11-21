@@ -212,3 +212,67 @@ it.each(['partial', 'missing_metadata', 'reputation_failure'] as const)(
     } finally {vi.useRealTimers();vi.unstubAllEnvs();}
   },
 );
+
+it('renews the cache TTL after a failed refresh without extending the source age, then expires retained service', async () => {
+  vi.useFakeTimers();
+  const {createHistoryLoader,HISTORY_CACHE_SECONDS,HISTORY_RETAINED_MAX_AGE_MS}=await import('./release-history-cache');
+  const loadedAt=Date.now();
+  const original={rows:[{winget_id:'Fixture.Private',detailsUnavailable:true}],total:1,loadedAt};
+  let body=JSON.stringify(original),stale=false,cold=false,fail=true;
+  const sourceError=new Error('Catalog history unavailable',{cause:new DOMException('History budget expired','TimeoutError')});
+  const load=vi.fn(async()=>{if(fail)throw sourceError;return {rows:[],total:0} as never;});
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>cold?null:({isStale:stale,value:{kind:'FETCH',data:{body}}})),
+    set:vi.fn(async(_key:string,value:{data:{body:string};revalidate:number})=>{body=value.data.body;stale=false;})};
+  vi.stubGlobal('__incrementalCache',cache);
+  const warn=vi.spyOn(console,'warn').mockImplementation(()=>{}),error=vi.spyOn(console,'error').mockImplementation(()=>{});
+  const callback=createHistoryLoader(load),filters={query:'private filter',month:'',kind:'all' as const,page:1};
+  const run=async()=>{const store={nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false};const value=await workAsyncStorage.run(store as never,()=>callback(filters));await Promise.all(Object.values(store.pendingRevalidates));return value;};
+  try {
+    await run(); // The instance learns the source timestamp from a served cache hit.
+    expect(load).not.toHaveBeenCalled();
+    stale=true;await run();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(body)).toMatchObject({...original,refreshFailedAt:loadedAt});
+    expect(cache.set.mock.calls[0][1].revalidate).toBe(HISTORY_CACHE_SECONDS);
+    await run();await run();expect(load).toHaveBeenCalledTimes(1);
+    stale=true;await run();expect(warn).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(HISTORY_CACHE_SECONDS*1000);
+    stale=true;await run();
+    expect(JSON.parse(body).loadedAt).toBe(loadedAt);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(filters.query);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Fixture.Private');
+    expect(error).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(HISTORY_RETAINED_MAX_AGE_MS-HISTORY_CACHE_SECONDS*1000);
+    const writes=cache.set.mock.calls.length;
+    stale=true;await run();
+    expect(cache.set).toHaveBeenCalledTimes(writes);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('revalidating cache'),sourceError);
+    cold=true;
+    await expect(run()).rejects.toBe(sourceError);
+    fail=false;
+    const recovered=await run();
+    expect(recovered.loadedAt).toBe(Date.now());
+    expect(recovered.refreshFailedAt).toBeUndefined();
+  } finally {vi.useRealTimers();}
+});
+
+it('does not retain unknown-age entries and bounds remembered filter keys to 200', async () => {
+  const {createHistoryLoader}=await import('./release-history-cache');
+  const original={rows:[],total:1,loadedAt:Date.now()};
+  let cold=false,unknownAge=false;
+  const sourceError=new Error('source failed');
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>cold?null:({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(unknownAge?{rows:[],total:1}:original)}}})),
+    set:vi.fn(async()=>{})};
+  vi.stubGlobal('__incrementalCache',cache);vi.spyOn(console,'warn').mockImplementation(()=>{});
+  const callback=createHistoryLoader(async()=>{throw sourceError;});
+  const run=(query:string)=>workAsyncStorage.run({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false} as never,()=>callback({query,month:'',kind:'all',page:1}));
+  for(let i=0;i<201;i++)await run(String(i));
+  cold=true;
+  await expect(run('0')).rejects.toBe(sourceError);
+  expect((await run('200')).refreshFailedAt).toBeTypeOf('number');
+  cold=false;unknownAge=true;await run('legacy');cold=true;
+  await expect(run('legacy')).rejects.toBe(sourceError);
+});

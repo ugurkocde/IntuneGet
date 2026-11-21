@@ -329,6 +329,12 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           </div>
         </header>
 
+        {result?.refreshFailedAt != null && result.loadedAt != null && (
+          <p role="status" className="mb-6 rounded-xl border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-text-secondary">
+            <T>Showing history loaded at <Var><time dateTime={new Date(result.loadedAt).toISOString()}>{syncDateFormat.format(new Date(result.loadedAt))}</time></Var> UTC. A refresh failed and will be retried.</T>
+          </p>
+        )}
+
         {result && (
           <dl className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-overlay/10 bg-overlay/10 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none">
             {stats.map(([label, value]) => (

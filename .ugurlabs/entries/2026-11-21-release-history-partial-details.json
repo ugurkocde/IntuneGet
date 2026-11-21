@@ -1,5 +1,5 @@
 {
-  "title": "Keep release history available when some details cannot load",
-  "summary": "Release history can now cache partially available details for its normal five minute refresh interval. Affected rows keep their unavailable indicators while later refreshes retry the missing details.",
+  "title": "Keep release history visible during a failed refresh",
+  "summary": "Release history can retain a recent result when a refresh fails, show when that history was loaded, and retry on its normal refresh interval. Missing details stay visibly marked, and retained results keep their original age.",
   "type": "fixed"
 }
