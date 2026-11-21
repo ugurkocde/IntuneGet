@@ -4,7 +4,6 @@ const MIN_DELAY_MS = 60_000;
 const MAX_DELAY_MS = 65 * 60_000;
 const MAX_DEFERRALS = 5;
 const ATTEMPTS_KEY = 'workflow_dispatch_rate_limit_attempts';
-export const UNCONFIRMED_AT_KEY = 'workflow_dispatch_unconfirmed_at';
 export const DISPATCH_IDENTITY_KEY = 'workflow_dispatch_unconfirmed_identity';
 
 export class WorkflowDispatchRetryStopped extends Error {
