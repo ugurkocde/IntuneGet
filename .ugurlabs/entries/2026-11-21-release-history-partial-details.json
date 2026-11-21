@@ -1,0 +1,5 @@
+{
+  "title": "Keep release history available when some details cannot load",
+  "summary": "Release history can now cache partially available details for its normal five minute refresh interval. Affected rows keep their unavailable indicators while later refreshes retry the missing details.",
+  "type": "fixed"
+}
