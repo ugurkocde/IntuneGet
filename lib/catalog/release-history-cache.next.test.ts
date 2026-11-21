@@ -258,10 +258,10 @@ it('renews the cache TTL after a failed refresh without extending the source age
   } finally {vi.useRealTimers();}
 });
 
-it('rejects retained cache hits at the source age boundary despite a fresh TTL', async () => {
+it.each([true, false])('rejects known-age cache hits at the boundary, marked=%s', async marked => {
   vi.useFakeTimers();
   const {createHistoryLoader,HISTORY_RETAINED_MAX_AGE_MS}=await import('./release-history-cache');
-  const loadedAt=Date.now(), result={rows:[],total:1,loadedAt,refreshFailedAt:loadedAt};
+  const loadedAt=Date.now(), result={rows:[],total:1,loadedAt,...(marked ? {refreshFailedAt:loadedAt} : {})};
   const cache={generateSimpleCacheKey:async(key:string)=>key,
     get:vi.fn(async()=>({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(result)}}})),set:vi.fn(async()=>{})};
   vi.stubGlobal('__incrementalCache',cache);

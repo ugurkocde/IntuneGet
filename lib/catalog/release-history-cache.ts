@@ -69,7 +69,8 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
     retained.delete(key);
     // Next can keep serving a failed refresh through its renewed TTL and stale
     // fallback. Enforce source age on every read, including fresh cache hits.
-    if (result.refreshFailedAt !== undefined && !usable(result, Date.now())) {
+    if ((result.loadedAt !== undefined || result.refreshFailedAt !== undefined)
+      && !usable(result, Date.now())) {
       throw new Error('Catalog history retained result expired');
     }
     if (usable(result, Date.now())) {
