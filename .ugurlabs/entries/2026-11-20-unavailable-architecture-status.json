@@ -1,0 +1,5 @@
+{
+  "title": "Show unavailable packages without a failed test claim",
+  "summary": "Deployments refused before an installation test now show a validation outcome when the selected package is unavailable.",
+  "type": "fixed"
+}

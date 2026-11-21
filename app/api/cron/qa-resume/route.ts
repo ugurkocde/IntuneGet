@@ -319,7 +319,7 @@ export async function GET(request: Request) {
 
 
     const unavailable = !skipCandidateQa && demandWasEvaluated && candidateStatus === 'failed' && !observed.qa_candidate_id
-      ? knownUnavailableDisposition(candidateFailureSummary) : null;
+      ? knownUnavailableDisposition(candidateFailureSummary, { architecture: item.architecture || job.architecture || 'x64' }) : null;
     if (unavailable) {
       const { data: changed, error: unavailableError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
         status: 'failed', status_message: unavailable.message, error_message: unavailable.message,

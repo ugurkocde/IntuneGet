@@ -721,7 +721,7 @@ export async function POST(request: NextRequest) {
                   wingetId: item.wingetId, version: item.version, architecture: item.architecture || 'x64', installerSha256,
                 }).catch(() => null)) : null;
             const unavailable = qaDemand?.state === 'failed' && !qaDemand.candidateId && !unsupportedMessage
-              ? knownUnavailableDisposition(qaDemand.failureSummary) : null;
+              ? knownUnavailableDisposition(qaDemand.failureSummary, { architecture: item.architecture }) : null;
             // Self-hosted installs have no QA pipeline, so local jobs must remain pollable.
             const initialStatus = isLocalPackagerMode && !supabaseServerConfigured
               ? 'queued'
