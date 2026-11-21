@@ -58,6 +58,7 @@ interface TriggerResult {
   skipped?: boolean;
   skipReason?: string;
   code?:
+    | 'ARCHITECTURE_UNAVAILABLE'
     | 'QA_FAILED_CURRENT_VERSION'
     | 'QA_NOT_PASSED_CURRENT_VERSION'
     | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
