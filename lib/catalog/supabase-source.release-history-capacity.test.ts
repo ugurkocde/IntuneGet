@@ -56,15 +56,10 @@ describe('history capacity across distinct keys', () => {
     vi.mocked(Date.now).mockReturnValue(301_000);
     expect(knownLastHistoryPage(scoped)).toBeNull();
   });
-  it('keeps both cache callback definitions and their keys identical to the deployed versions', async () => {
+  it('uses the shared history cache wrapper and preserves the independent recent count cache', async () => {
     const {readFileSync} = await import('node:fs');
     const page = readFileSync(new URL('../../app/(marketing)/apps/releases/page.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-    expect(page).toContain(`const loadHistory = unstable_cache(
-  async (filters: ReleaseHistoryFilters) =>
-    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters)),
-  ["catalog-release-history-v8"],
-  { revalidate: 300 },
-);`);
+    expect(page).toContain('const loadHistory = createHistoryLoader(filters => getCatalogSource().getReleaseHistory(filters));');
     expect(page).toContain(`const loadRecentUpdates = unstable_cache(
   (from: string) => getCatalogSource().countReleaseHistory({ query: "", month: "", kind: "updated", page: 1, from }),
   ["catalog-release-history-recent-v1"],
