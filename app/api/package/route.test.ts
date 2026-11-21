@@ -1036,12 +1036,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: [makeWin32Item({ sourceType: 'custom', installerSha256: mode === 'missing hash' ? '' : 'A'.repeat(64) })] }),
     }));
-    const body = await response.json();
-    if (mode === 'unconfirmed') {
-      expect(body.jobs).toHaveLength(1);
-      expect(updateMock.mock.calls[0][1]).toMatchObject({ status: 'awaiting_qa', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED',
-        error_details: { workflow_dispatch_unconfirmed_identity: 'b'.repeat(64), workflow_dispatch_unconfirmed_at: expect.any(String) } });
-    } else expect(body.jobs).toEqual([]);
+    expect((await response.json()).jobs).toEqual([]);
   });
 
   it('preserves the uncertainty code for a custom app dispatch without a confirmed response', async () => {

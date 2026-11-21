@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
-import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, DISPATCH_IDENTITY_KEY, UNCONFIRMED_AT_KEY } from '@/lib/workflow-dispatch-rate-limit';
+import { dispatchRateLimitHold, WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError, DISPATCH_IDENTITY_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
@@ -829,7 +829,6 @@ export async function POST(request: NextRequest) {
         const isBatch = pendingDispatches.length > 1;
 
         const dispatchIdentities = new Map<string, string>();
-        const dispatchTimes = new Map<string, string>();
         const dispatchResults = await Promise.allSettled(
           pendingDispatches.map(async ({ item, jobId, createdAt }) => {
             const installerSha256 = item.installerSha256?.trim() || '';
@@ -886,7 +885,7 @@ export async function POST(request: NextRequest) {
               workflowInputs,
               undefined,
               { skipRunCapture: isBatch, newJobAdmission: item.sourceType !== 'custom',
-                beforeDispatch: async identity => { dispatchIdentities.set(jobId, identity); dispatchTimes.set(jobId, new Date().toISOString()); } }
+                beforeDispatch: async identity => { dispatchIdentities.set(jobId, identity); } }
             );
 
             const updateData: Record<string, unknown> = {
@@ -928,16 +927,15 @@ export async function POST(request: NextRequest) {
             const rateLimit = result.reason instanceof WorkflowDispatchRateLimitError || result.reason instanceof WorkflowDispatchUnconfirmedError ? result.reason : null;
             const custom = dispatch?.item.sourceType === 'custom';
             const identity = dispatch && dispatchIdentities.get(dispatch.jobId);
-            const pinnedCustom = custom && rateLimit &&
+            const pinnedCustom = custom && rateLimit instanceof WorkflowDispatchRateLimitError &&
               typeof identity === 'string' && /^[a-f0-9]{64}$/i.test(identity) &&
               Boolean(dispatch.item.installerSha256?.trim());
             const rateHold = rateLimit && (!custom || pinnedCustom)
-              ? dispatchRateLimitHold(rateLimit, pinnedCustom ? { [DISPATCH_IDENTITY_KEY]: identity, ...(rateLimit instanceof WorkflowDispatchUnconfirmedError ? { [UNCONFIRMED_AT_KEY]: dispatchTimes.get(dispatch.jobId) ?? new Date().toISOString() } : {}) } : null) : null;
+              ? dispatchRateLimitHold(rateLimit, pinnedCustom ? { [DISPATCH_IDENTITY_KEY]: identity } : null) : null;
             if (rateHold && dispatch) {
               let retryWriteFailed = false;
               const held = await db.jobs.update(dispatch.jobId, {
                 ...rateHold,
-                ...(pinnedCustom && rateLimit instanceof WorkflowDispatchUnconfirmedError ? { status_message: 'Checking whether GitHub started packaging. No retry has been sent.' } : {}),
                 ...((rateLimit instanceof WorkflowDispatchUnconfirmedError || pinnedCustom) && forceCreate && !dispatch.item.forceCreate
                   ? { package_config: { ...dispatch.item, forceCreate: true } as unknown as import('@/types/database').Json }
                   : {}),
