@@ -6,7 +6,6 @@ vi.mock('@/lib/customer-upstream-recovery', () => ({ holdCustomerUpstreamJob: vi
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  findPackagingWorkflowRunMock,
   findPendingApprovalBlocksMock,
   createServerClientMock,
   getFeatureFlagsMock,
@@ -19,7 +18,6 @@ const {
   enforceQaGateMock,
   getApprovedCuratedReleaseMock,
 } = vi.hoisted(() => ({
-  findPackagingWorkflowRunMock: vi.fn(),
   findPendingApprovalBlocksMock: vi.fn(),
   createServerClientMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
@@ -47,7 +45,7 @@ vi.mock('@/lib/db', () => ({ getDatabase: () => ({}) }));
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock, isSupabaseServerConfigured: () => true }));
 vi.mock('@/lib/features', () => ({ getFeatureFlags: getFeatureFlagsMock }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
-vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: triggerPackagingWorkflowMock, isGitHubActionsConfigured: () => true, findPackagingWorkflowRun: findPackagingWorkflowRunMock, getGitHubActionsConfig: () => ({ owner: 'fixture', workflowsRepo: 'fixture', ref: 'main', workflowFile: 'package.yml', token: 'synthetic' }) }));
+vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: triggerPackagingWorkflowMock, isGitHubActionsConfigured: () => true }));
 vi.mock('@/lib/auto-update/cleanup', () => ({
   handleAutoUpdateJobCompletion: handleAutoUpdateJobCompletionMock,
 }));
@@ -1374,10 +1372,7 @@ describe('GET /api/cron/qa-resume', () => {
       else if (mode === '429') {
         expect(store.row.status).toBe('awaiting_qa');
         expect(store.row.error_details).toMatchObject({ workflow_dispatch_rate_limit_attempts: 2, workflow_dispatch_unconfirmed_identity: 'b'.repeat(64) });
-      } else if (['503','network'].includes(mode)) {
-        expect(store.row.status).toBe('awaiting_qa');
-        expect(store.row.error_details).toHaveProperty('workflow_dispatch_unconfirmed_at');
-      } else if (mode === 'budget') {
+      } else if (['503','network','budget'].includes(mode)) {
         expect(store.row.status).toBe('failed');
         expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalled();
       } else if (mode === 'success') expect(store.row.status).toBe('packaging');
@@ -1456,63 +1451,6 @@ describe('GET /api/cron/qa-resume', () => {
       else expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
       if (custom) expect(ensureQaDemandMock).not.toHaveBeenCalled();
       expect(posted).toBe(changed ? 0 : 1);
-    });
-
-    it.each(['found', 'missing', 'read error', 'budget', 'callback', 'due', 'changed', 'local'])('only reconciles custom unknown dispatch: %s', async mode => {
-      const { store, run } = setup();
-      const original = '2026-11-20T10:00:00Z';
-      Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null,
-        error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED', qa_resume_due_at: '2026-01-01T00:00:00Z',
-        error_details: { workflow_dispatch_unconfirmed_identity: 'b'.repeat(64),
-          workflow_dispatch_unconfirmed_at: original, workflow_dispatch_rate_limit_attempts: mode === 'budget' ? 5 : 1 },
-        package_config: { sourceType: 'custom', installerSha256: 'A'.repeat(64), architecture: 'x64' } });
-      if (mode === 'local') getFeatureFlagsMock.mockReturnValue({ localPackager: true });
-      findPackagingWorkflowRunMock.mockImplementation(async () => {
-        if (mode === 'callback') store.row.callback_run_id = 'new-owner';
-        if (mode === 'due') store.row.qa_resume_due_at = '2030-01-01T00:00:00Z';
-        if (mode === 'read error') throw new Error('synthetic read 429');
-        return ['found', 'callback', 'due'].includes(mode) ? { id: 123 } : null;
-      });
-      let posts = 0;
-      triggerPackagingWorkflowMock.mockImplementation(async (_input, _ref, options) => {
-        await options.beforeDispatch(mode === 'changed' ? 'c'.repeat(64) : 'b'.repeat(64));
-        posts++; return { runId: 999 };
-      });
-      await run();
-      expect(posts).toBe(0);
-      expect(ensureQaDemandMock).not.toHaveBeenCalled();
-      if (mode === 'found') expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123', packaging_started_at: original });
-      if (['missing','read error'].includes(mode)) expect(store.row).toMatchObject({ status: 'awaiting_qa', error_details: { workflow_dispatch_unconfirmed_at: original, workflow_dispatch_rate_limit_attempts: 2 } });
-      if (mode === 'budget') { expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_UNRECONCILED'); expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalled(); }
-      if (['changed','local'].includes(mode)) expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
-      if (['callback','due'].includes(mode)) expect(store.row.status).toBe('awaiting_qa');
-    });
-
-    it('retries a temporary reconciliation write failure without terminal cleanup or another POST', async () => {
-      const { store, run } = setup();
-      const original = '2026-11-20T10:00:00Z';
-      Object.assign(store.row, { qa_candidate_id: null, qa_completed_at: null, is_auto_update: true,
-        error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED', qa_resume_due_at: '2026-01-01T00:00:00Z',
-        error_details: { workflow_dispatch_unconfirmed_identity: 'b'.repeat(64), workflow_dispatch_unconfirmed_at: original },
-        package_config: { sourceType: 'custom', installerSha256: 'A'.repeat(64), architecture: 'x64' } });
-      findPackagingWorkflowRunMock.mockResolvedValue({ id: 123 });
-      const update = store.updateQuery;
-      let fail = true;
-      store.updateQuery = () => {
-        if (fail) { fail = false; return chain({ data: null, error: { message: 'synthetic transient write error' } }); }
-        return update();
-      };
-      let posts = 0;
-      triggerPackagingWorkflowMock.mockImplementation(async (_input, _ref, options) => {
-        await options.beforeDispatch('b'.repeat(64)); posts++; return { runId: 999 };
-      });
-      expect(await (await run()).json()).toMatchObject({ failed: 0 });
-      expect(store.row).toMatchObject({ status: 'awaiting_qa', error_code: 'WORKFLOW_DISPATCH_UNCONFIRMED' });
-      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
-      expect(await (await run()).json()).toMatchObject({ resumed: 1, failed: 0 });
-      expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123', packaging_started_at: original });
-      expect(posts).toBe(0);
-      expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     });
 
     it('holds a fresh unconfirmed dispatch and shares the existing bounded retry budget', async () => {
