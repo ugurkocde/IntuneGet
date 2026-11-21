@@ -666,6 +666,26 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     expect(history).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['This app version is not available for automated deployment.', null, 'VERSION_UNAVAILABLE'],
+    ['This app is not available for automated deployment.', null, 'PACKAGE_UNAVAILABLE'],
+    ['This app version is not available for automated deployment.', 'synthetic-candidate', 'QA_FAILED_CURRENT_VERSION'],
+    ['This app is not available for automated deployment.', 'synthetic-candidate', 'QA_FAILED_CURRENT_VERSION'],
+    ['Unknown refusal', null, 'QA_FAILED_CURRENT_VERSION'],
+  ])('classifies availability %s with candidate %s', async (summary, candidateId, code) => {
+    ensureQaDemandMock.mockResolvedValue({ state: 'failed', candidateId, failureSummary: summary,
+      identity: { executionProfileSha256: 'B'.repeat(64), presentationProfileSha256: 'D'.repeat(64) } });
+    const trigger = makeTrigger(createSupabaseMock({}));
+    const policy = makePolicy({ displayName: 'Synthetic App', architecture: 'x64' });
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
+    const history = vi.spyOn(trigger as never, 'createHistoryRecord' as never);
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
+    expect(result).toMatchObject({ success: false, skipped: true, code, skipReason: summary });
+    expect(history).not.toHaveBeenCalled();
+  });
   it.each(['The uninstall step failed.', '', '   '])('persists both failure fields in the auto-update job writer: %s', async (summary) => {
     const insert = vi.fn();
     const trigger = makeTrigger(createSupabaseMock({
