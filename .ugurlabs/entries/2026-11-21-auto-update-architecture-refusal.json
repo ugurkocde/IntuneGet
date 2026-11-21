@@ -1,0 +1,5 @@
+{
+  "title": "Identify unavailable architectures in automatic updates",
+  "summary": "Automatic updates now distinguish an unsupported architecture from a failed installation test.",
+  "type": "fixed"
+}
