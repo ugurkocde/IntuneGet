@@ -258,10 +258,10 @@ it('renews the cache TTL after a failed refresh without extending the source age
   } finally {vi.useRealTimers();}
 });
 
-it.each([true, false])('rejects known-age cache hits at the boundary, marked=%s', async marked => {
+it('rejects marked known-age cache hits at the boundary', async () => {
   vi.useFakeTimers();
   const {createHistoryLoader,HISTORY_RETAINED_MAX_AGE_MS}=await import('./release-history-cache');
-  const loadedAt=Date.now(), result={rows:[],total:1,loadedAt,...(marked ? {refreshFailedAt:loadedAt} : {})};
+  const loadedAt=Date.now(), result={rows:[],total:1,loadedAt,refreshFailedAt:loadedAt};
   const cache={generateSimpleCacheKey:async(key:string)=>key,
     get:vi.fn(async()=>({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(result)}}})),set:vi.fn(async()=>{})};
   vi.stubGlobal('__incrementalCache',cache);
@@ -275,6 +275,50 @@ it.each([true, false])('rejects known-age cache hits at the boundary, marked=%s'
     await expect(run()).rejects.toThrow('Catalog history retained result expired');
     expect(load).not.toHaveBeenCalled();
   } finally {vi.useRealTimers();}
+});
+
+it.each([false,true])('serves an unmarked fresh hit across small clock skew and keeps marked future ages fail closed: %s', async marked => {
+  const {createHistoryLoader}=await import('./release-history-cache');
+  const loadedAt=Date.now()+60_000,result={rows:[],total:1,loadedAt,...(marked?{refreshFailedAt:loadedAt}:{})};
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:false,value:{kind:'FETCH',data:{body:JSON.stringify(result)}}})),set:vi.fn()};
+  vi.stubGlobal('__incrementalCache',cache);
+  const load=vi.fn(async()=>{throw new Error('must not load');}),callback=createHistoryLoader(load);
+  const run=()=>workAsyncStorage.run({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false} as never,()=>callback({query:'',month:'',kind:'all',page:1}));
+  if(marked)await expect(run()).rejects.toThrow('Catalog history retained result expired');
+  else expect(await run()).toEqual(result);
+  expect(load).not.toHaveBeenCalled();
+});
+
+it.each(['success', 'immediate', 'failure'] as const)('refreshes an idle 31-minute key in the foreground without duplicating Next background work: %s', async outcome => {
+  vi.useFakeTimers();
+  const {createHistoryLoader}=await import('./release-history-cache');
+  const original={rows:[],total:1,loadedAt:Date.now()-31*60*1000};
+  const fresh={rows:[],total:2};
+  const failure=new Error('idle source unavailable');
+  let release!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const load=vi.fn(async()=>{if(outcome!=='immediate')await gate;if(outcome==='failure')throw failure;return fresh as never;});
+  let body=JSON.stringify(original),stale=true;
+  const cache={generateSimpleCacheKey:async(key:string)=>key,
+    get:vi.fn(async()=>({isStale:stale,value:{kind:'FETCH',data:{body}}})),
+    set:vi.fn(async(_key:string,value:{data:{body:string}})=>{body=value.data.body;stale=false;})};
+  vi.stubGlobal('__incrementalCache',cache);
+  vi.spyOn(console,'error').mockImplementation(()=>{});
+  const callback=createHistoryLoader(load),filters={query:'',month:'',kind:'all' as const,page:1};
+  const stores=Array.from({length:2},()=>({nextFetchId:1,route:'/apps/releases',pendingRevalidates:{},isStaticGeneration:false}));
+  const results=Promise.allSettled(stores.map(store=>workAsyncStorage.run(store as never,()=>callback(filters))));
+  try {
+    await vi.advanceTimersByTimeAsync(0);release();
+    const settled=await results;
+    await Promise.all(stores.flatMap(store=>Object.values(store.pendingRevalidates)));
+    for(const result of settled){
+      if(outcome==='failure')expect(result).toMatchObject({status:'rejected',reason:failure});
+      else expect(result).toMatchObject({status:'fulfilled',value:{...fresh,loadedAt:Date.now()}});
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+    if(outcome==='failure')expect(cache.set).not.toHaveBeenCalled();
+  } finally {release();await results;await Promise.all(stores.flatMap(store=>Object.values(store.pendingRevalidates)));vi.useRealTimers();}
 });
 
 it('does not retain unknown-age entries and bounds remembered filter keys to 200', async () => {

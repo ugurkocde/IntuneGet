@@ -30,6 +30,7 @@ export function createHistoryCacheLoader(load: HistoryLoader): HistoryLoader {
 
 export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
   const retained = new Map<string, ReleaseHistoryResult>();
+  const pending = new Map<string, Promise<ReleaseHistoryResult>>();
   let nextFailureWarningAt = -Infinity;
   const admit = createHistoryCacheLoader(load);
   const keyOf = (f: ReleaseHistoryFilters) => JSON.stringify([
@@ -38,10 +39,26 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
   const usable = (result: ReleaseHistoryResult, now: number) =>
     typeof result.loadedAt === 'number' && Number.isFinite(result.loadedAt)
     && now >= result.loadedAt && now - result.loadedAt < HISTORY_RETAINED_MAX_AGE_MS;
-  const cached = unstable_cache(async (filters: ReleaseHistoryFilters) => {
+  const remember = (key: string, result: ReleaseHistoryResult) => {
+    const current = retained.get(key);
+    if (current?.loadedAt !== undefined && result.loadedAt !== undefined
+      && current.loadedAt > result.loadedAt) return;
+    retained.delete(key);
+    retained.set(key, result);
+    if (retained.size > RETAINED_KEYS) retained.delete(retained.keys().next().value!);
+  };
+  // Both Next's background refresh and an expired idle-key foreground read
+  // join the same source operation. Store before invoking the source.
+  const refresh = (filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> => {
+    const key = keyOf(filters);
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const operation = Promise.resolve().then(async () => {
     try {
       const result = await admit(filters);
-      return { ...result, loadedAt: Date.now(), refreshFailedAt: undefined };
+      const fresh = { ...result, loadedAt: Date.now(), refreshFailedAt: undefined };
+      remember(key, fresh);
+      return fresh;
     } catch (error) {
       const previous = retained.get(keyOf(filters));
       const now = Date.now();
@@ -58,24 +75,37 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
       }
       return { ...previous, refreshFailedAt: now };
     }
-  }, ['catalog-release-history-v8'], {
+    }).finally(() => { if (pending.get(key) === operation) pending.delete(key); });
+    pending.set(key, operation);
+    return operation;
+  };
+  const cached = unstable_cache((filters: ReleaseHistoryFilters) => refresh(filters), ['catalog-release-history-v8'], {
     revalidate: HISTORY_CACHE_SECONDS,
   });
   return async filters => {
     // Next serves stale data before its background refresh settles. Retaining
     // that served value lets this instance return it when the refresh fails.
-    const result = await cached(filters);
+    let result = await cached(filters);
     const key = keyOf(filters);
-    retained.delete(key);
     // Next can keep serving a failed refresh through its renewed TTL and stale
     // fallback. Enforce source age on every read, including fresh cache hits.
-    if ((result.loadedAt !== undefined || result.refreshFailedAt !== undefined)
-      && !usable(result, Date.now())) {
+    if (result.refreshFailedAt !== undefined && !usable(result, Date.now())) {
+      throw new Error('Catalog history retained result expired');
+    }
+    if (result.refreshFailedAt === undefined && typeof result.loadedAt === 'number' && Number.isFinite(result.loadedAt)
+      && Date.now() - result.loadedAt >= HISTORY_RETAINED_MAX_AGE_MS) {
+      // An unmarked idle cache entry is not proof that its source is failing.
+      // A fast background refresh may already have settled before cached()
+      // returns its stale value; reuse that observation rather than reload.
+      const fresh = retained.get(key);
+      result = fresh && usable(fresh, Date.now()) && fresh.loadedAt! > result.loadedAt
+        ? fresh : await refresh(filters);
+    }
+    if (result.refreshFailedAt !== undefined && !usable(result, Date.now())) {
       throw new Error('Catalog history retained result expired');
     }
     if (usable(result, Date.now())) {
-      retained.set(key, result);
-      if (retained.size > RETAINED_KEYS) retained.delete(retained.keys().next().value!);
+      remember(key, result);
     }
     return result;
   };
