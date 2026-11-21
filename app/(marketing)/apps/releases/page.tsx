@@ -6,7 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getGT } from "gt-next/server";
-import { CompleteHistoryError, requireCompleteHistory } from "@/lib/catalog/release-history-cache";
+import { createHistoryLoader } from "@/lib/catalog/release-history-cache";
 import { knownLastHistoryPage } from "@/lib/catalog/release-history-capacity";
 import {
   ArrowRight,
@@ -41,16 +41,11 @@ type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 const PAGE_SIZE = 40;
-const loadHistory = unstable_cache(
-  async (filters: ReleaseHistoryFilters) =>
-    requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters)),
-  ["catalog-release-history-v8"],
-  { revalidate: 300 },
-);
+const loadHistory = createHistoryLoader(filters => getCatalogSource().getReleaseHistory(filters));
 // cache() shares one in-flight load between generateMetadata and the page. Filters are
 // serialized because cache() compares arguments by identity.
 const loadHistoryOrPartial = cache((key: string) =>
-  loadHistory(JSON.parse(key) as ReleaseHistoryFilters).catch(error => error instanceof CompleteHistoryError ? error.result : null));
+  loadHistory(JSON.parse(key) as ReleaseHistoryFilters).catch(() => null));
 const loadRecentUpdates = unstable_cache(
   (from: string) => getCatalogSource().countReleaseHistory({ query: "", month: "", kind: "updated", page: 1, from }),
   ["catalog-release-history-recent-v1"],
@@ -333,6 +328,12 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
             <ReleaseFeedDialog key={filters.app ?? "all"} app={filters.app} />
           </div>
         </header>
+
+        {result?.refreshFailedAt != null && result.loadedAt != null && (
+          <p role="status" className="mb-6 rounded-xl border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-text-secondary">
+            <T>Showing history loaded at <Var><time dateTime={new Date(result.loadedAt).toISOString()}>{syncDateFormat.format(new Date(result.loadedAt))}</time></Var> UTC. A refresh failed and will be retried.</T>
+          </p>
+        )}
 
         {result && (
           <dl className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-overlay/10 bg-overlay/10 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none">
