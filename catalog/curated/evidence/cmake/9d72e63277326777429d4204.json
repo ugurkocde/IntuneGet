@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "websiteCommit": "ff771120bc3165a83ce5848106e2e990771502c1",
+    "workflowCommit": "bf6c94a9db74fc3983f56af3100fbae951c2fbbe",
+    "runId": "44790901509",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "cmake",
+    "version": "4.5.1",
+    "installerUrl": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-windows-x86_64.msi",
+    "vendorSha256": "0041a25845bc8c399b42d20f836616cb0b7020a8605348c089563bbc0c023356",
+    "releaseNotesUrl": "https://github.com/Kitware/CMake/releases/tag/v4.5.1",
+    "discoveredAt": "2026-11-19T16:40:09.201Z",
+    "id": "9d72e63277326777429d4204"
+  },
+  "previous": {
+    "appId": "cmake",
+    "version": "4.5.0",
+    "installerUrl": "https://github.com/Kitware/CMake/releases/download/v4.5.0/cmake-4.5.0-windows-x86_64.msi",
+    "vendorSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+    "releaseNotesUrl": "https://github.com/Kitware/CMake/releases/tag/v4.5.0",
+    "discoveredAt": "2026-11-12T19:12:53.683Z",
+    "id": "1de45910fa68d4b2865b916d"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "9d72e63277326777429d4204",
+      "installerSha256": "0041a25845bc8c399b42d20f836616cb0b7020a8605348c089563bbc0c023356",
+      "sourceUrl": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-windows-x86_64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Kitware, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.463.389.0",
+        "scanner": "defender",
+        "malicious": 0,
+        "suspicious": 0,
+        "status": "clean",
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "0041a25845bc8c399b42d20f836616cb0b7020a8605348c089563bbc0c023356",
+        "scannedAt": "2026-11-20T18:24:52.9814568Z"
+      }
+    },
+    "previous": {
+      "candidateId": "1de45910fa68d4b2865b916d",
+      "installerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+      "sourceUrl": "https://github.com/Kitware/CMake/releases/download/v4.5.0/cmake-4.5.0-windows-x86_64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Kitware, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.463.389.0",
+        "scanner": "defender",
+        "malicious": 0,
+        "suspicious": 0,
+        "status": "clean",
+        "engineVersion": "1.1.26100.4",
+        "installerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+        "scannedAt": "2026-11-20T18:25:08.9434712Z"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "9d72e63277326777429d4204",
+    "packageId": "IntuneGet.Curated.CMake",
+    "installerUrl": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-windows-x86_64.msi",
+    "installerSha256": "0041a25845bc8c399b42d20f836616cb0b7020a8605348c089563bbc0c023356",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.CMake",
+      "displayName": "CMake",
+      "publisher": "Kitware, Inc.",
+      "version": "4.5.1",
+      "architecture": "x64",
+      "installerSha256": "0041a25845bc8c399b42d20f836616cb0b7020a8605348c089563bbc0c023356",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:CMake",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_CMake\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.5.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_CMake\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.5.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "E540ED3B0717A5DDC32D4E8958FE2138EDC1AF38217EBA2D63063ACCABE7E66B",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.CMake\",\"publisher\":\"IntuneGet QA\",\"version\":\"4.5.1\",\"wingetId\":\"IntuneGet.Curated.CMake\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.5.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_CMake\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"80B6D30ECCC158F5680C3FACD78966F4831062ECD251E20EA82EC97E3CB56790\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"0041A25845BC8C399B42D20F836616CB0B7020A8605348C089563BBC0C023356\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:CMake\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.5.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_CMake\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"0D6E353649CF73FB1A6307A832AB8B4B406E89C0309E3EF9A65A539035788C23\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "0d6e353649cf73fb1a6307a832ab8b4b406e89c0309e3ef9a65a539035788c23",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "installerSha256": "0041a25845bc8c399b42d20f836616cb0b7020a8605348c089563bbc0c023356",
+    "previousInstallerSha256": "8e450caad4ce6bfb0f30206cac64bc611deee0d6848f4bf0ef30f51ff3606e25",
+    "installerVersion": "4.5.1",
+    "executionProfileSha256": "E540ED3B0717A5DDC32D4E8958FE2138EDC1AF38217EBA2D63063ACCABE7E66B",
+    "testedAt": "2026-11-20T18:32:32.3805486Z",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "architecture": "x64",
+    "upgradeFromVersion": "4.5.0",
+    "candidateId": "9d72e63277326777429d4204"
+  },
+  "verifiedAt": "2026-11-20T18:32:44.6600117Z",
+  "authenticatedArtifact": {
+    "id": 14657616709,
+    "sha256": "8de2b11012143fce58160d7f957334a476f59732b16ece44d42b282c10781888"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-21T11:13:40.445Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
