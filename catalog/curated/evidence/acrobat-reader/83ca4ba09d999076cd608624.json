@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runAttempt": "1",
+    "runId": "44752519343",
+    "websiteCommit": "f8b8b48e5d345333f26eb5495f5431d7006e9b84",
+    "workflowCommit": "5eeb21dd7264bd68daea0600bf437ad42f0f5a0e"
+  },
+  "candidate": {
+    "appId": "acrobat-reader",
+    "version": "26.003.22110",
+    "installerUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600322110/AcroRdrDCx642600322110_en_US.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.adobe.com/acrobat/pdf-reader/volume-distribution.html",
+    "discoveredAt": "2026-11-18T10:15:06.859Z",
+    "id": "83ca4ba09d999076cd608624"
+  },
+  "previous": {
+    "appId": "acrobat-reader",
+    "version": "26.002.22031",
+    "installerUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600222031/AcroRdrDCx642600222031_en_US.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.adobe.com/acrobat/pdf-reader/volume-distribution.html",
+    "discoveredAt": "2026-10-14T12:33:17.775Z",
+    "id": "22da8e47db0aefb8109d6534"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "83ca4ba09d999076cd608624",
+      "installerSha256": "a7149f099dba2f868b65c2e4d62149fe411490fbb622192725fcc9ecfaa03852",
+      "sourceUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600322110/AcroRdrDCx642600322110_en_US.exe",
+      "finalOrigin": "https://ardownload2.adobe.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Adobe Inc."
+      },
+      "security": {
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "a7149f099dba2f868b65c2e4d62149fe411490fbb622192725fcc9ecfaa03852",
+        "engineVersion": "1.1.26100.4",
+        "suspicious": 0,
+        "scannedAt": "2026-11-20T14:46:28.0662738Z",
+        "malicious": 0,
+        "signatureVersion": "1.463.386.0"
+      }
+    },
+    "previous": {
+      "candidateId": "22da8e47db0aefb8109d6534",
+      "installerSha256": "86e98feb3f2afa66656a85cbbc6fb71d6a3217ebf8fdc21f4d1a54d21cb45028",
+      "sourceUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600222031/AcroRdrDCx642600222031_en_US.exe",
+      "finalOrigin": "https://ardownload2.adobe.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Adobe Inc."
+      },
+      "security": {
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "86e98feb3f2afa66656a85cbbc6fb71d6a3217ebf8fdc21f4d1a54d21cb45028",
+        "engineVersion": "1.1.26100.4",
+        "suspicious": 0,
+        "scannedAt": "2026-11-20T14:55:32.8681504Z",
+        "malicious": 0,
+        "signatureVersion": "1.463.386.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "83ca4ba09d999076cd608624",
+    "packageId": "IntuneGet.Curated.AcrobatReader",
+    "installerUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600322110/AcroRdrDCx642600322110_en_US.exe",
+    "installerSha256": "a7149f099dba2f868b65c2e4d62149fe411490fbb622192725fcc9ecfaa03852",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.AcrobatReader",
+      "displayName": "Adobe Acrobat Reader",
+      "publisher": "Adobe Inc.",
+      "version": "26.003.22110",
+      "architecture": "x64",
+      "installerSha256": "a7149f099dba2f868b65c2e4d62149fe411490fbb622192725fcc9ecfaa03852",
+      "installerType": "exe",
+      "installScope": "machine",
+      "silentSwitches": "/sAll /rs /rps /msi EULA_ACCEPT=YES",
+      "uninstallCommand": "REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat (64-bit)",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.003.22110\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.003.22110\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "D5EEECBE55EB1249EFF230A618A7B9DBB7965CDCA52AF840EF041AD56F208ADF",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.AcrobatReader\",\"publisher\":\"IntuneGet QA\",\"version\":\"26.003.22110\",\"wingetId\":\"IntuneGet.Curated.AcrobatReader\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.003.22110\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"F4AEF20002CC3182FE06DDA4FCFC4F37B9F534058244D6EEE78371EA75E8D723\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"A7149F099DBA2F868B65C2E4D62149FE411490FBB622192725FCC9ECFAA03852\",\"silentArgs\":\"/sAll /rs /rps /msi EULA_ACCEPT=YES\",\"sourceType\":\"exe\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat (64-bit)\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.003.22110\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"108971E8D09C8BB7A5D71901D62C707D5BF062DA1AE8E1B85870B4BBD0F7EFE3\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "108971e8d09c8bb7a5d71901d62c707d5bf062da1ae8e1b85870b4bbd0f7efe3",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionContext": "LocalSystem",
+    "testedAt": "2026-11-20T15:09:12.118674Z",
+    "candidateId": "83ca4ba09d999076cd608624",
+    "installerVersion": "26.003.22110",
+    "previousInstallerSha256": "86e98feb3f2afa66656a85cbbc6fb71d6a3217ebf8fdc21f4d1a54d21cb45028",
+    "executionProfileSha256": "D5EEECBE55EB1249EFF230A618A7B9DBB7965CDCA52AF840EF041AD56F208ADF",
+    "upgradeFromVersion": "26.002.22031",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "installerSha256": "a7149f099dba2f868b65c2e4d62149fe411490fbb622192725fcc9ecfaa03852",
+    "testLevel": "psadt-package",
+    "architecture": "x64"
+  },
+  "verifiedAt": "2026-11-20T15:09:20.5911389Z",
+  "authenticatedArtifact": {
+    "id": 14641243290,
+    "sha256": "f14301e8377b86054df264e454a9c094533d2eb17636cd38124833aba1f51749"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-21T11:13:40.445Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
