@@ -53,7 +53,7 @@ export async function handleAutoUpdateJobCompletion(
   // Fetch the job to check if it's an auto-update
   const { data: job, error: fetchError } = await supabase
     .from('packaging_jobs')
-    .select('id, is_auto_update, auto_update_policy_id, package_config, error_category, error_code')
+    .select('id, is_auto_update, auto_update_policy_id, package_config, error_category, error_code, github_run_id, callback_run_id')
     .eq('id', jobId)
     .single();
 
@@ -64,6 +64,14 @@ export async function handleAutoUpdateJobCompletion(
 
   // Guard: not an auto-update job
   if (!job.is_auto_update || !job.auto_update_policy_id) {
+    return;
+  }
+
+  // An uncertain dispatch may still be running. Keep its dedupe checkpoint
+  // and policy version marker until reconciliation or a callback finds the run.
+  if ((terminalStatus === 'failed' || terminalStatus === 'cancelled') &&
+    (job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED' || job.error_code === 'WORKFLOW_DISPATCH_UNRECONCILED') &&
+    !job.github_run_id && !job.callback_run_id) {
     return;
   }
 
