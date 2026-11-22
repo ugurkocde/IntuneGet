@@ -175,7 +175,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       dispatchMs = elapsed();
       const response = await isolatedHistoryFetch(input, { ...init, headers }, phase => {
         transportPhases[phase] = Math.round(elapsed());
-      });
+      }, rpcName === 'get_catalog_release_history_v2' && Boolean(deadline));
       headersMs = elapsed();
       status = response.status;
       return response;
