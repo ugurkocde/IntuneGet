@@ -1599,7 +1599,7 @@ describe('unresolved hosted dispatch admission', () => {
     vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
     const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
-    expect(result).toMatchObject({ success: false, skipped: true, code: 'WORKFLOW_DISPATCH_UNRECONCILED' });
+    expect(result).toMatchObject({ success: false, skipped: true, skipReason: expect.stringContaining('unresolved') });
     expect(history).not.toHaveBeenCalled();expect(job).not.toHaveBeenCalled();
     const lookup = supabase.from.mock.results.find((_, index) => supabase.from.mock.calls[index][0] === 'packaging_jobs')!.value;
     expect(lookup.eq).toHaveBeenCalledWith('version', UPDATE_INFO.latestVersion);

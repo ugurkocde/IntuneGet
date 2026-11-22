@@ -297,7 +297,7 @@ export class AutoUpdateTrigger {
         .or('error_code.in.(WORKFLOW_DISPATCH_UNCONFIRMED,WORKFLOW_DISPATCH_UNRECONCILED),error_details->>workflow_dispatch_unconfirmed_at.not.is.null')
         .limit(1).maybeSingle();
       if (checkpointError) return { success: false, error: 'Could not verify earlier workflow dispatches. No update was started.' };
-      if (unresolved) return { success: false, skipped: true, code: 'WORKFLOW_DISPATCH_UNRECONCILED',
+      if (unresolved) return { success: false, skipped: true,
         skipReason: 'An earlier workflow dispatch for this version is unresolved. No new update was started.' };
 
       const curated = isCuratedPackageId(updateInfo.wingetId) || updateInfo.sourceType === 'curated'
