@@ -32,7 +32,7 @@ interface PackageConfig {
  *
  * On failure (failed/cancelled):
  *   - Marks auto_update_history as failed/cancelled
- *   - Sets last_auto_update_version to null (so the update reappears in Available tab)
+ *   - Clears the version marker unless an uncertain dispatch has no known run
  *   - Increments consecutive_failures (disables policy after threshold)
  */
 export async function handleAutoUpdateJobCompletion(
@@ -134,8 +134,8 @@ export async function handleAutoUpdateJobCompletion(
       })
       .eq('id', policyId);
   } else {
-    // On failure: clear last_auto_update_version so update reappears in Available tab
-    // and increment consecutive_failures for circuit breaker
+    // Preserve the marker for an uncertain dispatch without a known run.
+    // Other failures clear it; all failures increment the circuit-breaker count.
     const { data: policy } = await supabase
       .from('app_update_policies')
       .select('consecutive_failures, policy_type, is_enabled, user_id, winget_id, tenant_id')
