@@ -1766,7 +1766,7 @@ describe('GET /api/cron/qa-resume', () => {
       expect(await (await run()).json()).toMatchObject({ held: 1, failed: 0 });
       expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(2);
       expect(store.row.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: 2,
-        ...(kind === 'unconfirmed' ? { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) } : {}) });
+        ...(kind === 'unconfirmed' ? { workflow_dispatch_unconfirmed_identity: 'A'.repeat(64), workflow_dispatch_unconfirmed_at: expect.any(String) } : {}) });
       expect(holdCustomerUpstreamJob).toHaveBeenCalledTimes(5);
       expect(enforceQaGateMock).toHaveBeenCalledTimes(4);
       expect(findPendingApprovalBlocksMock).toHaveBeenCalledTimes(3);

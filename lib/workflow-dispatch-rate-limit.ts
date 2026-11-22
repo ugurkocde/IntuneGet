@@ -81,6 +81,8 @@ export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError | Wo
     error_category: 'network',
     error_message: error.message,
     error_details: { ...previous, [ATTEMPTS_KEY]: count + 1,
+      ...(error instanceof WorkflowDispatchUnconfirmedError && previous[UNCONFIRMED_AT_KEY] == null
+        ? { [UNCONFIRMED_AT_KEY]: new Date(now).toISOString() } : {}),
       ...(identity ? { [DISPATCH_IDENTITY_KEY]: identity } : {}) } as Json,
   };
 }

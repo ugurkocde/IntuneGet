@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
 import { createClient } from '@supabase/supabase-js';
 import { handleAutoUpdateJobCompletion } from '../cleanup';
+import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, UNCONFIRMED_AT_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
@@ -1585,13 +1586,21 @@ describe('trigger pause owner notices', () => {
 
 
 describe('unresolved hosted dispatch admission', () => {
-  it('keeps a rejected timestamp-less dispatch through real cleanup and later admission', async () => {
+  it.each([false, true])('keeps uncertain dispatch through cleanup/admission after an intervening 429: %s', async intervening429 => {
     vi.clearAllMocks(); getApprovalFailuresMock.mockResolvedValue([]);
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fixture.invalid');
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fixture-service');
     const retained: Record<string, unknown> = { id: 'uncertain-job', is_auto_update: true,
       auto_update_policy_id: 'policy-1', package_config: { autoUpdateHistoryId: 'prior-history' },
       error_code: 'WORKFLOW_DISPATCH_UNRECONCILED', error_details: {}, github_run_id: null, callback_run_id: null };
+    if (intervening429) {
+      const at = Date.parse('2026-11-22T00:00:00Z');
+      const uncertain = dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(503, at, 'A'.repeat(64)), null, at)!;
+      const rejected = dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(at + 180_000).toISOString()), uncertain.error_details, at + 120_000)!;
+      // The following identity rejection is no longer marked UNCONFIRMED.
+      Object.assign(retained, { error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED', error_details: rejected.error_details });
+      expect(rejected.error_details).toMatchObject({ [UNCONFIRMED_AT_KEY]: new Date(at).toISOString() });
+    }
     let deleted = false;
     const policyWrite = vi.fn();
     const cleanupClient = { from: (table: string) => {
@@ -1626,7 +1635,7 @@ describe('unresolved hosted dispatch admission', () => {
         .toMatchObject({ success: false, skipped: true, skipReason: expect.stringContaining('unresolved') });
       expect(history).not.toHaveBeenCalled(); expect(job).not.toHaveBeenCalled();
       const lookup = supabase.from.mock.results[0].value;
-      expect(lookup.or).toHaveBeenCalledWith(expect.stringContaining(String(retained.error_code)));
+      expect(lookup.or).toHaveBeenCalledWith(expect.stringContaining(intervening429 ? UNCONFIRMED_AT_KEY : String(retained.error_code)));
     } finally { vi.unstubAllEnvs(); }
   });
   it.each([null, '2.0.0'])('holds an existing same-version checkpoint even when the policy marker is %s', async marker => {
