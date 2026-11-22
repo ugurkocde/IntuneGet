@@ -67,13 +67,11 @@ export async function handleAutoUpdateJobCompletion(
     return;
   }
 
-  // An uncertain dispatch may still be running. Keep its dedupe checkpoint
-  // and policy version marker until reconciliation or a callback finds the run.
-  if ((terminalStatus === 'failed' || terminalStatus === 'cancelled') &&
+  // A failed lookup cannot prove that dispatch never started. Record the
+  // failure, but retain the job and version marker to prevent a second dispatch.
+  const preserveDispatchCheckpoint = (terminalStatus === 'failed' || terminalStatus === 'cancelled') &&
     (job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED' || job.error_code === 'WORKFLOW_DISPATCH_UNRECONCILED') &&
-    !job.github_run_id && !job.callback_run_id) {
-    return;
-  }
+    !job.github_run_id && !job.callback_run_id;
 
   const policyId = job.auto_update_policy_id;
   const packageConfig = job.package_config as PackageConfig | null;
@@ -149,7 +147,7 @@ export async function handleAutoUpdateJobCompletion(
       newFailureCount >= DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures;
 
     const updates: Record<string, unknown> = {
-      last_auto_update_version: null,
+      ...(preserveDispatchCheckpoint ? {} : { last_auto_update_version: null }),
       consecutive_failures: newFailureCount,
       updated_at: new Date().toISOString(),
     };
@@ -171,6 +169,12 @@ export async function handleAutoUpdateJobCompletion(
   // Successful deployments stay visible so users can see what was auto-deployed.
   if (!isSuccess) {
     try {
+      if (preserveDispatchCheckpoint) {
+        const { error } = await supabase.from('packaging_jobs')
+          .update({ archived_at: new Date().toISOString() }).eq('id', jobId);
+        if (error) console.error('[AutoUpdate Cleanup] Dispatch checkpoint archive failed');
+        return;
+      }
       // Dismissing an approval failure must not erase the retained-app checkpoint.
       if (isIntuneApprovalFailure(job)) {
         const { error } = await supabase.from('packaging_jobs')
