@@ -51,13 +51,21 @@ describe('explicit GitHub dispatch rejection', () => {
       const error = count % 2 === 0 ? new WorkflowDispatchUnconfirmedError(503, now, count === 0 ? 'A'.repeat(64) : undefined)
         : new WorkflowDispatchRateLimitError(429, new Date(now + 60_000).toISOString());
       const held = dispatchRateLimitHold(error, details, now)!;
-      expect(held.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: count + 1, workflow_dispatch_unconfirmed_identity: 'A'.repeat(64) });
+      expect(held.error_details).toEqual({ workflow_dispatch_rate_limit_attempts: count + 1, workflow_dispatch_unconfirmed_identity: 'A'.repeat(64), workflow_dispatch_unconfirmed_at: new Date(now).toISOString() });
       details = held.error_details;
     }
     expect(dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(null, now), details, now)).toBeNull();
   });
   it('does not bootstrap an ambiguous retry without new admission identity', () => {
     expect(dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(503, now), null, now)).toBeNull();
+  });
+  it('retains the original uncertainty time through a later explicit rejection', () => {
+    const first = dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(503, now, 'A'.repeat(64)), null, now)!;
+    const later = now + 120_000;
+    const next = dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(later + 60_000).toISOString()), first.error_details, later)!;
+    expect(next.error_details).toMatchObject({ workflow_dispatch_unconfirmed_at: new Date(now).toISOString() });
+    const again = dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(null, later), next.error_details, later)!;
+    expect(again.error_details).toMatchObject({ workflow_dispatch_unconfirmed_at: new Date(now).toISOString() });
   });
   it('pins a new admission and retains its identity through a later rate limit', () => {
     const first = dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(503, now, 'A'.repeat(64)), null, now)!;

@@ -4,6 +4,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
+import { createClient } from '@supabase/supabase-js';
+import { handleAutoUpdateJobCompletion } from '../cleanup';
+import { dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, UNCONFIRMED_AT_KEY } from '@/lib/workflow-dispatch-rate-limit';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
@@ -62,6 +65,7 @@ vi.mock('@/lib/db/supabase-adapter', () => ({
 }));
 
 interface TableHandlers {
+  checkpointResult?: { data: unknown; error: unknown };
   maybeSingleResult?: { data: unknown; error: unknown };
   maybeSingleSpy?: ReturnType<typeof vi.fn>;
   singleResult?: { data: unknown; error: unknown };
@@ -76,11 +80,15 @@ function createSupabaseMock(tables: Record<string, TableHandlers>) {
       const handlers = tables[table] || {};
       const builder: Record<string, unknown> = {};
       const chain = () => builder;
-      for (const method of ['select', 'eq', 'not', 'contains', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'is', 'or', 'not', 'contains', 'order', 'limit']) {
         builder[method] = vi.fn(chain);
       }
+      let checkpoint = false;
+      builder.or = vi.fn(() => { checkpoint = true; return builder; });
       builder.error = handlers.terminalError || null;
-      builder.maybeSingle = vi.fn(async () => handlers.maybeSingleSpy
+      builder.maybeSingle = vi.fn(async () => checkpoint
+        ? handlers.checkpointResult || { data: null, error: null }
+        : handlers.maybeSingleSpy
         ? handlers.maybeSingleSpy()
         : handlers.maybeSingleResult || { data: null, error: null });
       builder.single = vi.fn(async () => handlers.singleResult || { data: null, error: null });
@@ -1573,5 +1581,85 @@ describe('trigger pause owner notices', () => {
     const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true, bypassUpdateScope: true });
     expect(result).toMatchObject({ success: false, error: 'Fixture job failure' });
     expect(failed).toHaveBeenCalledWith('fixture-history', 'Fixture job failure');
+  });
+});
+
+
+describe('unresolved hosted dispatch admission', () => {
+  it.each([false, true])('keeps uncertain dispatch through cleanup/admission after an intervening 429: %s', async intervening429 => {
+    vi.clearAllMocks(); getApprovalFailuresMock.mockResolvedValue([]);
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fixture.invalid');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fixture-service');
+    const retained: Record<string, unknown> = { id: 'uncertain-job', is_auto_update: true,
+      auto_update_policy_id: 'policy-1', package_config: { autoUpdateHistoryId: 'prior-history' },
+      error_code: 'WORKFLOW_DISPATCH_UNRECONCILED', error_details: {}, github_run_id: null, callback_run_id: null };
+    if (intervening429) {
+      const at = Date.parse('2026-11-22T00:00:00Z');
+      const uncertain = dispatchRateLimitHold(new WorkflowDispatchUnconfirmedError(503, at, 'A'.repeat(64)), null, at)!;
+      const rejected = dispatchRateLimitHold(new WorkflowDispatchRateLimitError(429, new Date(at + 180_000).toISOString()), uncertain.error_details, at + 120_000)!;
+      // The following identity rejection is no longer marked UNCONFIRMED.
+      Object.assign(retained, { error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED', error_details: rejected.error_details });
+      expect(rejected.error_details).toMatchObject({ [UNCONFIRMED_AT_KEY]: new Date(at).toISOString() });
+    }
+    let deleted = false;
+    const policyWrite = vi.fn();
+    const cleanupClient = { from: (table: string) => {
+      const query = { select: () => query, eq: () => query,
+        single: async () => ({ error: null, data: table === 'packaging_jobs' ? retained
+          : table === 'auto_update_history' ? { status: 'pending' } : { consecutive_failures: 0, policy_type: 'auto_update' } }),
+        update: (value: Record<string, unknown>) => {
+          if (table === 'packaging_jobs') Object.assign(retained, value);
+          if (table === 'app_update_policies') policyWrite(value);
+          return query;
+        },
+        delete: () => { deleted = true; return query; },
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve),
+      }; return query;
+    } };
+    vi.mocked(createClient).mockReturnValueOnce(cleanupClient as never);
+    try {
+      await handleAutoUpdateJobCompletion('uncertain-job', 'failed', 'Changed inputs');
+      expect(deleted).toBe(false);
+      expect(retained.archived_at).toEqual(expect.any(String));
+      expect(policyWrite).toHaveBeenCalledWith(expect.not.objectContaining({ last_auto_update_version: null }));
+      const supabase = createSupabaseMock({ packaging_jobs: { checkpointResult: {
+        data: deleted ? null : { id: retained.id }, error: null,
+      } } });
+      const trigger = makeTrigger(supabase);
+      const policy = { ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }),
+        original_upload_history_id: 'prior-upload', consecutive_failures: 0, last_auto_update_version: null };
+      vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+      const history = vi.spyOn(trigger as never, 'createHistoryRecord' as never);
+      const job = vi.spyOn(trigger as never, 'createPackagingJob' as never);
+      expect(await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true }))
+        .toMatchObject({ success: false, skipped: true, skipReason: expect.stringContaining('unresolved') });
+      expect(history).not.toHaveBeenCalled(); expect(job).not.toHaveBeenCalled();
+      const lookup = supabase.from.mock.results[0].value;
+      expect(lookup.or).toHaveBeenCalledWith(expect.stringContaining(intervening429 ? UNCONFIRMED_AT_KEY : String(retained.error_code)));
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it.each([null, '2.0.0'])('holds an existing same-version checkpoint even when the policy marker is %s', async marker => {
+    vi.clearAllMocks(); getApprovalFailuresMock.mockResolvedValue([]);
+    ensureQaDemandMock.mockResolvedValue({ state: 'passed', candidateId: null,
+      identity: { executionProfileSha256: 'A'.repeat(64), presentationProfileSha256: 'B'.repeat(64) } });
+    const supabase = createSupabaseMock({ packaging_jobs: { checkpointResult: { data: { id: 'prior-uncertain' }, error: null } } });
+    const trigger = makeTrigger(supabase);
+    const policy = { ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }),
+      original_upload_history_id: 'prior-upload', consecutive_failures: 0, last_auto_update_version: marker };
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    const history = vi.spyOn(trigger as never, 'createHistoryRecord' as never).mockResolvedValue({ id: 'new-history' } as never);
+    const job = vi.spyOn(trigger as never, 'createPackagingJob' as never).mockResolvedValue({ id: 'new-job' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
+    expect(result).toMatchObject({ success: false, skipped: true, skipReason: expect.stringContaining('unresolved') });
+    expect(history).not.toHaveBeenCalled();expect(job).not.toHaveBeenCalled();
+    const lookup = supabase.from.mock.results.find((_, index) => supabase.from.mock.calls[index][0] === 'packaging_jobs')!.value;
+    expect(lookup.eq).toHaveBeenCalledWith('version', UPDATE_INFO.latestVersion);
+    expect(lookup.eq).toHaveBeenCalledWith('auto_update_policy_id', policy.id);
+    expect(lookup.eq).toHaveBeenCalledWith('user_id', policy.user_id);
+    expect(lookup.eq).toHaveBeenCalledWith('tenant_id', policy.tenant_id);
   });
 });
