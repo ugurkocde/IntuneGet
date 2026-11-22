@@ -4,6 +4,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
+import { createClient } from '@supabase/supabase-js';
+import { handleAutoUpdateJobCompletion } from '../cleanup';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
@@ -1583,6 +1585,50 @@ describe('trigger pause owner notices', () => {
 
 
 describe('unresolved hosted dispatch admission', () => {
+  it('keeps a rejected timestamp-less dispatch through real cleanup and later admission', async () => {
+    vi.clearAllMocks(); getApprovalFailuresMock.mockResolvedValue([]);
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fixture.invalid');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fixture-service');
+    const retained: Record<string, unknown> = { id: 'uncertain-job', is_auto_update: true,
+      auto_update_policy_id: 'policy-1', package_config: { autoUpdateHistoryId: 'prior-history' },
+      error_code: 'WORKFLOW_DISPATCH_UNRECONCILED', error_details: {}, github_run_id: null, callback_run_id: null };
+    let deleted = false;
+    const policyWrite = vi.fn();
+    const cleanupClient = { from: (table: string) => {
+      const query = { select: () => query, eq: () => query,
+        single: async () => ({ error: null, data: table === 'packaging_jobs' ? retained
+          : table === 'auto_update_history' ? { status: 'pending' } : { consecutive_failures: 0, policy_type: 'auto_update' } }),
+        update: (value: Record<string, unknown>) => {
+          if (table === 'packaging_jobs') Object.assign(retained, value);
+          if (table === 'app_update_policies') policyWrite(value);
+          return query;
+        },
+        delete: () => { deleted = true; return query; },
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve),
+      }; return query;
+    } };
+    vi.mocked(createClient).mockReturnValueOnce(cleanupClient as never);
+    try {
+      await handleAutoUpdateJobCompletion('uncertain-job', 'failed', 'Changed inputs');
+      expect(deleted).toBe(false);
+      expect(retained.archived_at).toEqual(expect.any(String));
+      expect(policyWrite).toHaveBeenCalledWith(expect.not.objectContaining({ last_auto_update_version: null }));
+      const supabase = createSupabaseMock({ packaging_jobs: { checkpointResult: {
+        data: deleted ? null : { id: retained.id }, error: null,
+      } } });
+      const trigger = makeTrigger(supabase);
+      const policy = { ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }),
+        original_upload_history_id: 'prior-upload', consecutive_failures: 0, last_auto_update_version: null };
+      vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+      const history = vi.spyOn(trigger as never, 'createHistoryRecord' as never);
+      const job = vi.spyOn(trigger as never, 'createPackagingJob' as never);
+      expect(await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true }))
+        .toMatchObject({ success: false, skipped: true, skipReason: expect.stringContaining('unresolved') });
+      expect(history).not.toHaveBeenCalled(); expect(job).not.toHaveBeenCalled();
+      const lookup = supabase.from.mock.results[0].value;
+      expect(lookup.or).toHaveBeenCalledWith(expect.stringContaining(String(retained.error_code)));
+    } finally { vi.unstubAllEnvs(); }
+  });
   it.each([null, '2.0.0'])('holds an existing same-version checkpoint even when the policy marker is %s', async marker => {
     vi.clearAllMocks(); getApprovalFailuresMock.mockResolvedValue([]);
     ensureQaDemandMock.mockResolvedValue({ state: 'passed', candidateId: null,

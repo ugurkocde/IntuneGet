@@ -1391,7 +1391,8 @@ describe('GET /api/cron/qa-resume', () => {
       expect(client.from).not.toHaveBeenCalledWith('qa_package_results');
       expect(posted).toBe(['invalid','local','changed','callback','due','unconfirmed'].includes(mode) ? 0 : 1);
       expect(store.row.qa_completed_at).toBeNull();
-      if (['invalid','local','changed','unconfirmed'].includes(mode)) expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+      if (mode === 'unconfirmed') expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_UNRECONCILED');
+      else if (['invalid','local','changed'].includes(mode)) expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
       else if (mode === '429') {
         expect(store.row.status).toBe('awaiting_qa');
         expect(store.row.error_details).toMatchObject({ workflow_dispatch_rate_limit_attempts: 2, workflow_dispatch_unconfirmed_identity: 'b'.repeat(64) });
@@ -1474,7 +1475,7 @@ describe('GET /api/cron/qa-resume', () => {
       expect(await (await run()).json()).toMatchObject({ resumed: changed ? 0 : 1, failed: changed ? 1 : 0 });
       expect(captured).toHaveLength(2);
       if (!changed) expect(captured[1]).toEqual(captured[0]);
-      else expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+      else expect(store.row.error_code).toBe(custom ? 'WORKFLOW_DISPATCH_IDENTITY_CHANGED' : 'WORKFLOW_DISPATCH_UNRECONCILED');
       if (custom) expect(ensureQaDemandMock).not.toHaveBeenCalled();
       expect(posted).toBe(changed ? 0 : 1);
     });
@@ -1505,7 +1506,7 @@ describe('GET /api/cron/qa-resume', () => {
       if (mode === 'found') expect(store.row).toMatchObject({ status: 'packaging', github_run_id: '123', packaging_started_at: original });
       if (['missing','read error'].includes(mode)) expect(store.row).toMatchObject({ status: 'awaiting_qa', error_details: { workflow_dispatch_unconfirmed_at: original, workflow_dispatch_rate_limit_attempts: 2 } });
       if (mode === 'budget') { expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_UNRECONCILED'); expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalled(); }
-      if (['changed','local'].includes(mode)) expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_IDENTITY_CHANGED');
+      if (['changed','local'].includes(mode)) expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_UNRECONCILED');
       if (['callback','due'].includes(mode)) expect(store.row.status).toBe('awaiting_qa');
     });
 

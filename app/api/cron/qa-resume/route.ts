@@ -610,7 +610,11 @@ export async function GET(request: Request) {
       const rejectChangedRetry = async () => {
         const message = 'Packaging inputs changed after GitHub did not confirm startup. Start a new deployment.';
         const { data: changed, error: writeError } = await guardObservedIdentity(supabase.from('packaging_jobs').update({
-          status: 'failed', error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED',
+          status: 'failed',
+          // Rejection cannot prove an earlier dispatch did not start, even if
+          // its original timestamp is missing. Keep cleanup/admission blocked.
+          error_code: job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED'
+            ? 'WORKFLOW_DISPATCH_UNRECONCILED' : 'WORKFLOW_DISPATCH_IDENTITY_CHANGED',
           status_message: message, error_message: message, error_stage: 'validation', error_category: 'validation',
           completed_at: new Date().toISOString(),
         }).eq('id', job.id).eq('status', 'awaiting_qa').is('callback_run_id', null).is('github_run_id', null)
