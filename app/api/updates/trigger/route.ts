@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { DISPATCH_IDENTITY_KEY, dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, WorkflowDispatchRetryStopped } from '@/lib/workflow-dispatch-rate-limit';
+import { DISPATCH_IDENTITY_KEY, UNCONFIRMED_AT_KEY, dispatchRateLimitHold, WorkflowDispatchUnconfirmedError, WorkflowDispatchRateLimitError, WorkflowDispatchRetryStopped } from '@/lib/workflow-dispatch-rate-limit';
 import { buildStoredJobWorkflowInputs, storedJobItem } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
@@ -371,6 +371,7 @@ export async function POST(request: NextRequest) {
             const isBatch = updateRequests.length > 1;
             const customSource = [deploymentConfig.sourceType, installerInfo.sourceType, item.sourceType].includes('custom');
             let claimedAt: string | null = null;
+            let dispatchAttemptAt: string | null = null;
             let sentIdentity: string | undefined;
             const ownedWrite = (patch: Database['public']['Tables']['packaging_jobs']['Update'], afterClaim = false) => {
               let query = supabase.from('packaging_jobs').update(patch)
@@ -394,8 +395,9 @@ export async function POST(request: NextRequest) {
                 newJobAdmission: !customSource,
                 beforeDispatch: async identity => {
                   sentIdentity = identity;
+                  dispatchAttemptAt = new Date().toISOString();
                   if (job.status !== 'awaiting_qa') return;
-                  const now = new Date().toISOString();
+                  const now = dispatchAttemptAt;
                   const { data: won, error } = await ownedWrite({ status: 'packaging',
                     status_message: customSource ? 'Preparing deployment' : 'Installation test passed; packaging started',
                     packaging_started_at: now, qa_completed_at: job.qa_completed_at ?? (customSource ? null : now) });
@@ -416,13 +418,14 @@ export async function POST(request: NextRequest) {
                 // Only a fresh ownerless admission can be deferred. The resume
                 // path checks the exact payload pin before claiming or posting.
                 const hold = customSource
-                  ? error instanceof WorkflowDispatchRateLimitError && item.sourceType === 'custom' &&
+                  ? item.sourceType === 'custom' &&
                     typeof sentIdentity === 'string' && /^[a-f0-9]{64}$/i.test(sentIdentity)
-                    ? dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: sentIdentity }) : null
+                    ? dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: sentIdentity, ...(error instanceof WorkflowDispatchUnconfirmedError ? { [UNCONFIRMED_AT_KEY]: dispatchAttemptAt ?? claimedAt ?? new Date().toISOString() } : {}) }) : null
                   : error instanceof WorkflowDispatchRateLimitError
                   ? error.dispatchIdentity === undefined ? null
                     : dispatchRateLimitHold(error, { [DISPATCH_IDENTITY_KEY]: error.dispatchIdentity })
                   : dispatchRateLimitHold(error, null);
+                if (customSource && hold && error instanceof WorkflowDispatchUnconfirmedError) hold.status_message = 'Checking whether GitHub started packaging. No retry has been sent.';
                 const patch: Database['public']['Tables']['packaging_jobs']['Update'] = hold ?? {
                   status: 'failed', error_code: error.code, error_stage: 'authenticate',
                   error_category: 'network', error_message: error.message,
