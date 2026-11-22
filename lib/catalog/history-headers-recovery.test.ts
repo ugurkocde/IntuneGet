@@ -9,7 +9,18 @@ async function fixture(handle: (socket: Socket, number: number, data: string) =>
   const server = createServer(socket => {
     const number = ++connections; sockets.add(socket); socket.on('error', () => {});
     socket.on('close', () => sockets.delete(socket));
-    socket.on('data', data => handle(socket, number, data.toString()));
+    let received = Buffer.alloc(0);
+    let handled = false;
+    socket.on('data', chunk => {
+      if (handled) return;
+      received = Buffer.concat([received, chunk]);
+      const end = received.indexOf('\r\n\r\n');
+      if (end < 0) return;
+      const length = Number(received.subarray(0, end).toString().match(/(?:^|\r\n)content-length:\s*(\d+)/i)?.[1] ?? 0);
+      if (received.length < end + 4 + length) return;
+      handled = true;
+      handle(socket, number, received.subarray(0, end + 4 + length).toString());
+    });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   cleanup.push(() => new Promise(resolve => { for (const socket of sockets) socket.destroy(); server.close(() => resolve()); }));
