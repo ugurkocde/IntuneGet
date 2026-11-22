@@ -1,5 +1,5 @@
 import { after } from 'next/server';
-import { isolatedHistoryFetch } from './history-transport';
+import { isolatedHistoryFetch, type HistoryTransportPhase } from './history-transport';
 import { loadReleaseMetadata, releasePairKey } from './release-metadata';
 import { normalizeStoredInstallers } from './stored-installers';
 import { enrichRelease, type FileReputation } from './release-enrichment';
@@ -165,6 +165,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     let dispatchMs: number | null = null;
     let headersMs: number | null = null;
     let status: number | null = null;
+    const transportPhases: Partial<Record<HistoryTransportPhase, number>> = {};
     // This hook is local to this RPC. Follow-up metadata reads keep their client.
     const client = createClient(url, key, { global: { fetch: async (input, init) => {
       // Match even aborted reads to existing edge logs without filter values.
@@ -172,7 +173,9 @@ export class SupabaseCatalogSource implements CatalogSource {
       const clientInfo = headers.get('x-client-info');
       headers.set('x-client-info', `${clientInfo ? `${clientInfo}; ` : ''}ig-hist=${historyInstance}.${seq}.${historyRpcLabel(rpcName)}`);
       dispatchMs = elapsed();
-      const response = await isolatedHistoryFetch(input, { ...init, headers });
+      const response = await isolatedHistoryFetch(input, { ...init, headers }, phase => {
+        transportPhases[phase] = Math.round(elapsed());
+      });
       headersMs = elapsed();
       status = response.status;
       return response;
@@ -201,6 +204,7 @@ export class SupabaseCatalogSource implements CatalogSource {
         const emittedAt = Date.now();
         console.warn('Catalog history RPC timing', {
           entryMs: 0, dispatchMs, headersMs, settledMs, category, budgetExpired, status,
+          ...(Object.keys(transportPhases).length ? { transportPhases: { ...transportPhases } } : {}),
           filterShape: {
             app: Boolean(filters.app), query: Boolean(filters.query), month: Boolean(filters.month),
             from: Boolean(filters.from), to: Boolean(filters.to), architecture: Boolean(filters.architecture),
