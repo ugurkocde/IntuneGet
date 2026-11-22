@@ -1,0 +1,1 @@
+{"title":"Recover stalled release history reads","summary":"Release history reads can make one fresh connection when a sent request receives no response headers, while keeping the existing total deadline and cached fallback.","type":"fixed"}
