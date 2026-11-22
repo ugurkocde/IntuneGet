@@ -2286,6 +2286,12 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'MSYS2 Installer',
     registeredDisplayName: 'MSYS2',
   },
+  // The bootstrapper's catalog title differs from the installed product,
+  // which is registered beside its bundled WebView2 prerequisite.
+  'maxon.maxonapp': {
+    generatedDisplayName: 'Maxon App Installer',
+    registeredDisplayName: 'Maxon App',
+  },
   // WinGet 7.2.0 and QA run 34666488057 agree on this unbraced NSIS
   // key. The generated catalog command incorrectly decorates it as an MSI
   // GUID and uses a spaced title. Preserve the exact vendor registration.
