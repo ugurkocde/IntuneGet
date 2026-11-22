@@ -602,6 +602,25 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Maxon App\'s exact registered identity beside bundled prerequisites', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Maxon.MaxonApp',
+      'REGISTRY_UNINSTALL:Maxon App Installer'
+    )).toBe('REGISTRY_UNINSTALL:Maxon App');
+    expect(resolveApplicationUninstallCommand(
+      ' maxon.maxonapp ',
+      'REGISTRY_UNINSTALL:Maxon App Installer'
+    )).toBe('REGISTRY_UNINSTALL:Maxon App');
+    expect(resolveApplicationUninstallCommand(
+      'Maxon.MaxonApp',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+    expect(resolveApplicationUninstallCommand(
+      'Example.App',
+      'REGISTRY_UNINSTALL:Maxon App Installer'
+    )).toBe('REGISTRY_UNINSTALL:Maxon App Installer');
+  });
+
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(resolveApplicationInstallScope('SadeghHayeri.GreenTunnel', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' sadeghhayeri.greentunnel ', undefined)).toBe('user');
