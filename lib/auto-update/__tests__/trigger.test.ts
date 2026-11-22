@@ -62,6 +62,7 @@ vi.mock('@/lib/db/supabase-adapter', () => ({
 }));
 
 interface TableHandlers {
+  checkpointResult?: { data: unknown; error: unknown };
   maybeSingleResult?: { data: unknown; error: unknown };
   maybeSingleSpy?: ReturnType<typeof vi.fn>;
   singleResult?: { data: unknown; error: unknown };
@@ -76,11 +77,15 @@ function createSupabaseMock(tables: Record<string, TableHandlers>) {
       const handlers = tables[table] || {};
       const builder: Record<string, unknown> = {};
       const chain = () => builder;
-      for (const method of ['select', 'eq', 'not', 'contains', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'is', 'or', 'not', 'contains', 'order', 'limit']) {
         builder[method] = vi.fn(chain);
       }
+      let checkpoint = false;
+      builder.or = vi.fn(() => { checkpoint = true; return builder; });
       builder.error = handlers.terminalError || null;
-      builder.maybeSingle = vi.fn(async () => handlers.maybeSingleSpy
+      builder.maybeSingle = vi.fn(async () => checkpoint
+        ? handlers.checkpointResult || { data: null, error: null }
+        : handlers.maybeSingleSpy
         ? handlers.maybeSingleSpy()
         : handlers.maybeSingleResult || { data: null, error: null });
       builder.single = vi.fn(async () => handlers.singleResult || { data: null, error: null });
@@ -1573,5 +1578,33 @@ describe('trigger pause owner notices', () => {
     const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true, bypassUpdateScope: true });
     expect(result).toMatchObject({ success: false, error: 'Fixture job failure' });
     expect(failed).toHaveBeenCalledWith('fixture-history', 'Fixture job failure');
+  });
+});
+
+
+describe('unresolved hosted dispatch admission', () => {
+  it.each([null, '2.0.0'])('holds an existing same-version checkpoint even when the policy marker is %s', async marker => {
+    vi.clearAllMocks(); getApprovalFailuresMock.mockResolvedValue([]);
+    ensureQaDemandMock.mockResolvedValue({ state: 'passed', candidateId: null,
+      identity: { executionProfileSha256: 'A'.repeat(64), presentationProfileSha256: 'B'.repeat(64) } });
+    const supabase = createSupabaseMock({ packaging_jobs: { checkpointResult: { data: { id: 'prior-uncertain' }, error: null } } });
+    const trigger = makeTrigger(supabase);
+    const policy = { ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }),
+      original_upload_history_id: 'prior-upload', consecutive_failures: 0, last_auto_update_version: marker };
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    const history = vi.spyOn(trigger as never, 'createHistoryRecord' as never).mockResolvedValue({ id: 'new-history' } as never);
+    const job = vi.spyOn(trigger as never, 'createPackagingJob' as never).mockResolvedValue({ id: 'new-job' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
+    expect(result).toMatchObject({ success: false, skipped: true, code: 'WORKFLOW_DISPATCH_UNRECONCILED' });
+    expect(history).not.toHaveBeenCalled();expect(job).not.toHaveBeenCalled();
+    const lookup = supabase.from.mock.results.find((_, index) => supabase.from.mock.calls[index][0] === 'packaging_jobs')!.value;
+    expect(lookup.eq).toHaveBeenCalledWith('version', UPDATE_INFO.latestVersion);
+    expect(lookup.eq).toHaveBeenCalledWith('auto_update_policy_id', policy.id);
+    expect(lookup.eq).toHaveBeenCalledWith('user_id', policy.user_id);
+    expect(lookup.eq).toHaveBeenCalledWith('tenant_id', policy.tenant_id);
   });
 });

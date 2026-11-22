@@ -40,3 +40,13 @@ it.each(['callback_run_id', 'github_run_id'])('still completes cleanup when %s e
   expect(fixture.writes).toContain('app_update_policies:update');
   expect(fixture.writes).toContain('packaging_jobs:delete');
 });
+
+it('retains the uncertainty checkpoint after a changed-identity rejection', async () => {
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fixture.invalid');vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fixture-service');
+  fixture.job = { id: 'job', is_auto_update: true, auto_update_policy_id: 'policy', package_config: { autoUpdateHistoryId: 'history' },
+    error_code: 'WORKFLOW_DISPATCH_IDENTITY_CHANGED', error_details: { workflow_dispatch_unconfirmed_at: '2026-11-22T00:00:00Z' },
+    github_run_id: null, callback_run_id: null };
+  await handleAutoUpdateJobCompletion('job', 'failed', 'fixture');
+  expect(fixture.changes.find(c => c.table === 'app_update_policies')!.value).not.toHaveProperty('last_auto_update_version');
+  expect(fixture.writes).not.toContain('packaging_jobs:delete');
+});

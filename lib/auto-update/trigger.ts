@@ -287,6 +287,19 @@ export class AutoUpdateTrigger {
         }
       }
 
+      // Archived checkpoints still block the same policy/version. Do not rely
+      // on a policy marker write having succeeded, or on an unchanged error code.
+      const { data: unresolved, error: checkpointError } = await this.supabase
+        .from('packaging_jobs').select('id')
+        .eq('auto_update_policy_id', policy.id).eq('user_id', policy.user_id)
+        .eq('tenant_id', policy.tenant_id).eq('version', updateInfo.latestVersion)
+        .is('github_run_id', null).is('callback_run_id', null)
+        .or('error_code.in.(WORKFLOW_DISPATCH_UNCONFIRMED,WORKFLOW_DISPATCH_UNRECONCILED),error_details->>workflow_dispatch_unconfirmed_at.not.is.null')
+        .limit(1).maybeSingle();
+      if (checkpointError) return { success: false, error: 'Could not verify earlier workflow dispatches. No update was started.' };
+      if (unresolved) return { success: false, skipped: true, code: 'WORKFLOW_DISPATCH_UNRECONCILED',
+        skipReason: 'An earlier workflow dispatch for this version is unresolved. No new update was started.' };
+
       const curated = isCuratedPackageId(updateInfo.wingetId) || updateInfo.sourceType === 'curated'
         ? findCuratedApp(updateInfo.wingetId) : undefined;
       const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
