@@ -1,0 +1,5 @@
+{
+  "title": "Give demand selection a dedicated cron budget",
+  "summary": "Demand backfill uses a bounded cron budget while other callers retain their existing deadlines and the shared overlap guard prevents parallel selection.",
+  "type": "fixed"
+}

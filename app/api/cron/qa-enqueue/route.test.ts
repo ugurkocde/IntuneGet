@@ -133,6 +133,7 @@ function createSupabaseStub(options: {
   demandError?: boolean;
   slowDemand?: boolean;
   demandDelayMs?: number;
+  catalogDelayMs?: number;
   privateDemandError?: boolean;
   transportDemandError?: boolean;
   optionalSkip?: boolean;
@@ -174,17 +175,18 @@ function createSupabaseStub(options: {
         return Promise.resolve({ data: null, error: null });
       }
       if (name === 'qa_idle_catalog_backfill_ids') {
+        if(options.catalogDelayMs) return new Promise(resolve=>setTimeout(()=>resolve({data:[],error:null}),options.catalogDelayMs));
         return Promise.resolve({
           data: (options.catalogBackfillApps || []).map((winget_id) => ({ winget_id })),
           error: null,
         });
       }
-      if (name === 'qa_missing_demand_backfill_ids' && options.slowDemand) return new Promise<{data: null; error: null}>(() => {});
-      if (name === 'qa_missing_demand_backfill_ids' && options.demandDelayMs) return new Promise<{data: unknown[]; error: null}>(resolve => setTimeout(() => resolve({data: [{winget_id: 'SECRET_ROW'}], error: null}), options.demandDelayMs));
-      if (name === 'qa_missing_demand_backfill_ids' && options.privateDemandError) return Promise.resolve({data: null, error: {code: '57014', message: 'statement timeout SECRET_ERROR'}, status: 500, headers: {secret: 'SECRET_HEADER'}});
-      if (name === 'qa_missing_demand_backfill_ids' && options.transportDemandError) return Promise.resolve({data: null, error: {code: '', message: 'TypeError: fetch failed SECRET_ERROR'}, status: 0, headers: {secret: 'SECRET_HEADER'}});
-      if (name === 'qa_missing_demand_backfill_ids' && options.demandError) return Promise.resolve({data: null, error: {code: '57014', message: 'canceling statement due to statement timeout'}});
-      if (name !== 'qa_missing_demand_backfill_ids') {
+      if (['qa_missing_demand_backfill_ids','qa_cron_demand_backfill_ids'].includes(name) && options.slowDemand) return new Promise<{data: null; error: null}>(() => {});
+      if (['qa_missing_demand_backfill_ids','qa_cron_demand_backfill_ids'].includes(name) && options.demandDelayMs) return new Promise<{data: unknown[]; error: null}>(resolve => setTimeout(() => resolve({data: [{winget_id: 'SECRET_ROW'}], error: null}), options.demandDelayMs));
+      if (['qa_missing_demand_backfill_ids','qa_cron_demand_backfill_ids'].includes(name) && options.privateDemandError) return Promise.resolve({data: null, error: {code: '57014', message: 'statement timeout SECRET_ERROR'}, status: 500, headers: {secret: 'SECRET_HEADER'}});
+      if (['qa_missing_demand_backfill_ids','qa_cron_demand_backfill_ids'].includes(name) && options.transportDemandError) return Promise.resolve({data: null, error: {code: '', message: 'TypeError: fetch failed SECRET_ERROR'}, status: 0, headers: {secret: 'SECRET_HEADER'}});
+      if (['qa_missing_demand_backfill_ids','qa_cron_demand_backfill_ids'].includes(name) && options.demandError) return Promise.resolve({data: null, error: {code: '57014', message: 'canceling statement due to statement timeout'}});
+      if (!['qa_missing_demand_backfill_ids','qa_cron_demand_backfill_ids'].includes(name)) {
         throw new Error(`Unexpected RPC: ${name}`);
       }
       return Promise.resolve({
@@ -693,7 +695,7 @@ describe('GET /api/cron/qa-enqueue', () => {
       }),
     ]);
     expect(rpcCalls).toEqual([
-      { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 5 } },
+      { name: 'qa_cron_demand_backfill_ids', args: { p_limit: 5 } },
       { name: 'qa_toolchain_backfill_page', args: expect.objectContaining({ p_after: '', p_limit: 25, p_terminal_retry_ids: expect.any(Array) }) },
       { name: 'qa_idle_catalog_backfill_ids', args: { p_limit: 5 } },
     ]);
@@ -2040,6 +2042,39 @@ describe('optional backfill budget', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('allows one cron demand result beyond the old 2.5s deadline', async()=>{
+    vi.useFakeTimers();
+    const signalSpy=vi.spyOn(AbortSignal,'timeout');
+    try {
+      const {client,rpcCalls,checkpoints}=createSupabaseStub({demandDelayMs:3000});
+      createServerClientMock.mockReturnValue(client);
+      const pending=GET(cronRequest());
+      await vi.advanceTimersByTimeAsync(3000);
+      await pending;
+      const demand=settleRecords().filter(r=>r.lane==='demand-backfill');
+      expect(demand).toHaveLength(1);
+      expect(signalSpy).toHaveBeenCalledWith(9000);
+      expect(signalSpy).toHaveBeenCalledWith(2500);
+      expect(demand[0]).toMatchObject({settledBy:'data',rowCount:1});
+      expect(rpcCalls.filter(c=>c.name==='qa_cron_demand_backfill_ids')).toHaveLength(1);
+      expect(rpcCalls.some(c=>c.name==='qa_missing_demand_backfill_ids')).toBe(false);
+      expect(checkpoints).not.toContainEqual(expect.objectContaining({id:'qa-optional-backfill-skip',value:{skipNext:true}}));
+      demand.forEach(checkRecord);
+    } finally {signalSpy.mockRestore();vi.useRealTimers();}
+  });
+  it('keeps the catalog caller bounded at 2.5s', async()=>{
+    vi.useFakeTimers();
+    try {
+      const {client,checkpoints}=createSupabaseStub({catalogDelayMs:3000});
+      createServerClientMock.mockReturnValue(client);
+      const pending=GET(cronRequest());
+      await vi.advanceTimersByTimeAsync(2500);
+      await pending;
+      expect(settleRecords().find(r=>r.lane==='catalog-backfill')).toMatchObject({settledBy:'race_timer'});
+      expect(checkpoints).toContainEqual(expect.objectContaining({id:'qa-optional-backfill-skip',value:{skipNext:true}}));
+    } finally {vi.useRealTimers();}
+  });
+
   it('whitelists an error record while preserving the error and skip flag', async () => {
     const {client, checkpoints} = createSupabaseStub({privateDemandError: true});
     createServerClientMock.mockReturnValue(client);
@@ -2075,7 +2110,8 @@ describe('optional backfill budget', () => {
     try {
       const {client, rpcCalls, checkpoints} = createSupabaseStub({slowDemand: true});
       createServerClientMock.mockReturnValue(client);
-      const request = GET(cronRequest());
+      let settled = false;
+      const request = GET(cronRequest()).then(response => {settled = true; return response;});
       source.getAppByWingetId.mockResolvedValue({app: {winget_id: 'Fixture.App', name: 'Fixture app', publisher: 'Fixture publisher', latest_version: '1.0', description: 'Fixture description', category: 'utilities', app_source: 'win32', is_verified: true, is_locale_variant: false}, versions: ['1.0']});
       source.getQaResult.mockResolvedValue(null);
       source.getInstallationChangelog.mockResolvedValue(null);
@@ -2086,10 +2122,12 @@ describe('optional backfill budget', () => {
       expect(html).toContain('Fixture app');
       expect(performance.now() - started).toBeLessThan(1_000);
       // The actual page renders while the independent backfill is still pending.
-      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.advanceTimersByTimeAsync(8_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
       const response = await request;
       expect(response.status).toBe(207);
-      expect(rpcCalls.map(c => c.name)).toEqual(['qa_missing_demand_backfill_ids']);
+      expect(rpcCalls.map(c => c.name)).toEqual(['qa_cron_demand_backfill_ids']);
       expect(checkpoints).toContainEqual(expect.objectContaining({id: 'qa-optional-backfill-skip', value: expect.objectContaining({skipNext: true})}));
       expect(settleRecords()).toHaveLength(1);
       expect(settleRecords()[0]).toMatchObject({lane: 'demand-backfill', settledBy: 'race_timer'});
@@ -2128,7 +2166,7 @@ describe('optional backfill budget', () => {
     createServerClientMock.mockReturnValue(client);
     const response = await GET(cronRequest());
     expect(response.status).toBe(200);
-    expect(rpcCalls.some(c => ['qa_missing_demand_backfill_ids','qa_idle_catalog_backfill_ids','qa_toolchain_backfill_page'].includes(c.name))).toBe(false);
+    expect(rpcCalls.some(c => ['qa_cron_demand_backfill_ids','qa_idle_catalog_backfill_ids','qa_toolchain_backfill_page'].includes(c.name))).toBe(false);
     expect(checkpoints).toContainEqual(expect.objectContaining({id: 'qa-optional-backfill-skip', value: expect.objectContaining({skipNext: false})}));
     expect(detectWingetChangesMock).toHaveBeenCalled();
     expect(settleRecords()).toHaveLength(0);
@@ -2137,6 +2175,6 @@ describe('optional backfill budget', () => {
     const {client, rpcCalls} = createSupabaseStub({});
     createServerClientMock.mockReturnValue(client);
     await GET(cronRequest());
-    for (const name of ['qa_missing_demand_backfill_ids','qa_idle_catalog_backfill_ids']) expect(rpcCalls.find(c => c.name === name)?.args.p_limit).toBe(5);
+    for (const name of ['qa_cron_demand_backfill_ids','qa_idle_catalog_backfill_ids']) expect(rpcCalls.find(c => c.name === name)?.args.p_limit).toBe(5);
   });
 });

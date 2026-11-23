@@ -65,6 +65,7 @@ const TOOLCHAIN_BACKFILL_MAX_PAGES = 2;
 // deployed-app demand per poll to avoid spending hours reclassifying known
 // payloads three at a time.
 const DEMAND_BACKFILL_BATCH_SIZE = 5;
+const DEMAND_BACKFILL_BUDGET_MS = 9_000;
 // Many catalog rows cannot currently resolve to a trusted Windows installer.
 // Probe enough idle candidates to keep the serialized VM supplied, while the
 // loop below still resolves manifests in bounded groups of BATCH_SIZE and the
@@ -431,7 +432,8 @@ type BackfillSettledBy = 'data' | 'pg_error' | 'transport_error' | 'race_timer' 
 
 async function boundedBackfillRpc(
   query: PromiseLike<BackfillRpcResult>,
-  telemetry?: BackfillTimingContext & {lane: 'demand-backfill' | 'catalog-backfill'; signal: AbortSignal}
+  telemetry?: BackfillTimingContext & {lane: 'demand-backfill' | 'catalog-backfill'; signal: AbortSignal},
+  budgetMs = 2_500
 ) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const callStart = performance.now();
@@ -443,7 +445,7 @@ async function boundedBackfillRpc(
       by: (r.error ? (telemetry?.signal.aborted ? 'abort_signal' : r.status === 0 ? 'transport_error' : 'pg_error') : 'data') as BackfillSettledBy,
       r,
     })), new Promise<{by: BackfillSettledBy; r: BackfillRpcResult}>(resolve => {
-      timer = setTimeout(() => resolve({by: 'race_timer', r: {data: null, error: {message: 'The operation was aborted due to timeout'}}}), 2_500);
+      timer = setTimeout(() => resolve({by: 'race_timer', r: {data: null, error: {message: 'The operation was aborted due to timeout'}}}), budgetMs);
     })]);
     settledBy = winner.by;
     result = winner.r;
@@ -480,10 +482,10 @@ async function findDemandBackfillIds(
   supabase: ReturnType<typeof createServerClient>,
   timing?: BackfillTimingContext
 ): Promise<string[]> {
-  const signal = AbortSignal.timeout(2_500);
-  const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_missing_demand_backfill_ids', {
+  const signal = AbortSignal.timeout(DEMAND_BACKFILL_BUDGET_MS);
+  const { data, error } = await boundedBackfillRpc(supabase.rpc('qa_cron_demand_backfill_ids', {
     p_limit: DEMAND_BACKFILL_BATCH_SIZE,
-  }).abortSignal(signal), timing ? {pollRequestId: timing.pollRequestId, routeStartMono: timing.routeStartMono, lane: 'demand-backfill', signal} : undefined);
+  }).abortSignal(signal), timing ? {pollRequestId: timing.pollRequestId, routeStartMono: timing.routeStartMono, lane: 'demand-backfill', signal} : undefined, DEMAND_BACKFILL_BUDGET_MS);
   if (error) throw new Error(`Could not select demanded-app QA backfill: ${error.message}`);
   return Array.from(
     new Set(
