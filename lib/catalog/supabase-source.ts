@@ -86,6 +86,9 @@ const historyRpcLabel = (rpcName: string) =>
   rpcName === 'get_catalog_release_history_v2' ? 'v2' : rpcName === 'get_catalog_release_history_global_rows' ? 'rows' : 'count';
 
 export class SupabaseCatalogSource implements CatalogSource {
+  private readonly presentationReads = new Map<string, {
+    read: Promise<CuratedAppWithDetails | null>; startedAt: number;
+  }>();
   private readonly historyReads = new Map<string, Promise<ReleaseHistoryResult>>();
   private readonly historyCounts = new Map<string, Promise<number>>();
   private globalHistorySummary: { value: Omit<ReleaseHistoryResult, 'rows'>; at: number } | null = null;
@@ -539,7 +542,29 @@ export class SupabaseCatalogSource implements CatalogSource {
   // app detail
   // ---------------------------------------------------------------------------
 
-  async getAppByWingetId(wingetId: string, options: { presentationOnly?: boolean } = {}): Promise<CuratedAppWithDetails | null> {
+  getAppByWingetId(wingetId: string, options: { presentationOnly?: boolean } = {}): Promise<CuratedAppWithDetails | null> {
+    if (!options.presentationOnly) return this.loadAppByWingetId(wingetId, options);
+    const existing = this.presentationReads.get(wingetId);
+    if (existing && performance.now() - existing.startedAt < 1000) return existing.read;
+    if (existing) this.presentationReads.delete(wingetId);
+    const startedAt = performance.now();
+    const read = this.loadAppByWingetId(wingetId, { presentationOnly: true });
+    // Coalesce only pending presentation reads on this source instance. React
+    // cache handles a single render; Next retains ownership of settled results.
+    // Join only the first second: a later request must not inherit an old
+    // stalled read. This does not cancel, retry or shorten any caller's fetch.
+    // Overflow bypasses sharing rather than denying work or growing the map.
+    if (this.presentationReads.size < 64) {
+      this.presentationReads.set(wingetId, { read, startedAt });
+      const clear = () => {
+        if (this.presentationReads.get(wingetId)?.read === read) this.presentationReads.delete(wingetId);
+      };
+      void read.then(clear, clear);
+    }
+    return read;
+  }
+
+  private async loadAppByWingetId(wingetId: string, options: { presentationOnly?: boolean }): Promise<CuratedAppWithDetails | null> {
     const supabase = serviceOrAnonClient();
     if (!supabase) {
       return null;
