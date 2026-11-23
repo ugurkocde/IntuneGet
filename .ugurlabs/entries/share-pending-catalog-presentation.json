@@ -1,0 +1,5 @@
+{
+  "title": "Share simultaneous catalog presentation reads",
+  "summary": "Coalesce short-lived pending reads for the same app on each server instance to reduce duplicate database work during concurrent page renders. Production effect remains under verification.",
+  "type": "improved"
+}
