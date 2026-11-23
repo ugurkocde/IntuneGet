@@ -26,6 +26,8 @@ It performs no table writes. No role is granted new access.
 
 ## Validation and deployment
 
+The lock holder waits for the probe to finish before releasing its transaction;
+a separate 15 second timeout bounds failed fixture cleanup.
 The existing demand PG17 contract checks actual overlapping sessions, ordered
 result parity, denied anonymous/authenticated access, unchanged ACL and owner,
 the hoisted deadline against a held table lock, serviceability after the

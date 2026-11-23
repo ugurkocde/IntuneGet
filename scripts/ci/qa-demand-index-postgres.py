@@ -196,30 +196,32 @@ def bounded_demand_contracts(sql, with_timeout=False):
         statement = ('select pg_advisory_xact_lock(1849,1)' if kind == 'overlap'
                      else 'lock table public.curated_apps in access exclusive mode')
         tag = 'demand-bound-holder-' + kind
-        future = pool.submit(run, "begin;"+statement+";select pg_sleep(4);rollback;",
+        run('create table if not exists fixture_holder_release(done boolean);truncate fixture_holder_release;')
+        future = pool.submit(run, "begin;"+statement+";set local statement_timeout='15s';"
+                             "do $$ begin while not exists(select 1 from fixture_holder_release) loop "
+                             "perform pg_sleep(0.05);end loop;end $$;rollback;",
                              'fixture_owner', True, tag)
-        # Observe the holder after lock acquisition. Never report an unobserved
-        # overlap as a passing concurrency test.
-        seen = False
-        until = time.monotonic() + 3
-        while time.monotonic() < until:
-            # Session owners are postgres even after SET ROLE. Observe only
-            # activity metadata as the existing disposable service admin.
-            seen = json.loads(run("select to_json(count(*)>0) from pg_stat_activity where datname=current_database() and application_name='"+tag+"' and wait_event='PgSleep'", role=None).stdout.splitlines()[-1])
-            if seen:
-                break
-        assert seen, 'Concurrent holder precondition not observed'
-        start = time.monotonic()
-        pre = "\n\\set VERBOSITY verbose\n"
-        if kind == 'deadline':
-            # Same pre-request statement boundary as PostgREST. On OLD with no
-            # function timeout, use the configured API-role 8-second baseline.
-            timeout = value("select to_json(coalesce((select split_part(s,'=',2) from pg_proc p cross join lateral unnest(p.proconfig)s where p.oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure and s like 'statement_timeout=%'),'8s'))")
-            pre += "select set_config('statement_timeout','"+timeout+"',false);\n"
-        response = run(pre+"select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids(3)",
-                       'service_role', False)
-        elapsed = (time.monotonic()-start)*1000
-        future.result(timeout=15)
+        try:
+            # Observe lock acquisition, then retain it until the probe finishes.
+            seen = False
+            until = time.monotonic() + 3
+            while time.monotonic() < until:
+                seen = json.loads(run("select to_json(count(*)>0) from pg_stat_activity where datname=current_database() and application_name='"+tag+"' and wait_event='PgSleep'", role=None).stdout.splitlines()[-1])
+                if seen:
+                    break
+            assert seen, 'Concurrent holder precondition not observed'
+            pre = "\n\\set VERBOSITY verbose\nset lock_timeout=0;\n"
+            if kind == 'deadline':
+                # Model PostgREST's separate pre-request statement boundary.
+                timeout = value("select to_json(coalesce((select split_part(s,'=',2) from pg_proc p cross join lateral unnest(p.proconfig)s where p.oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure and s like 'statement_timeout=%'),'8s'))")
+                pre += "select set_config('statement_timeout','"+timeout+"',false);\n"
+            start = time.monotonic()
+            response = run(pre+"select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids(3)",
+                           'service_role', False)
+            elapsed = (time.monotonic()-start)*1000
+        finally:
+            run('insert into fixture_holder_release values(true)')
+            future.result(timeout=20)
         if kind == 'overlap':
             rows = json.loads(response.stdout.splitlines()[-1]) if not response.returncode else None
             if candidate:
@@ -231,7 +233,7 @@ def bounded_demand_contracts(sql, with_timeout=False):
             assert response.returncode and '57014' in response.stderr and 'statement timeout' in response.stderr, response.stderr
             assert elapsed < 2500, elapsed
         else:
-            assert not response.returncode and elapsed >= 2500, (response.stderr, elapsed)
+            assert response.returncode and '57014' in response.stderr and elapsed >= 7500, (response.stderr, elapsed)
         return elapsed
     sql('create database '+database+' owner fixture_owner', database='postgres', role=None)
     try:
@@ -260,7 +262,7 @@ def bounded_demand_contracts(sql, with_timeout=False):
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             overlap_ms = hold_and_call(pool, 'overlap', True)
             timeout_ms = hold_and_call(pool, 'deadline', True)
-        # An exception must release the transaction lock, allowing later work.
+        # The failed session has closed; a fresh session can perform later work.
         assert results('3') == expected[4]
         barrier = threading.Barrier(9)
         def parallel_read(_):
