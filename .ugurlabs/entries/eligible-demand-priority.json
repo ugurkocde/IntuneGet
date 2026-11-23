@@ -1,0 +1,5 @@
+{
+  "title": "Reduce work when selecting demanded app checks",
+  "summary": "Demand selection filters already covered and ineligible apps before calculating priorities, while retaining the existing timeout and security checks. Production impact is being verified.",
+  "type": "improved"
+}
