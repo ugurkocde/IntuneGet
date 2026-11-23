@@ -369,7 +369,48 @@ export async function GET(request: Request) {
           installerSha256: inputs.installerSha256, installScope,
         });
         const identity = buildQaPackageIdentityFromWorkflowInput({ ...inputs, installScope, psadtConfig: JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG), packageDependencies });
-        if (identity.executionProfileSha256 !== job.execution_profile_sha256?.toUpperCase()) throw new Error('Changed customer profile');
+        if (identity.executionProfileSha256 !== job.execution_profile_sha256?.toUpperCase()) {
+          // Requalify changed execution inputs through normal demand. Never use
+          // the old payload-wide pass or alter its pending publication record.
+          const demand = await ensureQaDemand(supabase, {
+            ...inputs, installScope, psadtConfig: JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG),
+            priority: job.is_auto_update ? QA_PRIORITY_DEMAND : QA_PRIORITY_CUSTOMER,
+            demandSource: job.is_auto_update ? 'auto_update' : 'customer',
+            requireExactProfile: true,
+          });
+          // Demand resolves dependencies independently. If trust changed during
+          // this request, do not persist a profile other than the one observed.
+          if (demand.identity.executionProfileSha256 !== identity.executionProfileSha256 ||
+              (demand.state === 'waiting' && !demand.candidateId)) throw new Error('Requalification pending');
+          const now = new Date().toISOString();
+          let relink = supabase.from('packaging_jobs').update({
+            execution_profile_sha256: identity.executionProfileSha256,
+            presentation_profile_sha256: identity.presentationProfileSha256,
+            qa_candidate_id: demand.candidateId, qa_requested_at: now,
+            ...(demand.state === 'failed' ? {
+              status: 'qa_failed', status_message: demand.failureSummary || 'The required installation test could not complete.',
+              error_message: demand.failureSummary || 'The required installation test could not complete.',
+              error_code: 'QA_FAILED_EXECUTION_PROFILE', error_stage: 'validation', error_category: 'installer',
+              qa_completed_at: now, completed_at: now,
+            } : { status_message: 'Waiting for installation validation before deployment' }),
+          }).eq('id', job.id).eq('status', 'awaiting_qa').eq('updated_at', job.updated_at)
+            .eq('execution_profile_sha256', job.execution_profile_sha256!)
+            .eq('winget_id', job.winget_id).eq('version', job.version)
+            .is('github_run_id', null).is('callback_run_id', null).is('intune_app_id', null)
+            .is('cancelled_at', null).is('archived_at', null);
+          relink = guardObservedIdentity(relink, true);
+          const changed = await relink.select('id').maybeSingle();
+          if (changed.error) throw new Error('Customer requalification unavailable');
+          if (changed.data && demand.state === 'failed') {
+            failed++;
+            await handleAutoUpdateJobCompletion(job.id, 'failed', demand.failureSummary || 'The required installation test could not complete.');
+          } else if (changed.data) {
+            waitingIds.push(job.id); waiting++;
+          }
+          // No claim or dispatch in the requalification cycle. The next tick
+          // observes the new candidate through all existing security gates.
+          continue;
+        }
         const { data: result, error } = await supabase.from('qa_package_results')
           .select('outcome').eq('package_profile_sha256', identity.executionProfileSha256)
           .eq('winget_id', job.winget_id).eq('tested_version', job.version)

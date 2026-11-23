@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
+import { buildQaPackageIdentityFromWorkflowInput } from '@/lib/qa/package-profile';
+import { QA_DEPLOYMENT_TEST_PSADT_CONFIG } from '@/lib/qa/deployment-test-config';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
@@ -231,6 +233,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     });
     expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it.each(['inserted', 'active same', 'active different'])('requires a new exact profile instead of accepting a historical payload pass: %s', async race => {
+    const input = { ...demandInput(), requireExactProfile: true };
+    const identity = buildQaPackageIdentityFromWorkflowInput({ ...input,
+      psadtConfig: JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG), packageDependencies: [] });
+    const rpc = vi.fn(async (_name: string, _args: unknown) => ({ data: { outcome: race === 'inserted' ? 'inserted' : 'active_conflict', candidate: { id: 'current-profile', package_profile_sha256: race === 'active different' ? 'B'.repeat(64) : identity.executionProfileSha256 } }, error: null }));
+    const client = { rpc, from: vi.fn((table: string) => {
+      const filters: Record<string, unknown> = {};
+      const builder = query({ data: null, error: null });
+      builder.eq = vi.fn((key, value) => { filters[key] = value; return builder; });
+      builder.maybeSingle = vi.fn(async () => ({ data: table === 'qa_package_results' && filters.outcome === 'Passed' &&
+        !filters.package_profile_sha256 ? { package_profile_sha256: 'B'.repeat(64) } : null, error: null }));
+      return builder;
+    }) };
+    const result = await ensureQaDemand(client as never, input);
+    expect(result).toMatchObject({ state: 'waiting', candidateId: race === 'active different' ? null : 'current-profile' });
+    expect(result.identity.executionProfileSha256).toBe(identity.executionProfileSha256);
+    expect(rpc).toHaveBeenCalledOnce();
+    expect(rpc.mock.calls[0]?.[1]).toMatchObject({ p_candidate: {
+      package_profile_sha256: identity.executionProfileSha256, status: 'queued',
+    } });
   });
 
   it('blocks the failed Copilot profile before normalization or queue insertion', async () => {

@@ -45,6 +45,8 @@ export interface QaDemandInput extends QaWorkflowPackageInput {
   installerUrl: string;
   priority: number;
   demandSource: QaDemandSource;
+  /** Requalify changed execution inputs without accepting an older payload-wide pass. */
+  requireExactProfile?: boolean;
 }
 
 export interface QaDemandResult {
@@ -184,14 +186,16 @@ export async function ensureQaDemand(
   // QA qualifies the immutable application payload, not every possible PSADT
   // presentation or policy combination. One successful test for this exact
   // app/version/architecture/installer is sufficient for every customer upload.
-  const { data: passedResult, error: resultError } = await supabase
+  let passedQuery = supabase
     .from('qa_package_results')
     .select('package_profile_sha256')
     .eq('winget_id', input.wingetId)
     .eq('tested_version', input.version)
     .eq('architecture', architecture)
     .eq('installer_sha256', installerSha256)
-    .eq('outcome', 'Passed')
+    .eq('outcome', 'Passed');
+  if (input.requireExactProfile) passedQuery = passedQuery.eq('package_profile_sha256', profileSha256);
+  const { data: passedResult, error: resultError } = await passedQuery
     .order('tested_at_utc', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -244,7 +248,7 @@ export async function ensureQaDemand(
 
   // If the same payload is already queued or running, attach this upload to
   // that test instead of multiplying VM runs for different PSADT settings.
-  const { data: activeCandidate, error: activeError } = await supabase
+  let activeQuery = supabase
     .from('qa_candidates')
     .select('id, status, priority')
     .eq('winget_id', input.wingetId)
@@ -252,7 +256,9 @@ export async function ensureQaDemand(
     .eq('architecture', architecture)
     .eq('installer_sha256', installerSha256)
     .eq('test_level', 'psadt-package')
-    .in('status', ['queued', 'dispatched', 'running'])
+    .in('status', ['queued', 'dispatched', 'running']);
+  if (input.requireExactProfile) activeQuery = activeQuery.eq('package_profile_sha256', profileSha256);
+  const { data: activeCandidate, error: activeError } = await activeQuery
     .order('priority', { ascending: false })
     .order('enqueued_at', { ascending: true })
     .limit(1)
@@ -328,6 +334,9 @@ export async function ensureQaDemand(
 
   if (!existing) throw new Error('Could not resolve exact package QA candidate');
   // The RPC resolves the winner using the same expressions as the unique index.
+  if (input.requireExactProfile && existing.package_profile_sha256?.toUpperCase() !== profileSha256) {
+    return { identity, candidateId: null, state: 'waiting' };
+  }
   if (outcome === 'active_conflict') {
     return { identity, candidateId: existing.id, state: 'waiting' };
   }
