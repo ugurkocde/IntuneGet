@@ -1,4 +1,9 @@
+import { QA_DEPLOYMENT_TEST_PSADT_CONFIG } from '@/lib/qa/deployment-test-config';
 import { createHash } from 'node:crypto';
+import { buildQaPackageIdentityFromWorkflowInput } from '@/lib/qa/package-profile';
+import { buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
+const dependencyResolverMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+vi.mock('@/lib/winget-dependencies', async original => ({ ...(await original<typeof import('@/lib/winget-dependencies')>()), resolveWingetPackageDependencies: dependencyResolverMock }));
 import { NextRequest } from 'next/server';
 const securityHoldsMock = vi.hoisted(() => vi.fn().mockResolvedValue(new Map()));
 vi.mock('@/lib/qa/installer-security-holds', async importOriginal => ({ ...(await importOriginal<typeof import('@/lib/qa/installer-security-holds')>()), loadInstallerSecurityHolds: securityHoldsMock }));
@@ -338,6 +343,65 @@ describe('GET /api/cron/qa-resume', () => {
       else expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
     }
   );
+
+  it.each(['passed', 'missing', 'lookup error', 'profile changed', 'payload mismatch', 'security', 'dependency error', 'concurrent claim', 'result failed', 'result app', 'result version', 'result architecture', 'candidate payload', 'stored payload', 'null profile', 'curated source'])('reconciles a customer pass independently of publication: %s', async kind => {
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    dependencyResolverMock.mockReset();
+    dependencyResolverMock.mockResolvedValue([]);
+    const job = {
+      id: 'customer-pass-job', tenant_id: 'tenant-fake', winget_id: 'Vendor.App', version: '1.0',
+      status: 'awaiting_qa', qa_candidate_id: 'publication-candidate', architecture: 'x64',
+      installer_sha256: 'B'.repeat(64), installer_type: 'exe',
+      updated_at: '2026-11-22T00:00:00Z', created_at: new Date().toISOString(),
+      callback_run_id: null, github_run_id: null, cancelled_at: null, archived_at: null,
+      qa_resume_due_at: null, execution_profile_sha256: '',
+      package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64', installCommand: '/S' },
+    };
+    const inputs = buildStoredJobWorkflowInputs(job as never, job.package_config as never, {
+      callbackUrl: 'https://example.test/api/package/callback', qaOverride: false, sanitizeAssignments: false,
+    });
+    job.execution_profile_sha256 = buildQaPackageIdentityFromWorkflowInput({ ...inputs, psadtConfig: JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG), packageDependencies: [] }).executionProfileSha256;
+    const result = { package_profile_sha256: job.execution_profile_sha256, winget_id: job.winget_id,
+      tested_version: job.version, architecture: 'x64', installer_sha256: job.installer_sha256, outcome: 'Passed' };
+    if (kind === 'result failed') result.outcome = 'Failed';
+    if (kind === 'result app') result.winget_id = 'Other.App';
+    if (kind === 'result version') result.tested_version = '2.0';
+    if (kind === 'result architecture') result.architecture = 'arm64';
+    if (kind === 'stored payload') job.installer_sha256 = 'C'.repeat(64);
+    if (kind === 'null profile') job.execution_profile_sha256 = '';
+    if (kind === 'curated source') job.package_config.sourceType = 'curated';
+    if (kind === 'profile changed') job.package_config.installCommand = '/different';
+    if (kind === 'payload mismatch') result.installer_sha256 = 'C'.repeat(64);
+    if (kind === 'dependency error') dependencyResolverMock.mockRejectedValue(new Error('Synthetic unavailable dependency graph'));
+    const store = jobStore(job); let reads = 0;
+    const from = vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1 ? chain({ data: [structuredClone(job)], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') return candidateQuery([{ id: 'publication-candidate', status: 'error', phase: 'publishing',
+        github_run_id: '123456789', package_profile_sha256: 'D'.repeat(64), winget_id: job.winget_id,
+        version: job.version, architecture: 'x64', installer_sha256: kind === 'candidate payload' ? 'F'.repeat(64) : job.installer_sha256 }]);
+      if (table === 'qa_package_results') return kind === 'lookup error' ? chain({ data: null, error: { message: 'Synthetic lookup error' } })
+        : candidateQuery(kind === 'missing' ? [] : [result]);
+      throw new Error('Unexpected table ' + table);
+    });
+    createServerClientMock.mockReturnValue({ from });
+    enforceQaGateMock.mockImplementation(async () => {
+      if (kind === 'concurrent claim') store.row.execution_profile_sha256 = 'E'.repeat(64);
+      if (kind === 'security') throw new QaGateNotPassedError({ wingetId: job.winget_id, version: job.version,
+        architecture: 'x64', installerSha256: job.installer_sha256, packageProfileSha256: job.execution_profile_sha256, reason: 'reputation' });
+    });
+    triggerPackagingWorkflowMock.mockResolvedValue({ runId: '987654321' });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(response.status).toBe(200);
+    const success = kind === 'passed';
+    expect(await response.json()).toMatchObject({ resumed: success ? 1 : 0, failed: 0 });
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(success ? 1 : 0);
+    if (success) {
+      expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ resolvedPackageDependencies: [], packageProfileSha256: job.execution_profile_sha256 }));
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(store.row.status).toBe('packaging');
+    }
+    expect(from.mock.calls.every(([table]) => ['packaging_jobs', 'qa_candidates', 'qa_package_results'].includes(table))).toBe(true);
+  });
 
   it.each([1, 2, 3].flatMap((jobCount) => [true, false].flatMap((localPackager) =>
     [true, false].flatMap((isAutoUpdate) => [true, false].map((continuity) =>

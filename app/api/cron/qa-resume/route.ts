@@ -1,3 +1,7 @@
+import { QA_DEPLOYMENT_TEST_PSADT_CONFIG } from '@/lib/qa/deployment-test-config';
+import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
+import { buildQaPackageIdentityFromWorkflowInput } from '@/lib/qa/package-profile';
+import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import { storedJobItem, buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
 import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
@@ -112,6 +116,8 @@ export async function GET(request: Request) {
     let candidateStatus = candidate?.status;
     let candidateFailureSummary = candidate?.failure_summary;
     let appVersionAlreadyPassed = false;
+    let customerResultRecovered = false;
+    let customerResultDependencies: Awaited<ReturnType<typeof resolveWingetPackageDependencies>> | undefined;
     let demandWasEvaluated = false;
 
     if (!skipCandidateQa && (!candidate || candidateStatus === 'superseded')) {
@@ -281,6 +287,10 @@ export async function GET(request: Request) {
       for (const [column, value] of identityFields) {
         query = value == null ? query.is(column, null) : query.eq(column, value);
       }
+      if (customerResultRecovered) {
+        query = query.eq('execution_profile_sha256', job.execution_profile_sha256!);
+        query = query.eq('updated_at', job.updated_at);
+      }
       if (!guardDueTime) return query;
       return job.qa_resume_due_at == null
         ? query.is('qa_resume_due_at', null)
@@ -336,9 +346,42 @@ export async function GET(request: Request) {
     // continuity, without treating publication failure as installer failure.
     if (!skipCandidateQa && candidateStatus === 'error' &&
         candidate?.phase === 'publishing' && candidate.github_run_id) {
-      waitingIds.push(job.id);
-      waiting++;
-      continue;
+      // Publication state belongs to the linked QA candidate. A different
+      // customer profile may already have its own exact passing result.
+      // Recompute from dispatch inputs and today's trusted dependency graph;
+      // the stored profile hash alone cannot authorize changed commands.
+      try {
+        const inputs = buildStoredJobWorkflowInputs(job, item, {
+          callbackUrl, qaOverride: false, sanitizeAssignments: false,
+        });
+        if (item.sourceType === 'curated' || item.sourceType === 'custom' ||
+            !/^[a-f0-9]{64}$/i.test(job.execution_profile_sha256 || '') ||
+            candidate.id !== observed.qa_candidate_id || candidate.winget_id !== job.winget_id ||
+            candidate.version !== job.version || candidate.architecture !== inputs.architecture ||
+            candidate.installer_sha256?.toUpperCase() !== inputs.installerSha256.toUpperCase() ||
+            inputs.architecture !== observed.architecture ||
+            inputs.installerSha256.toUpperCase() !== observed.installer_sha256?.toUpperCase()) throw new Error('Unverified customer identity');
+        const installScope = resolveApplicationInstallScope(inputs.wingetId, inputs.installScope);
+        const packageDependencies = await resolveWingetPackageDependencies({
+          wingetId: inputs.wingetId, version: inputs.version, architecture: inputs.architecture,
+          installerSha256: inputs.installerSha256, installScope,
+        });
+        const identity = buildQaPackageIdentityFromWorkflowInput({ ...inputs, installScope, psadtConfig: JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG), packageDependencies });
+        if (identity.executionProfileSha256 !== job.execution_profile_sha256?.toUpperCase()) throw new Error('Changed customer profile');
+        const { data: result, error } = await supabase.from('qa_package_results')
+          .select('outcome').eq('package_profile_sha256', identity.executionProfileSha256)
+          .eq('winget_id', job.winget_id).eq('tested_version', job.version)
+          .eq('architecture', (inputs.architecture || 'x64').toLowerCase())
+          .eq('installer_sha256', inputs.installerSha256.toUpperCase())
+          .eq('outcome', 'Passed').limit(1).maybeSingle();
+        if (error || result?.outcome !== 'Passed') throw new Error('Customer result unavailable');
+        candidateStatus = 'passed';
+        appVersionAlreadyPassed = true;
+        customerResultRecovered = true;
+        customerResultDependencies = packageDependencies;
+      } catch {
+        waitingIds.push(job.id); waiting++; continue;
+      }
     }
 
 
@@ -461,6 +504,7 @@ export async function GET(request: Request) {
           ? observed.installer_sha256 || ''
           : observedConfig?.installerSha256 || observed.installer_sha256 || '',
         packageProfileSha256: job.execution_profile_sha256 || '',
+        resolvedPackageDependencies: customerResultDependencies,
         qaOverride: skipCustomerQa,
         sourceType: observedConfig?.sourceType,
         curatedReleaseId: observedConfig?.curatedReleaseId,
