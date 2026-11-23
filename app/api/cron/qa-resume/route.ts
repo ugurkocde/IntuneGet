@@ -276,7 +276,7 @@ export async function GET(request: Request) {
       waiting++;
       continue;
     }
-    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T, guardDueTime = false): T => {
+    const guardObservedIdentity = <T extends { eq: (key: string, value: string) => T; is: (key: string, value: null) => T }>(query: T, guardDueTime = false, guardUpdatedAt = true): T => {
       const identityFields = [
         ['qa_candidate_id', observed.qa_candidate_id],
         ['installer_sha256', observed.installer_sha256],
@@ -289,7 +289,9 @@ export async function GET(request: Request) {
       }
       if (customerResultRecovered) {
         query = query.eq('execution_profile_sha256', job.execution_profile_sha256!);
-        query = query.eq('updated_at', job.updated_at);
+        // A successful claim changes updated_at through the database trigger.
+        // Keep the snapshot guard until claiming, then use status and identity.
+        if (guardUpdatedAt) query = query.eq('updated_at', job.updated_at);
       }
       if (!guardDueTime) return query;
       return job.qa_resume_due_at == null
@@ -751,7 +753,7 @@ export async function GET(request: Request) {
           .is('github_run_id', null)
           .is('callback_run_id', null)
           .is('cancelled_at', null)
-          .is('archived_at', null), !claimedPackaging)
+          .is('archived_at', null), !claimedPackaging, !claimedPackaging)
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
@@ -775,7 +777,7 @@ export async function GET(request: Request) {
           })
           .eq('id', job.id)
           .eq('status', failureStatus)
-          .is('github_run_id', null).is('callback_run_id', null), !claimedPackaging)
+          .is('github_run_id', null).is('callback_run_id', null), !claimedPackaging, !claimedPackaging)
           .select('id')
           .maybeSingle();
         if (holdError) throw holdError;
@@ -800,7 +802,7 @@ export async function GET(request: Request) {
         .eq('id', job.id)
         .eq('status', failureStatus)
         .is('github_run_id', null).is('callback_run_id', null)
-        .is('cancelled_at', null).is('archived_at', null), !claimedPackaging)
+        .is('cancelled_at', null).is('archived_at', null), !claimedPackaging, !claimedPackaging)
         .select('id')
         .maybeSingle();
       if (failedJob) {
