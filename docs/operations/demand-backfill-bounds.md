@@ -28,8 +28,11 @@ It performs no table writes. No role is granted new access.
 
 The existing demand PG17 contract checks actual overlapping sessions, ordered
 result parity, denied anonymous/authenticated access, unchanged ACL and owner,
-the hoisted deadline against a held table lock, lock release after failure,
-and rollback. Old code returns work during overlap and can run past the
+the hoisted deadline against a held table lock, serviceability after the
+failed session closes, and an equivalent restored state. Transaction lock
+release follows PostgreSQL's transaction semantics; the fixture does not
+prove release within the same session after failure. Old code returns work
+during overlap and can run past the
 client budget under the configured eight-second API baseline. These are
 behavior regressions, not a reproduction of the production stall's cause.
 
@@ -49,5 +52,7 @@ Do not run that migration's old-source guard against the new body. Confirm
 the restored body MD5 is `e358c88ca1ad6f6fcd0ee5d51b96840b`, the original
 volatility is `STABLE`, the ACL/owner are unchanged, and the original timeout
 state is restored. Notify PostgREST to reload its schema. The PG17 fixture
-tests this rollback for its starting configuration; deployment must retain
-its own starting snapshot. No data rollback is required.
+replays historical migrations and reapplies the optional timeout to check an
+equivalent restored state. It does not validate the production definition-only
+rollback procedure above. Deployment must retain its own starting snapshot.
+No data rollback is required.
