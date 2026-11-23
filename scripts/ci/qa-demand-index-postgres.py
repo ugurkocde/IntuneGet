@@ -290,6 +290,71 @@ def bounded_demand_contracts(sql, with_timeout=False):
         sql('drop database '+database+' with(force)',database='postgres',role=None)
 
 
+def eligible_priority_contracts(sql):
+    """Production SQL57014 is timing RED; reproduce avoidable priority work here."""
+    database = 'demand_eligible_' + uuid.uuid4().hex
+    migration = ROOT/'supabase/migrations/20261123204151_qa_demand_eligible_priority_scope.sql'
+    def run(text, role='fixture_owner', check=True):
+        return sql(text, database=database, role=role, check=check)
+    def value(text):
+        return json.loads(run(text).stdout.splitlines()[-1])
+    def snapshot():
+        return value("select json_build_object('body',md5(prosrc),'acl',proacl::text,'config',proconfig,'definer',prosecdef,'volatile',provolatile,'owner',proowner) from pg_proc where oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure")
+    def results():
+        return [value("select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids("+n+")") for n in ['NULL','-5','0','1','3','5','100','1000']]
+    def priority_counts(query):
+        prefix = query.split('  select app.winget_id', 1)[0]
+        return value(prefix + "select json_build_object('demand',(select count(*) from demand),'failures',(select count(*) from current_version_failures))")
+    sql('create database '+database+' owner fixture_owner', database='postgres', role=None)
+    try:
+        fixture = FIXTURE.replace('generate_series(1,1000)', 'generate_series(1,1412)').replace('g%1000+1','g%1412+1').replace('generate_series(1,100000)','generate_series(1,22000)').replace('generate_series(1,50000)','generate_series(1,22000)')
+        run(fixture)
+        # 1412 demanded keys, 52 eligible. Keep security/filter negatives 1..10.
+        run("insert into qa_candidates select 'Fixture.'||g,'2','2','psadt-package','passed','{\"profileKind\":\"catalog-default\"}',now() from generate_series(13,1362)g;insert into qa_candidates select 'Fixture.'||g,'2','2','psadt-package','failed','{\"profileKind\":\"custom\"}',now() from generate_series(13,298)g;analyze;")
+        for name in ['20260823195500_recognize_live_qa_version_coverage.sql','20261115102714_qa_demand_failure_lookup_index.sql','20261115144200_qa_demand_failure_key_scope.sql','20261123143806_qa_demand_timeout_overlap.sql']:
+            run('begin;'+(ROOT/'supabase/migrations'/name).read_text()+'commit;')
+        run('grant select on all tables in schema public to service_role')
+        old_definition = value("select to_json(pg_get_functiondef('public.qa_missing_demand_backfill_ids(integer)'::regprocedure))")
+        before = snapshot()
+        assert before['body'] == '453e81d15e8cfa87dfcecf8e00f76af1'
+        old_query = old_definition.split(' RETURN QUERY\n',1)[1].split('\nEND;',1)[0].replace('p_limit','5')
+        expected = results()
+        assert expected[5][:2] == ['Fixture.12','Fixture.11']
+        baseline = priority_counts(old_query)
+        assert baseline == {'demand':1412,'failures':289}, baseline
+        assert baseline['demand'] > 52, 'OLD bounded priority regression did not fail'
+        print('RED priority work includes covered keys: '+json.dumps(baseline)+'; production SQL57014 timing RED retained, no local timing reproduction claim', flush=True)
+        run('begin;'+migration.read_text()+'commit;')
+        after = snapshot()
+        assert {k:v for k,v in after.items() if k!='body'} == {k:v for k,v in before.items() if k!='body'}
+        assert results() == expected
+        new_definition = value("select to_json(pg_get_functiondef('public.qa_missing_demand_backfill_ids(integer)'::regprocedure))")
+        new_query = new_definition.split(' RETURN QUERY\n',1)[1].split('\nEND;',1)[0].replace('p_limit','5')
+        candidate = priority_counts(new_query)
+        assert candidate == {'demand':52,'failures':2}, candidate
+        # The original final predicates remain verbatim, also copied into the early CTE.
+        predicates = old_query.split('  where app.is_verified is true',1)[1].split('  order by',1)[0]
+        assert new_query.count('  where app.is_verified is true'+predicates) == 2
+        for role in ['anon','authenticated']:
+            denied = run('select * from public.qa_missing_demand_backfill_ids(5)',role,False)
+            assert denied.returncode and 'permission denied' in denied.stderr
+        def read(_):
+            started = time.monotonic()
+            response = run("set statement_timeout='2s';select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids(5)",'service_role')
+            rows = json.loads(response.stdout.splitlines()[-1])
+            assert rows in ([],expected[5])  # Existing overlap lock may skip a caller.
+            return (time.monotonic()-started)*1000
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            times = list(pool.map(read,range(8)))
+        assert max(times) < 2000, times
+        # Restore the exact previous function definition, not its older SQL ancestor.
+        run(old_definition)
+        assert snapshot() == before and results() == expected
+        print('GREEN eligible priority '+json.dumps(candidate)+' ordered parity/ACL/owner/config/rollback eight-client max_ms='+str(max(times))+'; production effect unverified, six natural caller slots required',flush=True)
+    finally:
+        sql('drop database '+database+' with(force)',database='postgres',role=None)
+
+
 if __name__ == '__main__':
     t = runpy.run_path(str(ROOT/'scripts/qa-automation/vt-ledger-postgres.test.py'))
     if not t['re'].fullmatch(r'[a-f0-9]{12,64}', t['CONTAINER']):
@@ -301,3 +366,4 @@ if __name__ == '__main__':
     early_demand_contracts(t['sql'], with_timeout=True)
     bounded_demand_contracts(t['sql'])
     bounded_demand_contracts(t['sql'], with_timeout=True)
+    eligible_priority_contracts(t['sql'])
