@@ -345,7 +345,7 @@ describe('GET /api/cron/qa-resume', () => {
     }
   );
 
-  it.each(['passed', 'rate limit', 'unconfirmed', 'dispatch failure', 'retryable preflight', 'missing', 'lookup error', 'profile changed', 'payload mismatch', 'security', 'dependency error', 'concurrent claim', 'result failed', 'result app', 'result version', 'result architecture', 'candidate payload', 'stored payload', 'null profile', 'curated source'])('reconciles a customer pass independently of publication: %s', async kind => {
+  it.each(['passed', 'rate limit', 'unconfirmed', 'dispatch failure', 'retryable preflight', 'missing', 'lookup error', 'profile changed', 'payload mismatch', 'security', 'dependency error', 'concurrent claim', 'result failed', 'result app', 'result version', 'result architecture', 'candidate payload', 'stored payload', 'null profile', 'curated source', 'stale timestamp', 'stale candidate', 'stale profile', 'stale cancel', 'stale archive', 'stale dispatch', 'stale callback', 'stale app', 'stale due', 'stale dependency change', 'stale failed'])('reconciles a customer pass independently of publication: %s', async kind => {
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     dependencyResolverMock.mockReset();
     dependencyResolverMock.mockResolvedValue([]);
@@ -371,10 +371,24 @@ describe('GET /api/cron/qa-resume', () => {
     if (kind === 'stored payload') job.installer_sha256 = 'C'.repeat(64);
     if (kind === 'null profile') job.execution_profile_sha256 = '';
     if (kind === 'curated source') job.package_config.sourceType = 'curated';
-    if (kind === 'profile changed') job.package_config.installCommand = '/different';
+    if (kind === 'profile changed' || kind.startsWith('stale ')) job.package_config.installCommand = '/different';
     if (kind === 'payload mismatch') result.installer_sha256 = 'C'.repeat(64);
     if (kind === 'dependency error') dependencyResolverMock.mockRejectedValue(new Error('Synthetic unavailable dependency graph'));
     const store = jobStore(job, true); let reads = 0;
+    ensureQaDemandMock.mockImplementation(async (_client, demandInput) => {
+      const identity = buildQaPackageIdentityFromWorkflowInput(demandInput);
+      if (kind === 'stale timestamp') store.row.updated_at = '2026-11-23T00:00:00Z';
+      if (kind === 'stale candidate') store.row.qa_candidate_id = 'other-candidate';
+      if (kind === 'stale profile') store.row.execution_profile_sha256 = 'E'.repeat(64);
+      if (kind === 'stale cancel') store.row.cancelled_at = '2026-11-23T00:00:00Z';
+      if (kind === 'stale archive') store.row.archived_at = '2026-11-23T00:00:00Z';
+      if (kind === 'stale dispatch') store.row.github_run_id = 'existing-run';
+      if (kind === 'stale callback') store.row.callback_run_id = 'existing-callback';
+      if (kind === 'stale app') store.row.intune_app_id = 'existing-app';
+      if (kind === 'stale due') store.row.qa_resume_due_at = '2026-11-24T00:00:00Z';
+      if (kind === 'stale dependency change') identity.executionProfileSha256 = 'F'.repeat(64);
+      return { identity, candidateId: 'new-profile', state: kind === 'stale failed' ? 'failed' : 'waiting', failureSummary: 'Synthetic failed exact profile' };
+    });
     const from = vi.fn((table: string) => {
       if (table === 'packaging_jobs') return ++reads === 1 ? chain({ data: [structuredClone(job)], error: null }) : store.updateQuery();
       if (table === 'qa_candidates') return candidateQuery([{ id: 'publication-candidate', status: 'error', phase: 'publishing',
@@ -401,7 +415,7 @@ describe('GET /api/cron/qa-resume', () => {
     expect(response.status).toBe(200);
     const success = kind === 'passed';
     const held = ['rate limit', 'unconfirmed', 'retryable preflight'].includes(kind);
-    expect(await response.json()).toMatchObject({ resumed: success ? 1 : 0, failed: kind === 'dispatch failure' ? 1 : 0, ...(held ? { held: 1 } : {}) });
+    expect(await response.json()).toMatchObject({ resumed: success ? 1 : 0, failed: ['dispatch failure', 'stale failed'].includes(kind) ? 1 : 0, ...(held ? { held: 1 } : {}) });
     if (held) {
       expect(store.row.status).toBe('awaiting_qa');
       expect(Date.parse(store.row.qa_resume_due_at as string)).toBeGreaterThan(Date.now());
@@ -410,6 +424,18 @@ describe('GET /api/cron/qa-resume', () => {
     if (kind === 'unconfirmed') expect(store.row.error_code).toBe('WORKFLOW_DISPATCH_UNCONFIRMED');
     if (kind === 'dispatch failure') expect(store.row).toMatchObject({ status: 'failed', error_code: 'QA_RESUME_DISPATCH_FAILED' });
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(success || held || kind === 'dispatch failure' ? 1 : 0);
+    if (kind === 'profile changed' || kind.startsWith('stale ')) {
+      expect(ensureQaDemandMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requireExactProfile: true }));
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      if (kind === 'profile changed' || kind === 'stale failed') {
+        expect(store.row.qa_candidate_id).toBe('new-profile');
+        expect(store.row.execution_profile_sha256).not.toBe(job.execution_profile_sha256);
+        expect(store.row.package_config).toEqual(job.package_config);
+        expect(store.row.status).toBe(kind === 'stale failed' ? 'qa_failed' : 'awaiting_qa');
+      } else {
+        expect(store.row.qa_candidate_id).not.toBe('new-profile');
+      }
+    }
     if (success) {
       expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ resolvedPackageDependencies: [], packageProfileSha256: job.execution_profile_sha256 }));
       expect(ensureQaDemandMock).not.toHaveBeenCalled();

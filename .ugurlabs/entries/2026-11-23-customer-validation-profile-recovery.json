@@ -1,0 +1,5 @@
+{
+  "title": "Recover deployments waiting on changed validation inputs",
+  "summary": "Waiting deployments can request validation for their current package inputs when an earlier validation profile is outdated, while retaining security checks and protection against duplicate deployment.",
+  "type": "fixed"
+}
