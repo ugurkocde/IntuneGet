@@ -1,0 +1,5 @@
+{
+  "title": "Distinguish unavailable packages in automatic updates",
+  "summary": "Automatic updates identify unavailable versions and packages without claiming that an installation test failed.",
+  "type": "fixed"
+}

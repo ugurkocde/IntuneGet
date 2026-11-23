@@ -1,0 +1,5 @@
+{
+  "title": "Recover custom deployments after uncertain GitHub responses",
+  "summary": "Custom installer deployments check for an existing packaging run when GitHub does not confirm startup. These checks never resend an uncertain request.",
+  "type": "fixed"
+}

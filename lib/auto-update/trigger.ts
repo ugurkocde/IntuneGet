@@ -59,6 +59,8 @@ interface TriggerResult {
   skipReason?: string;
   code?:
     | 'ARCHITECTURE_UNAVAILABLE'
+    | 'VERSION_UNAVAILABLE'
+    | 'PACKAGE_UNAVAILABLE'
     | 'QA_FAILED_CURRENT_VERSION'
     | 'QA_NOT_PASSED_CURRENT_VERSION'
     | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
@@ -285,6 +287,19 @@ export class AutoUpdateTrigger {
         }
       }
 
+      // Archived checkpoints still block the same policy/version. Do not rely
+      // on a policy marker write having succeeded, or on an unchanged error code.
+      const { data: unresolved, error: checkpointError } = await this.supabase
+        .from('packaging_jobs').select('id')
+        .eq('auto_update_policy_id', policy.id).eq('user_id', policy.user_id)
+        .eq('tenant_id', policy.tenant_id).eq('version', updateInfo.latestVersion)
+        .is('github_run_id', null).is('callback_run_id', null)
+        .or('error_code.in.(WORKFLOW_DISPATCH_UNCONFIRMED,WORKFLOW_DISPATCH_UNRECONCILED),error_details->>workflow_dispatch_unconfirmed_at.not.is.null')
+        .limit(1).maybeSingle();
+      if (checkpointError) return { success: false, error: 'Could not verify earlier workflow dispatches. No update was started.' };
+      if (unresolved) return { success: false, skipped: true,
+        skipReason: 'An earlier workflow dispatch for this version is unresolved. No new update was started.' };
+
       const curated = isCuratedPackageId(updateInfo.wingetId) || updateInfo.sourceType === 'curated'
         ? findCuratedApp(updateInfo.wingetId) : undefined;
       const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
@@ -426,6 +441,8 @@ export class AutoUpdateTrigger {
           skipped: true,
           skipReason: qaDemand.failureSummary,
           code: unavailable?.code === 'ARCHITECTURE_UNAVAILABLE'
+            || unavailable?.code === 'VERSION_UNAVAILABLE'
+            || unavailable?.code === 'PACKAGE_UNAVAILABLE'
             ? unavailable.code
             : 'QA_FAILED_CURRENT_VERSION',
           packageProfileSha256: qaDemand.identity.executionProfileSha256,

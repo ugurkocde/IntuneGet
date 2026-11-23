@@ -1,0 +1,5 @@
+{
+  "title": "Resume deployments after verified installation tests",
+  "summary": "Waiting deployments can use their verified installation result when an older linked test is still awaiting publication. Existing package security and deployment checks still apply.",
+  "type": "fixed"
+}

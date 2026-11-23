@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "websiteCommit": "f8b8b48e5d345333f26eb5495f5431d7006e9b84",
+    "runId": "44746828132",
+    "workflowCommit": "435a5af017cd5b04cf8be4f322d2fda5a55389fd",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "vscode",
+    "version": "1.147.0",
+    "installerUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/8a14f0cc1b08d531eb83255ea3764ae22aa932b5/VSCodeSetup-x64-1.147.0.exe",
+    "vendorSha256": "02fd3f76968ed56542cd44f4762a106f5f1175b939bbc10d6d875609da794355",
+    "releaseNotesUrl": "https://code.visualstudio.com/",
+    "discoveredAt": "2026-11-18T09:40:16.107Z",
+    "id": "fdd12c6e919bcfb638947d5c"
+  },
+  "previous": {
+    "appId": "vscode",
+    "version": "1.146.0",
+    "installerUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/69047191fc427f2f92828279aae1d90d8eeda7ab/VSCodeSetup-x64-1.146.0.exe",
+    "vendorSha256": "972fcb16d819532a25af8dc1976e1c80508e080bf56eb65bfd6a35eed983a35b",
+    "releaseNotesUrl": "https://code.visualstudio.com/",
+    "discoveredAt": "2026-11-11T10:14:48.79Z",
+    "id": "65ece6513d3eb37a55d94663"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "fdd12c6e919bcfb638947d5c",
+      "installerSha256": "02fd3f76968ed56542cd44f4762a106f5f1175b939bbc10d6d875609da794355",
+      "sourceUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/8a14f0cc1b08d531eb83255ea3764ae22aa932b5/VSCodeSetup-x64-1.147.0.exe",
+      "finalOrigin": "https://vscode.download.prss.microsoft.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "suspicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "scanner": "defender",
+        "installerSha256": "02fd3f76968ed56542cd44f4762a106f5f1175b939bbc10d6d875609da794355",
+        "scannedAt": "2026-11-20T13:54:54.2085638Z",
+        "signatureVersion": "1.463.386.0"
+      }
+    },
+    "previous": {
+      "candidateId": "65ece6513d3eb37a55d94663",
+      "installerSha256": "972fcb16d819532a25af8dc1976e1c80508e080bf56eb65bfd6a35eed983a35b",
+      "sourceUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/69047191fc427f2f92828279aae1d90d8eeda7ab/VSCodeSetup-x64-1.146.0.exe",
+      "finalOrigin": "https://vscode.download.prss.microsoft.com",
+      "signature": {
+        "publisher": "Microsoft Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "suspicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "malicious": 0,
+        "scanner": "defender",
+        "installerSha256": "972fcb16d819532a25af8dc1976e1c80508e080bf56eb65bfd6a35eed983a35b",
+        "scannedAt": "2026-11-20T13:55:14.8486347Z",
+        "signatureVersion": "1.463.386.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "fdd12c6e919bcfb638947d5c",
+    "packageId": "IntuneGet.Curated.VisualStudioCode",
+    "installerUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/8a14f0cc1b08d531eb83255ea3764ae22aa932b5/VSCodeSetup-x64-1.147.0.exe",
+    "installerSha256": "02fd3f76968ed56542cd44f4762a106f5f1175b939bbc10d6d875609da794355",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.VisualStudioCode",
+      "displayName": "Visual Studio Code",
+      "publisher": "Microsoft Corporation",
+      "version": "1.147.0",
+      "architecture": "x64",
+      "installerSha256": "02fd3f76968ed56542cd44f4762a106f5f1175b939bbc10d6d875609da794355",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:{EA457B21-F73E-494C-ACAB-524FDE069978}_is1:Microsoft Visual Studio Code",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VisualStudioCode\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.147.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VisualStudioCode\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.147.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "003AAB7FF2F60BE593AC0D5F2AF785B754C80D83E6137B9737FADB09721556CD",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.VisualStudioCode\",\"publisher\":\"IntuneGet QA\",\"version\":\"1.147.0\",\"wingetId\":\"IntuneGet.Curated.VisualStudioCode\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.147.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VisualStudioCode\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"218BD218C770BEB7237524A3584E60BE7DE05FB217DA9E4C23AD8D555CAC6C4C\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"02FD3F76968ED56542CD44F4762A106F5F1175B939BBC10D6D875609DA794355\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:{EA457B21-F73E-494C-ACAB-524FDE069978}_is1:Microsoft Visual Studio Code\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.147.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_VisualStudioCode\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"9D084634460544B8BC0954D4438B1A5FD7D1AE6806C40DD6E62D643B33F7AA86\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "9d084634460544b8bc0954d4438b1a5fd7d1ae6806c40dd6e62d643b33f7aa86",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionProfileSha256": "003AAB7FF2F60BE593AC0D5F2AF785B754C80D83E6137B9737FADB09721556CD",
+    "testedAt": "2026-11-20T13:59:49.6992792Z",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionContext": "LocalSystem",
+    "previousInstallerSha256": "972fcb16d819532a25af8dc1976e1c80508e080bf56eb65bfd6a35eed983a35b",
+    "installerSha256": "02fd3f76968ed56542cd44f4762a106f5f1175b939bbc10d6d875609da794355",
+    "candidateId": "fdd12c6e919bcfb638947d5c",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "upgradeFromVersion": "1.146.0",
+    "installerVersion": "1.147.0",
+    "architecture": "x64",
+    "testLevel": "psadt-package"
+  },
+  "verifiedAt": "2026-11-20T13:59:56.2918465Z",
+  "authenticatedArtifact": {
+    "id": 14634193056,
+    "sha256": "2df73fdd058cbc841f03e2cd232506269bdcb413d7dcdd8c5a775631cd0943fd"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-21T11:13:40.445Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

@@ -32,7 +32,7 @@ interface PackageConfig {
  *
  * On failure (failed/cancelled):
  *   - Marks auto_update_history as failed/cancelled
- *   - Sets last_auto_update_version to null (so the update reappears in Available tab)
+ *   - Clears the version marker unless an uncertain dispatch has no known run
  *   - Increments consecutive_failures (disables policy after threshold)
  */
 export async function handleAutoUpdateJobCompletion(
@@ -53,7 +53,7 @@ export async function handleAutoUpdateJobCompletion(
   // Fetch the job to check if it's an auto-update
   const { data: job, error: fetchError } = await supabase
     .from('packaging_jobs')
-    .select('id, is_auto_update, auto_update_policy_id, package_config, error_category, error_code')
+    .select('id, is_auto_update, auto_update_policy_id, package_config, error_category, error_code, error_details, github_run_id, callback_run_id')
     .eq('id', jobId)
     .single();
 
@@ -66,6 +66,15 @@ export async function handleAutoUpdateJobCompletion(
   if (!job.is_auto_update || !job.auto_update_policy_id) {
     return;
   }
+
+  // A failed lookup cannot prove that dispatch never started. Record the
+  // failure, but retain the job and version marker to prevent a second dispatch.
+  const details = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
+    ? job.error_details as Record<string, unknown> : null;
+  const preserveDispatchCheckpoint = (terminalStatus === 'failed' || terminalStatus === 'cancelled') &&
+    (job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED' || job.error_code === 'WORKFLOW_DISPATCH_UNRECONCILED'
+      || details?.workflow_dispatch_unconfirmed_at != null) &&
+    !job.github_run_id && !job.callback_run_id;
 
   const policyId = job.auto_update_policy_id;
   const packageConfig = job.package_config as PackageConfig | null;
@@ -128,8 +137,8 @@ export async function handleAutoUpdateJobCompletion(
       })
       .eq('id', policyId);
   } else {
-    // On failure: clear last_auto_update_version so update reappears in Available tab
-    // and increment consecutive_failures for circuit breaker
+    // Preserve the marker for an uncertain dispatch without a known run.
+    // Other failures clear it; all failures increment the circuit-breaker count.
     const { data: policy } = await supabase
       .from('app_update_policies')
       .select('consecutive_failures, policy_type, is_enabled, user_id, winget_id, tenant_id')
@@ -141,7 +150,7 @@ export async function handleAutoUpdateJobCompletion(
       newFailureCount >= DEFAULT_SAFETY_CONFIG.maxConsecutiveFailures;
 
     const updates: Record<string, unknown> = {
-      last_auto_update_version: null,
+      ...(preserveDispatchCheckpoint ? {} : { last_auto_update_version: null }),
       consecutive_failures: newFailureCount,
       updated_at: new Date().toISOString(),
     };
@@ -163,6 +172,12 @@ export async function handleAutoUpdateJobCompletion(
   // Successful deployments stay visible so users can see what was auto-deployed.
   if (!isSuccess) {
     try {
+      if (preserveDispatchCheckpoint) {
+        const { error } = await supabase.from('packaging_jobs')
+          .update({ archived_at: new Date().toISOString() }).eq('id', jobId);
+        if (error) console.error('[AutoUpdate Cleanup] Dispatch checkpoint archive failed');
+        return;
+      }
       // Dismissing an approval failure must not erase the retained-app checkpoint.
       if (isIntuneApprovalFailure(job)) {
         const { error } = await supabase.from('packaging_jobs')

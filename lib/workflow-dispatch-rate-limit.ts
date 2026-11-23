@@ -4,6 +4,7 @@ const MIN_DELAY_MS = 60_000;
 const MAX_DELAY_MS = 65 * 60_000;
 const MAX_DEFERRALS = 5;
 const ATTEMPTS_KEY = 'workflow_dispatch_rate_limit_attempts';
+export const UNCONFIRMED_AT_KEY = 'workflow_dispatch_unconfirmed_at';
 export const DISPATCH_IDENTITY_KEY = 'workflow_dispatch_unconfirmed_identity';
 
 export class WorkflowDispatchRetryStopped extends Error {
@@ -80,6 +81,8 @@ export function dispatchRateLimitHold(error: WorkflowDispatchRateLimitError | Wo
     error_category: 'network',
     error_message: error.message,
     error_details: { ...previous, [ATTEMPTS_KEY]: count + 1,
+      ...(error instanceof WorkflowDispatchUnconfirmedError && previous[UNCONFIRMED_AT_KEY] == null
+        ? { [UNCONFIRMED_AT_KEY]: new Date(now).toISOString() } : {}),
       ...(identity ? { [DISPATCH_IDENTITY_KEY]: identity } : {}) } as Json,
   };
 }
