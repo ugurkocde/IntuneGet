@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import runpy
 import time
+import threading
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -171,6 +172,122 @@ def early_demand_contracts(sql, with_timeout=False):
     finally:
         sql('drop database '+name+' with(force)',database='postgres',role=None)
 
+def bounded_demand_contracts(sql, with_timeout=False):
+    """Real sessions: production counts are causal RED, overlap is behavior RED.
+
+    Hoisting models PostgREST's separate pre-request settings statement; merely
+    SETting statement_timeout inside a direct function call does not arm it.
+    """
+    database = 'demand_bound_' + uuid.uuid4().hex
+    migration = ROOT/'supabase/migrations/20261123143806_qa_demand_timeout_overlap.sql'
+    original = (ROOT/'supabase/migrations/20261115144200_qa_demand_failure_key_scope.sql').read_text().replace('\r\n','\n')
+    original_query = original.split('as $$\n',1)[1].split('\n$$;',1)[0]
+    wrapped_query = migration.read_text().replace('\r\n','\n').split(' RETURN QUERY\n',1)[1].split('\nEND;',1)[0]
+    assert wrapped_query == original_query, 'Eligibility, ordering or query body changed'
+    def run(text, role='fixture_owner', check=True, application='demand-bound'):
+        return sql(text, database=database, role=role, check=check, application=application)
+    def value(text):
+        return json.loads(run(text).stdout.splitlines()[-1])
+    def snapshot():
+        return value("select json_build_object('body',md5(prosrc),'acl',proacl::text,'config',proconfig,'definer',prosecdef,'volatile',provolatile,'owner',proowner) from pg_proc where oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure")
+    def results(limit):
+        return value("select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids("+limit+")")
+    def hold_and_call(pool, kind, candidate):
+        statement = ('select pg_advisory_xact_lock(1849,1)' if kind == 'overlap'
+                     else 'lock table public.curated_apps in access exclusive mode')
+        tag = 'demand-bound-holder-' + kind
+        future = pool.submit(run, "begin;"+statement+";select pg_sleep(4);rollback;",
+                             'fixture_owner', True, tag)
+        # Observe the holder after lock acquisition. Never report an unobserved
+        # overlap as a passing concurrency test.
+        seen = False
+        until = time.monotonic() + 3
+        while time.monotonic() < until:
+            # Session owners are postgres even after SET ROLE. Observe only
+            # activity metadata as the existing disposable service admin.
+            seen = json.loads(run("select to_json(count(*)>0) from pg_stat_activity where datname=current_database() and application_name='"+tag+"' and wait_event='PgSleep'", role=None).stdout.splitlines()[-1])
+            if seen:
+                break
+        assert seen, 'Concurrent holder precondition not observed'
+        start = time.monotonic()
+        pre = "\n\\set VERBOSITY verbose\n"
+        if kind == 'deadline':
+            # Same pre-request statement boundary as PostgREST. On OLD with no
+            # function timeout, use the configured API-role 8-second baseline.
+            timeout = value("select to_json(coalesce((select split_part(s,'=',2) from pg_proc p cross join lateral unnest(p.proconfig)s where p.oid='public.qa_missing_demand_backfill_ids(integer)'::regprocedure and s like 'statement_timeout=%'),'8s'))")
+            pre += "select set_config('statement_timeout','"+timeout+"',false);\n"
+        response = run(pre+"select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids(3)",
+                       'service_role', False)
+        elapsed = (time.monotonic()-start)*1000
+        future.result(timeout=15)
+        if kind == 'overlap':
+            rows = json.loads(response.stdout.splitlines()[-1]) if not response.returncode else None
+            if candidate:
+                assert rows == [] and elapsed < 1000, (response.stderr, rows, elapsed)
+            else:
+                assert rows, 'OLD overlap RED did not reproduce'
+            return elapsed
+        if candidate:
+            assert response.returncode and '57014' in response.stderr and 'statement timeout' in response.stderr, response.stderr
+            assert elapsed < 2500, elapsed
+        else:
+            assert not response.returncode and elapsed >= 2500, (response.stderr, elapsed)
+        return elapsed
+    sql('create database '+database+' owner fixture_owner', database='postgres', role=None)
+    try:
+        run(FIXTURE)
+        run((ROOT/'supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql').read_text())
+        run('begin;'+(ROOT/'supabase/migrations/20261115144200_qa_demand_failure_key_scope.sql').read_text()+'commit;')
+        if with_timeout:
+            run("alter function public.qa_missing_demand_backfill_ids(integer) set statement_timeout='2s'")
+        before = snapshot()
+        assert before['body'] == 'e358c88ca1ad6f6fcd0ee5d51b96840b'
+        limits = ['NULL','-5','0','1','3','5','100','1000']
+        expected = [results(n) for n in limits]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            hold_and_call(pool, 'overlap', False)
+            old_deadline = None if with_timeout else hold_and_call(pool, 'deadline', False)
+        print('RED actual OLD overlap returns work; with_timeout='+str(with_timeout)+'; API8s old_ms='+str(old_deadline), flush=True)
+        run('begin;'+migration.read_text()+'commit;')
+        after = snapshot()
+        assert after['acl'] == before['acl'] and after['owner'] == before['owner']
+        assert after['definer'] and after['volatile'] == 'v'
+        assert after['config'] == ['search_path=""','statement_timeout=2s']
+        assert [results(n) for n in limits] == expected
+        for role in ['anon','authenticated']:
+            denied = run('select * from public.qa_missing_demand_backfill_ids(3)',role,False)
+            assert denied.returncode and 'permission denied' in denied.stderr
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            overlap_ms = hold_and_call(pool, 'overlap', True)
+            timeout_ms = hold_and_call(pool, 'deadline', True)
+        # An exception must release the transaction lock, allowing later work.
+        assert results('3') == expected[4]
+        barrier = threading.Barrier(9)
+        def parallel_read(_):
+            barrier.wait(timeout=10)
+            started = time.monotonic()
+            response = run("select coalesce(json_agg(winget_id),'[]'::json) from public.qa_missing_demand_backfill_ids(3)",'service_role')
+            rows = json.loads(response.stdout.splitlines()[-1])
+            assert rows in ([], expected[4])
+            return (time.monotonic()-started)*1000
+        with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+            futures = [pool.submit(parallel_read,i) for i in range(8)]
+            barrier.wait(timeout=10)
+            point_started = time.monotonic()
+            run("select * from public.curated_apps where winget_id='Fixture.11'")
+            point_ms = (time.monotonic()-point_started)*1000
+            times = [f.result(timeout=15) for f in futures]
+        assert max(times) < 2000 and point_ms < 1000, (times,point_ms)
+        run('begin;'+(ROOT/'supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql').read_text()+'commit;')
+        run('begin;'+(ROOT/'supabase/migrations/20261115144200_qa_demand_failure_key_scope.sql').read_text()+'commit;')
+        if with_timeout:
+            run("alter function public.qa_missing_demand_backfill_ids(integer) set statement_timeout='2s'")
+        assert snapshot() == before and [results(n) for n in limits] == expected
+        print('GREEN demand overlap_skip_ms='+str(overlap_ms)+' hoisted_timeout57014_ms='+str(timeout_ms)+' eight_session_max_ms='+str(max(times))+' point_ms='+str(point_ms)+' parity/ACL/owner/rollback; production cause/effect and live hoisting unverified',flush=True)
+    finally:
+        sql('drop database '+database+' with(force)',database='postgres',role=None)
+
+
 if __name__ == '__main__':
     t = runpy.run_path(str(ROOT/'scripts/qa-automation/vt-ledger-postgres.test.py'))
     if not t['re'].fullmatch(r'[a-f0-9]{12,64}', t['CONTAINER']):
@@ -180,3 +297,5 @@ if __name__ == '__main__':
     contracts(t['sql'])
     early_demand_contracts(t['sql'])
     early_demand_contracts(t['sql'], with_timeout=True)
+    bounded_demand_contracts(t['sql'])
+    bounded_demand_contracts(t['sql'], with_timeout=True)

@@ -1,0 +1,5 @@
+{
+  "title": "Bound optional demand backfill work",
+  "summary": "Limit database time for optional demand backfill and skip overlapping calls while preserving eligibility checks and queue ordering. Production impact remains under verification.",
+  "type": "fixed"
+}
