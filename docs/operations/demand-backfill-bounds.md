@@ -58,3 +58,31 @@ replays historical migrations and reapplies the optional timeout to check an
 equivalent restored state. It does not validate the production definition-only
 rollback procedure above. Deployment must retain its own starting snapshot.
 No data rollback is required.
+# Eligible demand priority work
+
+`20261123204151_qa_demand_eligible_priority_scope.sql` materializes the eligible
+deployed keys before calculating auto update and failure priorities. The early
+filter is a copy of the existing final predicates; the final predicates, order,
+limit clamp, advisory overlap skip and 2 s statement timeout remain in place.
+No caller, security exclusion, index, owner or grant changes are included.
+
+The production snapshot used to size the regression had 1,412 deployed keys,
+52 eligible keys and 289 demanded current failure groups. These are current
+counts, not reconstructed eligibility counts for historical failed calls.
+Production statement timeouts are the timing RED. The fixture separately
+demonstrates unnecessary priority work on already covered keys and checks
+ordered parity, denied roles, configuration, owner, rollback and eight callers.
+A fast OLD fixture must not be described as reproducing the production timeout.
+
+The exact slow execution or waiting phase remains unproved. This change removes
+avoidable work; production effect requires natural caller acceptance. Require
+six consecutive qa-enqueue slots without the demanded-app selection error and
+positive queue progress whenever eligible demand exists. Distinguish intentional
+skip ticks from successful selections. Preserve earlier failed windows and the
+separate six-hour burst acceptance criterion.
+
+Rollback restores the exact preceding function definition from
+`20261123143806_qa_demand_timeout_overlap.sql`, retaining its owner, ACL,
+VOLATILE mode, overlap lock and 2 s configuration. Restore only the function
+definition, not earlier grant or unrelated migration statements, and verify the
+preceding body MD5 `453e81d15e8cfa87dfcecf8e00f76af1` plus ACL and owner.
