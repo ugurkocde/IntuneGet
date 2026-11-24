@@ -86,7 +86,7 @@ def rotation_contracts(sql):
                 try:
                     until = time.monotonic()+3
                     while time.monotonic()<until:
-                        if value("select to_json(exists(select 1 from pg_stat_activity where datname=current_database() and application_name='"+tag+"' and wait_event='PgSleep'))"):
+                        if json.loads(run("select to_json(exists(select 1 from pg_stat_activity where datname=current_database() and application_name='"+tag+"' and wait_event='PgSleep'))", role=None).stdout.splitlines()[-1]):
                             break
                     else:
                         raise AssertionError('Holder was not observed')
