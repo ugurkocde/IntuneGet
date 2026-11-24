@@ -144,6 +144,13 @@ const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
   {
+    // The vendor manual section 2.3.2 documents quiet removal. Omit the optional
+    // userfilesdelete flag so its default preserves the user's ELSTER data.
+    // https://download.elster.de/download/authenticator/ElsterAuthenticator-Benutzerhandbuch.pdf
+    wingetId: 'BayerischesLandesamtfuerSteuern.ElsterAuthenticator',
+    reviewedUninstallArguments: ['-q'],
+  },
+  {
     // Lansweeper's Intune deployment guide documents this removal mode for
     // the registered LsAgent uninstaller; installation switches are separate.
     // https://www.lansweeper.com/blog/pro-tips/deploying-lsagent-with-intune/
