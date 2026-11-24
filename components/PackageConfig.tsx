@@ -85,6 +85,8 @@ import { useLocaleVariants, usePackageManifest } from '@/hooks/use-packages';
 import { resolveListedWingetVersion } from '@/lib/winget-version';
 import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
+import { applyPackageDefaults, pickPackageDefaults } from '@/lib/package-defaults';
+import type { PackageDefaults } from '@/types/user-settings';
 
 interface PackageConfigProps {
   package: NormalizedPackage;
@@ -116,7 +118,12 @@ type ConfigSection =
   | 'branding'
   | 'advanced';
 
-export function PackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest, configurationRefreshNotice }: PackageConfigProps) {
+export function PackageConfig(props: PackageConfigProps) {
+  const { packageDefaultsAccountScope } = useUserSettings();
+  return <AccountPackageConfig key={packageDefaultsAccountScope ?? 0} {...props} />;
+}
+
+function AccountPackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest, configurationRefreshNotice }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
 
   // Store app install experience state
@@ -188,17 +195,52 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     }
   }, [showLocaleDropdown]);
 
+  // Saved defaults (#2085) only seed brand new Win32 packages. Deployed
+  // configs, replaced cart items and Store apps keep their own settings.
+  const { packageDefaults: savedPackageDefaults, packageDefaultsStatus, savePackageDefaults } = useUserSettings();
+  const canSeedDefaults = !isDeployed && !deployedConfig && !replaceCartItemId && !isStoreApp;
+  const seedDefaults = canSeedDefaults ? savedPackageDefaults ?? null : null;
+  const defaultsPending = canSeedDefaults && packageDefaultsStatus === 'loading';
+  const configEditedRef = useRef(false);
+  const seededDefaultsRef = useRef<PackageDefaults | null>(seedDefaults);
+
   // PSADT config state - pre-fill from deployed config when available
   const [config, setConfig] = useState<PSADTConfig>(() => {
     const win32Config = deployedConfig && 'psadtConfig' in deployedConfig ? deployedConfig : null;
     if (win32Config?.psadtConfig) {
       return win32Config.psadtConfig;
     }
-    return {
+    return applyPackageDefaults({
       ...DEFAULT_PSADT_CONFIG,
       processesToClose: getDefaultProcessesToClose(pkg.name, installers[0]?.type || 'exe'),
-    };
+    }, seedDefaults);
   });
+
+  // Defaults that finish loading after mount apply once, unless the user has
+  // already changed the config.
+  useEffect(() => {
+    if (!seedDefaults || seededDefaultsRef.current || configEditedRef.current) return;
+    seededDefaultsRef.current = seedDefaults;
+    setConfig((prev) => applyPackageDefaults(prev, seedDefaults));
+  }, [seedDefaults]);
+
+  const [defaultsStatus, setDefaultsStatus] = useState<{ kind: 'saved' | 'cleared' | 'error'; message: string } | null>(null);
+  const [isDefaultsSaving, setIsDefaultsSaving] = useState(false);
+  const saveCurrentAsDefaults = async (clear: boolean) => {
+    if (typeof savePackageDefaults !== 'function' || isDefaultsSaving || packageDefaultsStatus !== 'loaded') return;
+    setIsDefaultsSaving(true);
+    setDefaultsStatus(null);
+    try {
+      await savePackageDefaults(clear ? null : pickPackageDefaults(config));
+      setDefaultsStatus(clear
+        ? { kind: 'cleared', message: 'Saved defaults cleared. New packages use the standard settings.' }
+        : { kind: 'saved', message: 'Saved. New packages you configure will start with these settings.' });
+    } catch (err) {
+      setDefaultsStatus({ kind: 'error', message: err instanceof Error ? err.message : 'Package defaults were not saved.' });
+    } finally {
+      setIsDefaultsSaving(false);
+    }
+  };
 
   // Editable Intune app description (#117). Defaults to the package description;
   // left blank, it falls back to the package default at deploy time. The
@@ -440,6 +482,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath, customDetectionActive]);
 
   const setCustomDetection = (enabled: boolean) => {
+    configEditedRef.current = true;
     setCustomDetectionErrors([]);
     if (enabled) {
       const rules = lastCustomRulesRef.current ?? [createEmptyDetectionRule('registry')];
@@ -455,7 +498,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const handleAddToCart = async () => {
-    if (addedToCartSuccess) return;
+    if (addedToCartSuccess || defaultsPending) return;
 
     // Store apps don't need an installer
     if (!isStoreApp && !selectedInstaller) return;
@@ -595,10 +638,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const updateConfig = (updates: Partial<PSADTConfig>) => {
+    configEditedRef.current = true;
     setConfig((prev) => ({ ...prev, ...updates }));
   };
 
   const addProcess = () => {
+    configEditedRef.current = true;
     setConfig((prev) => ({
       ...prev,
       processesToClose: [
@@ -609,6 +654,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const removeProcess = (index: number) => {
+    configEditedRef.current = true;
     setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
@@ -617,6 +663,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const updateProcess = (index: number, updates: Partial<ProcessToClose>) => {
+    configEditedRef.current = true;
     setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
@@ -628,6 +675,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
 
   // Post-install / post-uninstall command list editors (#118)
   const addCommand = (key: 'postInstallCommands' | 'postUninstallCommands') => {
+    configEditedRef.current = true;
     setConfig((prev) => ({ ...prev, [key]: [...(prev[key] || []), ''] }));
   };
 
@@ -636,6 +684,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     index: number,
     value: string
   ) => {
+    configEditedRef.current = true;
     setConfig((prev) => ({
       ...prev,
       [key]: (prev[key] || []).map((c, i) => (i === index ? value : c)),
@@ -646,6 +695,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     key: 'postInstallCommands' | 'postUninstallCommands',
     index: number
   ) => {
+    configEditedRef.current = true;
     setConfig((prev) => ({
       ...prev,
       [key]: (prev[key] || []).filter((_, i) => i !== index),
@@ -1039,6 +1089,29 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   </button>
                 </div>
               </div>}
+
+              {!isStoreApp && configMode === 'advanced' && typeof savePackageDefaults === 'function' && (
+                <div className="rounded-lg border border-overlay/10 bg-bg-elevated px-3 py-2 text-xs text-text-secondary">
+                  <p>
+                    Save the install behavior, deferral, restart and disk space choices below as your starting point for packages you configure from now on. Commands, detection, processes and branding are never saved. Packages already in your cart keep their settings.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(false)} className="rounded-md border border-overlay/15 px-2 py-1 text-text-primary hover:bg-overlay/5 disabled:opacity-50">
+                      {isDefaultsSaving ? 'Saving defaults...' : 'Save as my defaults'}
+                    </button>
+                    {savedPackageDefaults && (
+                      <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(true)} className="rounded-md px-2 py-1 text-text-muted hover:text-text-primary disabled:opacity-50">
+                        Clear saved defaults
+                      </button>
+                    )}
+                    {defaultsStatus && (
+                      <span role={defaultsStatus.kind === 'error' ? 'alert' : 'status'} className={defaultsStatus.kind === 'error' ? 'text-red-400' : 'text-text-muted'}>
+                        {defaultsStatus.message}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Installation Behavior (advanced only, win32 only) */}
               {!isStoreApp && (visibleSections === null || visibleSections.includes('behavior')) && <ConfigSection
@@ -2245,7 +2318,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                 </Button>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+                  disabled={defaultsPending || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
                   variant="outline"
                   className={cn(
                     'py-5 text-base font-medium',
@@ -2270,7 +2343,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           ) : (
             <Button
               onClick={handleAddToCart}
-              disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+              disabled={defaultsPending || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
               className={cn(
                 'w-full py-5 text-base font-medium',
                 inCart || addedToCartSuccess
