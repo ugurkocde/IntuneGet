@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import type { Win32CartItem } from '@/types/upload';
+import type { AppRelationship } from '@/types/intune';
 
 vi.hoisted(() => {
   const values = new Map<string, string>();
@@ -15,16 +16,18 @@ vi.hoisted(() => {
 });
 
 const manifestState = vi.hoisted(() => ({ data: undefined, isFetching: false, error: null as Error | null }));
+const updateSettingsMock = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/use-packages', () => ({
   useLocaleVariants: () => ({ data: { variants: [] }, isSuccess: true }),
   usePackageManifest: () => manifestState,
 }));
 vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ settings: { carryOverAssignments: false } }) }));
-vi.mock('@/hooks/use-update-app-settings', () => ({ useUpdateAppSettings: () => ({ isUpdating: false }) }));
+vi.mock('@/hooks/use-update-app-settings', () => ({ useUpdateAppSettings: () => ({ isUpdating: false, updateSettings: updateSettingsMock }) }));
 vi.mock('@/components/AppIcon', () => ({ AppIcon: () => null }));
 vi.mock('@/components/AssignmentConfig', () => ({ AssignmentConfig: () => null }));
 vi.mock('@/components/CategoryConfig', () => ({ CategoryConfig: () => null }));
-vi.mock('@/components/DependencyConfig', () => ({ DependencyConfig: () => null }));
+vi.mock('@/components/DependencyConfig', () => ({ DependencyConfig: ({ relationships, onChange }: { relationships: AppRelationship[]; onChange: (value: AppRelationship[]) => void }) =>
+  createElement('button', { onClick: () => onChange([...relationships, { relationshipType: 'dependency', targetId: '22222222-2222-4222-8222-222222222222', targetDisplayName: 'Added', dependencyType: 'autoInstall' }]) }, 'Add test relationship') }));
 vi.mock('@/components/EspProfileSelector', () => ({ EspProfileSelector: () => null }));
 vi.mock('@/components/updates/CartUpdatePolicyPicker', () => ({ CartUpdatePolicyPicker: () => null }));
 
@@ -44,11 +47,41 @@ const oldItem: Win32CartItem = {
 };
 
 beforeEach(() => {
+  updateSettingsMock.mockReset().mockResolvedValue(undefined);
   manifestState.error = null;
   useCartStore.setState({ items: [structuredClone(oldItem)] });
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
+});
+
+it.each([false, true])('keeps the relationship baseline captured when the editor opens (edited=%s)', async (edited) => {
+  const initial: AppRelationship = { relationshipType: 'dependency', targetId: '11111111-1111-4111-8111-111111111111', targetDisplayName: 'Initial', dependencyType: 'autoInstall' };
+  const concurrent: AppRelationship = { ...initial, targetId: '33333333-3333-4333-8333-333333333333', targetDisplayName: 'Concurrent' };
+  const props = { package: { id: oldItem.wingetId, name: oldItem.displayName, publisher: oldItem.publisher, version: '1.0' }, installers: [installer],
+    isDeployed: true, intuneAppId: '44444444-4444-4444-8444-444444444444', deployedConfig: { ...oldItem, relationships: [initial] }, onClose: vi.fn() };
+  await act(async () => root.render(createElement(PackageConfig, props)));
+  const button = (text: string) => [...document.querySelectorAll('button')].find(x => x.textContent?.includes(text))!;
+  if (edited) {
+    await act(async () => button('Dependencies & Supersedence').click());
+    await act(async () => button('Add test relationship').click());
+  }
+  // A normal background refetch changes the prop without remounting the editor.
+  await act(async () => root.render(createElement(PackageConfig, { ...props, deployedConfig: { ...oldItem, relationships: [initial, concurrent] } })));
+  const save = button('Update Settings');
+  if (!edited) {
+    expect(save.disabled).toBe(true);
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+    return;
+  }
+  expect(save.disabled).toBe(false);
+  updateSettingsMock.mockRejectedValue(new Error('Relationships changed; refresh before saving.'));
+  await act(async () => save.click());
+  expect(updateSettingsMock).toHaveBeenCalledWith(expect.objectContaining({
+    baselineRelationships: [initial],
+    relationships: [initial, expect.objectContaining({ targetDisplayName: 'Added' })],
+  }));
+  expect(document.body.textContent).toContain('Relationships changed; refresh before saving.');
 });
 afterEach(async () => {
   await act(async () => root?.unmount());

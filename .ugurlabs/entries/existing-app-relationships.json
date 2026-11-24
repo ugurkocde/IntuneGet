@@ -1,0 +1,5 @@
+{
+  "title": "Edit relationships on deployed apps",
+  "summary": "Update dependencies and supersedence on the existing Intune app without repackaging. Relationships added in Intune are preserved, and approval or save failures are reported before you retry.",
+  "type": "improved"
+}

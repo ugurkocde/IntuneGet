@@ -259,8 +259,12 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [espProfiles, setEspProfiles] = useState<EspProfileSelection[]>(
     deployedConfig?.espProfiles || []
   );
+  // Keep the baseline paired with this editor's desired state across refetches.
+  const [baselineRelationships] = useState<AppRelationship[]>(
+    () => (deployedConfig?.relationships || []).map(relationship => ({ ...relationship }))
+  );
   const [relationships, setRelationships] = useState<AppRelationship[]>(
-    deployedConfig?.relationships || []
+    () => baselineRelationships.map(relationship => ({ ...relationship }))
   );
   const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
     deployedConfig?.updatePolicy
@@ -311,7 +315,8 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
       JSON.stringify(categories) !== JSON.stringify(deployedConfig.categories || []);
     const hasEspChanges =
       JSON.stringify(espProfiles) !== JSON.stringify(deployedConfig.espProfiles || []);
-    const hasGraphChanges = hasAssignmentChanges || hasCategoryChanges || hasEspChanges;
+    const hasRelationshipChanges = JSON.stringify(relationships) !== JSON.stringify(baselineRelationships);
+    const hasGraphChanges = hasAssignmentChanges || hasCategoryChanges || hasEspChanges || hasRelationshipChanges;
 
     // Redeploy-required: version, architecture, scope, locale, PSADT config
     const hasVersionChange = selectedVersion !== deployedConfig.version;
@@ -331,7 +336,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
 
     return { hasGraphChanges, hasRedeployChanges };
   }, [isDeployed, deployedConfig, assignments, categories, espProfiles,
-      selectedVersion, selectedArch, selectedScope, selectedLocale, config, description, pkg.description]);
+      selectedVersion, selectedArch, selectedScope, selectedLocale, config, description, pkg.description, relationships, baselineRelationships]);
 
   // Installers always arrive for the package's default (latest) version. When the
   // user selects a different version we must re-fetch so the installer URL/SHA
@@ -625,8 +630,10 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
       await updateSettings({
         intuneAppId,
         wingetId: effectiveWingetId,
-        assignments,
-        categories,
+        assignments: JSON.stringify(assignments) !== JSON.stringify(deployedConfig?.assignments || []) ? assignments : undefined,
+        categories: JSON.stringify(categories) !== JSON.stringify(deployedConfig?.categories || []) ? categories : undefined,
+        relationships: JSON.stringify(relationships) !== JSON.stringify(baselineRelationships) ? relationships : undefined,
+        baselineRelationships,
       });
       setSettingsSuccess(true);
       setTimeout(() => onClose(), 1200);

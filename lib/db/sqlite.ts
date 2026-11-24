@@ -1,3 +1,4 @@
+import type { AppRelationship } from '@/types/intune';
 /**
  * SQLite Database Implementation for Self-Hosted Mode
  * Provides a simple, zero-dependency database for true self-hosting
@@ -144,7 +145,8 @@ export const sqliteDeployedConfig = {
   mergeFields(
     id: string,
     identity: { userId: string; tenantId: string; wingetId: string; intuneAppId: string },
-    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[] }
+    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[]; relationships?: AppRelationship[] },
+    expectedUpdatedAt?: string
   ): PackagingJob | null {
     const database = getDb();
     const where = "id = ? AND user_id = ? AND tenant_id = ? AND winget_id = ? AND intune_app_id = ? AND status = 'deployed' AND archived_at IS NULL";
@@ -153,11 +155,13 @@ export const sqliteDeployedConfig = {
       const row = database.prepare(`SELECT * FROM packaging_jobs WHERE ${where}`).get(...values) as Record<string, unknown> | undefined;
       if (!row) return null;
       const job = parseJobRow(row);
+      if (expectedUpdatedAt !== undefined && job.updated_at !== expectedUpdatedAt) return null;
       const config = job.package_config;
       if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
       const merged = { ...config };
       if (patch.assignments) merged.assignments = patch.assignments as unknown as Json;
       if (patch.categories) merged.categories = patch.categories as unknown as Json;
+      if (patch.relationships) merged.relationships = patch.relationships as unknown as Json;
       const result = database.prepare(`UPDATE packaging_jobs SET package_config = ?, updated_at = ? WHERE ${where}`)
         .run(JSON.stringify(merged), new Date().toISOString(), ...values);
       return result.changes === 1 ? { ...job, package_config: merged } : null;
