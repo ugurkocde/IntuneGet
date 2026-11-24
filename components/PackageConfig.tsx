@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { AppIcon } from '@/components/AppIcon';
+import { isWin32CartItem } from '@/types/upload';
 import { AssignmentConfig } from '@/components/AssignmentConfig';
 import { CartUpdatePolicyPicker, type CartUpdatePolicyValue } from '@/components/updates/CartUpdatePolicyPicker';
 import { CategoryConfig } from '@/components/CategoryConfig';
@@ -592,6 +593,10 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
 
         addItem({
           appSource: 'win32',
+          ...(deployedConfig && isWin32CartItem(deployedConfig) && deployedConfig.sourceType === 'curated' ? {
+            sourceType: 'curated' as const,
+            curatedReleaseId: deployedConfig.curatedReleaseId,
+          } : {}),
           wingetId: effectiveWingetId,
           displayName,
           publisher: pkg.publisher,

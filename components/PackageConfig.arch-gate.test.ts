@@ -78,6 +78,12 @@ describe('hosted architecture selection', () => {
     expect(button(isDeployed ? 'Redeploy' : 'Add to Selection').disabled).toBe(false);
     expect(document.body.textContent).not.toContain(reason);
   });
+  it.each([false, true])('retains curated identity when the action creates a cart item, deployed=%s', async (isDeployed) => {
+    await render({ installers: [arm], isDeployed, deployedConfig: { ...oldItem, architecture: 'arm64', sourceType: 'curated', curatedReleaseId: 'fixture-approved-release' }, intuneAppId: isDeployed ? 'fixture-app' : undefined });
+    await act(async () => button(isDeployed ? 'Redeploy' : 'Add to Selection').click());
+    expect(useCartStore.getState().items).toHaveLength(1);
+    expect(useCartStore.getState().items[0]).toMatchObject({ wingetId: pkg.id, sourceType: 'curated', curatedReleaseId: 'fixture-approved-release' });
+  });
   it.each(['neutral', 'arm'] as const)('explains a blocked %s installer', async (architecture) => {
     await render({ installers: [{ ...installer, architecture }] });
     expect(button('Add to Selection').disabled).toBe(true);
