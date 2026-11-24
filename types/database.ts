@@ -2741,6 +2741,14 @@ export interface Database {
           winget_id: string;
         }>;
       };
+      qa_cron_demand_backfill_ids: {
+        Args: {
+          p_limit?: number;
+        };
+        Returns: Array<{
+          winget_id: string;
+        }>;
+      };
       qa_idle_catalog_backfill_ids: {
         Args: {
           p_limit?: number;
