@@ -20,6 +20,28 @@ beforeEach(() => {
 });
 
 describe('manifest selection availability', () => {
+  it.each(['arm64', 'arm'])('does not recommend an %s installer for an x64 request', async (architecture) => {
+    const installer = { ...currentInstaller, architecture };
+    mocks.installers.mockResolvedValue([installer]);
+    const response = await GET(new NextRequest('https://example.test/api/winget/manifest?id=Example.App&arch=x64'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ installers: [installer], recommendedInstaller: null });
+  });
+
+  it.each(['neutral', 'x86'])('retains the declared %s fallback for an x64 request', async (architecture) => {
+    const installer = { ...currentInstaller, architecture };
+    mocks.installers.mockResolvedValue([installer]);
+    const response = await GET(new NextRequest('https://example.test/api/winget/manifest?id=Example.App&arch=x64'));
+    expect(await response.json()).toMatchObject({ recommendedInstaller: installer });
+  });
+
+  it('preserves an explicitly requested arm64 installer', async () => {
+    const installer = { ...currentInstaller, architecture: 'arm64' };
+    mocks.installers.mockResolvedValue([installer]);
+    const response = await GET(new NextRequest('https://example.test/api/winget/manifest?id=Example.App&arch=arm64'));
+    expect(await response.json()).toMatchObject({ recommendedInstaller: installer });
+  });
+
   it('offers live versions and installers even when cached metadata contains older installers', async () => {
     mocks.manifest.mockResolvedValue({ Name: 'Example', Version: '1.0', Installers: [{ InstallerUrl: 'old.exe' }] });
     const response = await GET(new NextRequest('https://example.test/api/winget/manifest?id=Example.App'));

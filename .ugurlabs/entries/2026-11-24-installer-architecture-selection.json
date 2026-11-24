@@ -1,0 +1,5 @@
+{
+  "title": "Keep automatic installer selection within compatible architectures",
+  "summary": "Quick add and bulk add now report when no compatible installer is available instead of silently selecting a different processor architecture.",
+  "type": "fixed"
+}
