@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     };
     const recommendedInstaller = (architecturePriority[architecture] || architecturePriority.x64)
       .map((arch) => installers.find((installer) => installer.architecture === arch))
-      .find(Boolean) || installers[0];
+      .find(Boolean) || null;
     return NextResponse.json({
       manifest: {
         id: packageId,
