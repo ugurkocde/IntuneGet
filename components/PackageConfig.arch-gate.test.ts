@@ -72,6 +72,19 @@ afterEach(async () => {
 const arm = { ...installer, architecture: 'arm64' as const };
 const reason = 'ARM64 builds cannot be deployed yet';
 describe('hosted architecture selection', () => {
+  it.each([false, true])('preserves source-classified curated access without an ID prefix, deployed=%s', async (isDeployed) => {
+    await render({ installers: [arm], isDeployed, deployedConfig: { ...oldItem, architecture: 'arm64', sourceType: 'curated' }, intuneAppId: isDeployed ? 'fixture-app' : undefined });
+    expect(button('arm64').disabled).toBe(false);
+    expect(button(isDeployed ? 'Redeploy' : 'Add to Selection').disabled).toBe(false);
+    expect(document.body.textContent).not.toContain(reason);
+  });
+  it.each(['neutral', 'arm'] as const)('explains a blocked %s installer', async (architecture) => {
+    await render({ installers: [{ ...installer, architecture }] });
+    expect(button('Add to Selection').disabled).toBe(true);
+    expect(document.body.textContent).toContain(`${architecture} builds cannot be deployed yet`);
+    await act(async () => button('Add to Selection').click());
+    expect(useCartStore.getState().items).toHaveLength(0);
+  });
   it('blocks an ARM64 only catalog package before it enters the cart', async () => {
     await render({ installers: [arm] });
     expect(button('Add to Selection').disabled).toBe(true);

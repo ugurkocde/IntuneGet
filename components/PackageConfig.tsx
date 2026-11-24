@@ -141,6 +141,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const isStoreApp = pkg.appSource === 'store';
   const hostedQaArchGate = !isStoreApp && getClientFeatureFlags().hostedServices
     && deployedConfig?.sourceType !== 'custom'
+    && deployedConfig?.sourceType !== 'curated'
     && !(deployedConfig?.wingetId ?? pkg.id).toLowerCase().startsWith('intuneget.curated.');
 
   // Store app install experience state
@@ -939,6 +940,11 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                 </div>
                 {showArchitectureReason && (
                   <p className="mt-2 text-sm text-text-muted" role="status">{HOSTED_QA_ARCH_REASON}</p>
+                )}
+                {archBlocked && selectedInstaller?.architecture !== 'arm64' && (
+                  <p className="mt-2 text-sm text-text-muted" role="status">
+                    Hosted testing runs on x64 and x86 only, so {selectedInstaller?.architecture} builds cannot be deployed yet.
+                  </p>
                 )}
               </div>
             </div>
