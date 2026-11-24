@@ -62,6 +62,23 @@ beforeEach(() => {
 });
 
 describe('package defaults in user settings', () => {
+  it.each(['x', 1, true])('rejects scalar defaults %s even alongside a valid setting', async (value) => {
+    for (const body of [{ packageDefaults: value }, { theme: 'dark', packageDefaults: value }]) {
+      expect((await patch(body)).status).toBe(400);
+      expect(h.state.lastUpsert).toBeNull();
+    }
+  });
+
+  it('allows other settings when defaults are omitted', async () => {
+    expect((await patch({ theme: 'dark' })).status).toBe(200);
+    expect(h.state.lastUpsert).toMatchObject({ theme: 'dark' });
+  });
+
+  it('replaces defaults so an omitted optional deferral limit is removed', async () => {
+    h.state.stored = { packageDefaults: { allowDefer: true, deferDays: 7 }, theme: 'dark' };
+    expect((await patch({ packageDefaults: { allowDefer: true } })).status).toBe(200);
+    expect(h.state.lastUpsert).toEqual({ packageDefaults: { allowDefer: true }, theme: 'dark' });
+  });
   it('returns null defaults when nothing is stored', async () => {
     const body = await (await get()).json();
     expect(body.settings.packageDefaults).toBeNull();

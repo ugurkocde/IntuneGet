@@ -13,3 +13,9 @@ it('allows unset optional defaults while excluding package specific and verifica
   expect(value).not.toHaveProperty('installCommand');
   expect(value).not.toHaveProperty('processesToClose');
 });
+
+it('ignores disabled invalid deferral fields but names invalid enabled fields', () => {
+  expect(pickPackageDefaults({ ...DEFAULT_PSADT_CONFIG, allowDefer: false, deferTimes: 100, deferDays: 0 })).not.toHaveProperty('deferTimes');
+  expect(() => pickPackageDefaults({ ...DEFAULT_PSADT_CONFIG, allowDefer: true, deferTimes: 100 })).toThrow('deferTimes');
+  expect(() => pickPackageDefaults({ ...DEFAULT_PSADT_CONFIG, allowDefer: true, deferDays: 0 })).toThrow('deferDays');
+});

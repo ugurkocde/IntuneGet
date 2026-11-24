@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, createElement, useEffect } from 'react';
+import { act, createElement, useEffect, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 const h = vi.hoisted(() => {
@@ -73,6 +73,49 @@ afterEach(async () => {
 });
 
 describe('package defaults in the settings provider', () => {
+  it('advances scope once for a real account change in StrictMode', async () => {
+    const strictRender = () => act(async () => root.render(createElement(StrictMode, null, createElement(UserSettingsProvider, null, createElement(Probe)))));
+    await strictRender();
+    const start = latest.packageDefaultsAccountScope;
+    Object.assign(h.auth, { account: accountB, token: 'token-b' });
+    await strictRender();
+    expect(latest.packageDefaultsAccountScope).toBe(start + 1);
+    await strictRender();
+    expect(latest.packageDefaultsAccountScope).toBe(start + 1);
+  });
+
+  it('keeps an in-flight save valid for a fresh account object with the same ids', async () => {
+    await render();
+    await act(async () => h.gets[0].resolve(response(null)));
+    let saving!: Promise<unknown>;
+    await act(async () => { saving = latest.savePackageDefaults({ allowDefer: true }).catch((e) => e); });
+    h.auth.account = { ...accountA };
+    await render();
+    let result: unknown;
+    await act(async () => { h.patches[0].resolve(response({ allowDefer: true })); result = await saving; });
+    expect(result).toBeUndefined();
+    expect(latest.packageDefaults).toEqual({ allowDefer: true });
+  });
+
+  it('exposes a failed load separately from an empty saved defaults value', async () => {
+    await render();
+    expect(latest.packageDefaultsStatus).toBe('loading');
+    await act(async () => h.gets[0].reject(new Error('Network error')));
+    expect(latest.packageDefaultsStatus).toBe('error');
+    expect(latest.packageDefaults).toBeNull();
+    Object.assign(h.auth, { account: accountB, token: 'token-b' });
+    await render();
+    expect(latest.packageDefaultsStatus).toBe('loading');
+    await act(async () => h.gets[1].resolve(response(null)));
+    expect(latest.packageDefaultsStatus).toBe('loaded');
+  });
+
+  it('marks defaults unavailable when token acquisition returns no token', async () => {
+    h.auth.token = '';
+    await render();
+    expect(latest.packageDefaultsStatus).toBe('error');
+    expect(h.gets).toHaveLength(0);
+  });
   it('requires a fresh load when returning to a previously loaded account', async () => {
     await render();
     await act(async () => h.gets[0].resolve(response({ deployMode: 'Auto' })));

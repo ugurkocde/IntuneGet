@@ -19,8 +19,8 @@ vi.mock('@/hooks/use-packages', () => ({
   useLocaleVariants: () => ({ data: { variants: [] }, isSuccess: true }),
   usePackageManifest: () => manifestState,
 }));
-const settingsState = vi.hoisted(() => ({ packageDefaults: null as unknown, accountScope: 0, save: vi.fn(async () => undefined) }));
-vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ settings: { carryOverAssignments: false }, packageDefaults: settingsState.packageDefaults, packageDefaultsAccountScope: settingsState.accountScope, savePackageDefaults: settingsState.save }) }));
+const settingsState = vi.hoisted(() => ({ packageDefaults: null as unknown, packageDefaultsStatus: 'loaded', accountScope: 0, save: vi.fn(async () => undefined) }));
+vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ settings: { carryOverAssignments: false }, packageDefaults: settingsState.packageDefaults, packageDefaultsStatus: settingsState.packageDefaultsStatus, packageDefaultsAccountScope: settingsState.accountScope, savePackageDefaults: settingsState.save }) }));
 vi.mock('@/hooks/use-update-app-settings', () => ({ useUpdateAppSettings: () => ({ isUpdating: false }) }));
 vi.mock('@/components/AppIcon', () => ({ AppIcon: () => null }));
 vi.mock('@/components/AssignmentConfig', () => ({ AssignmentConfig: () => null }));
@@ -51,6 +51,7 @@ const render = (props: Record<string, unknown> = {}) => act(async () => root.ren
 
 beforeEach(() => {
   settingsState.accountScope = 0;
+  settingsState.packageDefaultsStatus = 'loaded';
   settingsState.packageDefaults = null;
   settingsState.save.mockClear();
   useCartStore.setState({ items: [] });
@@ -64,6 +65,36 @@ afterEach(async () => {
 });
 
 describe('saved package defaults', () => {
+  it('blocks adding until defaults load and then commits the seeded values', async () => {
+    settingsState.packageDefaultsStatus = 'loading';
+    await render();
+    expect(button('Add to Selection').disabled).toBe(true);
+    await act(async () => button('Add to Selection').click());
+    expect(useCartStore.getState().items).toHaveLength(0);
+    settingsState.packageDefaultsStatus = 'loaded';
+    settingsState.packageDefaults = defaults;
+    await render();
+    expect(button('Add to Selection').disabled).toBe(false);
+    await act(async () => button('Add to Selection').click());
+    expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.deployMode).toBe('NonInteractive');
+  });
+
+  it('allows standard settings after a failed defaults load', async () => {
+    settingsState.packageDefaultsStatus = 'error';
+    await render();
+    expect(button('Add to Selection').disabled).toBe(false);
+    await act(async () => button('Add to Selection').click());
+    expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.deployMode).toBe(DEFAULT_PSADT_CONFIG.deployMode);
+  });
+
+  it('does not gate Store apps or replacement cart items on defaults loading', async () => {
+    settingsState.packageDefaultsStatus = 'loading';
+    await render({ package: { ...pkg, appSource: 'store' } });
+    expect(button('Add to Selection').disabled).toBe(false);
+    useCartStore.setState({ items: [structuredClone(oldItem)] });
+    await render({ deployedConfig: oldItem, replaceCartItemId: oldItem.id });
+    expect(button('Update Selection').disabled).toBe(false);
+  });
   it('keeps today\'s behavior without saved defaults', async () => {
     await render();
     await act(async () => button('Add to Selection').click());

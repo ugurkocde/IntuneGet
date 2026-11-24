@@ -84,8 +84,9 @@ export function pickPackageDefaults(config: PSADTConfig): PackageDefaults | null
   const clean = sanitizePackageDefaults(config);
   const keys = ['deployMode', 'restartBehavior', 'windowLocation', ...BOOLEAN_KEYS, ...Object.keys(INTEGER_LIMITS), 'restartPrompt'] as const;
   for (const key of keys) {
+    if ((key === 'deferTimes' || key === 'deferDays') && config.allowDefer !== true) continue;
     if (config[key as keyof PSADTConfig] !== undefined && (!clean || !(key in clean))) {
-      throw new Error('Package defaults contain an invalid value. Check the countdown and deferral limits before saving.');
+      throw new Error(`Package defaults contain an invalid value for ${key}. Check its countdown or deferral limits before saving.`);
     }
   }
   return clean;

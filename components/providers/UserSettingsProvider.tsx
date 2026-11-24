@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -41,13 +42,14 @@ type UserSettingsContextValue = {
   setSupersedePreviousApp: (enabled: boolean) => Promise<void>;
   /** Server only defaults for the signed in account, null until loaded. */
   packageDefaults: PackageDefaults | null;
+  packageDefaultsStatus: 'loading' | 'loaded' | 'error';
   /** Changes whenever the signed in account changes, including sign out. */
   packageDefaultsAccountScope: number;
   /** Saves or clears the defaults. Throws when the server cannot store them. */
   savePackageDefaults: (defaults: PackageDefaults | null) => Promise<void>;
 };
 
-type ScopedPackageDefaults = { generation: number; value: PackageDefaults | null };
+type ScopedPackageDefaults = { generation: number; value: PackageDefaults | null; status: 'loaded' | 'error' };
 
 /** Splits server only values off so they never reach local storage. */
 function splitServerSettings(settings: StoredUserSettings | UserSettings): {
@@ -287,14 +289,20 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     isAuthenticated && !isInitializing && account
       ? JSON.stringify([account.homeAccountId, account.tenantId])
       : null;
-  const accountScopeRef = useRef({ key: accountKey, generation: 0 });
-  if (accountScopeRef.current.key !== accountKey) {
-    accountScopeRef.current = { key: accountKey, generation: accountScopeRef.current.generation + 1 };
+  const [scope, setScope] = useState(() => ({ key: accountKey, generation: 0 }));
+  let renderScope = scope;
+  if (scope.key !== accountKey) {
+    renderScope = { key: accountKey, generation: scope.generation + 1 };
+    setScope(renderScope);
   }
-  const generation = accountScopeRef.current.generation;
+  const generation = renderScope.generation;
+  const accountScopeRef = useRef(scope);
+  useLayoutEffect(() => { accountScopeRef.current = scope; }, [scope]);
   const [scopedDefaults, setScopedDefaults] = useState<ScopedPackageDefaults | null>(null);
   const packageDefaults =
     accountKey !== null && scopedDefaults?.generation === generation ? scopedDefaults.value : null;
+  const packageDefaultsStatus = accountKey === null ? 'loaded'
+    : scopedDefaults?.generation === generation ? scopedDefaults.status : 'loading';
 
   const [settings, setSettingsState] = useState<UserSettings>(() => {
     return readLegacyUserSettings().settings;
@@ -330,7 +338,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
 
       const requestScope = accountScopeRef.current;
       if (requestScope.key === null) return;
-      const isCurrent = () => accountScopeRef.current === requestScope;
+      const isCurrent = () => accountScopeRef.current.generation === requestScope.generation;
       setIsSaving(true);
       setSyncError(null);
 
@@ -376,7 +384,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated || requestScope.key === null) {
       return;
     }
-    const isCurrent = () => accountScopeRef.current === requestScope;
+    const isCurrent = () => accountScopeRef.current.generation === requestScope.generation;
 
     setIsLoading(true);
     setSyncError(null);
@@ -386,6 +394,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       if (!isCurrent()) return;
       if (!token) {
         setSyncError("No active authentication token. Using local settings.");
+        setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
         setHasStoredSettings(false);
         return;
       }
@@ -396,7 +405,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
 
       const split = splitServerSettings(response.settings);
       applySettings(split.settings);
-      setScopedDefaults({ generation: requestScope.generation, value: split.packageDefaults });
+      setScopedDefaults({ generation: requestScope.generation, value: split.packageDefaults, status: 'loaded' });
       setHasStoredSettings(Boolean(response.hasStoredSettings));
 
       if (!response.hasStoredSettings && hasAnyLegacySetting(legacy)) {
@@ -425,6 +434,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     } catch {
       if (!isCurrent()) return;
       setSyncError("Unable to load server settings. Using local settings.");
+      setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
       setHasStoredSettings(false);
     } finally {
       if (isCurrent()) setIsLoading(false);
@@ -448,19 +458,20 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
         throw new Error("Sign in to save package defaults.");
       }
       const token = await getAccessToken();
-      if (accountScopeRef.current !== requestScope) {
+      if (accountScopeRef.current.generation !== requestScope.generation) {
         throw new Error("Account changed. Package defaults were not saved for the current account.");
       }
       if (!token) {
         throw new Error("No active authentication token. Package defaults were not saved.");
       }
       const response = await patchUserSettings(token, { packageDefaults: defaults });
-      if (accountScopeRef.current !== requestScope) {
+      if (accountScopeRef.current.generation !== requestScope.generation) {
         throw new Error("Account changed. Package defaults were not saved for the current account.");
       }
       setScopedDefaults({
         generation: requestScope.generation,
         value: splitServerSettings(response.settings).packageDefaults,
+        status: 'loaded',
       });
     },
     [getAccessToken]
@@ -546,11 +557,13 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       setCarryOverAssignments,
       setSupersedePreviousApp,
       packageDefaults,
+      packageDefaultsStatus,
       packageDefaultsAccountScope: generation,
       savePackageDefaults,
     }),
     [
       packageDefaults,
+      packageDefaultsStatus,
       generation,
       savePackageDefaults,
       hasStoredSettings,

@@ -154,7 +154,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const payload: unknown = await request.json();
-    if (!isStoredSettings(payload) || Array.isArray(payload.packageDefaults)) {
+    if (!isStoredSettings(payload) || Array.isArray(payload.packageDefaults) ||
+      (payload.packageDefaults !== undefined && payload.packageDefaults !== null && !isStoredSettings(payload.packageDefaults))) {
       return NextResponse.json(
         { error: 'Settings must be a JSON object' },
         { status: 400 }

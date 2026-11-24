@@ -7,11 +7,12 @@ import type { PackageDefaults } from '@/types/user-settings';
 const mock = vi.hoisted(() => ({
   defaults: null as PackageDefaults | null,
   isLoading: false,
+  packageDefaultsStatus: 'loaded',
   account: { homeAccountId: 'a', tenantId: 'one' },
   save: vi.fn(),
 }));
 vi.mock('@/hooks/useMicrosoftAuth', () => ({ useMicrosoftAuth: () => ({ account: mock.account, isAuthenticated: true, isInitializing: false }) }));
-vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ packageDefaults: mock.defaults, savePackageDefaults: mock.save, isLoading: mock.isLoading }) }));
+vi.mock('@/components/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ packageDefaults: mock.defaults, packageDefaultsStatus: mock.packageDefaultsStatus, savePackageDefaults: mock.save, isLoading: mock.isLoading }) }));
 import { PackageDefaultsSettings } from './PackageDefaultsSettings';
 
 let root: Root;
@@ -25,11 +26,42 @@ const input = (text: string) => {
 beforeEach(() => {
   mock.defaults = null;
   mock.isLoading = false;
+  mock.packageDefaultsStatus = 'loaded';
   mock.account = { homeAccountId: 'a', tenantId: 'one' };
   mock.save.mockReset().mockImplementation(async (value) => { mock.defaults = value; });
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
+});
+
+it('locks the editor after a failed load instead of overwriting unseen defaults', async () => {
+  mock.packageDefaultsStatus = 'error';
+  await render();
+  expect(input('Use saved package defaults').disabled).toBe(true);
+  await act(async () => input('Use saved package defaults').click());
+  expect(mock.save).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('could not be loaded');
+});
+
+it('clears the optional deferral days value', async () => {
+  mock.defaults = { allowDefer: true, deferDays: 7 };
+  await render();
+  await act(async () => {
+    const field = input('Deferral days'); field.value = ''; field.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  });
+  expect(mock.save).toHaveBeenCalledOnce();
+  expect(mock.save.mock.calls[0][0]).not.toHaveProperty('deferDays');
+});
+
+it.each([['Deferral days', '400'], ['Close countdown in seconds', '']])('reports invalid %s without saving', async (label, value) => {
+  mock.defaults = { allowDefer: true, deferDays: 7, closeCountdown: 60 };
+  await render();
+  await act(async () => {
+    const field = input(label); field.value = value; field.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  });
+  expect(mock.save).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(label);
+  expect(input(label).value).toBe(label === 'Deferral days' ? '7' : '60');
 });
 afterEach(async () => { await act(async () => root.unmount()); document.body.innerHTML = ''; });
 

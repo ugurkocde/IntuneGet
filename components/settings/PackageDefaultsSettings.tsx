@@ -37,11 +37,18 @@ export function PackageDefaultsSettings() {
 }
 
 function DefaultsCard({ signedIn }: { signedIn: boolean }) {
-  const { packageDefaults, savePackageDefaults, isLoading } = useUserSettings();
+  const { packageDefaults, packageDefaultsStatus, savePackageDefaults, isLoading } = useUserSettings();
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ error: boolean; text: string } | null>(null);
   const values = { ...pickPackageDefaults(DEFAULT_PSADT_CONFIG), ...packageDefaults };
-  const disabled = !signedIn || isLoading || saving;
+  const disabled = !signedIn || isLoading || saving || packageDefaultsStatus !== 'loaded';
+
+  function validNumber(input: HTMLInputElement, label: string, min: number, max: number, saved: number | undefined) {
+    if (input.value !== '' && input.validity.valid && Number.isInteger(input.valueAsNumber) && input.valueAsNumber >= min && input.valueAsNumber <= max) return true;
+    setStatus({ error: true, text: `${label} must be between ${min} and ${max}.` });
+    input.value = saved === undefined ? '' : String(saved);
+    return false;
+  }
 
   async function save(next: PackageDefaults | null) {
     setSaving(true);
@@ -86,7 +93,14 @@ function DefaultsCard({ signedIn }: { signedIn: boolean }) {
             <label key={key} className="flex flex-col gap-1 text-sm text-text-secondary">
               {label}
               <input key={`${key}-${values[key]}`} className={INPUT_CLASS} type="number" min={min} max={max} step={1} defaultValue={values[key]} onBlur={(event) => {
-                if (event.target.validity.valid && event.target.value !== '' && event.target.valueAsNumber !== values[key]) {
+                if (key === 'deferDays' && event.target.value === '') {
+                  if (values.deferDays !== undefined) {
+                    const { deferDays: _deferDays, ...rest } = values;
+                    void save(rest);
+                  }
+                  return;
+                }
+                if (validNumber(event.target, label, min, max, values[key]) && event.target.valueAsNumber !== values[key]) {
                   void save({ ...values, [key]: event.target.valueAsNumber });
                 }
               }} />
@@ -103,7 +117,7 @@ function DefaultsCard({ signedIn }: { signedIn: boolean }) {
             <label key={key} className="flex flex-col gap-1 text-sm text-text-secondary">
               {label}
               <input key={`${key}-${values.restartPrompt?.[key]}`} className={INPUT_CLASS} type="number" min={min} max={max} step={1} defaultValue={values.restartPrompt?.[key]} onBlur={(event) => {
-                if (event.target.validity.valid && event.target.value !== '' && event.target.valueAsNumber !== values.restartPrompt?.[key]) {
+                if (validNumber(event.target, label, min, max, values.restartPrompt?.[key]) && event.target.valueAsNumber !== values.restartPrompt?.[key]) {
                   void save({ ...values, restartPrompt: { ...DEFAULT_PSADT_CONFIG.restartPrompt, ...values.restartPrompt, [key]: event.target.valueAsNumber } });
                 }
               }} />
@@ -112,6 +126,7 @@ function DefaultsCard({ signedIn }: { signedIn: boolean }) {
         </fieldset>
       )}
       {!signedIn && <p className="mt-2 text-sm text-text-muted">Sign in to manage package defaults.</p>}
+      {signedIn && packageDefaultsStatus === 'error' && <p role="alert" className="mt-2 text-sm text-red-400">Saved defaults could not be loaded. Reload to edit them.</p>}
       {(saving || isLoading) && <p role="status" className="mt-2 text-sm text-text-muted">{saving ? 'Saving package defaults...' : 'Loading package defaults...'}</p>}
       {status && <p role={status.error ? 'alert' : 'status'} className={`mt-2 text-sm ${status.error ? 'text-red-400' : 'text-text-muted'}`}>{status.text}</p>}
     </section>

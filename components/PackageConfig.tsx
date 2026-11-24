@@ -197,9 +197,10 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
 
   // Saved defaults (#2085) only seed brand new Win32 packages. Deployed
   // configs, replaced cart items and Store apps keep their own settings.
-  const { packageDefaults: savedPackageDefaults, savePackageDefaults } = useUserSettings();
+  const { packageDefaults: savedPackageDefaults, packageDefaultsStatus, savePackageDefaults } = useUserSettings();
   const canSeedDefaults = !isDeployed && !deployedConfig && !replaceCartItemId && !isStoreApp;
   const seedDefaults = canSeedDefaults ? savedPackageDefaults ?? null : null;
+  const defaultsPending = canSeedDefaults && packageDefaultsStatus === 'loading';
   const configEditedRef = useRef(false);
   const seededDefaultsRef = useRef<PackageDefaults | null>(seedDefaults);
 
@@ -496,7 +497,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const handleAddToCart = async () => {
-    if (addedToCartSuccess) return;
+    if (addedToCartSuccess || defaultsPending) return;
 
     // Store apps don't need an installer
     if (!isStoreApp && !selectedInstaller) return;
@@ -2315,7 +2316,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                 </Button>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+                  disabled={defaultsPending || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
                   variant="outline"
                   className={cn(
                     'py-5 text-base font-medium',
@@ -2340,7 +2341,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
           ) : (
             <Button
               onClick={handleAddToCart}
-              disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+              disabled={defaultsPending || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
               className={cn(
                 'w-full py-5 text-base font-medium',
                 inCart || addedToCartSuccess
