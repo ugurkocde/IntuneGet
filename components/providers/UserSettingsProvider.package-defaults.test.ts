@@ -247,8 +247,12 @@ describe('package defaults in the settings provider', () => {
   });
 
   it('does not load while MSAL is still initializing with a cached account', async () => {
-    Object.assign(h.auth, { isInitializing: true, account: null });
+    Object.assign(h.auth, { isInitializing: true, account: accountA });
+    h.getAccessToken = vi.fn(async () => {
+      throw new Error('uninitialized_public_client_application');
+    });
     await render();
+    expect(h.getAccessToken).not.toHaveBeenCalled();
     expect(h.gets).toHaveLength(0);
     expect(latest.packageDefaults).toBeNull();
   });
