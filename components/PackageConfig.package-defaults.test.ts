@@ -65,6 +65,17 @@ afterEach(async () => {
 });
 
 describe('saved package defaults', () => {
+  it.each(['loading', 'error'])('blocks saving and clearing unseen defaults while %s', async (status) => {
+    settingsState.packageDefaultsStatus = status;
+    settingsState.packageDefaults = { deployMode: 'Auto' };
+    await render();
+    await act(async () => button('Advanced').click());
+    expect(button('Save as my defaults').disabled).toBe(true);
+    await act(async () => button('Save as my defaults').click());
+    expect(button('Clear saved defaults').disabled).toBe(true);
+    await act(async () => button('Clear saved defaults').click());
+    expect(settingsState.save).not.toHaveBeenCalled();
+  });
   it('blocks adding until defaults load and then commits the seeded values', async () => {
     settingsState.packageDefaultsStatus = 'loading';
     await render();

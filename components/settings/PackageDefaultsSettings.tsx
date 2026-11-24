@@ -93,7 +93,7 @@ function DefaultsCard({ signedIn }: { signedIn: boolean }) {
             <label key={key} className="flex flex-col gap-1 text-sm text-text-secondary">
               {label}
               <input key={`${key}-${values[key]}`} className={INPUT_CLASS} type="number" min={min} max={max} step={1} defaultValue={values[key]} onBlur={(event) => {
-                if (key === 'deferDays' && event.target.value === '') {
+                if (key === 'deferDays' && event.target.value === '' && !event.target.validity.badInput) {
                   if (values.deferDays !== undefined) {
                     const { deferDays: _deferDays, ...rest } = values;
                     void save(rest);

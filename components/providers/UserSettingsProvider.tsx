@@ -297,6 +297,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
   }
   const generation = renderScope.generation;
   const accountScopeRef = useRef(scope);
+  const loadSequenceRef = useRef(0);
   useLayoutEffect(() => { accountScopeRef.current = scope; }, [scope]);
   const [scopedDefaults, setScopedDefaults] = useState<ScopedPackageDefaults | null>(null);
   const packageDefaults =
@@ -384,7 +385,8 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated || requestScope.key === null) {
       return;
     }
-    const isCurrent = () => accountScopeRef.current.generation === requestScope.generation;
+    const sequence = ++loadSequenceRef.current;
+    const isCurrent = () => accountScopeRef.current.generation === requestScope.generation && loadSequenceRef.current === sequence;
 
     setIsLoading(true);
     setSyncError(null);

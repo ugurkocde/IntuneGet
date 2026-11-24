@@ -53,6 +53,20 @@ it('clears the optional deferral days value', async () => {
   expect(mock.save.mock.calls[0][0]).not.toHaveProperty('deferDays');
 });
 
+it('preserves the saved limit when a browser reports empty bad numeric input', async () => {
+  mock.defaults = { allowDefer: true, deferDays: 7 };
+  await render();
+  await act(async () => {
+    const field = input('Deferral days');
+    field.value = '';
+    Object.defineProperty(field, 'validity', { configurable: true, value: { badInput: true, valid: false } });
+    field.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  });
+  expect(mock.save).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('Deferral days');
+  expect(input('Deferral days').value).toBe('7');
+});
+
 it.each([['Deferral days', '400'], ['Close countdown in seconds', '']])('reports invalid %s without saving', async (label, value) => {
   mock.defaults = { allowDefer: true, deferDays: 7, closeCountdown: 60 };
   await render();

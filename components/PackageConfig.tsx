@@ -227,7 +227,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [defaultsStatus, setDefaultsStatus] = useState<{ kind: 'saved' | 'cleared' | 'error'; message: string } | null>(null);
   const [isDefaultsSaving, setIsDefaultsSaving] = useState(false);
   const saveCurrentAsDefaults = async (clear: boolean) => {
-    if (typeof savePackageDefaults !== 'function' || isDefaultsSaving) return;
+    if (typeof savePackageDefaults !== 'function' || isDefaultsSaving || packageDefaultsStatus !== 'loaded') return;
     setIsDefaultsSaving(true);
     setDefaultsStatus(null);
     try {
@@ -1094,11 +1094,11 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                     Save the install behavior, deferral, restart and disk space choices below as your starting point for packages you configure from now on. Commands, detection, processes and branding are never saved. Packages already in your cart keep their settings.
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" disabled={isDefaultsSaving} onClick={() => void saveCurrentAsDefaults(false)} className="rounded-md border border-overlay/15 px-2 py-1 text-text-primary hover:bg-overlay/5 disabled:opacity-50">
+                    <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(false)} className="rounded-md border border-overlay/15 px-2 py-1 text-text-primary hover:bg-overlay/5 disabled:opacity-50">
                       {isDefaultsSaving ? 'Saving defaults...' : 'Save as my defaults'}
                     </button>
                     {savedPackageDefaults && (
-                      <button type="button" disabled={isDefaultsSaving} onClick={() => void saveCurrentAsDefaults(true)} className="rounded-md px-2 py-1 text-text-muted hover:text-text-primary disabled:opacity-50">
+                      <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(true)} className="rounded-md px-2 py-1 text-text-muted hover:text-text-primary disabled:opacity-50">
                         Clear saved defaults
                       </button>
                     )}

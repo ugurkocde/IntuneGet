@@ -58,6 +58,7 @@ const accountA = { homeAccountId: 'a', localAccountId: 'a', tenantId: 't1' };
 const accountB = { homeAccountId: 'b', localAccountId: 'b', tenantId: 't2' };
 
 beforeEach(() => {
+  h.getAccessToken = async () => h.nextToken ?? h.auth.token;
   h.values.clear();
   h.gets.length = 0;
   h.patches.length = 0;
@@ -73,6 +74,20 @@ afterEach(async () => {
 });
 
 describe('package defaults in the settings provider', () => {
+  it.each(['success', 'failure'])('ignores an older overlapping load %s after the latest load succeeds', async (outcome) => {
+    await render();
+    h.getAccessToken = async () => h.auth.token;
+    await render();
+    expect(h.gets).toHaveLength(2);
+    await act(async () => h.gets[1].resolve(response({ deployMode: 'Auto' })));
+    await act(async () => {
+      if (outcome === 'success') h.gets[0].resolve(response({ deployMode: 'Silent' }));
+      else h.gets[0].reject(new Error('Older request failed'));
+    });
+    expect(latest.packageDefaultsStatus).toBe('loaded');
+    expect(latest.packageDefaults).toEqual({ deployMode: 'Auto' });
+    expect(latest.isLoading).toBe(false);
+  });
   it('advances scope once for a real account change in StrictMode', async () => {
     const strictRender = () => act(async () => root.render(createElement(StrictMode, null, createElement(UserSettingsProvider, null, createElement(Probe)))));
     await strictRender();
