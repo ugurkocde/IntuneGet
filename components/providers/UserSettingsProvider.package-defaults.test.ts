@@ -74,6 +74,29 @@ afterEach(async () => {
 });
 
 describe('package defaults in the settings provider', () => {
+  it.each(['success', 'failure'])('preserves a successful save when an earlier same-account reload ends in %s', async (outcome) => {
+    await render();
+    await act(async () => h.gets[0].resolve(response({ deployMode: 'Auto' })));
+    h.getAccessToken = async () => h.auth.token;
+    await render();
+    expect(h.gets).toHaveLength(2);
+    expect(latest.isLoading).toBe(true);
+    await act(async () => {
+      const saving = latest.savePackageDefaults({ deployMode: 'Silent' });
+      await Promise.resolve();
+      h.patches[0].resolve(response({ deployMode: 'Silent' }));
+      await saving;
+    });
+    expect(latest.isLoading).toBe(true);
+    await act(async () => {
+      if (outcome === 'success') h.gets[1].resolve(response({ deployMode: 'Auto' }));
+      else h.gets[1].reject(new Error('Older reload failed'));
+    });
+    expect(latest.packageDefaults).toEqual({ deployMode: 'Silent' });
+    expect(latest.packageDefaultsStatus).toBe('loaded');
+    expect(latest.isLoading).toBe(false);
+  });
+
   it.each(['success', 'failure'])('ignores an older overlapping load %s after the latest load succeeds', async (outcome) => {
     await render();
     h.getAccessToken = async () => h.auth.token;

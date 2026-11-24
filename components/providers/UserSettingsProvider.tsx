@@ -298,6 +298,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
   const generation = renderScope.generation;
   const accountScopeRef = useRef(scope);
   const loadSequenceRef = useRef(0);
+  const defaultsRevisionRef = useRef(0);
   useLayoutEffect(() => { accountScopeRef.current = scope; }, [scope]);
   const [scopedDefaults, setScopedDefaults] = useState<ScopedPackageDefaults | null>(null);
   const packageDefaults =
@@ -386,6 +387,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       return;
     }
     const sequence = ++loadSequenceRef.current;
+    const defaultsRevision = defaultsRevisionRef.current;
     const isCurrent = () => accountScopeRef.current.generation === requestScope.generation && loadSequenceRef.current === sequence;
 
     setIsLoading(true);
@@ -396,7 +398,9 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       if (!isCurrent()) return;
       if (!token) {
         setSyncError("No active authentication token. Using local settings.");
-        setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
+        if (defaultsRevisionRef.current === defaultsRevision) {
+          setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
+        }
         setHasStoredSettings(false);
         return;
       }
@@ -407,7 +411,9 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
 
       const split = splitServerSettings(response.settings);
       applySettings(split.settings);
-      setScopedDefaults({ generation: requestScope.generation, value: split.packageDefaults, status: 'loaded' });
+      if (defaultsRevisionRef.current === defaultsRevision) {
+        setScopedDefaults({ generation: requestScope.generation, value: split.packageDefaults, status: 'loaded' });
+      }
       setHasStoredSettings(Boolean(response.hasStoredSettings));
 
       if (!response.hasStoredSettings && hasAnyLegacySetting(legacy)) {
@@ -436,7 +442,9 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     } catch {
       if (!isCurrent()) return;
       setSyncError("Unable to load server settings. Using local settings.");
-      setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
+      if (defaultsRevisionRef.current === defaultsRevision) {
+        setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
+      }
       setHasStoredSettings(false);
     } finally {
       if (isCurrent()) setIsLoading(false);
@@ -470,6 +478,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       if (accountScopeRef.current.generation !== requestScope.generation) {
         throw new Error("Account changed. Package defaults were not saved for the current account.");
       }
+      defaultsRevisionRef.current += 1;
       setScopedDefaults({
         generation: requestScope.generation,
         value: splitServerSettings(response.settings).packageDefaults,
