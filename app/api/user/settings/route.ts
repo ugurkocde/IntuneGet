@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { DEFAULT_USER_SETTINGS } from '@/types/user-settings';
-import type { UserSettings, UserSettingsUpdate } from '@/types/user-settings';
+import type { UserSettings, StoredUserSettingsUpdate as UserSettingsUpdate } from '@/types/user-settings';
+import { sanitizePackageDefaults } from '@/lib/package-defaults';
 
 function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
@@ -63,6 +64,12 @@ function sanitizeSettings(payload: Record<string, unknown>): UserSettingsUpdate 
     updates.supersedePreviousApp = payload.supersedePreviousApp;
   }
 
+  if (payload.packageDefaults === null) {
+    updates.packageDefaults = null;
+  } else if (isStoredSettings(payload.packageDefaults)) {
+    updates.packageDefaults = sanitizePackageDefaults(payload.packageDefaults);
+  }
+
   return updates;
 }
 
@@ -78,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     if (!isSupabaseServerConfigured()) {
       return NextResponse.json({
-        settings: DEFAULT_USER_SETTINGS,
+        settings: { ...DEFAULT_USER_SETTINGS, packageDefaults: null },
         hasStoredSettings: false,
       });
     }
@@ -113,6 +120,7 @@ export async function GET(request: NextRequest) {
 
     const merged = {
       ...DEFAULT_USER_SETTINGS,
+      packageDefaults: null,
       ...sanitizedStoredSettings,
     };
 
@@ -145,8 +153,21 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const payload = (await request.json()) as Record<string, unknown>;
+    const payload: unknown = await request.json();
+    if (!isStoredSettings(payload) || Array.isArray(payload.packageDefaults)) {
+      return NextResponse.json(
+        { error: 'Settings must be a JSON object' },
+        { status: 400 }
+      );
+    }
     const settingsUpdate = sanitizeSettings(payload);
+
+    if (isStoredSettings(payload.packageDefaults) && settingsUpdate.packageDefaults === null) {
+      return NextResponse.json(
+        { error: 'No valid package defaults provided. Send null to clear saved defaults.' },
+        { status: 400 }
+      );
+    }
 
     if (Object.keys(settingsUpdate).length === 0) {
       return NextResponse.json(
@@ -218,6 +239,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({
       settings: {
         ...DEFAULT_USER_SETTINGS,
+        packageDefaults: null,
         ...updatedSettings,
       },
       hasStoredSettings: true,
