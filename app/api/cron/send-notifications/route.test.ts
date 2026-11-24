@@ -163,10 +163,14 @@ describe('send-notifications cron pending update paging', () => {
     state.msPerUser = 0;
     state.clock = 0;
     dateNow = vi.spyOn(Date, 'now').mockImplementation(() => state.clock);
+    vi.stubGlobal('setTimeout', (callback: () => void, ms: number) => {
+      state.clock += ms; callback(); return 0;
+    });
   });
 
   afterEach(() => {
     dateNow.mockRestore();
+    vi.unstubAllGlobals();
     delete process.env.CRON_SECRET;
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -241,12 +245,20 @@ describe('send-notifications cron pending update paging', () => {
 
     const { body } = await runCron();
 
-    expect(allNotifiedIds()).toEqual(idsOf(rows));
-    expect(state.notified.size).toBe(700);
-    expect(body).toMatchObject({ success: true, channelUsers: 700, pendingUpdates: 1001, usersRemaining: 0 });
+    expect(state.notified.size).toBe(480);
+    expect(body).toMatchObject({ success: false, channelUsers: 700, pendingUpdates: 1001, usersRemaining: 220 });
+    const firstDelivered = allNotifiedIds();
+    // Model the helper marking successful deliveries. Every remaining row must
+    // still be read and delivered by the following daily run.
+    for (const row of rows) if (firstDelivered.includes(String(row.id))) row.notified_at = 'sent';
+    state.clock += 24 * 60 * 60 * 1000;
+    state.notified = new Map();
+    const next = await runCron();
+    expect(next.body).toMatchObject({ success: true, usersRemaining: 0 });
+    expect([...firstDelivered, ...allNotifiedIds()].sort()).toEqual(idsOf(rows));
     // Two pages of 300 plus a short page, then the empty page that ends the read.
-    expect(state.requests.notification_preferences).toBe(3);
-    expect(state.requests.webhook_configurations).toBe(2);
+    expect(state.requests.notification_preferences).toBe(6);
+    expect(state.requests.webhook_configurations).toBe(4);
   });
 
   it('ignores email preferences when email is not configured for the deployment', async () => {
@@ -263,7 +275,7 @@ describe('send-notifications cron pending update paging', () => {
   });
 
   it('stops at the time budget and reports the users left for the next run', async () => {
-    // Every user takes 13 s, so one batch of 20 users uses up the 240 s budget.
+    // Every user takes 13 s; the nineteenth finishes after the 240 s budget.
     state.msPerUser = 13_000;
     const owners = Array.from({ length: 50 }, (_, n) => userId(n));
     state.tables.update_check_results = Array.from({ length: 1500 }, (_, n) => pendingRow(n, owners[n % 50]));
@@ -272,8 +284,8 @@ describe('send-notifications cron pending update paging', () => {
     const { status, body } = await runCron();
 
     expect(status).toBe(200);
-    expect(body).toMatchObject({ success: false, usersProcessed: 20, usersRemaining: 30 });
-    expect(state.notified.size).toBe(20);
+    expect(body).toMatchObject({ success: false, usersProcessed: 19, usersRemaining: 31 });
+    expect(state.notified.size).toBe(19);
   });
 
   it('reaches different users on consecutive days when the budget cuts every run short', async () => {
@@ -293,7 +305,7 @@ describe('send-notifications cron pending update paging', () => {
       state.clock = runAt;
       state.notified = new Map();
       const { body } = await runCron();
-      expect(body).toMatchObject({ usersProcessed: 20, usersRemaining: 30 });
+      expect(body).toMatchObject({ usersProcessed: 19, usersRemaining: 31 });
       return new Set(state.notified.keys());
     };
 
