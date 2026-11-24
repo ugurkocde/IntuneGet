@@ -69,6 +69,7 @@ import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import type { ReactNode } from 'react';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
+import { getClientFeatureFlags } from '@/lib/features';
 import { INTUNE_APP_SOURCE_MARKER } from '@/lib/intune-description';
 import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';
@@ -87,6 +88,19 @@ import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
 import { applyPackageDefaults, pickPackageDefaults } from '@/lib/package-defaults';
 import type { PackageDefaults } from '@/types/user-settings';
+
+// Keep aligned with the hosted runner architecture contract in lib/qa/candidate.ts.
+export const HOSTED_QA_ARCHITECTURES: ReadonlySet<string> = new Set(['x64', 'x86']);
+const HOSTED_QA_ARCH_REASON =
+  'Hosted testing runs on x64 and x86 only, so ARM64 builds cannot be deployed yet.';
+
+function firstSelectableArchitecture(installers: NormalizedInstaller[], hostedGate: boolean): WingetArchitecture | undefined {
+  if (!hostedGate) return installers[0]?.architecture;
+  return (['x64', 'x86', 'arm64'] as WingetArchitecture[]).find(
+    (arch) => installers.some((installer) => installer.architecture === arch)
+      && (!hostedGate || HOSTED_QA_ARCHITECTURES.has(arch))
+  ) ?? installers[0]?.architecture;
+}
 
 interface PackageConfigProps {
   package: NormalizedPackage;
@@ -125,6 +139,9 @@ export function PackageConfig(props: PackageConfigProps) {
 
 function AccountPackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest, configurationRefreshNotice }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
+  const hostedQaArchGate = !isStoreApp && getClientFeatureFlags().hostedServices
+    && deployedConfig?.sourceType !== 'custom'
+    && !(deployedConfig?.wingetId ?? pkg.id).toLowerCase().startsWith('intuneget.curated.');
 
   // Store app install experience state
   const [storeInstallExperience, setStoreInstallExperience] = useState<'user' | 'system'>('user');
@@ -142,7 +159,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
     const win32Config = deployedConfig && 'architecture' in deployedConfig ? deployedConfig : null;
     const preferred = win32Config?.architecture || 'x64';
     const available = new Set(installers.map((i) => i.architecture));
-    return available.has(preferred) ? preferred : (installers[0]?.architecture || 'x64');
+    return available.has(preferred) ? preferred : (firstSelectableArchitecture(installers, hostedQaArchGate) || 'x64');
   });
   const [selectedScope, setSelectedScope] = useState<WingetScope>(() => {
     const win32Config = deployedConfig && 'installScope' in deployedConfig ? deployedConfig : null;
@@ -365,7 +382,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
     architectureInstallers.find((installer) => installer.scope === selectedScope) ||
     architectureInstallers.find((installer) => !installer.scope) ||
     architectureInstallers[0] ||
-    effectiveInstallers[0];
+    effectiveInstallers.find((installer) => installer.architecture === firstSelectableArchitecture(effectiveInstallers, hostedQaArchGate));
   const scopeIsAvailable = (scope: WingetScope) =>
     architectureInstallers.some(
       (installer) => !installer.scope || installer.scope === scope
@@ -388,6 +405,9 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
     if (customDetectionActive) lastCustomRulesRef.current = config.detectionRules;
   }, [customDetectionActive, config.detectionRules]);
   const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
+  const archBlocked = hostedQaArchGate && !!selectedInstaller
+    && !HOSTED_QA_ARCHITECTURES.has(selectedInstaller.architecture);
+  const showArchitectureReason = hostedQaArchGate && availableArchitectures.includes('arm64');
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
   const inCart = isStoreApp
@@ -461,9 +481,9 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
       effectiveInstallers.length > 0 &&
       !effectiveInstallers.some((i) => i.architecture === selectedArch)
     ) {
-      setSelectedArch(effectiveInstallers[0].architecture as WingetArchitecture);
+      setSelectedArch(firstSelectableArchitecture(effectiveInstallers, hostedQaArchGate)!);
     }
-  }, [effectiveInstallers, selectedArch]);
+  }, [effectiveInstallers, selectedArch, hostedQaArchGate]);
 
   // Generate detection rules when installer, version, locale, or marker path changes
   // Pass effectiveWingetId so locale variant packages get correct detection markers.
@@ -502,7 +522,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const handleAddToCart = async () => {
-    if (addedToCartSuccess || defaultsPending) return;
+    if (addedToCartSuccess || defaultsPending || archBlocked) return;
 
     // Store apps don't need an installer
     if (!isStoreApp && !selectedInstaller) return;
@@ -896,7 +916,8 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                 <label className="block text-sm font-medium text-text-muted mb-2">Architecture</label>
                 <div className="flex flex-wrap gap-2">
                   {(['x64', 'x86', 'arm64'] as WingetArchitecture[]).map((arch) => {
-                    const available = availableArchitectures.includes(arch);
+                    const available = availableArchitectures.includes(arch)
+                      && (!hostedQaArchGate || HOSTED_QA_ARCHITECTURES.has(arch));
                     return (
                       <button
                         key={arch}
@@ -916,6 +937,9 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                     );
                   })}
                 </div>
+                {showArchitectureReason && (
+                  <p className="mt-2 text-sm text-text-muted" role="status">{HOSTED_QA_ARCH_REASON}</p>
+                )}
               </div>
             </div>
 
@@ -2323,7 +2347,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                 </Button>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={defaultsPending || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+                  disabled={defaultsPending || archBlocked || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
                   variant="outline"
                   className={cn(
                     'py-5 text-base font-medium',
@@ -2348,7 +2372,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
           ) : (
             <Button
               onClick={handleAddToCart}
-              disabled={defaultsPending || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+              disabled={defaultsPending || archBlocked || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
               className={cn(
                 'w-full py-5 text-base font-medium',
                 inCart || addedToCartSuccess
