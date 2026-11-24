@@ -449,3 +449,5 @@ if __name__ == '__main__':
     bounded_demand_contracts(t['sql'], with_timeout=True)
     eligible_priority_contracts(t['sql'])
     cron_budget_contracts(t['sql'])
+    rotation = runpy.run_path(str(ROOT/'scripts/ci/qa-selector-rotation-postgres.py'))
+    rotation['rotation_contracts'](t['sql'])
