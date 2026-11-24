@@ -31,7 +31,7 @@ describe('same-app relationship updates', () => {
       { '@odata.type': edge['@odata.type'], targetId: target, dependencyType: 'detect', id: 'saved-id' },
     ]);
   });
-  it.each([[{ ...wanted, targetId: app }], [wanted, wanted], [{ ...wanted, dependencyType: 'invalid' }], [{ ...wanted, targetId: 'bad/id' }]])('rejects invalid relationships', value => {
+  it.each([[{ ...wanted, targetId: app }], [wanted, wanted], [{ ...wanted, dependencyType: 'invalid' }], [{ ...wanted, targetId: 'bad/id' }]].map(value => ({ value })))('rejects invalid relationships', ({ value }) => {
     expect(() => validateRelationships(value, app)).toThrow();
   });
   it('uses the full replace action, reads back and stores server labels', async () => {

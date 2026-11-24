@@ -106,11 +106,13 @@ export async function PATCH(
       categories,
       wingetId,
       relationships,
+      baselineRelationships,
     } = body as {
       assignments?: PackageAssignment[];
       categories?: IntuneAppCategorySelection[];
       wingetId?: string;
       relationships?: AppRelationship[];
+      baselineRelationships?: AppRelationship[];
     };
 
     phase = 'local-config';
@@ -135,12 +137,15 @@ export async function PATCH(
       const source = await db.jobs.getLatestDeployed(user.userId, tenantId, wingetId, intuneAppId);
       const config = source?.package_config;
       if (!source || !config || typeof config !== 'object' || Array.isArray(config)) return NextResponse.json({ error: 'Refresh the matching deployed package before updating relationships.' }, { status: 409 });
+      if (!Array.isArray(baselineRelationships) || JSON.stringify(baselineRelationships) !== JSON.stringify(config.relationships ?? [])) {
+        return NextResponse.json({ error: 'The saved relationships changed. Refresh the app before trying again.' }, { status: 409 });
+      }
       const savedRelationships = await syncAppRelationships(graphToken, intuneAppId, (config.relationships ?? []) as unknown as AppRelationship[], relationships);
       applied.push('relationships');
       const fields = { relationships: savedRelationships };
       if (!supabase) {
         const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');
-        if (!sqliteDeployedConfig.mergeFields(source.id, { userId: user.userId, tenantId, wingetId, intuneAppId }, fields)) throw new Error('Save failed');
+        if (!sqliteDeployedConfig.mergeFields(source.id, { userId: user.userId, tenantId, wingetId, intuneAppId }, fields, source.updated_at)) throw new Error('Save failed');
       } else {
         // Compare the source snapshot so a concurrent settings write is never overwritten.
         const { data: saved, error } = await supabase.from('packaging_jobs')
@@ -193,7 +198,7 @@ export async function PATCH(
       phase = 'config-read';
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
-        .select('id, package_config')
+        .select('id, package_config, updated_at')
         .eq('user_id', user.userId)
         .eq('tenant_id', tenantId)
         .eq('winget_id', wingetId)
@@ -220,6 +225,7 @@ export async function PATCH(
           .from('packaging_jobs')
           .update({ package_config: updatedConfig })
           .eq('id', latestJob.id)
+          .eq('updated_at', latestJob.updated_at)
           .eq('user_id', user.userId)
           .eq('tenant_id', tenantId)
           .eq('winget_id', wingetId)

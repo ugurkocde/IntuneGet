@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: async () => ({ userId: 'owner', tenantId: 'tenant' }) }));
 vi.mock('@/lib/msp/tenant-resolution', () => ({ resolveTargetTenantId: async () => ({ tenantId: 'tenant', errorResponse: null }) }));
 vi.mock('@/lib/intune/graph-client', () => ({ getServicePrincipalToken: async () => 'fixture-token' }));
-vi.mock('@/lib/intune-api', () => ({ getApp: async () => ({ id: 'fixture-app' }) }));
+vi.mock('@/lib/intune-api', () => ({ getApp: async () => ({ id: 'fixture-app' }), syncAppCategories: async () => undefined }));
 vi.mock('@/lib/intune-relationships', () => ({
   syncAppRelationships: async (_token: string, _app: string, _baseline: unknown, desired: unknown) => desired,
   RelationshipUpdateError: class extends Error {},
@@ -36,8 +36,8 @@ vi.mock('@/lib/supabase', () => ({ getServerClientOrNull: () => ({
   },
 }) }));
 import { PATCH } from './route';
-const call = () => PATCH(new NextRequest('https://fixture.invalid/api/settings', { method: 'PATCH',
-  headers: { Authorization: 'Bearer fixture' }, body: JSON.stringify({ wingetId: 'Fixture.App', relationships: [] }) }),
+const call = (body = { wingetId: 'Fixture.App', relationships: [], baselineRelationships: [] } as Record<string, unknown>) => PATCH(new NextRequest('https://fixture.invalid/api/settings', { method: 'PATCH',
+  headers: { Authorization: 'Bearer fixture' }, body: JSON.stringify(body) }),
 { params: Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }) });
 describe('hosted relationship persistence', () => {
   beforeEach(() => { state.filters = []; state.saved = false; state.race = false; });
@@ -55,5 +55,10 @@ describe('hosted relationship persistence', () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ applied: ['relationships'] });
     expect(state.saved).toBe(false);
+  });
+  it('guards a category save with the exact snapshot timestamp', async () => {
+    expect((await call({ wingetId: 'Fixture.App', categories: [] })).status).toBe(200);
+    expect(state.filters).toContainEqual(['updated_at', state.row.updated_at]);
+    expect(state.saved).toBe(true);
   });
 });

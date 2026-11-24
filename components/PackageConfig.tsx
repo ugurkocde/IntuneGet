@@ -629,6 +629,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
         assignments: JSON.stringify(assignments) !== JSON.stringify(deployedConfig?.assignments || []) ? assignments : undefined,
         categories: JSON.stringify(categories) !== JSON.stringify(deployedConfig?.categories || []) ? categories : undefined,
         relationships: JSON.stringify(relationships) !== JSON.stringify(deployedConfig?.relationships || []) ? relationships : undefined,
+        baselineRelationships: deployedConfig?.relationships || [],
       });
       setSettingsSuccess(true);
       setTimeout(() => onClose(), 1200);

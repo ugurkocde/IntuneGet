@@ -145,7 +145,8 @@ export const sqliteDeployedConfig = {
   mergeFields(
     id: string,
     identity: { userId: string; tenantId: string; wingetId: string; intuneAppId: string },
-    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[]; relationships?: AppRelationship[] }
+    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[]; relationships?: AppRelationship[] },
+    expectedUpdatedAt?: string
   ): PackagingJob | null {
     const database = getDb();
     const where = "id = ? AND user_id = ? AND tenant_id = ? AND winget_id = ? AND intune_app_id = ? AND status = 'deployed' AND archived_at IS NULL";
@@ -154,6 +155,7 @@ export const sqliteDeployedConfig = {
       const row = database.prepare(`SELECT * FROM packaging_jobs WHERE ${where}`).get(...values) as Record<string, unknown> | undefined;
       if (!row) return null;
       const job = parseJobRow(row);
+      if (expectedUpdatedAt !== undefined && job.updated_at !== expectedUpdatedAt) return null;
       const config = job.package_config;
       if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
       const merged = { ...config };

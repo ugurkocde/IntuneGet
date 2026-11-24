@@ -243,7 +243,7 @@ describe('same-app relationship settings', () => {
     const appId = '11111111-1111-4111-8111-111111111111';
     const relationships = [{ relationshipType: 'dependency', targetId: '22222222-2222-4222-8222-222222222222', targetDisplayName: 'Fixture dependency', dependencyType: 'autoInstall' }];
     const job = await create({ intune_app_id: appId });
-    const response = await call({ wingetId: 'Fixture.App', relationships }, appId);
+    const response = await call({ wingetId: 'Fixture.App', relationships, baselineRelationships: [] }, appId);
     expect(response.status).toBe(200);
     expect(state.relationships).toHaveBeenCalledWith('fixture-token', appId, [], relationships);
     expect(state.assign).not.toHaveBeenCalled();
@@ -253,5 +253,19 @@ describe('same-app relationship settings', () => {
     await create();
     expect((await call({ wingetId: 'Fixture.App', relationships: [] }, '33333333-3333-4333-8333-333333333333')).status).toBe(409);
     expect(state.relationships).not.toHaveBeenCalled();
+  });
+  it('rejects an editor baseline changed by another save before any relationship write', async () => {
+    const job = await create({ package_config: { ...original, relationships: [{ relationshipType: 'dependency', targetId: '22222222-2222-4222-8222-222222222222' }] } });
+    expect((await call({ wingetId: 'Fixture.App', relationships: [], baselineRelationships: [] })).status).toBe(409);
+    expect(state.relationships).not.toHaveBeenCalled();
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toHaveProperty('relationships');
+  });
+  it('rejects a local snapshot changed while Graph is updating relationships', async () => {
+    const job = await create();
+    state.relationships.mockImplementationOnce(async () => { await sqliteDb.jobs.update(job.id, { package_config: { ...original, description: 'Concurrent edit' }, updated_at: '2027-01-01T00:00:00Z' }); });
+    const response = await call({ wingetId: 'Fixture.App', relationships: [], baselineRelationships: [] });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ applied: ['relationships'] });
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, description: 'Concurrent edit' });
   });
 });
