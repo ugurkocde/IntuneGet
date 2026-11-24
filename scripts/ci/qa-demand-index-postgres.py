@@ -355,6 +355,87 @@ def eligible_priority_contracts(sql):
         sql('drop database '+database+' with(force)',database='postgres',role=None)
 
 
+def cron_budget_contracts(sql):
+    """2s-overrun model on real PG17; no claim of production lock causality."""
+    database = 'demand_cron_' + uuid.uuid4().hex
+    old_fn = 'qa_missing_demand_backfill_ids'
+    cron_fn = 'qa_cron_demand_backfill_ids'
+    def run(text, role='fixture_owner', check=True, application='cron-budget'):
+        return sql("set work_mem='3500kB';"+text,database=database,role=role,check=check,application=application)
+    def value(text):
+        return json.loads(run(text).stdout.splitlines()[-1])
+    def snapshot(fn):
+        return value("select json_build_object('body',md5(prosrc),'acl',proacl::text,'config',proconfig,'definer',prosecdef,'volatile',provolatile,'language',prolang,'owner',proowner) from pg_proc where oid='public."+fn+"(integer)'::regprocedure")
+    def rows(fn, limit='5'):
+        return value("select coalesce(json_agg(winget_id),'[]'::json) from public."+fn+"("+limit+")")
+    def delayed(fn, seconds, advisory=False):
+        tag = 'cron-holder-' + uuid.uuid4().hex[:8]
+        lock = 'select pg_advisory_xact_lock(1849,1)' if advisory else 'lock table public.curated_apps in access exclusive mode'
+        run('create table if not exists fixture_cron_release(done boolean);truncate fixture_cron_release')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            holder = pool.submit(run,"begin;"+lock+";set local statement_timeout='15s';do $$ begin while not exists(select 1 from fixture_cron_release) loop perform pg_sleep(0.05);end loop;end $$;rollback;",'fixture_owner',True,tag)
+            until = time.monotonic()+3
+            observed = False
+            while time.monotonic()<until:
+                observed=json.loads(run("select to_json(exists(select 1 from pg_stat_activity where datname=current_database() and application_name='"+tag+"' and wait_event='PgSleep'))",role=None).stdout.splitlines()[-1])
+                if observed:
+                    break
+            assert observed, 'Local held-lock precondition not observed'
+            def release():
+                time.sleep(seconds)
+                run('insert into fixture_cron_release values(true)')
+            releasing=pool.submit(release)
+            timeout = value("select to_json(split_part(setting,'=',2)) from pg_proc p cross join lateral unnest(p.proconfig) setting where p.oid='public."+fn+"(integer)'::regprocedure and setting like 'statement_timeout=%'")
+            # Emulate PostgREST's separate pre-call settings statement. A SET
+            # inside an already running function cannot arm the current timer.
+            statement="\n\\set VERBOSITY verbose\nbegin;set local lock_timeout='8s';set local statement_timeout='"+timeout+"';select coalesce(json_agg(winget_id),'[]'::json) from public."+fn+"(5);commit;"
+            start=time.monotonic()
+            response=run(statement,'service_role',False)
+            elapsed=(time.monotonic()-start)*1000
+            releasing.result(timeout=20)
+            holder.result(timeout=20)
+        return response,elapsed
+    sql('create database '+database+' owner fixture_owner',database='postgres',role=None)
+    try:
+        run(FIXTURE)
+        run('grant select on all tables in schema public to service_role')
+        for name in ['20260823195500_recognize_live_qa_version_coverage.sql','20261115144200_qa_demand_failure_key_scope.sql','20261123143806_qa_demand_timeout_overlap.sql','20261123204151_qa_demand_eligible_priority_scope.sql']:
+            run('begin;'+(ROOT/'supabase/migrations'/name).read_text()+'commit;')
+        before=snapshot(old_fn)
+        limits=['NULL','-5','0','1','3','5','100','1000']
+        expected=[rows(old_fn,n) for n in limits]
+        response,old_ms=delayed(old_fn,3)
+        assert response.returncode and '57014' in response.stderr and 'statement timeout' in response.stderr, response.stderr
+        assert 1800 <= old_ms < 3000, old_ms
+        print('RED cron overrun model OLD hoisted2s57014 ms='+str(old_ms)+' work_mem3500kB; not a production lock diagnosis',flush=True)
+        # Supabase installations may grant new functions to these roles by default.
+        run('alter default privileges in schema public grant execute on functions to anon,authenticated')
+        run('begin;'+(ROOT/'supabase/migrations/20261123233922_qa_cron_demand_budget.sql').read_text()+'commit;')
+        cron=snapshot(cron_fn)
+        assert snapshot(old_fn)==before
+        assert cron['body']==before['body'] and cron['owner']==before['owner']
+        assert cron['config']==['search_path=""','statement_timeout=8s'] and cron['definer']
+        assert cron['volatile']==before['volatile'] and cron['language']==before['language']
+        assert [rows(cron_fn,n) for n in limits]==expected
+        for role in ['anon','authenticated']:
+            denied=run('select * from public.'+cron_fn+'(5)',role,False)
+            assert denied.returncode and 'permission denied' in denied.stderr
+        response,new_ms=delayed(cron_fn,3)
+        assert response.returncode==0, response.stderr
+        assert json.loads(response.stdout.splitlines()[-1])==expected[5]
+        assert 2500 <= new_ms < 8000, new_ms
+        response,finite_ms=delayed(cron_fn,9)
+        assert response.returncode and '57014' in response.stderr and 'statement timeout' in response.stderr, response.stderr
+        assert 7500 <= finite_ms < 8500, finite_ms
+        response,skip_ms=delayed(cron_fn,3,True)
+        assert response.returncode==0 and json.loads(response.stdout.splitlines()[-1])==[] and skip_ms<1000
+        run('drop function public.'+cron_fn+'(integer)')
+        assert snapshot(old_fn)==before and [rows(old_fn,n) for n in limits]==expected
+        print('GREEN cron8s delayed_data_ms='+str(new_ms)+' finite57014_ms='+str(finite_ms)+' overlap_skip_ms='+str(skip_ms)+' ordered/ACL/old2s unchanged/rollback PASS; passive caller and burst acceptance required',flush=True)
+    finally:
+        sql('drop database '+database+' with(force)',database='postgres',role=None)
+
+
 if __name__ == '__main__':
     t = runpy.run_path(str(ROOT/'scripts/qa-automation/vt-ledger-postgres.test.py'))
     if not t['re'].fullmatch(r'[a-f0-9]{12,64}', t['CONTAINER']):
@@ -367,3 +448,4 @@ if __name__ == '__main__':
     bounded_demand_contracts(t['sql'])
     bounded_demand_contracts(t['sql'], with_timeout=True)
     eligible_priority_contracts(t['sql'])
+    cron_budget_contracts(t['sql'])
