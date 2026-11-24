@@ -190,6 +190,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // A verified Microsoft identity can link an app before another feature has
+    // created its local profile. Keep the creator foreign key valid without
+    // replacing an existing profile or associating it with an MSP target tenant.
+    const { error: profileError } = await supabase.from('user_profiles').upsert({
+      id: user.userId,
+      email: user.userEmail || null,
+      name: user.userName,
+      intune_tenant_id: user.tenantId,
+    }, { onConflict: 'id', ignoreDuplicates: true });
+
+    if (profileError) {
+      return NextResponse.json({ error: 'Failed to create mapping' }, { status: 500 });
+    }
+
     // Create new mapping
     const { data: created, error } = await supabase
       .from('manual_app_mappings')
