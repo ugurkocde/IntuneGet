@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "1ba9b1d7a1db1a6c0a1faedc428d972c0e98c70f",
+    "workflowCommit": "ef5d61fef1882669dbfc4b83cb5dce63ef4a88b2",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "44971864481",
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml"
+  },
+  "candidate": {
+    "appId": "calibre",
+    "version": "9.19.0",
+    "installerUrl": "https://github.com/kovidgoyal/calibre/releases/download/v9.19.0/calibre-64bit-9.19.0.msi",
+    "vendorSha256": "241193d5045bdcbc3e7ec000c22ede0b5da1fd2e91e83fa0b17f0e1f67174480",
+    "releaseNotesUrl": "https://github.com/kovidgoyal/calibre/releases/tag/v9.19.0",
+    "discoveredAt": "2026-11-21T21:12:14.559Z",
+    "id": "cdc7ac9e0f3546792e876e19"
+  },
+  "previous": {
+    "appId": "calibre",
+    "version": "9.18.0",
+    "installerUrl": "https://download.calibre-ebook.com/9.18.0/calibre-64bit-9.18.0.msi",
+    "vendorSha256": "05c0f2223866f8082e05b2d4bc9c57b31a833de8355a1191fd79c260c2636d38",
+    "releaseNotesUrl": "https://github.com/kovidgoyal/calibre/releases/tag/v9.18.0",
+    "discoveredAt": "2026-11-21T21:12:28.554Z",
+    "id": "6aa28dd9308fc46889221d6b"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "cdc7ac9e0f3546792e876e19",
+      "installerSha256": "241193d5045bdcbc3e7ec000c22ede0b5da1fd2e91e83fa0b17f0e1f67174480",
+      "sourceUrl": "https://github.com/kovidgoyal/calibre/releases/download/v9.19.0/calibre-64bit-9.19.0.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Kovid Goyal",
+        "status": "valid"
+      },
+      "security": {
+        "suspicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "scannedAt": "2026-11-22T01:45:08.0987857Z",
+        "malicious": 0,
+        "installerSha256": "241193d5045bdcbc3e7ec000c22ede0b5da1fd2e91e83fa0b17f0e1f67174480",
+        "signatureVersion": "1.463.409.0",
+        "status": "clean",
+        "scanner": "defender"
+      }
+    },
+    "previous": {
+      "candidateId": "6aa28dd9308fc46889221d6b",
+      "installerSha256": "05c0f2223866f8082e05b2d4bc9c57b31a833de8355a1191fd79c260c2636d38",
+      "sourceUrl": "https://download.calibre-ebook.com/9.18.0/calibre-64bit-9.18.0.msi",
+      "finalOrigin": "https://download.calibre-ebook.com",
+      "signature": {
+        "publisher": "Kovid Goyal",
+        "status": "valid"
+      },
+      "security": {
+        "suspicious": 0,
+        "engineVersion": "1.1.26100.4",
+        "scannedAt": "2026-11-22T01:46:04.589835Z",
+        "malicious": 0,
+        "installerSha256": "05c0f2223866f8082e05b2d4bc9c57b31a833de8355a1191fd79c260c2636d38",
+        "signatureVersion": "1.463.409.0",
+        "status": "clean",
+        "scanner": "defender"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "cdc7ac9e0f3546792e876e19",
+    "packageId": "IntuneGet.Curated.Calibre",
+    "installerUrl": "https://github.com/kovidgoyal/calibre/releases/download/v9.19.0/calibre-64bit-9.19.0.msi",
+    "installerSha256": "241193d5045bdcbc3e7ec000c22ede0b5da1fd2e91e83fa0b17f0e1f67174480",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Calibre",
+      "displayName": "calibre",
+      "publisher": "Kovid Goyal",
+      "version": "9.19.0",
+      "architecture": "x64",
+      "installerSha256": "241193d5045bdcbc3e7ec000c22ede0b5da1fd2e91e83fa0b17f0e1f67174480",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:calibre",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Calibre\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"9.19.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Calibre\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"9.19.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "AB36ADBDF90F943ADA7A3DFAEB76C20855024ABCBE4097840E867D0ECE33CF0D",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Calibre\",\"publisher\":\"IntuneGet QA\",\"version\":\"9.19.0\",\"wingetId\":\"IntuneGet.Curated.Calibre\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"9.19.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Calibre\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"19FDE61E57177DA95094EE495118875360D7B4B3AE860CFEFB291E59D0CDDD4B\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"241193D5045BDCBC3E7EC000C22EDE0B5DA1FD2E91E83FA0B17F0E1F67174480\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:calibre\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"9.19.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Calibre\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"152CF854EA1D4936A6BA25B3A53265E90D81D3F18906262C714EF656C6005CCD\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"1cc5fb513cf3c23120f2b0741d66f11ee435d409\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "152cf854ea1d4936a6ba25b3a53265e90d81d3f18906262c714ef656c6005ccd",
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "approvalRequired": true
+  },
+  "qa": {
+    "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+    "executionContext": "LocalSystem",
+    "installerSha256": "241193d5045bdcbc3e7ec000c22ede0b5da1fd2e91e83fa0b17f0e1f67174480",
+    "testLevel": "psadt-package",
+    "architecture": "x64",
+    "upgradeFromVersion": "9.18.0",
+    "previousInstallerSha256": "05c0f2223866f8082e05b2d4bc9c57b31a833de8355a1191fd79c260c2636d38",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerVersion": "9.19.0",
+    "candidateId": "cdc7ac9e0f3546792e876e19",
+    "executionProfileSha256": "AB36ADBDF90F943ADA7A3DFAEB76C20855024ABCBE4097840E867D0ECE33CF0D",
+    "testedAt": "2026-11-22T01:59:48.7840001Z"
+  },
+  "verifiedAt": "2026-11-22T02:00:01.9199094Z",
+  "authenticatedArtifact": {
+    "id": 14734703277,
+    "sha256": "94405cd83b879054a2b8110c29c64da108ef99c86603e1efbe9adac310da10c8"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-11-23T22:41:40.719Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
