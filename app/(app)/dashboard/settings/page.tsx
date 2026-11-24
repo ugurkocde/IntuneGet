@@ -24,6 +24,7 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { PageHeader } from '@/components/dashboard';
 import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { WebhookManager } from '@/components/settings/WebhookManager';
+import { PackageDefaultsSettings } from '@/components/settings/PackageDefaultsSettings';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { cn } from '@/lib/utils';
 import { useCartStore } from '@/stores/cart-store';
@@ -478,6 +479,8 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </motion.section>
+
+                  <PackageDefaultsSettings />
 
                   {/* Supersede previous version card */}
                   <motion.section

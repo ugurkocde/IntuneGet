@@ -5,7 +5,9 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -15,6 +17,8 @@ import { useSidebarStore } from "@/stores/sidebar-store";
 import { getUserSettings, patchUserSettings } from "@/lib/user-settings";
 import {
   DEFAULT_USER_SETTINGS,
+  type PackageDefaults,
+  type StoredUserSettings,
   type ThemeMode,
   type ViewMode,
   type UserSettings,
@@ -36,7 +40,25 @@ type UserSettingsContextValue = {
   setOnboardingCompleted: (completed: boolean) => Promise<void>;
   setCarryOverAssignments: (enabled: boolean) => Promise<void>;
   setSupersedePreviousApp: (enabled: boolean) => Promise<void>;
+  /** Server only defaults for the signed in account, null until loaded. */
+  packageDefaults: PackageDefaults | null;
+  packageDefaultsStatus: 'loading' | 'loaded' | 'error';
+  /** Changes whenever the signed in account changes, including sign out. */
+  packageDefaultsAccountScope: number;
+  /** Saves or clears the defaults. Throws when the server cannot store them. */
+  savePackageDefaults: (defaults: PackageDefaults | null) => Promise<void>;
 };
+
+type ScopedPackageDefaults = { generation: number; value: PackageDefaults | null; status: 'loaded' | 'error' };
+
+/** Splits server only values off so they never reach local storage. */
+function splitServerSettings(settings: StoredUserSettings | UserSettings): {
+  settings: UserSettings;
+  packageDefaults: PackageDefaults | null;
+} {
+  const { packageDefaults, ...rest } = settings as StoredUserSettings;
+  return { settings: rest, packageDefaults: packageDefaults ?? null };
+}
 
 const UserSettingsContext = createContext<UserSettingsContextValue | null>(null);
 
@@ -262,7 +284,27 @@ function hasAnyLegacySetting(
 }
 
 export function UserSettingsProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, getAccessToken } = useMicrosoftAuth();
+  const { isAuthenticated, isInitializing, account, getAccessToken } = useMicrosoftAuth();
+  const accountKey =
+    isAuthenticated && !isInitializing && account
+      ? JSON.stringify([account.homeAccountId, account.tenantId])
+      : null;
+  const [scope, setScope] = useState(() => ({ key: accountKey, generation: 0 }));
+  let renderScope = scope;
+  if (scope.key !== accountKey) {
+    renderScope = { key: accountKey, generation: scope.generation + 1 };
+    setScope(renderScope);
+  }
+  const generation = renderScope.generation;
+  const accountScopeRef = useRef(scope);
+  const loadSequenceRef = useRef(0);
+  const defaultsRevisionRef = useRef(0);
+  useLayoutEffect(() => { accountScopeRef.current = scope; }, [scope]);
+  const [scopedDefaults, setScopedDefaults] = useState<ScopedPackageDefaults | null>(null);
+  const packageDefaults =
+    accountKey !== null && scopedDefaults?.generation === generation ? scopedDefaults.value : null;
+  const packageDefaultsStatus = accountKey === null ? 'loaded'
+    : scopedDefaults?.generation === generation ? scopedDefaults.status : 'loading';
 
   const [settings, setSettingsState] = useState<UserSettings>(() => {
     return readLegacyUserSettings().settings;
@@ -296,11 +338,15 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const requestScope = accountScopeRef.current;
+      if (requestScope.key === null) return;
+      const isCurrent = () => accountScopeRef.current.generation === requestScope.generation;
       setIsSaving(true);
       setSyncError(null);
 
       try {
         const token = await getAccessToken();
+        if (!isCurrent()) return;
         if (!token) {
           setSyncError("No active authentication token. Settings saved locally.");
           setHasStoredSettings(false);
@@ -308,9 +354,12 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
         }
 
         const response = await patchUserSettings(token, update);
-        setSettingsState(response.settings);
+        if (!isCurrent()) return;
+        const split = splitServerSettings(response.settings);
+        setSettingsState(split.settings);
         setHasStoredSettings(Boolean(response.hasStoredSettings));
       } catch (error) {
+        if (!isCurrent()) return;
         setSyncError(
           error instanceof Error
             ? error.message
@@ -318,7 +367,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
         );
         setHasStoredSettings(false);
       } finally {
-        setIsSaving(false);
+        if (isCurrent()) setIsSaving(false);
       }
     },
     [getAccessToken, isAuthenticated]
@@ -333,25 +382,38 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
   );
 
   const loadFromServer = useCallback(async () => {
-    if (!isAuthenticated) {
+    const requestScope = accountScopeRef.current;
+    if (!isAuthenticated || requestScope.key === null) {
       return;
     }
+    const sequence = ++loadSequenceRef.current;
+    const defaultsRevision = defaultsRevisionRef.current;
+    const isCurrent = () => accountScopeRef.current.generation === requestScope.generation && loadSequenceRef.current === sequence;
 
     setIsLoading(true);
     setSyncError(null);
 
     try {
       const token = await getAccessToken();
+      if (!isCurrent()) return;
       if (!token) {
         setSyncError("No active authentication token. Using local settings.");
+        if (defaultsRevisionRef.current === defaultsRevision) {
+          setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
+        }
         setHasStoredSettings(false);
         return;
       }
 
       const legacy = readLegacyUserSettings();
       const response = await getUserSettings(token);
+      if (!isCurrent()) return;
 
-      applySettings(response.settings);
+      const split = splitServerSettings(response.settings);
+      applySettings(split.settings);
+      if (defaultsRevisionRef.current === defaultsRevision) {
+        setScopedDefaults({ generation: requestScope.generation, value: split.packageDefaults, status: 'loaded' });
+      }
       setHasStoredSettings(Boolean(response.hasStoredSettings));
 
       if (!response.hasStoredSettings && hasAnyLegacySetting(legacy)) {
@@ -372,23 +434,59 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
 
         if (Object.keys(migrationPatch).length > 0) {
           const migrated = await patchUserSettings(token, migrationPatch);
-          applySettings(migrated.settings);
+          if (!isCurrent()) return;
+          applySettings(splitServerSettings(migrated.settings).settings);
           setHasStoredSettings(Boolean(migrated.hasStoredSettings));
         }
       }
     } catch {
+      if (!isCurrent()) return;
       setSyncError("Unable to load server settings. Using local settings.");
+      if (defaultsRevisionRef.current === defaultsRevision) {
+        setScopedDefaults({ generation: requestScope.generation, value: null, status: 'error' });
+      }
       setHasStoredSettings(false);
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
-  }, [applySettings, getAccessToken, isAuthenticated]);
+  }, [generation, applySettings, getAccessToken, isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    setIsSaving(false);
+    setSyncError(null);
+    if (accountKey !== null) {
       void loadFromServer();
+    } else {
+      setIsLoading(false);
     }
-  }, [isAuthenticated, loadFromServer]);
+  }, [accountKey, loadFromServer]);
+
+  const savePackageDefaults = useCallback(
+    async (defaults: PackageDefaults | null) => {
+      const requestScope = accountScopeRef.current;
+      if (requestScope.key === null) {
+        throw new Error("Sign in to save package defaults.");
+      }
+      const token = await getAccessToken();
+      if (accountScopeRef.current.generation !== requestScope.generation) {
+        throw new Error("Account changed. Package defaults were not saved for the current account.");
+      }
+      if (!token) {
+        throw new Error("No active authentication token. Package defaults were not saved.");
+      }
+      const response = await patchUserSettings(token, { packageDefaults: defaults });
+      if (accountScopeRef.current.generation !== requestScope.generation) {
+        throw new Error("Account changed. Package defaults were not saved for the current account.");
+      }
+      defaultsRevisionRef.current += 1;
+      setScopedDefaults({
+        generation: requestScope.generation,
+        value: splitServerSettings(response.settings).packageDefaults,
+        status: 'loaded',
+      });
+    },
+    [getAccessToken]
+  );
 
   const setTheme = useCallback(
     async (theme: ThemeMode) => {
@@ -469,8 +567,16 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       setOnboardingCompleted,
       setCarryOverAssignments,
       setSupersedePreviousApp,
+      packageDefaults,
+      packageDefaultsStatus,
+      packageDefaultsAccountScope: generation,
+      savePackageDefaults,
     }),
     [
+      packageDefaults,
+      packageDefaultsStatus,
+      generation,
+      savePackageDefaults,
       hasStoredSettings,
       isLoading,
       isSaving,

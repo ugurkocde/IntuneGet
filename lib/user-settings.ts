@@ -1,4 +1,4 @@
-import type { UserSettings, UserSettingsResponse, UserSettingsUpdate } from "@/types/user-settings";
+import type { UserSettingsResponse, StoredUserSettingsUpdate } from "@/types/user-settings";
 
 const USER_SETTINGS_ENDPOINT = "/api/user/settings";
 
@@ -24,7 +24,7 @@ export async function getUserSettings(
 
 export async function patchUserSettings(
   accessToken: string,
-  settings: UserSettingsUpdate
+  settings: StoredUserSettingsUpdate
 ): Promise<UserSettingsResponse> {
   const response = await fetch(USER_SETTINGS_ENDPOINT, {
     method: "PATCH",
