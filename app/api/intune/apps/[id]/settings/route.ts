@@ -4,6 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { syncAppRelationships, RelationshipUpdateError } from '@/lib/intune-relationships';
+import type { AppRelationship } from '@/types/intune';
 import { getServerClientOrNull } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
@@ -25,6 +27,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   let phase: 'params' | 'authentication' | 'tenant-resolution' | 'consent' | 'graph-token' | 'app-lookup' | 'request-body' | 'local-config' | 'requirement-rules' | 'set-rules' | 'convert-assignments' | 'assignments' | 'categories' | 'config-read' | 'config-save' = 'params';
+  const applied: string[] = [];
   try {
     const { id: intuneAppId } = await params;
 
@@ -102,10 +105,14 @@ export async function PATCH(
       assignments,
       categories,
       wingetId,
+      relationships,
+      baselineRelationships,
     } = body as {
       assignments?: PackageAssignment[];
       categories?: IntuneAppCategorySelection[];
       wingetId?: string;
+      relationships?: AppRelationship[];
+      baselineRelationships?: AppRelationship[];
     };
 
     phase = 'local-config';
@@ -120,6 +127,34 @@ export async function PATCH(
         { error: 'No matching local deployment configuration was found. Refresh before updating Intune settings.' },
         { status: 409 }
       );
+    }
+
+    // Relationship edits require a saved deployment bound to this user, tenant and exact app.
+    // Persist this phase before any legacy assignment/category writes can fail.
+    if (relationships !== undefined) {
+      if (typeof wingetId !== 'string' || !wingetId) return NextResponse.json({ error: 'A matching deployed package is required.' }, { status: 400 });
+      const db = getDatabase();
+      const source = await db.jobs.getLatestDeployed(user.userId, tenantId, wingetId, intuneAppId);
+      const config = source?.package_config;
+      if (!source || !config || typeof config !== 'object' || Array.isArray(config)) return NextResponse.json({ error: 'Refresh the matching deployed package before updating relationships.' }, { status: 409 });
+      if (!Array.isArray(baselineRelationships) || JSON.stringify(baselineRelationships) !== JSON.stringify(config.relationships ?? [])) {
+        return NextResponse.json({ error: 'The saved relationships changed. Refresh the app before trying again.' }, { status: 409 });
+      }
+      const savedRelationships = await syncAppRelationships(graphToken, intuneAppId, (config.relationships ?? []) as unknown as AppRelationship[], relationships);
+      applied.push('relationships');
+      const fields = { relationships: savedRelationships };
+      if (!supabase) {
+        const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');
+        if (!sqliteDeployedConfig.mergeFields(source.id, { userId: user.userId, tenantId, wingetId, intuneAppId }, fields, source.updated_at)) throw new Error('Save failed');
+      } else {
+        // Compare the source snapshot so a concurrent settings write is never overwritten.
+        const { data: saved, error } = await supabase.from('packaging_jobs')
+          .update({ package_config: { ...config, relationships: savedRelationships } as unknown as Json })
+          .eq('id', source.id).eq('user_id', user.userId).eq('tenant_id', tenantId)
+          .eq('winget_id', wingetId).eq('intune_app_id', intuneAppId).eq('status', 'deployed')
+          .is('archived_at', null).eq('updated_at', source.updated_at).select('id').maybeSingle();
+        if (error || !saved) throw new Error('Save failed');
+      }
     }
 
     // Apply assignments
@@ -159,11 +194,11 @@ export async function PATCH(
     }
 
     // Persist updated assignments/categories in the most recent packaging_jobs row
-    if (wingetId && supabase) {
+    if (wingetId && supabase && (assignments || categories)) {
       phase = 'config-read';
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
-        .select('id, package_config')
+        .select('id, package_config, updated_at')
         .eq('user_id', user.userId)
         .eq('tenant_id', tenantId)
         .eq('winget_id', wingetId)
@@ -190,6 +225,7 @@ export async function PATCH(
           .from('packaging_jobs')
           .update({ package_config: updatedConfig })
           .eq('id', latestJob.id)
+          .eq('updated_at', latestJob.updated_at)
           .eq('user_id', user.userId)
           .eq('tenant_id', tenantId)
           .eq('winget_id', wingetId)
@@ -225,6 +261,10 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof RelationshipUpdateError) {
+      return NextResponse.json({ error: err.kind === 'approval_pending' ? 'Relationship update is awaiting administrator approval. Refresh before trying again.' : err.message, pending: err.kind === 'approval_pending', mayHaveApplied: err.mayHaveApplied, applied }, { status: err.kind === 'invalid' ? 400 : 409 });
+    }
+    if (applied.length) return NextResponse.json({ error: 'Relationships were applied, but the remaining settings or saved configuration could not be updated. Refresh before trying again.', applied }, { status: 409 });
     // Log only a fixed phase. Errors and request data may contain customer secrets.
     const errorKind = err instanceof Error && ['Error', 'TypeError', 'SyntaxError', 'AbortError'].includes(err.name)
       ? err.name : 'other';
