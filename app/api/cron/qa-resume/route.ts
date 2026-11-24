@@ -175,7 +175,9 @@ export async function GET(request: Request) {
       }
       const installerType = item.installerType || job.installer_type || 'exe';
       demandWasEvaluated = true;
-      const demand = await ensureQaDemand(supabase, {
+      let demand: Awaited<ReturnType<typeof ensureQaDemand>>;
+      try {
+        demand = await ensureQaDemand(supabase, {
         wingetId: job.winget_id,
         displayName: item.displayName || job.display_name,
         publisher: item.publisher || job.publisher || 'Unknown Publisher',
@@ -198,7 +200,12 @@ export async function GET(request: Request) {
         detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
         priority: job.is_auto_update ? QA_PRIORITY_DEMAND : QA_PRIORITY_CUSTOMER,
         demandSource: job.is_auto_update ? 'auto_update' : 'customer',
-      });
+        });
+      } catch {
+        // A transient manifest or demand read must not stop unrelated jobs.
+        // Keep this job behind the existing guarded waiting-job backoff.
+        waitingIds.push(job.id); waiting++; continue;
+      }
       candidateStatus = demand.state === 'waiting' ? 'queued' : demand.state;
       candidateFailureSummary = demand.failureSummary || null;
       appVersionAlreadyPassed = demand.state === 'passed';
