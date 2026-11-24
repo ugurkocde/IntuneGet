@@ -147,7 +147,7 @@ export async function PATCH(
           .update({ package_config: { ...config, relationships: savedRelationships } as unknown as Json })
           .eq('id', source.id).eq('user_id', user.userId).eq('tenant_id', tenantId)
           .eq('winget_id', wingetId).eq('intune_app_id', intuneAppId).eq('status', 'deployed')
-          .is('archived_at', null).eq('package_config', JSON.stringify(config)).select('id').maybeSingle();
+          .is('archived_at', null).eq('updated_at', source.updated_at).select('id').maybeSingle();
         if (error || !saved) throw new Error('Save failed');
       }
     }
@@ -189,7 +189,7 @@ export async function PATCH(
     }
 
     // Persist updated assignments/categories in the most recent packaging_jobs row
-    if (wingetId && supabase) {
+    if (wingetId && supabase && (assignments || categories)) {
       phase = 'config-read';
       const { data: latestJob } = await supabase
         .from('packaging_jobs')

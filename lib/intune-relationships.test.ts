@@ -22,6 +22,15 @@ describe('same-app relationship updates', () => {
     expect(() => computeRelationshipUpdate([], [wanted], [wanted])).toThrow();
     expect(() => computeRelationshipUpdate([{ ...edge, dependencyType: 'detect' }], [], [wanted])).toThrow();
   });
+  it('reconciles a removal already applied by approval or an uncertain prior request', () => {
+    expect(computeRelationshipUpdate([], [wanted], [])).toEqual([]);
+  });
+  it('reconciles a subtype change already applied before the local save', () => {
+    const desired = { ...wanted, dependencyType: 'detect' as const };
+    expect(computeRelationshipUpdate([{ ...edge, dependencyType: 'detect' }], [wanted], [desired])).toEqual([
+      { '@odata.type': edge['@odata.type'], targetId: target, dependencyType: 'detect', id: 'saved-id' },
+    ]);
+  });
   it.each([[{ ...wanted, targetId: app }], [wanted, wanted], [{ ...wanted, dependencyType: 'invalid' }], [{ ...wanted, targetId: 'bad/id' }]])('rejects invalid relationships', value => {
     expect(() => validateRelationships(value, app)).toThrow();
   });
@@ -56,5 +65,12 @@ describe('same-app relationship updates', () => {
       .mockResolvedValueOnce(Response.json({ value: [] }));
     vi.stubGlobal('fetch', fetcher);
     await expect(syncAppRelationships('fixture-token', app, [], [wanted])).rejects.toMatchObject({ kind: 'readback_mismatch', mayHaveApplied: true });
+  });
+  it('catches the saved baseline up after approval without submitting another mutation', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ value: [] }));
+    vi.stubGlobal('fetch', fetcher);
+    expect(await syncAppRelationships('fixture-token', app, [wanted], [])).toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1].method).toBeUndefined();
   });
 });

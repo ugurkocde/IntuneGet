@@ -37,7 +37,10 @@ export function computeRelationshipUpdate(live: Edge[], baseline: AppRelationshi
   const after = new Map(desired.map(x => [key(edge(x)), edge(x)]));
   for (const [k, old] of before) {
     const actual = next.get(k);
-    // Out-of-band edits must be reconciled, never resurrected or overwritten.
+    const wanted = after.get(k);
+    // An approved or uncertain prior write may already have reached Graph.
+    if ((!actual && !wanted) || (actual && wanted && signature(actual) === signature(wanted))) continue;
+    // A third state is an out-of-band conflict, never overwrite it.
     if (!actual || signature(actual) !== signature(old)) throw new RelationshipUpdateError('conflict');
     if (!after.has(k)) next.delete(k);
   }
@@ -89,7 +92,9 @@ export async function syncAppRelationships(token: string, appId: string, baselin
     if (url) throw new RelationshipUpdateError('rejected');
     return rows;
   };
-  const payload = computeRelationshipUpdate(await list(), baseline, canonical);
+  const live = await list();
+  const payload = computeRelationshipUpdate(live, baseline, canonical);
+  if (JSON.stringify(live.filter(x => x.targetType === 'child').map(signature).sort()) === JSON.stringify(payload.map(signature).sort())) return canonical;
   let response: Response;
   try { response = await request(`${BASE}${appId}/updateRelationships`, { method: 'POST', body: JSON.stringify({ relationships: payload }) }); }
   catch (error) { if (error instanceof RelationshipUpdateError) throw error; throw new RelationshipUpdateError('readback_mismatch', true); }
