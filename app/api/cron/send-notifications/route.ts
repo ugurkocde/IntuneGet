@@ -11,7 +11,7 @@ import { isEmailConfigured } from '@/lib/email/service';
 import { notifyUserOfPendingUpdates } from '@/lib/notifications/notify-user';
 import type { UpdateCheckResult } from '@/types/notifications';
 
-const BATCH_SIZE = 20;
+const USER_START_INTERVAL_MS = 500;
 
 // Rows requested per read. PostgREST returns at most its max-rows setting
 // (1000 on hosted Supabase) per request, whatever the request asks for.
@@ -192,33 +192,26 @@ export async function GET(request: Request) {
 
     const userIds = orderUsersForDay(Array.from(userUpdates.keys()), Math.floor(startedAt / DAY_MS));
 
-    // Process users in batches, delegating per-user delivery to the shared
-    // helper that the on-demand refresh path also uses.
+    // Space user starts to avoid a burst of concurrent email requests. Rows
+    // not reached within the budget stay pending for the next daily run.
     let usersProcessed = 0;
-    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
-      if (Date.now() - startedAt > PROCESSING_BUDGET_MS) {
-        break;
+    let lastUserStartedAt: number | null = null;
+    for (const userId of userIds) {
+      if (Date.now() - startedAt >= PROCESSING_BUDGET_MS) break;
+      if (lastUserStartedAt !== null) {
+        const waitMs = lastUserStartedAt + USER_START_INTERVAL_MS - Date.now();
+        if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
       }
-
-      const batchUserIds = userIds.slice(i, i + BATCH_SIZE);
-
-      await Promise.all(
-        batchUserIds.map(async (userId) => {
-          const res = await notifyUserOfPendingUpdates(supabase, userId, {
-            pendingUpdates: userUpdates.get(userId)!,
-          });
-          emailsSent += res.emailsSent;
-          webhooksSent += res.webhooksSent;
-          updatesProcessed += res.notifiedUpdateIds.length;
-          errors.push(...res.errors);
-        })
-      );
-      usersProcessed += batchUserIds.length;
-
-      // Rate limiting between batches
-      if (i + BATCH_SIZE < userIds.length) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      if (Date.now() - startedAt >= PROCESSING_BUDGET_MS) break;
+      lastUserStartedAt = Date.now();
+      const res = await notifyUserOfPendingUpdates(supabase, userId, {
+        pendingUpdates: userUpdates.get(userId)!,
+      });
+      emailsSent += res.emailsSent;
+      webhooksSent += res.webhooksSent;
+      updatesProcessed += res.notifiedUpdateIds.length;
+      errors.push(...res.errors);
+      usersProcessed++;
     }
 
     const usersRemaining = userIds.length - usersProcessed;
