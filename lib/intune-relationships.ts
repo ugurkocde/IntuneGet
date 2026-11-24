@@ -68,7 +68,7 @@ export async function syncAppRelationships(token: string, appId: string, baselin
   };
   const canonical: AppRelationship[] = [];
   for (const item of desired) {
-    const response = await request(`${BASE}${item.targetId}?$select=id,displayName,displayVersion`);
+    const response = await request(`${BASE}${item.targetId}`);
     if (response.status === 404) throw new RelationshipUpdateError('invalid');
     if (!response.ok) throw new RelationshipUpdateError('rejected');
     const target = await response.json();

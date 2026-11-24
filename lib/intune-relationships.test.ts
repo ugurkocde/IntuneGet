@@ -45,6 +45,21 @@ describe('same-app relationship updates', () => {
     expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ relationships: [{ '@odata.type': edge['@odata.type'], targetId: target, dependencyType: 'autoInstall' }] });
     expect(fetcher.mock.calls.some(c => c[1].method === 'DELETE')).toBe(false);
   });
+  it('reads derived target metadata without selecting fields on the mobileApp base type', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith('/relationships')) return Response.json({ value: [edge] });
+      if (parsed.searchParams.get('$select')?.split(',').includes('displayVersion')) {
+        return Response.json({ error: { message: 'Could not find a property named displayVersion on type microsoft.graph.mobileApp' } }, { status: 400 });
+      }
+      return Response.json({ id: target, displayName: 'Trusted label', displayVersion: '2' });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    expect(await syncAppRelationships('fixture-token', app, [wanted], [wanted])).toEqual([
+      { ...wanted, targetDisplayName: 'Trusted label', targetVersion: '2' },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it('reports approval pending without retry or persistence claims', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ id: target }))
       .mockResolvedValueOnce(Response.json({ value: [] }))
