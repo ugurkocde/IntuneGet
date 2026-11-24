@@ -86,3 +86,42 @@ Rollback restores the exact preceding function definition from
 VOLATILE mode, overlap lock and 2 s configuration. Restore only the function
 definition, not earlier grant or unrelated migration statements, and verify the
 preceding body MD5 `453e81d15e8cfa87dfcecf8e00f76af1` plus ACL and owner.
+## Cron-only selection budget
+
+The cron uses `qa_cron_demand_backfill_ids`, an additive service-role-only RPC
+whose body matches the active eligible-priority selector. Its server bound is
+8 s and the demand lane's client/race bound is 9 s. The original RPC retains
+its 2 s setting; other optional lane and checkpoint limits remain 2.5 s.
+Both functions use the same nonblocking transaction advisory lock `(1849,1)`.
+This admits at most one selector across the two names. There is no retry or
+parallel selection, and the existing five-row limit and skip-next behavior stay.
+
+The migration fails closed unless the old body is
+`e13e0a07df117bd78f37ee037e497253`, its settings and attributes match, and the
+migration role owns it. It creates the new function without replacement,
+revokes PUBLIC/anon/authenticated defaults, and grants only service_role.
+Postconditions verify identical bodies and owners, new 8 s configuration,
+denied anonymous/authenticated execution, and unchanged old body/config/ACL.
+
+The real PG17 contract uses `work_mem=3500kB` and models PostgREST timeout
+hoisting with a separate settings statement before the call. A local 3 s
+relation-lock hold makes OLD return SQL57014 at 2 s while the cron function
+completes after release. A 9 s hold verifies its finite 8 s cancellation.
+This models a cutoff overrun; it does not establish production lock contention.
+
+After exact source review, CI, CodeRabbit and coordination qualify, obtain the
+normal operational review for the immutable migration. Apply and verify the
+additive function before merging/deploying the caller, send schema reload and
+observe available reload evidence. The first natural cron slot establishes
+functional reachability; do not invoke the selector or replay work to prove it.
+Report any cache/reachability gap honestly. No role, project or credential settings change.
+
+Rollback reverts the caller first. Remove the dedicated RPC only in a later
+reviewed cleanup migration after no caller uses it. Keep the old RPC and its
+2 s settings unchanged throughout.
+
+Acceptance requires six consecutive attempted demand slots without SQL57014,
+at least one actual demand-key job queued when eligible demand exists, and zero
+five-row multi-route503/504 bursts within two minutes in the same window.
+Changed-feed jobs, skipped ticks, zero-row overlap skips and health200 do not
+establish demand recovery. Preserve all older failed windows and misses.
