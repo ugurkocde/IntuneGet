@@ -47,8 +47,9 @@ function Get-PostPowerShellHook {
         }
     }
     if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
-    # Reject directives before parsing; do not resolve author modules/assemblies.
-    if ($Value -match '(?im)(?:^|;)\s*using\s|#requires\b') { throw "PSADT $Name cannot contain using or requires directives." }
+    # Reject directives anywhere before parsing, including after comments or bare CR.
+    # This deliberately refuses the word in strings/comments to avoid parser resolution.
+    if ($Value -match '(?i)(?<![\w$-])using(?![\w-])|#requires\b') { throw "PSADT $Name cannot contain using or requires directives." }
     $hookTokens = $null; $hookErrors = $null
     $hookAst = [System.Management.Automation.Language.Parser]::ParseInput($Value, [ref]$hookTokens, [ref]$hookErrors)
     if ($hookErrors.Count -gt 0) {

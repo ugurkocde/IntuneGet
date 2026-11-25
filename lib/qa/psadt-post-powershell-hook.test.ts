@@ -125,6 +125,21 @@ describe.runIf(pwshAvailable && process.platform === 'win32')('hosted in-session
     expect(out.log).not.toContain('secret_sentinel');
   }, 60_000);
 
+  it.each([
+    '<#c#>using assembly secret_sentinel',
+    '# c\rusing module secret_sentinel',
+    '\u00a0using assembly secret_sentinel',
+    '\tUsInG module secret_sentinel',
+  ])('rejects disguised directives before parser resolution: case %#', (value) => {
+    for (const field of hooks) {
+      const out = build({ [field]: value });
+      expect(out.status).not.toBe(0);
+      expect(out.script).toBe('');
+      expect(out.log).toContain('cannot contain using or requires directives');
+      expect(out.log).not.toContain('secret_sentinel');
+    }
+  }, 60_000);
+
   it('accepts a bounded string and loop-local control flow without executing it', () => {
     const hook = "foreach ($x in 1..2) { if ($x -eq 1) { continue }; break }; return";
     const out = build({ postInstallPowerShell: hook, postUninstallPowerShell: '# ' + 'x'.repeat(8190) });
