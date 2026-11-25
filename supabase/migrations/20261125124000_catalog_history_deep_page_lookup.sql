@@ -5,6 +5,7 @@ DO $migration$
 DECLARE original record; replacement record;
 BEGIN
  IF to_regprocedure('public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)') IS NULL THEN RAISE EXCEPTION 'Unexpected catalog history source'; END IF;
+ IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid='public.curated_apps'::regclass AND attname='id' AND atttypid='integer'::regtype AND attnotnull AND NOT attisdropped) THEN RAISE EXCEPTION 'Unexpected catalog app identity'; END IF;
  ALTER FUNCTION public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text) COST 100;
  SELECT proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) AS body_md5
  INTO original FROM pg_proc WHERE oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure;
@@ -48,21 +49,33 @@ SELECT jsonb_build_object(
 ) FROM global_metadata m
 ) WHEN coalesce(app_filter,'')='' AND coalesce(search_text,'')='' AND coalesce(month_filter,'')=''
  AND date_from IS NULL AND date_to IS NULL AND coalesce(architecture_filter,'')='' AND kind_filter='all' THEN (
-WITH hist AS MATERIALIZED (
- -- Keep an uncovered column in this materialized projection: an index-only
- -- walk can otherwise revisit most heap pages before selecting a deep page.
- SELECT v.id,v.winget_id,v.created_at,v.version FROM public.version_history v
- WHERE v.created_at IS NOT NULL
-), visible AS NOT MATERIALIZED (
- SELECT h.id,h.winget_id,h.created_at AS detected_at FROM hist h
- JOIN public.curated_apps c ON c.winget_id=h.winget_id
- WHERE c.is_locale_variant IS NOT TRUE
+WITH agg AS MATERIALIZED (
+ -- Plain aggregates avoid a history tuplestore. Sort only by-value datums.
+ SELECT array_agg(v.created_at) AS ts,array_agg(c.id) AS app_ids
+ FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
+ WHERE v.created_at IS NOT NULL AND c.is_locale_variant IS NOT TRUE
+), ord AS MATERIALIZED (
+ SELECT array_agg(t ORDER BY t) AS ts FROM (SELECT unnest(a.ts) AS t FROM agg a) s
 ), global_metadata AS MATERIALIZED (
- SELECT count(*) AS total,count(DISTINCT winget_id) AS apps,min(detected_at) AS coverage_start,coalesce(jsonb_agg(DISTINCT to_char(detected_at AT TIME ZONE 'UTC','YYYY-MM') ORDER BY to_char(detected_at AT TIME ZONE 'UTC','YYYY-MM') DESC),'[]'::jsonb) AS months,array_agg(id ORDER BY detected_at DESC,id DESC) AS ordered_ids FROM visible
+ SELECT coalesce(cardinality(o.ts),0) AS total,o.ts[1] AS coverage_start,
+ (greatest(1,least(coalesce(page_number,1),10000))-1)*40 AS skipped,
+ (SELECT count(DISTINCT i) FROM (SELECT unnest(a.app_ids) AS i FROM agg a) s) AS apps,
+ coalesce((SELECT jsonb_agg(m ORDER BY m DESC) FROM (
+  SELECT to_char(t AT TIME ZONE 'UTC','YYYY-MM') AS m
+  FROM (SELECT unnest(o.ts) AS t) u GROUP BY m
+ ) months),'[]'::jsonb) AS months
+ FROM ord o
+), bounds AS MATERIALIZED (
+ -- width_bucket counts timestamps <= hi, locating the first boundary tie.
+ SELECT o.ts[m.total-m.skipped] AS hi,o.ts[greatest(m.total-m.skipped-39,1)] AS lo,
+ m.skipped-(m.total-width_bucket(o.ts[m.total-m.skipped],o.ts)) AS tie_skip
+ FROM global_metadata m CROSS JOIN ord o WHERE m.total>m.skipped
 ), page_ids AS MATERIALIZED (
- SELECT s.id FROM global_metadata m CROSS JOIN LATERAL unnest(m.ordered_ids[
-   (greatest(1,least(coalesce(page_number,1),10000))-1)*40+1:
-    greatest(1,least(coalesce(page_number,1),10000))*40]) AS s(id)
+ SELECT w.id FROM bounds b CROSS JOIN LATERAL (
+  SELECT v.id,row_number() OVER (ORDER BY v.created_at DESC,v.id DESC) AS rn
+  FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
+  WHERE v.created_at BETWEEN b.lo AND b.hi AND c.is_locale_variant IS NOT TRUE
+ ) w WHERE w.rn>b.tie_skip AND w.rn<=b.tie_skip+40
 ), page_rows AS MATERIALIZED (
  SELECT v.winget_id,c.name,c.publisher,v.version,v.release_date,v.created_at AS detected_at,v.id
  FROM page_ids s JOIN public.version_history v ON v.id=s.id
@@ -189,7 +202,7 @@ $$;
 $definition$;
  SELECT proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) AS body_md5
  INTO replacement FROM pg_proc WHERE oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure;
- IF replacement.body_md5 NOT IN ('3b3b6d8f9efa33c170b01b9147187eea','904a07f06db1b8eb9fa27fd2e1d717aa')
+ IF replacement.body_md5 NOT IN ('140284c9ef91b45bfd09845c99bb1651','839974702e6611589ab67450c681f7fe')
   OR replacement.proowner IS DISTINCT FROM original.proowner OR replacement.proacl IS DISTINCT FROM original.proacl
   OR replacement.proconfig IS DISTINCT FROM original.proconfig OR replacement.prosecdef IS DISTINCT FROM original.prosecdef
   OR replacement.provolatile IS DISTINCT FROM original.provolatile OR replacement.prolang IS DISTINCT FROM original.prolang
@@ -238,21 +251,27 @@ SELECT coalesce((SELECT jsonb_agg(to_jsonb(p) - 'id' ORDER BY detected_at DESC, 
   $query$ INTO result USING page_number;
  ELSE
   EXECUTE $query$
-WITH hist AS MATERIALIZED (
- -- Keep an uncovered column in this materialized projection: an index-only
- -- walk can otherwise revisit most heap pages before selecting a deep page.
- SELECT v.id,v.winget_id,v.created_at,v.version FROM public.version_history v
- WHERE v.created_at IS NOT NULL
-), visible AS NOT MATERIALIZED (
- SELECT h.id,h.winget_id,h.created_at AS detected_at FROM hist h
- JOIN public.curated_apps c ON c.winget_id=h.winget_id
- WHERE c.is_locale_variant IS NOT TRUE
-), page_lookup AS MATERIALIZED (
- SELECT array_agg(id ORDER BY detected_at DESC,id DESC) AS ordered_ids FROM visible
+WITH agg AS MATERIALIZED (
+ -- Match the V2 timestamp bounds without its metadata-only app array.
+ SELECT array_agg(v.created_at) AS ts
+ FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
+ WHERE v.created_at IS NOT NULL AND c.is_locale_variant IS NOT TRUE
+), ord AS MATERIALIZED (
+ SELECT array_agg(t ORDER BY t) AS ts FROM (SELECT unnest(a.ts) AS t FROM agg a) s
+), global_metadata AS MATERIALIZED (
+ SELECT coalesce(cardinality(o.ts),0) AS total,o.ts[1] AS coverage_start,
+ (greatest(1,least(coalesce($1,1),10000))-1)*40 AS skipped
+ FROM ord o
+), bounds AS MATERIALIZED (
+ SELECT o.ts[m.total-m.skipped] AS hi,o.ts[greatest(m.total-m.skipped-39,1)] AS lo,
+ m.skipped-(m.total-width_bucket(o.ts[m.total-m.skipped],o.ts)) AS tie_skip
+ FROM global_metadata m CROSS JOIN ord o WHERE m.total>m.skipped
 ), page_ids AS MATERIALIZED (
- SELECT s.id FROM page_lookup m CROSS JOIN LATERAL unnest(m.ordered_ids[
-   (greatest(1,least(coalesce($1,1),10000))-1)*40+1:
-    greatest(1,least(coalesce($1,1),10000))*40]) AS s(id)
+ SELECT w.id FROM bounds b CROSS JOIN LATERAL (
+  SELECT v.id,row_number() OVER (ORDER BY v.created_at DESC,v.id DESC) AS rn
+  FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
+  WHERE v.created_at BETWEEN b.lo AND b.hi AND c.is_locale_variant IS NOT TRUE
+ ) w WHERE w.rn>b.tie_skip AND w.rn<=b.tie_skip+40
 ), page_rows AS MATERIALIZED (
  SELECT v.winget_id,c.name,c.publisher,v.version,v.release_date,v.created_at AS detected_at,v.id
  FROM page_ids s JOIN public.version_history v ON v.id=s.id
@@ -278,7 +297,7 @@ $function$;
 $definition$;
  SELECT proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) AS body_md5
  INTO replacement FROM pg_proc WHERE oid='public.get_catalog_release_history_global_rows(integer)'::regprocedure;
- IF replacement.body_md5 NOT IN ('635dfeca8bf03089ed5f0b36dfd63697','911343084098963bcd0b099862ee3d2a')
+ IF replacement.body_md5 NOT IN ('d5bbdf22c9cb272b737fab91882d4d91','3057edd36a50792f47eab226703cebbd')
   OR replacement.proowner IS DISTINCT FROM original.proowner OR replacement.proacl IS DISTINCT FROM original.proacl
   OR replacement.proconfig IS DISTINCT FROM original.proconfig OR replacement.prosecdef IS DISTINCT FROM original.prosecdef
   OR replacement.provolatile IS DISTINCT FROM original.provolatile OR replacement.prolang IS DISTINCT FROM original.prolang
