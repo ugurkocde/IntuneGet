@@ -2,11 +2,11 @@ import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const state = vi.hoisted(() => ({ job: {} as Record<string, unknown>, update: vi.fn(), get: vi.fn(), history: vi.fn(), completed: vi.fn(), cleanup: vi.fn() }));
+const state = vi.hoisted(() => ({ job: {} as Record<string, unknown>, update: vi.fn(), get: vi.fn(), history: vi.fn(), completed: vi.fn(), cleanup: vi.fn(), policy: vi.fn(), chosenPolicy: vi.fn() }));
 vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { getById: state.get, update: state.update }, uploadHistory: { create: state.history } }) }));
 vi.mock('@/lib/msp/batch-orchestrator', () => ({ onJobCompleted: state.completed }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: state.cleanup }));
-vi.mock('@/lib/update-policies/ensure-policy', () => ({ ensureUpdatePolicy: vi.fn(), parseCartUpdatePolicy: () => null }));
+vi.mock('@/lib/update-policies/ensure-policy', () => ({ ensureUpdatePolicy: state.policy, parseCartUpdatePolicy: state.chosenPolicy }));
 vi.mock('@/lib/installer-preflight', () => ({ quarantineInstaller: vi.fn() }));
 import { POST } from './route';
 
@@ -26,6 +26,8 @@ describe('retired customer run callback fences', () => {
     state.history.mockReset().mockResolvedValue({});
     state.completed.mockReset().mockResolvedValue(undefined);
     state.cleanup.mockReset().mockResolvedValue(undefined);
+    state.policy.mockReset().mockResolvedValue({ status: 'saved' });
+    state.chosenPolicy.mockReset().mockReturnValue(null);
     state.update.mockReset().mockImplementation(async (_id, patch) => ({ ...state.job, ...patch }));
   });
   it('ignores a late callback while fresh QA admission is pending', async () => {
@@ -109,6 +111,45 @@ describe('retired customer run callback fences', () => {
     state.job.callback_run_id = '43';
     expect(await (await send('43', '43-2')).json()).toMatchObject({ success: true });
     expect(state.update).toHaveBeenCalled();
+  });
+  it.each([undefined, '22222222-2222-4222-8222-222222222222'])('fails a same app deployment with a different or missing target: %s', async intuneAppId => {
+    state.job.package_config = { updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' };
+    const result = await (await send('43', '43-1', 'deployed', { intuneAppId })).json();
+    expect(result.job).toMatchObject({ status: 'failed', error_code: 'SAME_APP_CALLBACK_BINDING_MISMATCH' });
+    expect(state.update.mock.calls[0][1]).not.toHaveProperty('intune_app_id');
+    expect(state.history).not.toHaveBeenCalled();
+    expect(state.completed).toHaveBeenCalledWith(jobId, 'failed', expect.any(String));
+  });
+  it('refuses duplicate skipped as a successful same app update', async () => {
+    state.job.package_config = { updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' };
+    expect(await (await send('43', '43-1', 'duplicate_skipped', { intuneAppId: '11111111-1111-4111-8111-111111111111' })).json())
+      .toMatchObject({ job: { status: 'failed', error_code: 'SAME_APP_CALLBACK_BINDING_MISMATCH' } });
+    expect(state.update.mock.calls[0][1]).not.toHaveProperty('intune_app_id');
+    expect(state.history).not.toHaveBeenCalled();
+  });
+  it('records a matching same app deployment without creating an update policy', async () => {
+    state.job.package_config = { updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' };
+    state.job.tenant_id = 'fixture-tenant';
+    state.chosenPolicy.mockReturnValue('auto');
+    expect(await (await send('43', '43-1', 'deployed', { intuneAppId: '11111111-1111-4111-8111-111111111111' })).json())
+      .toMatchObject({ job: { status: 'deployed', intune_app_id: '11111111-1111-4111-8111-111111111111' } });
+    expect(state.history).toHaveBeenCalledTimes(1);
+    expect(state.policy).not.toHaveBeenCalled();
+  });
+  it('makes content activation explicit after a failed same app update', async () => {
+    state.job.package_config = { updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' };
+    expect(await (await send('43', '43-1', 'failed', { message: 'Follow-up failed', errorDetails: { intuneResourceState: 'activated_new_content' } })).json())
+      .toMatchObject({ job: { status: 'failed', status_message: expect.stringContaining('New content is active'), error_details: { intuneResourceState: 'activated_new_content' } } });
+    expect(state.history).not.toHaveBeenCalled();
+  });
+  it('does not rescue a callback after the stored same app target changes', async () => {
+    state.job.package_config = { updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' };
+    const fresh = { ...state.job, updated_at: '2026-11-10T10:00:11Z', package_config: { updateMode: 'sameApp', targetIntuneAppId: '22222222-2222-4222-8222-222222222222' } };
+    state.get.mockResolvedValueOnce({ ...state.job }).mockResolvedValueOnce(fresh);
+    state.update.mockResolvedValueOnce(null);
+    expect(await (await send('43', '43-1', 'deployed', { intuneAppId: '11111111-1111-4111-8111-111111111111' })).json()).toMatchObject({ ignored: true });
+    expect(state.update).toHaveBeenCalledTimes(1);
+    expect(state.history).not.toHaveBeenCalled();
   });
   it('never acknowledges a retired runner with the active replacement job', async () => {
     state.job.callback_run_id = '43';

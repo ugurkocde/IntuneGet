@@ -72,6 +72,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const binding = (job: NonNullable<typeof currentJob>) => {
+      const config = job.package_config as { updateMode?: unknown; targetIntuneAppId?: unknown } | null;
+      return JSON.stringify([job.user_id, job.tenant_id, job.winget_id,
+        config?.updateMode, config?.targetIntuneAppId]);
+    };
+    const config = currentJob.package_config as { updateMode?: unknown; targetIntuneAppId?: unknown } | null;
+    const sameApp = config?.updateMode === 'sameApp';
+    if (sameApp) {
+      const target = config?.targetIntuneAppId;
+      const validTarget = typeof target === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(target);
+      if (data.status === 'duplicate_skipped' || (data.status === 'deployed'
+        && (!validTarget || data.intuneAppId?.toLowerCase() !== target.toLowerCase()))) {
+        // A signed callback still cannot substitute another app for this job.
+        // Run ownership and the normal revision guard protect this failure too.
+        data.status = 'failed';
+        data.errorCode = 'SAME_APP_CALLBACK_BINDING_MISMATCH';
+        data.errorCategory = 'validation';
+        data.errorStage = 'finalize';
+        data.message = 'The same app update result does not match its saved target. Verify the existing app before retrying.';
+        data.retryable = false;
+      }
+      if (data.status === 'failed' && data.errorDetails?.intuneResourceState === 'activated_new_content') {
+        data.message = 'New content is active in the existing app, but follow-up processing failed. Verify the app before retrying.';
+      }
+    }
+
     const updateData: Partial<typeof currentJob> = {
       callback_run_id: incomingRun,
       status: data.status,
@@ -161,6 +187,7 @@ export async function POST(request: NextRequest) {
           || (!currentJob.callback_run_id && latestJob.callback_run_id === incomingRun))
         && (!currentJob.callback_run_id || latestJob.github_run_id === currentJob.github_run_id)
         && latestJob.infrastructure_retry_run_id === currentJob.infrastructure_retry_run_id
+        && binding(latestJob) === binding(currentJob)
         && !isRetiredRunCallback(latestJob.infrastructure_retry_run_id, data.runId, data.attemptId)
         && shouldApplyCallback(latestJob.status, data.status, latestJob.updated_at)) {
         updatedJob = await db.jobs.update(data.jobId, {
@@ -235,7 +262,7 @@ export async function POST(request: NextRequest) {
 
       // Materialize an update policy chosen in the cart, now that the
       // upload_history row exists to anchor original_upload_history_id.
-      const chosenPolicy = parseCartUpdatePolicy(currentJob.package_config);
+      const chosenPolicy = sameApp ? null : parseCartUpdatePolicy(currentJob.package_config);
       if (chosenPolicy && currentJob.tenant_id) {
         const policyResult = await ensureUpdatePolicy({
           userId: currentJob.user_id,
