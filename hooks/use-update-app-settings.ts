@@ -1,5 +1,7 @@
 'use client';
 
+import type { AppRelationship } from '@/types/intune';
+
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMicrosoftAuth } from './useMicrosoftAuth';
 import { useMspOptional } from './useMspOptional';
@@ -10,6 +12,8 @@ interface UpdateAppSettingsRequest {
   wingetId: string;
   assignments?: PackageAssignment[];
   categories?: IntuneAppCategorySelection[];
+  relationships?: AppRelationship[];
+  baselineRelationships?: AppRelationship[];
 }
 
 export function useUpdateAppSettings() {
@@ -19,7 +23,7 @@ export function useUpdateAppSettings() {
   const tenantKey = isMspUser ? selectedTenantId || 'primary' : 'self';
 
   const mutation = useMutation<{ success: boolean }, Error, UpdateAppSettingsRequest>({
-    mutationFn: async ({ intuneAppId, wingetId, assignments, categories }) => {
+    mutationFn: async ({ intuneAppId, wingetId, assignments, categories, relationships, baselineRelationships }) => {
       const token = await getAccessToken();
       if (!token) {
         throw new Error('Not authenticated');
@@ -36,7 +40,7 @@ export function useUpdateAppSettings() {
               ? { 'X-MSP-Tenant-Id': selectedTenantId }
               : {}),
           },
-          body: JSON.stringify({ assignments, categories, wingetId }),
+          body: JSON.stringify({ assignments, categories, wingetId, relationships, baselineRelationships }),
         }
       );
 

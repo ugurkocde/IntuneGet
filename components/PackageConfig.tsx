@@ -28,6 +28,7 @@ import {
   Shield,
   Link2,
 } from 'lucide-react';
+import { PowerShellHooksConfig } from '@/components/PowerShellHooksConfig';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -41,6 +42,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { AppIcon } from '@/components/AppIcon';
+import { isWin32CartItem } from '@/types/upload';
 import { AssignmentConfig } from '@/components/AssignmentConfig';
 import { CartUpdatePolicyPicker, type CartUpdatePolicyValue } from '@/components/updates/CartUpdatePolicyPicker';
 import { CategoryConfig } from '@/components/CategoryConfig';
@@ -69,6 +71,7 @@ import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import type { ReactNode } from 'react';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
+import { getClientFeatureFlags } from '@/lib/features';
 import { INTUNE_APP_SOURCE_MARKER } from '@/lib/intune-description';
 import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';
@@ -85,6 +88,21 @@ import { useLocaleVariants, usePackageManifest } from '@/hooks/use-packages';
 import { resolveListedWingetVersion } from '@/lib/winget-version';
 import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
+import { applyPackageDefaults, pickPackageDefaults } from '@/lib/package-defaults';
+import type { PackageDefaults } from '@/types/user-settings';
+
+// Keep aligned with the hosted runner architecture contract in lib/qa/candidate.ts.
+export const HOSTED_QA_ARCHITECTURES: ReadonlySet<string> = new Set(['x64', 'x86']);
+const HOSTED_QA_ARCH_REASON =
+  'Hosted testing runs on x64 and x86 only, so ARM64 builds cannot be deployed yet.';
+
+function firstSelectableArchitecture(installers: NormalizedInstaller[], hostedGate: boolean): WingetArchitecture | undefined {
+  if (!hostedGate) return installers[0]?.architecture;
+  return (['x64', 'x86', 'arm64'] as WingetArchitecture[]).find(
+    (arch) => installers.some((installer) => installer.architecture === arch)
+      && (!hostedGate || HOSTED_QA_ARCHITECTURES.has(arch))
+  ) ?? installers[0]?.architecture;
+}
 
 interface PackageConfigProps {
   package: NormalizedPackage;
@@ -116,8 +134,17 @@ type ConfigSection =
   | 'branding'
   | 'advanced';
 
-export function PackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest, configurationRefreshNotice }: PackageConfigProps) {
+export function PackageConfig(props: PackageConfigProps) {
+  const { packageDefaultsAccountScope } = useUserSettings();
+  return <AccountPackageConfig key={packageDefaultsAccountScope ?? 0} {...props} />;
+}
+
+function AccountPackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest, configurationRefreshNotice }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
+  const hostedQaArchGate = !isStoreApp && getClientFeatureFlags().hostedServices
+    && deployedConfig?.sourceType !== 'custom'
+    && deployedConfig?.sourceType !== 'curated'
+    && !(deployedConfig?.wingetId ?? pkg.id).toLowerCase().startsWith('intuneget.curated.');
 
   // Store app install experience state
   const [storeInstallExperience, setStoreInstallExperience] = useState<'user' | 'system'>('user');
@@ -135,7 +162,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     const win32Config = deployedConfig && 'architecture' in deployedConfig ? deployedConfig : null;
     const preferred = win32Config?.architecture || 'x64';
     const available = new Set(installers.map((i) => i.architecture));
-    return available.has(preferred) ? preferred : (installers[0]?.architecture || 'x64');
+    return available.has(preferred) ? preferred : (firstSelectableArchitecture(installers, hostedQaArchGate) || 'x64');
   });
   const [selectedScope, setSelectedScope] = useState<WingetScope>(() => {
     const win32Config = deployedConfig && 'installScope' in deployedConfig ? deployedConfig : null;
@@ -188,17 +215,52 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     }
   }, [showLocaleDropdown]);
 
+  // Saved defaults (#2085) only seed brand new Win32 packages. Deployed
+  // configs, replaced cart items and Store apps keep their own settings.
+  const { packageDefaults: savedPackageDefaults, packageDefaultsStatus, savePackageDefaults } = useUserSettings();
+  const canSeedDefaults = !isDeployed && !deployedConfig && !replaceCartItemId && !isStoreApp;
+  const seedDefaults = canSeedDefaults ? savedPackageDefaults ?? null : null;
+  const defaultsPending = canSeedDefaults && packageDefaultsStatus === 'loading';
+  const configEditedRef = useRef(false);
+  const seededDefaultsRef = useRef<PackageDefaults | null>(seedDefaults);
+
   // PSADT config state - pre-fill from deployed config when available
   const [config, setConfig] = useState<PSADTConfig>(() => {
     const win32Config = deployedConfig && 'psadtConfig' in deployedConfig ? deployedConfig : null;
     if (win32Config?.psadtConfig) {
       return win32Config.psadtConfig;
     }
-    return {
+    return applyPackageDefaults({
       ...DEFAULT_PSADT_CONFIG,
       processesToClose: getDefaultProcessesToClose(pkg.name, installers[0]?.type || 'exe'),
-    };
+    }, seedDefaults);
   });
+
+  // Defaults that finish loading after mount apply once, unless the user has
+  // already changed the config.
+  useEffect(() => {
+    if (!seedDefaults || seededDefaultsRef.current || configEditedRef.current) return;
+    seededDefaultsRef.current = seedDefaults;
+    setConfig((prev) => applyPackageDefaults(prev, seedDefaults));
+  }, [seedDefaults]);
+
+  const [defaultsStatus, setDefaultsStatus] = useState<{ kind: 'saved' | 'cleared' | 'error'; message: string } | null>(null);
+  const [isDefaultsSaving, setIsDefaultsSaving] = useState(false);
+  const saveCurrentAsDefaults = async (clear: boolean) => {
+    if (typeof savePackageDefaults !== 'function' || isDefaultsSaving || packageDefaultsStatus !== 'loaded') return;
+    setIsDefaultsSaving(true);
+    setDefaultsStatus(null);
+    try {
+      await savePackageDefaults(clear ? null : pickPackageDefaults(config));
+      setDefaultsStatus(clear
+        ? { kind: 'cleared', message: 'Saved defaults cleared. New packages use the standard settings.' }
+        : { kind: 'saved', message: 'Saved. New packages you configure will start with these settings.' });
+    } catch (err) {
+      setDefaultsStatus({ kind: 'error', message: err instanceof Error ? err.message : 'Package defaults were not saved.' });
+    } finally {
+      setIsDefaultsSaving(false);
+    }
+  };
 
   // Editable Intune app description (#117). Defaults to the package description;
   // left blank, it falls back to the package default at deploy time. The
@@ -217,8 +279,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const [espProfiles, setEspProfiles] = useState<EspProfileSelection[]>(
     deployedConfig?.espProfiles || []
   );
+  // Keep the baseline paired with this editor's desired state across refetches.
+  const [baselineRelationships] = useState<AppRelationship[]>(
+    () => (deployedConfig?.relationships || []).map(relationship => ({ ...relationship }))
+  );
   const [relationships, setRelationships] = useState<AppRelationship[]>(
-    deployedConfig?.relationships || []
+    () => baselineRelationships.map(relationship => ({ ...relationship }))
   );
   const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
     deployedConfig?.updatePolicy
@@ -269,7 +335,8 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
       JSON.stringify(categories) !== JSON.stringify(deployedConfig.categories || []);
     const hasEspChanges =
       JSON.stringify(espProfiles) !== JSON.stringify(deployedConfig.espProfiles || []);
-    const hasGraphChanges = hasAssignmentChanges || hasCategoryChanges || hasEspChanges;
+    const hasRelationshipChanges = JSON.stringify(relationships) !== JSON.stringify(baselineRelationships);
+    const hasGraphChanges = hasAssignmentChanges || hasCategoryChanges || hasEspChanges || hasRelationshipChanges;
 
     // Redeploy-required: version, architecture, scope, locale, PSADT config
     const hasVersionChange = selectedVersion !== deployedConfig.version;
@@ -289,7 +356,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
 
     return { hasGraphChanges, hasRedeployChanges };
   }, [isDeployed, deployedConfig, assignments, categories, espProfiles,
-      selectedVersion, selectedArch, selectedScope, selectedLocale, config, description, pkg.description]);
+      selectedVersion, selectedArch, selectedScope, selectedLocale, config, description, pkg.description, relationships, baselineRelationships]);
 
   // Installers always arrive for the package's default (latest) version. When the
   // user selects a different version we must re-fetch so the installer URL/SHA
@@ -318,7 +385,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     architectureInstallers.find((installer) => installer.scope === selectedScope) ||
     architectureInstallers.find((installer) => !installer.scope) ||
     architectureInstallers[0] ||
-    effectiveInstallers[0];
+    effectiveInstallers.find((installer) => installer.architecture === firstSelectableArchitecture(effectiveInstallers, hostedQaArchGate));
   const scopeIsAvailable = (scope: WingetScope) =>
     architectureInstallers.some(
       (installer) => !installer.scope || installer.scope === scope
@@ -341,6 +408,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     if (customDetectionActive) lastCustomRulesRef.current = config.detectionRules;
   }, [customDetectionActive, config.detectionRules]);
   const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
+  const archBlocked = hostedQaArchGate && !!selectedInstaller
+    && !HOSTED_QA_ARCHITECTURES.has(selectedInstaller.architecture);
+  const showArchitectureReason = hostedQaArchGate && availableArchitectures.includes('arm64');
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
   const inCart = isStoreApp
@@ -414,9 +484,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
       effectiveInstallers.length > 0 &&
       !effectiveInstallers.some((i) => i.architecture === selectedArch)
     ) {
-      setSelectedArch(effectiveInstallers[0].architecture as WingetArchitecture);
+      setSelectedArch(firstSelectableArchitecture(effectiveInstallers, hostedQaArchGate)!);
     }
-  }, [effectiveInstallers, selectedArch]);
+  }, [effectiveInstallers, selectedArch, hostedQaArchGate]);
 
   // Generate detection rules when installer, version, locale, or marker path changes
   // Pass effectiveWingetId so locale variant packages get correct detection markers.
@@ -439,6 +509,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath, customDetectionActive]);
 
   const setCustomDetection = (enabled: boolean) => {
+    configEditedRef.current = true;
     setCustomDetectionErrors([]);
     if (enabled) {
       const rules = lastCustomRulesRef.current ?? [createEmptyDetectionRule('registry')];
@@ -454,7 +525,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const handleAddToCart = async () => {
-    if (addedToCartSuccess) return;
+    if (addedToCartSuccess || defaultsPending || archBlocked) return;
 
     // Store apps don't need an installer
     if (!isStoreApp && !selectedInstaller) return;
@@ -523,6 +594,10 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
 
         addItem({
           appSource: 'win32',
+          ...(deployedConfig && isWin32CartItem(deployedConfig) && deployedConfig.sourceType === 'curated' ? {
+            sourceType: 'curated' as const,
+            curatedReleaseId: deployedConfig.curatedReleaseId,
+          } : {}),
           wingetId: effectiveWingetId,
           displayName,
           publisher: pkg.publisher,
@@ -582,8 +657,10 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
       await updateSettings({
         intuneAppId,
         wingetId: effectiveWingetId,
-        assignments,
-        categories,
+        assignments: JSON.stringify(assignments) !== JSON.stringify(deployedConfig?.assignments || []) ? assignments : undefined,
+        categories: JSON.stringify(categories) !== JSON.stringify(deployedConfig?.categories || []) ? categories : undefined,
+        relationships: JSON.stringify(relationships) !== JSON.stringify(baselineRelationships) ? relationships : undefined,
+        baselineRelationships,
       });
       setSettingsSuccess(true);
       setTimeout(() => onClose(), 1200);
@@ -593,10 +670,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const updateConfig = (updates: Partial<PSADTConfig>) => {
+    configEditedRef.current = true;
     setConfig((prev) => ({ ...prev, ...updates }));
   };
 
   const addProcess = () => {
+    configEditedRef.current = true;
     setConfig((prev) => ({
       ...prev,
       processesToClose: [
@@ -607,6 +686,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const removeProcess = (index: number) => {
+    configEditedRef.current = true;
     setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
@@ -615,6 +695,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const updateProcess = (index: number, updates: Partial<ProcessToClose>) => {
+    configEditedRef.current = true;
     setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
@@ -626,6 +707,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
 
   // Post-install / post-uninstall command list editors (#118)
   const addCommand = (key: 'postInstallCommands' | 'postUninstallCommands') => {
+    configEditedRef.current = true;
     setConfig((prev) => ({ ...prev, [key]: [...(prev[key] || []), ''] }));
   };
 
@@ -634,6 +716,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     index: number,
     value: string
   ) => {
+    configEditedRef.current = true;
     setConfig((prev) => ({
       ...prev,
       [key]: (prev[key] || []).map((c, i) => (i === index ? value : c)),
@@ -644,6 +727,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     key: 'postInstallCommands' | 'postUninstallCommands',
     index: number
   ) => {
+    configEditedRef.current = true;
     setConfig((prev) => ({
       ...prev,
       [key]: (prev[key] || []).filter((_, i) => i !== index),
@@ -839,7 +923,8 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                 <label className="block text-sm font-medium text-text-muted mb-2">Architecture</label>
                 <div className="flex flex-wrap gap-2">
                   {(['x64', 'x86', 'arm64'] as WingetArchitecture[]).map((arch) => {
-                    const available = availableArchitectures.includes(arch);
+                    const available = availableArchitectures.includes(arch)
+                      && (!hostedQaArchGate || HOSTED_QA_ARCHITECTURES.has(arch));
                     return (
                       <button
                         key={arch}
@@ -859,6 +944,14 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                     );
                   })}
                 </div>
+                {showArchitectureReason && (
+                  <p className="mt-2 text-sm text-text-muted" role="status">{HOSTED_QA_ARCH_REASON}</p>
+                )}
+                {archBlocked && selectedInstaller?.architecture !== 'arm64' && (
+                  <p className="mt-2 text-sm text-text-muted" role="status">
+                    Hosted testing runs on x64 and x86 only, so {selectedInstaller?.architecture} builds cannot be deployed yet.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1037,6 +1130,29 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   </button>
                 </div>
               </div>}
+
+              {!isStoreApp && configMode === 'advanced' && typeof savePackageDefaults === 'function' && (
+                <div className="rounded-lg border border-overlay/10 bg-bg-elevated px-3 py-2 text-xs text-text-secondary">
+                  <p>
+                    Save the install behavior, deferral, restart and disk space choices below as your starting point for packages you configure from now on. Commands, detection, processes and branding are never saved. Packages already in your cart keep their settings.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(false)} className="rounded-md border border-overlay/15 px-2 py-1 text-text-primary hover:bg-overlay/5 disabled:opacity-50">
+                      {isDefaultsSaving ? 'Saving defaults...' : 'Save as my defaults'}
+                    </button>
+                    {savedPackageDefaults && (
+                      <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(true)} className="rounded-md px-2 py-1 text-text-muted hover:text-text-primary disabled:opacity-50">
+                        Clear saved defaults
+                      </button>
+                    )}
+                    {defaultsStatus && (
+                      <span role={defaultsStatus.kind === 'error' ? 'alert' : 'status'} className={defaultsStatus.kind === 'error' ? 'text-red-400' : 'text-text-muted'}>
+                        {defaultsStatus.message}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Installation Behavior (advanced only, win32 only) */}
               {!isStoreApp && (visibleSections === null || visibleSections.includes('behavior')) && <ConfigSection
@@ -2103,6 +2219,8 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                     />
                   </div>
 
+                  <PowerShellHooksConfig config={config} onChange={updateConfig} />
+
                   {/* Post-install commands (#118) */}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -2243,7 +2361,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                 </Button>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+                  disabled={defaultsPending || archBlocked || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
                   variant="outline"
                   className={cn(
                     'py-5 text-base font-medium',
@@ -2268,7 +2386,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           ) : (
             <Button
               onClick={handleAddToCart}
-              disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
+              disabled={defaultsPending || archBlocked || (!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
               className={cn(
                 'w-full py-5 text-base font-medium',
                 inCart || addedToCartSuccess

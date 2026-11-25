@@ -363,6 +363,8 @@ export interface PSADTConfig {
   // full command line executed via cmd.exe /c, in order. Empty/absent = none.
   postInstallCommands?: string[];
   postUninstallCommands?: string[];
+  postInstallPowerShell?: string;
+  postUninstallPowerShell?: string;
 }
 
 /**

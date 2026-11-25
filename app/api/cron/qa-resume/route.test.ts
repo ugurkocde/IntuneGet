@@ -81,6 +81,7 @@ vi.mock('@/lib/auto-update/trigger', () => ({
 import { POST } from '@/app/api/updates/trigger/route';
 import { GET } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { GitHubUnavailableError } from '@/lib/manifest-api';
 import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from '@/lib/workflow-dispatch-rate-limit';
 import { holdCustomerUpstreamJob } from '@/lib/customer-upstream-recovery';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
@@ -176,6 +177,37 @@ describe('GET /api/cron/qa-resume', () => {
       item,
       trustedInstallers: [],
     }));
+  });
+
+  it('defers failed demand rebuilding and continues the remaining batch', async () => {
+    const job = {
+      id: 'demand-job', winget_id: 'Vendor.App', version: '1.0', status: 'awaiting_qa',
+      qa_candidate_id: null, architecture: 'x64', qa_resume_due_at: null,
+      package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64' },
+      is_auto_update: true,
+    };
+    const later = { ...job, id: 'later-job', qa_candidate_id: 'later-candidate' };
+    const store = jobStore(job);
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1
+        ? chain({ data: [structuredClone(job), later], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') return candidateQuery([{ id: 'later-candidate', status: 'queued' }]);
+      throw new Error('Unexpected table');
+    }) });
+    ensureQaDemandMock.mockRejectedValueOnce(new GitHubUnavailableError(429));
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 2 });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ wingetId: later.winget_id }));
+    expect(store.row.status).toBe('awaiting_qa');
+    expect(Date.parse(String(store.row.qa_resume_due_at))).toBeGreaterThan(Date.now());
+    expect(store.row.qa_candidate_id).toBeNull();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(findPendingApprovalBlocksMock).not.toHaveBeenCalled();
+    expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain('private upstream');
   });
 
   it.each(['removed', 'metadata mismatch', 'unrecognized preflight', 'retryable', 'unknown', 'concurrent cancel', 'concurrent config', 'concurrent version', 'concurrent candidate', 'write error'])('isolates manifest reconciliation failure from the remaining batch: %s', async kind => {

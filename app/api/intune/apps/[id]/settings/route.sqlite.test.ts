@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 const state = vi.hoisted(() => {
   vi.stubEnv('DATABASE_PATH', ':memory:');
   vi.stubEnv('DATABASE_MODE', 'sqlite');
-  return { authenticated: true, assign: vi.fn(), categories: vi.fn(), graphFails: false };
+  return { authenticated: true, assign: vi.fn(), categories: vi.fn(), graphFails: false, relationships: vi.fn() };
 });
 vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: async () => state.authenticated
   ? { userId: 'fixture-owner', tenantId: 'fixture-tenant' } : null }));
@@ -18,7 +18,7 @@ vi.mock('@/lib/intune-api', () => ({
     await state.assign(...args);
     if (state.graphFails) throw new Error('Fixture Graph failure');
   },
-  syncAppCategories: state.categories, setAppRules: vi.fn(),
+  syncAppCategories: state.categories, setAppRules: vi.fn(), syncAppRelationships: state.relationships,
 }));
 vi.mock('@/lib/requirement-rules', () => ({ buildCartItemRequirementRules: () => undefined }));
 vi.mock('@/lib/db', async () => {
@@ -27,6 +27,7 @@ vi.mock('@/lib/db', async () => {
 });
 
 import { sqliteDb, closeSqliteDb, sqliteDeployedConfig } from '@/lib/db/sqlite';
+vi.mock('@/lib/intune-relationships', () => ({ syncAppRelationships: async (...args: unknown[]) => { await state.relationships(...args); return args[3]; }, RelationshipUpdateError: class extends Error {} }));
 import { PATCH } from './route';
 import { GET } from '../../deployed/config/route';
 
@@ -233,4 +234,38 @@ describe('deployed settings persistence with SQLite', () => {
       expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual(original);
     });
   }
+});
+
+
+describe('same-app relationship settings', () => {
+  beforeEach(() => { closeSqliteDb(); vi.clearAllMocks(); state.authenticated = true; state.graphFails = false; });
+  it('updates relationships on the exact existing app and persists them without changing assignments', async () => {
+    const appId = '11111111-1111-4111-8111-111111111111';
+    const relationships = [{ relationshipType: 'dependency', targetId: '22222222-2222-4222-8222-222222222222', targetDisplayName: 'Fixture dependency', dependencyType: 'autoInstall' }];
+    const job = await create({ intune_app_id: appId });
+    const response = await call({ wingetId: 'Fixture.App', relationships, baselineRelationships: [] }, appId);
+    expect(response.status).toBe(200);
+    expect(state.relationships).toHaveBeenCalledWith('fixture-token', appId, [], relationships);
+    expect(state.assign).not.toHaveBeenCalled();
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, relationships });
+  });
+  it('does not write relationships for a source app outside the exact saved deployment', async () => {
+    await create();
+    expect((await call({ wingetId: 'Fixture.App', relationships: [] }, '33333333-3333-4333-8333-333333333333')).status).toBe(409);
+    expect(state.relationships).not.toHaveBeenCalled();
+  });
+  it('rejects an editor baseline changed by another save before any relationship write', async () => {
+    const job = await create({ package_config: { ...original, relationships: [{ relationshipType: 'dependency', targetId: '22222222-2222-4222-8222-222222222222' }] } });
+    expect((await call({ wingetId: 'Fixture.App', relationships: [], baselineRelationships: [] })).status).toBe(409);
+    expect(state.relationships).not.toHaveBeenCalled();
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toHaveProperty('relationships');
+  });
+  it('rejects a local snapshot changed while Graph is updating relationships', async () => {
+    const job = await create();
+    state.relationships.mockImplementationOnce(async () => { await sqliteDb.jobs.update(job.id, { package_config: { ...original, description: 'Concurrent edit' }, updated_at: '2027-01-01T00:00:00Z' }); });
+    const response = await call({ wingetId: 'Fixture.App', relationships: [], baselineRelationships: [] });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ applied: ['relationships'] });
+    expect((await sqliteDb.jobs.getById(job.id))?.package_config).toEqual({ ...original, description: 'Concurrent edit' });
+  });
 });

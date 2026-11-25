@@ -5,6 +5,8 @@ import { useCartStore } from '@/stores/cart-store';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
 import type { NormalizedPackage } from '@/types/winget';
+import { useUserSettings } from '@/components/providers/UserSettingsProvider';
+import { applyPackageDefaults } from '@/lib/package-defaults';
 
 const BATCH_SIZE = 5;
 
@@ -28,6 +30,7 @@ interface UseBulkAddReturn {
 
 export function useBulkAdd(): UseBulkAddReturn {
   const addItemSilent = useCartStore((state) => state.addItemSilent);
+  const { packageDefaults, packageDefaultsStatus } = useUserSettings();
   const bulkAdd = useCallback(
     async (
       packages: NormalizedPackage[],
@@ -36,12 +39,28 @@ export function useBulkAdd(): UseBulkAddReturn {
       const succeeded: string[] = [];
       const failed: { id: string; name: string; error: string }[] = [];
       let completed = 0;
+      if (packageDefaultsStatus === 'loading') {
+        return { succeeded, failed: packages.map(pkg => ({ id: pkg.id, name: pkg.name, error: 'Package defaults are still loading' })) };
+      }
+      const start = useCartStore.getState().activeScope;
+      let scopeInvalidated = false;
+      const unsubscribe = useCartStore.subscribe((state, previous) => {
+        if (state.scope !== previous.scope || state.activeScope !== previous.activeScope) scopeInvalidated = true;
+      });
+      const assertCurrentScope = () => {
+        const current = useCartStore.getState();
+        if (scopeInvalidated || (start && (current.scope !== start || current.activeScope !== start))) {
+          throw new Error('Account changed during selection. Select the apps again.');
+        }
+      };
 
+      try {
       // Process in batches
       for (let i = 0; i < packages.length; i += BATCH_SIZE) {
         const batch = packages.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map(async (pkg) => {
+            assertCurrentScope();
             onProgress?.({
               completed,
               total: packages.length,
@@ -57,6 +76,7 @@ export function useBulkAdd(): UseBulkAddReturn {
             }
 
             const data = await response.json();
+            assertCurrentScope();
             const installer = data.recommendedInstaller;
 
             if (!installer) {
@@ -85,11 +105,11 @@ export function useBulkAdd(): UseBulkAddReturn {
               uninstallCommand: generateUninstallCommand(installer, pkg.name),
               detectionRules,
               iconPath: pkg.iconPath,
-              psadtConfig: {
+              psadtConfig: applyPackageDefaults({
                 ...DEFAULT_PSADT_CONFIG,
                 processesToClose,
                 detectionRules,
-              },
+              }, packageDefaults),
             });
 
             return pkg;
@@ -120,8 +140,11 @@ export function useBulkAdd(): UseBulkAddReturn {
       }
 
       return { succeeded, failed };
+      } finally {
+        unsubscribe();
+      }
     },
-    [addItemSilent]
+    [addItemSilent, packageDefaults, packageDefaultsStatus]
   );
 
   return { bulkAdd };

@@ -1,0 +1,5 @@
+{
+  "title": "Save progress dialog preferences",
+  "summary": "Save the progress dialog toggle as a default for new packages while keeping each package’s message and position.",
+  "type": "improved"
+}

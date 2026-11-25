@@ -1,0 +1,5 @@
+{
+  "title": "Add PowerShell session hooks to packages",
+  "summary": "Package configuration supports optional post install and post uninstall PowerShell using PSADT functions. Hooks have a length limit and separate execution identity; existing commands and empty defaults keep their behavior. Self hosted packagers reject nonempty hooks until supported.",
+  "type": "new"
+}
