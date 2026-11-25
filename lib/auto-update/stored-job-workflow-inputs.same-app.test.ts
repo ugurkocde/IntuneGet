@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildStoredJobWorkflowInputs } from './stored-job-workflow-inputs';
 import type { Win32CartItem } from '@/types/upload';
+vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { getById: vi.fn().mockResolvedValue(null) } }) }));
 
 const target = '11111111-1111-4111-8111-111111111111';
 const options = { callbackUrl: 'https://example.test/callback', qaOverride: false, sanitizeAssignments: true };
@@ -16,9 +17,9 @@ describe('same app stored dispatch binding', () => {
     vi.stubGlobal('fetch', fetchMock);
     try {
       const { triggerPackagingWorkflow } = await import('@/lib/github-actions');
-      await expect(triggerPackagingWorkflow({ ...item, jobId: 'fixture-job', tenantId: 'fixture-tenant', callbackUrl: options.callbackUrl } as unknown as Parameters<typeof triggerPackagingWorkflow>[0], {
+      await expect(triggerPackagingWorkflow({ ...item, forceCreate: false, jobId: 'fixture-job', tenantId: 'fixture-tenant', callbackUrl: options.callbackUrl } as unknown as Parameters<typeof triggerPackagingWorkflow>[0], {
         token: 'fixture-token', owner: 'fixture', repo: 'fixture', workflowsRepo: 'fixture-workflows',
-      })).rejects.toThrow(/same app.*workflow/i);
+      })).rejects.toThrow(/same app.*stored.*binding/i);
       expect(fetchMock).not.toHaveBeenCalled();
     } finally { vi.unstubAllGlobals(); }
   });

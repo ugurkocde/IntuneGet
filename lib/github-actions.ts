@@ -32,6 +32,8 @@ import {
 } from './winget-dependencies';
 import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller } from '@/types/winget';
+import { getDatabase } from '@/lib/db';
+import { acquireGraphToken } from '@/lib/graph-token';
 
 export interface WorkflowInputs {
   updateMode?: 'create' | 'sameApp';
@@ -140,6 +142,36 @@ export async function triggerPackagingWorkflow(
 ): Promise<TriggerResult> {
   // Never let a staged same app job fall through the existing create workflow.
   if (inputs.updateMode === 'sameApp') {
+    // All deferred dispatch callers enter here again. Re-read persisted ownership
+    // and the live target rather than trusting an earlier cart admission.
+    if (inputs.forceCreate) throw new Error('Same app updates cannot force create.');
+    const target = inputs.targetIntuneAppId?.toLowerCase();
+    if (!target || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(target)) {
+      throw new Error('Same app stored job binding is invalid.');
+    }
+    const db = getDatabase();
+    const job = await db.jobs.getById(inputs.jobId);
+    const stored = job?.package_config as unknown as Win32CartItem | undefined;
+    if (!job?.user_id || job.id !== inputs.jobId || job.tenant_id !== inputs.tenantId || job.winget_id !== inputs.wingetId ||
+        job.version !== inputs.version || job.archived_at || job.cancelled_at ||
+        !['queued', 'awaiting_qa', 'packaging'].includes(job.status) || stored?.updateMode !== 'sameApp' ||
+        stored.targetIntuneAppId?.toLowerCase() !== target || stored.wingetId !== inputs.wingetId) {
+      throw new Error('Same app stored job binding changed.');
+    }
+    const deployed = await db.jobs.getLatestDeployed(job.user_id, inputs.tenantId, inputs.wingetId, target);
+    if (!deployed || deployed.user_id !== job.user_id || deployed.tenant_id !== inputs.tenantId ||
+        deployed.winget_id !== inputs.wingetId || deployed.status !== 'deployed' ||
+        deployed.archived_at != null || deployed.intune_app_id?.toLowerCase() !== target) {
+      throw new Error('Same app target is not an active deployment.');
+    }
+    const { accessToken } = await acquireGraphToken(inputs.tenantId);
+    const response = await fetch(`https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/${target}?$select=id`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10_000) });
+    if (response.status !== 200) throw new Error('Same app target is unavailable.');
+    const app = await response.json();
+    if (app?.id?.toLowerCase() !== target || app?.['@odata.type'] !== '#microsoft.graph.win32LobApp') {
+      throw new Error('Same app target is unavailable.');
+    }
     throw new Error('Same app updates require a workflow that supports content replacement.');
   }
   const cfg = config || getGitHubActionsConfig();
