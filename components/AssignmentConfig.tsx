@@ -513,7 +513,7 @@ export function AssignmentConfig({ assignments, onChange, supportsAutoUpdateSupe
                         >
                           <UserCircle className="w-5 h-5 text-text-muted flex-shrink-0" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-text-primary text-sm truncate">{group.displayName}</p>
+                            <p className="text-text-primary text-sm whitespace-normal break-words" title={group.displayName}>{group.displayName}</p>
                             {group.description && (
                               <p className="text-text-muted text-xs truncate">{group.description}</p>
                             )}
@@ -574,8 +574,8 @@ export function AssignmentConfig({ assignments, onChange, supportsAutoUpdateSupe
 
                         {/* Target Name */}
                         <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            'text-sm font-medium truncate',
+                          <p title={getTargetDisplay(assignment)} className={cn(
+                            'text-sm font-medium whitespace-normal break-words',
                             isExclusion ? 'text-red-300' : 'text-text-primary'
                           )}>
                             {getTargetDisplay(assignment)}
