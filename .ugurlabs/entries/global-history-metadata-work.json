@@ -1,0 +1,5 @@
+{
+  "title": "Less repeated work for release history",
+  "summary": "Global release history calculates its counts and available months together while preserving the same rows, filters and ordering.",
+  "type": "improved"
+}
