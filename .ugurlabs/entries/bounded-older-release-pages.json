@@ -1,5 +1,0 @@
-{
-  "title": "Load older catalog release pages reliably",
-  "summary": "Older global release pages select their records directly while preserving page order, totals and access to every available release.",
-  "type": "fixed"
-}
