@@ -1,0 +1,1 @@
+{"title":"Explain unavailable ARM64 deployment choices","summary":"Application setup now explains when ARM64 builds cannot be deployed through hosted testing and prevents adding an unsupported choice to the deployment selection. Existing ARM64 settings remain visible without switching architectures.","type":"fixed"}
