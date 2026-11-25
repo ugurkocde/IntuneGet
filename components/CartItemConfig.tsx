@@ -22,6 +22,7 @@ import {
   Shield,
   Link2,
 } from 'lucide-react';
+import { PowerShellHooksConfig } from '@/components/PowerShellHooksConfig';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -1502,6 +1503,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                     />
                     <p className="text-text-muted text-xs mt-1">Override the auto-generated uninstall command</p>
                   </div>
+
+                  <PowerShellHooksConfig config={config} onChange={updateConfig} />
 
                   {/* Post-install commands (#118) */}
                   <div>

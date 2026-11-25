@@ -7,6 +7,8 @@ import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
 import { toast } from 'sonner';
 import type { NormalizedPackage } from '@/types/winget';
+import { useUserSettings } from '@/components/providers/UserSettingsProvider';
+import { applyPackageDefaults } from '@/lib/package-defaults';
 
 interface QuickAddOptions {
   architecture?: string;
@@ -25,11 +27,17 @@ export function useQuickAdd(
   const [isLoading, setIsLoading] = useState(false);
   const addItem = useCartStore((state) => state.addItem);
   const removeItem = useCartStore((state) => state.removeItem);
+  const { packageDefaults, packageDefaultsStatus } = useUserSettings();
 
   const quickAdd = useCallback(
     async (e: React.MouseEvent | React.KeyboardEvent) => {
       e.stopPropagation();
+      if (pkg.appSource !== 'store' && packageDefaultsStatus === 'loading') {
+        toast.info('Package defaults are still loading');
+        return;
+      }
       setIsLoading(true);
+      let unsubscribe: (() => void) | undefined;
 
       try {
         // Store apps: no manifest fetch needed, add directly
@@ -65,6 +73,11 @@ export function useQuickAdd(
         }
 
         // Win32 apps: fetch manifest and select best installer
+        const start = useCartStore.getState().activeScope;
+        let scopeInvalidated = false;
+        unsubscribe = useCartStore.subscribe((state, previous) => {
+          if (state.scope !== previous.scope || state.activeScope !== previous.activeScope) scopeInvalidated = true;
+        });
         const response = await fetch(
           `/api/winget/manifest?id=${encodeURIComponent(pkg.id)}&arch=${encodeURIComponent(architecture)}`
         );
@@ -74,6 +87,10 @@ export function useQuickAdd(
         }
 
         const data = await response.json();
+        const current = useCartStore.getState();
+        if (scopeInvalidated || (start && (current.scope !== start || current.activeScope !== start))) {
+          throw new Error('Account changed during selection. Select the app again.');
+        }
         const installer = data.recommendedInstaller;
 
         if (installer) {
@@ -104,11 +121,11 @@ export function useQuickAdd(
               installer.productCode,
               undefined
             ),
-            psadtConfig: {
+            psadtConfig: applyPackageDefaults({
               ...DEFAULT_PSADT_CONFIG,
               processesToClose,
               detectionRules,
-            },
+            }, packageDefaults),
           });
 
           toast.success(`${pkg.name} added`, {
@@ -137,11 +154,12 @@ export function useQuickAdd(
           description: 'Could not fetch package information. Please try again.',
         });
       } finally {
+        unsubscribe?.();
         setIsLoading(false);
       }
     },
-    [pkg.id, pkg.name, pkg.publisher, pkg.description, pkg.version, pkg.appSource, pkg.packageIdentifier, pkg.iconPath, architecture, addItem, removeItem]
+    [pkg.id, pkg.name, pkg.publisher, pkg.description, pkg.version, pkg.appSource, pkg.packageIdentifier, pkg.iconPath, architecture, addItem, removeItem, packageDefaults, packageDefaultsStatus]
   );
 
-  return { quickAdd, isLoading };
+  return { quickAdd, isLoading: isLoading || (pkg.appSource !== 'store' && packageDefaultsStatus === 'loading') };
 }

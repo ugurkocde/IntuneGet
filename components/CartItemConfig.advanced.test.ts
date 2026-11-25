@@ -96,3 +96,18 @@ describe('cart item advanced options (#162)', () => {
     expect(useCartStore.getState().items[0].description).toBe(item().description);
   });
 });
+
+
+describe('PowerShell session hooks', () => {
+  it('saves exact multiline hooks and warns about storage and QA coverage', async () => {
+    await render(item()); await openAdvanced();
+    const install = "  Write-ADTLogEntry -Message 'synthetic'\n";
+    const uninstall = "Write-ADTLogEntry -Message 'removed'";
+    await type(document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Post-install PowerShell"]')!, install);
+    await type(document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Post-uninstall PowerShell"]')!, uninstall);
+    expect(document.body.textContent).toContain('Do not include secrets');
+    expect(document.body.textContent).toContain('does not validate your custom PowerShell');
+    await save();
+    expect(useCartStore.getState().items[0]).toMatchObject({ psadtConfig: { postInstallPowerShell: install, postUninstallPowerShell: uninstall } });
+  });
+});

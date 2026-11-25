@@ -194,3 +194,21 @@ describe('saved package defaults', () => {
     expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.allowDefer).toBe(DEFAULT_PSADT_CONFIG.allowDefer);
   });
 });
+
+
+it('adds exact PowerShell session hooks without saving them as defaults', async () => {
+  await render(); await act(async () => button('Advanced').click());
+  await act(async () => button('Advanced Options').click());
+  const input = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Post-install PowerShell"]')!;
+  expect(input).not.toBeNull();
+  const script = "Write-ADTLogEntry -Message 'synthetic'\n";
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, script);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => button('Save as my defaults').click());
+  expect(settingsState.save).toHaveBeenCalledTimes(1);
+  expect(settingsState.save.mock.calls[0]).toEqual([expect.not.objectContaining({ postInstallPowerShell: expect.anything() })]);
+  await act(async () => button('Add to Selection').click());
+  expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.postInstallPowerShell).toBe(script);
+});

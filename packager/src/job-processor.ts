@@ -501,6 +501,15 @@ export class JobProcessor {
    * Generate Invoke-AppDeployToolkit.ps1 script (PSADT v4)
    */
   private generateDeployScript(job: PackagingJob, installerFileName: string): string {
+    // This generator does not yet mirror hosted in-session PowerShell hooks.
+    // Refuse rather than silently packaging an application without its hook.
+    const hookConfig = this.getPsadtConfig(job);
+    for (const field of ['postInstallPowerShell', 'postUninstallPowerShell']) {
+      const value = hookConfig?.[field];
+      if (value !== undefined && (typeof value !== 'string' || value.trim().length > 0)) {
+        throw new Error('PowerShell hooks are not supported by the self-hosted packager.');
+      }
+    }
     const nestedInstaller = this.getNestedInstaller(job);
     // Encoded once for the single-quoted strings getInstallCommand embeds it in.
     const silentSwitches = psSingleQuotedContent(this.extractSilentSwitches(
