@@ -4,10 +4,13 @@ DO $migration$
 DECLARE original record; replacement record;
 BEGIN
   if to_regprocedure('public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)') is null then raise exception 'Unexpected catalog history source'; end if;
-  select proowner,proacl,proconfig,prosecdef,provolatile,prolang,md5(prosrc) as body_md5 from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure into original;
-  if original.body_md5 <> 'ad242d7a91bc9b113e21c6e83df690c7'
+  -- Ownership-only DDL takes the function catalog row lock until transaction end.
+  -- Guard the body after obtaining it, so concurrent owner DDL cannot slip past.
+  ALTER FUNCTION public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text) COST 100;
+  select proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) as body_md5 from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure into original;
+  if original.body_md5 not in ('ad242d7a91bc9b113e21c6e83df690c7', '4929ec9bd9896e5f44ec736e751b2c36')
     or original.proconfig is distinct from ARRAY['search_path=""']::text[]
-    or original.prosecdef or original.provolatile <> 's'
+    or original.proisstrict or original.prosecdef or original.provolatile <> 's'
     or original.prolang <> (select oid from pg_language where lanname='sql')
     or original.proowner <> current_user::regrole::oid then
     raise exception 'Unexpected catalog history source';
@@ -152,14 +155,15 @@ $$;
 
 
 $definition$;
-  select proowner,proacl,proconfig,prosecdef,provolatile,prolang,md5(prosrc) as body_md5 from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure into replacement;
-  if replacement.body_md5 <> 'f2fe5dcfbf679e917e909d41d6ff0a09'
+  select proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) as body_md5 from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure into replacement;
+  if replacement.body_md5 not in ('f2fe5dcfbf679e917e909d41d6ff0a09', '3e82bf31d631c89505336f8d038d9c29')
     or replacement.proowner is distinct from original.proowner
     or replacement.proacl is distinct from original.proacl
     or replacement.proconfig is distinct from original.proconfig
     or replacement.prosecdef is distinct from original.prosecdef
     or replacement.provolatile is distinct from original.provolatile
-    or replacement.prolang is distinct from original.prolang then
+    or replacement.prolang is distinct from original.prolang
+    or replacement.proisstrict is distinct from original.proisstrict then
     raise exception 'Catalog history contract changed';
   end if;
 END
