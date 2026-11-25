@@ -12,6 +12,7 @@ import { CatalogAppCard } from '@/components/catalog/CatalogAppCard';
 import { CatalogCta } from '@/components/catalog/CatalogCta';
 import { QaReportButton } from '@/components/qa/QaReportButton';
 import { getCatalogSource } from '@/lib/catalog';
+import { createCatalogStageTrace } from '@/lib/catalog/stage-trace';
 import {
   absoluteAppCatalogUrl,
   appCatalogHref,
@@ -103,22 +104,27 @@ const schemaCategory: Record<string, string> = {
 
 export default async function AppDetailPage({ params }: PageProps) {
   const { wingetId } = await params;
-  const details = await resolveApp(wingetId);
+  const trace = createCatalogStageTrace();
+  const { details, qaRead, changelog, installer, relatedResult } = await trace.run(async () => {
+    const details = await trace.track('resolveApp', resolveApp(wingetId));
+    const { app } = details;
+    const source = getCatalogSource();
+    const [qaRead, changelog, installer, relatedResult] = await Promise.all([
+      trace.track('qa', source.getQaResult(app.winget_id).then(
+        (qa) => ({ qa, unavailable: false }),
+        () => ({ qa: null, unavailable: true }),
+      )),
+      trace.track('changelog', source.getInstallationChangelog(app.winget_id).catch(() => null)),
+      trace.track('installer', app.latest_version
+        ? source.getVersionInstallerInfo(app.winget_id, app.latest_version).catch(() => null)
+        : Promise.resolve(null)),
+      trace.track('related', app.category
+        ? source.getPopularApps({ limit: 7, offset: 0, category: app.category, sort: 'popular' }).catch(() => null)
+        : Promise.resolve(null)),
+    ]);
+    return { details, qaRead, changelog, installer, relatedResult };
+  });
   const { app, versions } = details;
-  const source = getCatalogSource();
-  const [qaRead, changelog, installer, relatedResult] = await Promise.all([
-    source.getQaResult(app.winget_id).then(
-      (qa) => ({ qa, unavailable: false }),
-      () => ({ qa: null, unavailable: true }),
-    ),
-    source.getInstallationChangelog(app.winget_id).catch(() => null),
-    app.latest_version
-      ? source.getVersionInstallerInfo(app.winget_id, app.latest_version).catch(() => null)
-      : Promise.resolve(null),
-    app.category
-      ? source.getPopularApps({ limit: 7, offset: 0, category: app.category, sort: 'popular' }).catch(() => null)
-      : Promise.resolve(null),
-  ]);
   const qa = qaRead.qa;
   const related = (relatedResult?.data ?? []).filter((item) => item.winget_id !== app.winget_id).slice(0, 6);
   const category = app.category || null;

@@ -45,7 +45,7 @@ async function chooseIntent(value: string) {
   });
 }
 
-async function searchAndPickGroup() {
+async function searchAndPickGroup(onFound?: (option: HTMLButtonElement) => void) {
   const input = document.querySelector<HTMLInputElement>('input[placeholder="Search Entra ID groups..."]')!;
   await act(async () => {
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
@@ -59,6 +59,7 @@ async function searchAndPickGroup() {
   const option = [...document.querySelectorAll('button')].find((button) =>
     button.textContent?.includes('Finance Users')
   )!;
+  onFound?.(option);
   await act(async () => option.click());
 }
 
@@ -121,5 +122,28 @@ describe('AssignmentConfig intent for new groups', () => {
       { type: 'allUsers', intent: 'available' },
       { type: 'exclusionGroup', intent: 'required', groupId: 'group-1', groupName: 'Finance Users' },
     ]);
+  });
+});
+
+
+describe('AssignmentConfig full group names', () => {
+  const name = 'Finance Users ' + 'North America production deployment group '.repeat(6);
+  it('reveals full names for included and excluded assignments', async () => {
+    await render([
+      { type: 'group', intent: 'required', groupId: 'include', groupName: name },
+      { type: 'exclusionGroup', intent: 'required', groupId: 'exclude', groupName: name },
+    ], vi.fn());
+    const labels = [...document.querySelectorAll('p')].filter(p => p.textContent === name);
+    expect(labels).toHaveLength(2);
+    for (const label of labels) expect(label.title).toBe(name);
+  });
+  it('reveals the complete search result name before selecting it', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ groups: [{ id: 'long', displayName: name }] }) })));
+    await render([{ type: 'allDevices', intent: 'required' }], vi.fn());
+    await searchAndPickGroup(option => {
+      const label = [...option.querySelectorAll('p')].find(p => p.textContent === name)!;
+      expect(label).toBeDefined();
+      expect(label.title).toBe(name);
+    });
   });
 });
