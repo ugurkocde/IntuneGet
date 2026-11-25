@@ -841,6 +841,23 @@ describe('POST /api/package (workflow dispatch)', () => {
     }));
   }
 
+  it('preserves exact hook text in stored configuration and workflow inputs', async () => {
+    const hooks = { postInstallPowerShell: "  Write-ADTLogEntry -Message 'synthetic'\r\n", postUninstallPowerShell: "Write-ADTLogEntry -Message 'removed'" };
+    const response = await postSingleItem({ psadtConfig: hooks });
+    expect(response.status).toBe(200);
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(hooks);
+    const stored = createMock.mock.calls[0][0];
+    expect(stored.package_config.psadtConfig).toMatchObject(hooks);
+  });
+
+  it.each([42, {}, 'x'.repeat(8193)])('rejects malformed PowerShell hooks before jobs or dispatch', async (value) => {
+    const response = await postSingleItem({ psadtConfig: { postInstallPowerShell: value } });
+    expect(response.status).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+
   it('records a security verdict at the dispatch gate as a validation block with its reason', async () => {
     triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaSecurityGateError({
       wingetId: 'Test.App',

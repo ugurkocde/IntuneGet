@@ -205,6 +205,12 @@ export async function POST(request: NextRequest) {
       if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
         return NextResponse.json({ error: 'Invalid PSADT settings' }, { status: 400 });
       }
+      for (const field of ['postInstallPowerShell', 'postUninstallPowerShell'] as const) {
+        const value = (psadtConfig as Record<string, unknown> | undefined)?.[field];
+        if (value !== undefined && (typeof value !== 'string' || value.length > 8192)) {
+          return NextResponse.json({ error: 'PowerShell hooks must be strings of at most 8192 characters' }, { status: 400 });
+        }
+      }
       const flag = (item as unknown as { psadtConfig?: { customDetection?: unknown } }).psadtConfig?.customDetection;
       if (flag !== undefined && typeof flag !== 'boolean') {
         return NextResponse.json({ error: 'Invalid custom detection setting' }, { status: 400 });

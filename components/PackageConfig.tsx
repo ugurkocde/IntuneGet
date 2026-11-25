@@ -28,6 +28,7 @@ import {
   Shield,
   Link2,
 } from 'lucide-react';
+import { PowerShellHooksConfig } from '@/components/PowerShellHooksConfig';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -2217,6 +2218,8 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                       className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm font-mono"
                     />
                   </div>
+
+                  <PowerShellHooksConfig config={config} onChange={updateConfig} />
 
                   {/* Post-install commands (#118) */}
                   <div>

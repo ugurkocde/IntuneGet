@@ -1226,9 +1226,12 @@ export function normalizeQaPsadtConfig(
   value: Partial<PSADTConfig> | null | undefined,
   detectionRules: DetectionRule[]
 ): PSADTConfig {
+  const { postInstallPowerShell, postUninstallPowerShell, ...config } = value || {};
   return {
     ...DEFAULT_PSADT_CONFIG,
-    ...(value || {}),
+    ...config,
+    ...(postInstallPowerShell?.trim() ? { postInstallPowerShell } : {}),
+    ...(postUninstallPowerShell?.trim() ? { postUninstallPowerShell } : {}),
     processesToClose: value?.processesToClose || [],
     progressDialog: {
       ...DEFAULT_PSADT_CONFIG.progressDialog,
