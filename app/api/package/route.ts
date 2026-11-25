@@ -201,10 +201,14 @@ export async function POST(request: NextRequest) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         return NextResponse.json({ error: 'Invalid package item' }, { status: 400 });
       }
-      // Admission must not persist a client target until server binding and
-      // content replacement are implemented together. Reject the whole batch.
-      const binding = item as unknown as { updateMode?: unknown; targetIntuneAppId?: unknown };
-      if (binding.updateMode !== undefined || binding.targetIntuneAppId !== undefined) {
+      const binding = item as unknown as Record<string, unknown>;
+      const sameApp = binding.updateMode === 'sameApp';
+      if ((binding.updateMode !== undefined && binding.updateMode !== 'create' && !sameApp) ||
+          (!sameApp && binding.targetIntuneAppId !== undefined) ||
+          (sameApp && (typeof binding.targetIntuneAppId !== 'string' ||
+            !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(binding.targetIntuneAppId) ||
+            isStoreCartItem(item) || item.sourceType === 'custom' || forceCreate === true ||
+            ['forceCreate', 'sourceIntuneAppId', 'autoSupersede', 'assignmentMigration'].some(key => binding[key] !== undefined)))) {
         return NextResponse.json({ error: 'Same-app content updates are not available yet' }, { status: 400 });
       }
       const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
@@ -272,6 +276,42 @@ export async function POST(request: NextRequest) {
         // Treat missing appSource as win32 for backward compatibility
         win32Items.push(item as Win32CartItem);
       }
+    }
+
+    // Retry safely re-posts the stored item here, so history and Graph must be
+    // checked anew for the current authenticated user and resolved tenant.
+    for (const item of win32Items) {
+      if (item.updateMode !== 'sameApp') continue;
+      const target = item.targetIntuneAppId!.toLowerCase();
+      try {
+        const deployed = await db.jobs.getLatestDeployed(userId, tenantId, item.wingetId, target);
+        if (!deployed || deployed.user_id !== userId || deployed.tenant_id !== tenantId ||
+            deployed.winget_id !== item.wingetId || deployed.status !== 'deployed' ||
+            deployed.archived_at != null || deployed.intune_app_id?.toLowerCase() !== target) {
+          return NextResponse.json({ error: 'Update target is not an active deployment for this user and tenant',
+            code: 'SAME_APP_TARGET_NOT_DEPLOYED' }, { status: 409 });
+        }
+        const { accessToken } = await acquireGraphToken(tenantId);
+        const response = await fetch(`https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/${target}?$select=id`,
+          { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10_000) });
+        if (response.status === 404) {
+          return NextResponse.json({ error: 'Update target is no longer available', code: 'SAME_APP_TARGET_MISSING' }, { status: 409 });
+        }
+        if (response.status !== 200) throw new Error('Target verification unavailable');
+        const app = await response.json();
+        if (app?.id?.toLowerCase() !== target || app?.['@odata.type'] !== '#microsoft.graph.win32LobApp') {
+          return NextResponse.json({ error: 'Update target is not the expected Win32 app', code: 'SAME_APP_TARGET_MISSING' }, { status: 409 });
+        }
+        item.targetIntuneAppId = deployed.intune_app_id!.toLowerCase();
+      } catch {
+        return NextResponse.json({ error: 'Could not verify the update target',
+          code: 'SAME_APP_TARGET_UNAVAILABLE', retryable: true }, { status: 503 });
+      }
+    }
+    // Keep admission and dispatch locked until workflow, deferred reauthorization,
+    // full relationship resolution and UI are ready to activate together.
+    if (win32Items.some(item => item.updateMode === 'sameApp')) {
+      return NextResponse.json({ error: 'Same-app content updates are not available yet' }, { status: 400 });
     }
 
     // Publisher licence agreements are accepted per tenant, never per cart.
