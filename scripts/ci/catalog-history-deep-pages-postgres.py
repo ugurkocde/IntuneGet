@@ -92,7 +92,7 @@ def contracts(sql):
         run('begin;' + candidate + 'commit;')
         assert snapshot() == security, 'Owner/ACL/function security changed'
         assert value('select public.get_catalog_release_history_v2(page_number=>1911)') == expected
-        for page in ['NULL', '-5', '0', '1', '2', '1324', '1911', '2376', '2377', '10000', '10001']:
+        for page in ['NULL', '-5', '0', '1', '2', '100', '101', '1324', '1911', '2376', '2377', '10000', '10001']:
             assert value('select public.get_catalog_release_history_v2(page_number=>' + page + ')=public.history_deep_oracle(page_number=>' + page + ')') is True
             assert value("select public.get_catalog_release_history_global_rows(" + page + ")=(public.history_deep_oracle(page_number=>" + page + ")->'rows')") is True
         for args in ["kind_filter=>'updated',page_number=>2", "app_filter=>'Fixture.1'"]:
@@ -112,7 +112,7 @@ def contracts(sql):
             print('GREEN ' + rpc + ': unchanged shallow work; one history scan and forty indexed rows at deep pages', flush=True)
         barrier = threading.Barrier(8)
         def concurrent_call(i):
-            page = [1,2,3,20,100,1324,1730,1911][i]
+            page = [1,2,3,100,101,1324,1730,1911][i]
             rpc = 'get_catalog_release_history_v2' if i%2==0 else 'get_catalog_release_history_global_rows'
             barrier.wait(timeout=10)
             start = time.monotonic()
