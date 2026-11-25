@@ -140,6 +140,112 @@ def contracts(sql):
         print('GREEN global candidate force_generic bounded first-row plan; ' + json.dumps(timing), flush=True)
         assert timing['p95_ms'] < 2000, timing
         assert timing['unrelated_ms'] < 1000, timing
+        # Recreate the captured production CRLF body; the migration pins that exact source.
+        run('begin;' + NEW.read_text().replace('\r\n', '\n').replace('\n', '\r\n') + 'commit;')
+        metadata_before = value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure")
+        assert metadata_before[0] == 'ad242d7a91bc9b113e21c6e83df690c7'
+        metadata_migration = (ROOT/'supabase/migrations/20261125033000_catalog_history_single_global_aggregate.sql').read_text()
+        # Owner-side STRICT drift must be rejected, not silently reset by replacement.
+        run('alter function ' + signature + ' strict')
+        strict_rejected = False
+        try:
+            run('begin;' + metadata_migration + 'rollback;')
+        except Exception as error:
+            strict_rejected = 'Unexpected catalog history source' in str(error) + str(getattr(error, 'stderr', ''))
+        assert strict_rejected, 'Migration silently accepts STRICT predecessor drift'
+        run('alter function ' + signature + ' called on null input')
+        # Fresh LF checkouts must replay the exact committed predecessor as well.
+        run('begin;' + new + 'commit;')
+        run('begin;' + metadata_migration + 'rollback;')
+        run('begin;' + metadata_migration.replace('\r\n', '\n').replace('\n', '\r\n') + 'rollback;')
+        run('begin;' + new.replace('SELECT CASE', 'SELECT /* unexpected owner edit */ CASE', 1) + 'commit;')
+        drift_rejected = False
+        try:
+            run('begin;' + metadata_migration + 'rollback;')
+        except Exception as error:
+            drift_rejected = 'Unexpected catalog history source' in str(error) + str(getattr(error, 'stderr', ''))
+        assert drift_rejected, 'Migration accepts an unpinned predecessor body'
+        run('begin;' + NEW.read_text().replace('\r\n', '\n').replace('\n', '\r\n') + 'commit;')
+        print('PASS exact LF/CRLF predecessors and rejection of STRICT/body drift', flush=True)
+        def wait_for(tag, event):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                # CI connects as postgres then SET ROLE fixture_owner. Wait events
+                # belong to the session user, so observe as the fixture admin;
+                # the concurrent DDL itself still runs as the restricted owner.
+                if json.loads(sql("select to_json(exists(select 1 from pg_stat_activity where datname=current_database() and application_name=" + quote(tag) + " and wait_event=" + quote(event) + "))", database=database, role=None).stdout):
+                    return
+                time.sleep(.05)
+            raise AssertionError('Concurrent DDL did not reach ' + event)
+        def rejected(text, message):
+            try:
+                run(text)
+            except Exception as error:
+                return message in str(error) + str(getattr(error, 'stderr', ''))
+            return False
+        # An owner already editing the function must block activation before its guard.
+        tag = 'history_ddl_' + uuid.uuid4().hex
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            holder = pool.submit(run, 'begin;set application_name=' + quote(tag) + ';alter function ' + signature + ' cost 100;select pg_sleep(3);rollback;')
+            wait_for(tag, 'PgSleep')
+            assert rejected('begin;' + metadata_migration + 'commit;', 'lock timeout'), 'Activation overwrote an in-flight owner definition'
+            holder.result(timeout=10)
+        assert value("select to_json(md5(prosrc)) from pg_proc where oid='"+signature+"'::regprocedure") == metadata_before[0]
+        # After the guard, competing CREATE OR REPLACE must wait on the held row lock.
+        tag = 'history_apply_' + uuid.uuid4().hex
+        other_tag = 'history_other_' + uuid.uuid4().hex
+        paused_migration = metadata_migration.replace('EXECUTE $definition$', 'PERFORM pg_sleep(3); EXECUTE $definition$', 1)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            applying = pool.submit(run, 'begin;set application_name=' + quote(tag) + ';' + paused_migration + 'commit;')
+            wait_for(tag, 'PgSleep')
+            competing = pool.submit(rejected, 'set application_name=' + quote(other_tag) + ';' + new, 'tuple concurrently updated')
+            wait_for(other_tag, 'transactionid')
+            applying.result(timeout=10)
+            assert competing.result(timeout=10), 'Concurrent owner replacement was not rejected'
+        assert value("select to_json(md5(prosrc)) from pg_proc where oid='"+signature+"'::regprocedure") == 'f2fe5dcfbf679e917e909d41d6ff0a09'
+        run('begin;' + NEW.read_text().replace('\r\n', '\n').replace('\n', '\r\n') + 'commit;')
+        print('PASS both concurrent function DDL directions without catalog UPDATE rights', flush=True)
+        def full_history_scans(plan):
+            return sum(1 for n in plan if n.get('Relation Name') == 'version_history'
+                       and n.get('Actual Rows', 0) * n.get('Actual Loops', 0) >= 74842)
+        def metadata_plan_summary(plan):
+            return {'full_history_scans': full_history_scans(plan),
+                    'nodes': [{key: n.get(key) for key in (
+                        'Node Type', 'Alias', 'Index Name', 'Parallel Aware',
+                        'Actual Rows', 'Actual Loops', 'Rows Removed by Filter')}
+                        for n in plan if n.get('Relation Name') == 'version_history']}
+        def history_work():
+            # Each run() exits its backend, flushing stats. Wait for parallel workers
+            # too, then read fresh counters in a new backend. Index tuples include
+            # index-only scans, unlike idx_tup_fetch. No other workload uses this DB.
+            deadline = time.monotonic() + 5
+            while value("select to_json(count(*)) from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()"):
+                assert time.monotonic() < deadline, 'History work backend drain timed out'
+                time.sleep(.05)
+            return value("select to_json(t.seq_tup_read + coalesce((select sum(i.idx_tup_read) from pg_stat_user_indexes i where i.relid=t.relid),0)) from pg_stat_user_tables t where t.relid='public.version_history'::regclass")
+        # One pass over N rows plus at most 40 page and 40 predecessor probes.
+        # 500 also covers locale rows skipped by the page index in this fixture.
+        history_budget = value('select to_json(count(*)) from public.version_history') + 500
+        before_work = history_work()
+        old_metadata_plan = plans('')
+        old_work = history_work() - before_work
+        print('Global metadata OLD plan ' + json.dumps({**metadata_plan_summary(old_metadata_plan), 'tuple_work': old_work, 'budget': history_budget}), flush=True)
+        assert old_work > history_budget, 'OLD global metadata duplicate work not reproduced'
+        print('RED global metadata reads the complete history relation more than once', flush=True)
+        run('begin;' + (ROOT/'supabase/migrations/20261125033000_catalog_history_single_global_aggregate.sql').read_text() + 'commit;')
+        before_work = history_work()
+        metadata_plan = plans('')
+        candidate_work = history_work() - before_work
+        print('Global metadata candidate plan ' + json.dumps({**metadata_plan_summary(metadata_plan), 'tuple_work': candidate_work, 'budget': history_budget}), flush=True)
+        assert 0 < candidate_work <= history_budget, 'Global metadata exceeds one-pass tuple work budget'
+        metadata_after = value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure")
+        assert metadata_after[1:] == metadata_before[1:]
+        for app, month, kind, page, search, architecture, start, end in cases:
+            args = ','.join([quote(search), quote(month), quote(kind), str(page), quote(app), quote(start) + '::date', quote(end) + '::date', quote(architecture)])
+            assert value('select to_json(public.get_catalog_release_history_v2(' + args + ') = public.history_parity_oracle(' + args + '))') is True
+        metadata_timing = burst()
+        assert metadata_timing['p95_ms'] < 2000 and metadata_timing['unrelated_ms'] < 1000, metadata_timing
+        print('GREEN one global history scan; full JSON/filter parity, security attributes and eight-session bounds; ' + json.dumps(metadata_timing), flush=True)
         # Exercise the additive rows RPC on the same real PG17 fixture and roles.
         v2_before = value("select json_build_array(md5(prosrc),proacl::text) from pg_proc where oid='"+signature+"'::regprocedure")
         run('begin;' + (ROOT/'supabase/migrations/20261115133712_catalog_history_global_rows.sql').read_text() + 'commit;')
@@ -152,6 +258,9 @@ def contracts(sql):
         run('drop function public.get_catalog_release_history_global_rows(integer)')
         assert value("select json_build_array(md5(prosrc),proacl::text) from pg_proc where oid='"+signature+"'::regprocedure") == v2_before
         print('PASS real PG17 additive rows parity/service ACL/unchanged v2/drop rollback/eight sessions; client wall timing only, production effect unverified', flush=True)
+        run('begin;' + NEW.read_text().replace('\r\n', '\n').replace('\n', '\r\n') + 'commit;')
+        assert value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure") == metadata_before
+        print('PASS exact pre-metadata definition and security snapshot rollback', flush=True)
         run('begin;' + old + 'commit;')
         assert value("select to_json(md5(prosrc)) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_md5 == '69204a947d44d31b8a4924c73ff14d4a'
         assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
