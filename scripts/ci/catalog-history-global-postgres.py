@@ -140,6 +140,25 @@ def contracts(sql):
         print('GREEN global candidate force_generic bounded first-row plan; ' + json.dumps(timing), flush=True)
         assert timing['p95_ms'] < 2000, timing
         assert timing['unrelated_ms'] < 1000, timing
+        # Recreate the captured production CRLF body; the migration pins that exact source.
+        run('begin;' + NEW.read_text().replace('\r\n', '\n').replace('\n', '\r\n') + 'commit;')
+        metadata_before = value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure")
+        assert metadata_before[0] == 'ad242d7a91bc9b113e21c6e83df690c7'
+        def full_history_scans(plan):
+            return sum(1 for n in plan if n.get('Relation Name') == 'version_history'
+                       and n.get('Actual Rows', 0) * n.get('Actual Loops', 0) >= 74842)
+        assert full_history_scans(plans('')) > 1, 'OLD global metadata duplicate scan not reproduced'
+        print('RED global metadata reads the complete history relation more than once', flush=True)
+        run('begin;' + (ROOT/'supabase/migrations/20261125033000_catalog_history_single_global_aggregate.sql').read_text() + 'commit;')
+        assert full_history_scans(plans('')) == 1, 'Global metadata still rescans the complete history relation'
+        metadata_after = value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure")
+        assert metadata_after[1:] == metadata_before[1:]
+        for app, month, kind, page, search, architecture, start, end in cases:
+            args = ','.join([quote(search), quote(month), quote(kind), str(page), quote(app), quote(start) + '::date', quote(end) + '::date', quote(architecture)])
+            assert value('select to_json(public.get_catalog_release_history_v2(' + args + ') = public.history_parity_oracle(' + args + '))') is True
+        metadata_timing = burst()
+        assert metadata_timing['p95_ms'] < 2000 and metadata_timing['unrelated_ms'] < 1000, metadata_timing
+        print('GREEN one global history scan; full JSON/filter parity, security attributes and eight-session bounds; ' + json.dumps(metadata_timing), flush=True)
         # Exercise the additive rows RPC on the same real PG17 fixture and roles.
         v2_before = value("select json_build_array(md5(prosrc),proacl::text) from pg_proc where oid='"+signature+"'::regprocedure")
         run('begin;' + (ROOT/'supabase/migrations/20261115133712_catalog_history_global_rows.sql').read_text() + 'commit;')
@@ -152,6 +171,9 @@ def contracts(sql):
         run('drop function public.get_catalog_release_history_global_rows(integer)')
         assert value("select json_build_array(md5(prosrc),proacl::text) from pg_proc where oid='"+signature+"'::regprocedure") == v2_before
         print('PASS real PG17 additive rows parity/service ACL/unchanged v2/drop rollback/eight sessions; client wall timing only, production effect unverified', flush=True)
+        run('begin;' + NEW.read_text().replace('\r\n', '\n').replace('\n', '\r\n') + 'commit;')
+        assert value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure") == metadata_before
+        print('PASS exact pre-metadata definition and security snapshot rollback', flush=True)
         run('begin;' + old + 'commit;')
         assert value("select to_json(md5(prosrc)) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_md5 == '69204a947d44d31b8a4924c73ff14d4a'
         assert value("select coalesce(to_json(proacl::text),'null'::json) from pg_proc where oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure") == before_acl
