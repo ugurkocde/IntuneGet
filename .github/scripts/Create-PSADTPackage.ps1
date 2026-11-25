@@ -29,6 +29,70 @@ function ConvertTo-PSSingleQuotedContent {
     return [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Value)
 }
 
+# Author hooks run only in the generated deployment, never on the generator host.
+# These syntax/control-flow checks prevent mistakes; they are NOT a sandbox.
+function Get-PostPowerShellHook {
+    param([AllowNull()]$Value, [string]$Name)
+    if ($Value -isnot [string]) { throw "PSADT $Name must be a string." }
+    if ($Value.Length -gt 8192) { throw "PSADT $Name exceeds 8192 characters." }
+    for ($i = 0; $i -lt $Value.Length; $i++) {
+        $c = $Value[$i]
+        if ([char]::IsHighSurrogate($c)) {
+            if ($i + 1 -ge $Value.Length -or -not [char]::IsLowSurrogate($Value[$i + 1])) { throw "PSADT $Name contains an invalid Unicode sequence." }
+            $i++
+        } elseif ([char]::IsLowSurrogate($c)) {
+            throw "PSADT $Name contains an invalid Unicode sequence."
+        } elseif (([int]$c -lt 32 -and [int]$c -notin @(9, 10, 13)) -or [int]$c -eq 127) {
+            throw "PSADT $Name contains an unsupported control character."
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
+    # Reject directives before parsing; do not resolve author modules/assemblies.
+    if ($Value -match '(?im)(?:^|;)\s*using\s|#requires\b') { throw "PSADT $Name cannot contain using or requires directives." }
+    $hookTokens = $null; $hookErrors = $null
+    $hookAst = [System.Management.Automation.Language.Parser]::ParseInput($Value, [ref]$hookTokens, [ref]$hookErrors)
+    if ($hookErrors.Count -gt 0) {
+        # ParseError.Message and Extent may disclose author text or secrets.
+        $position = $hookErrors[0].Extent.StartScriptPosition
+        throw "PSADT $Name has $($hookErrors.Count) syntax error(s); first at $($position.LineNumber):$($position.ColumnNumber)."
+    }
+    $invalidControl = @($hookAst.FindAll({ param($node)
+        if ($node -is [System.Management.Automation.Language.ExitStatementAst]) { return $true }
+        if ($node -is [System.Management.Automation.Language.BreakStatementAst] -or
+            $node -is [System.Management.Automation.Language.ContinueStatementAst]) {
+            # Labelled/dynamic jumps may reach a deployment scope outside the hook.
+            if ($null -ne $node.Label) { return $true }
+            $parent = $node.Parent
+            while ($null -ne $parent -and $parent -isnot [System.Management.Automation.Language.ScriptBlockAst]) {
+                if ($parent -is [System.Management.Automation.Language.LoopStatementAst] -or
+                    $parent -is [System.Management.Automation.Language.SwitchStatementAst]) { return $false }
+                $parent = $parent.Parent
+            }
+            return $true
+        }
+        return $false
+    }, $true))
+    if ($invalidControl.Count -gt 0) { throw "PSADT $Name contains exit or non-local loop control." }
+    return $Value
+}
+
+function Get-PostPowerShellHookLines {
+    param([string]$Text, [string]$Phase)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return }
+    $escaped = ConvertTo-PSSingleQuotedContent $Text
+    $hash = [System.Security.Cryptography.SHA256]::Create()
+    try { $digest = ([BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text)))).Replace('-', '').Substring(0, 12) }
+    finally { $hash.Dispose() }
+    $variable = 'intuneGetPost' + $Phase + 'Script'
+    # Interpolate the encoder result as literal string data, never as generator code.
+    @(
+        ''
+        "    Write-ADTLogEntry -Message 'Executing custom post-$($Phase.ToLowerInvariant()) PowerShell ($($Text.Length) chars, sha256 $digest)' -Source '$($Phase)-ADTDeployment'"
+        ('    $' + $variable + " = '$escaped'")
+        ('    & ([System.Management.Automation.ScriptBlock]::Create($' + $variable + '))')
+    )
+}
+
 function ConvertTo-PSDoubleQuotedContent {
     param([AllowNull()][AllowEmptyString()][string]$Value)
     return $Value -replace '[`$"\u201C-\u201E]', '`$0'
@@ -1453,6 +1517,27 @@ $postUninstallCommands = @()
 if ($psadtConfig.postUninstallCommands) {
     $postUninstallCommands = @($psadtConfig.postUninstallCommands | ForEach-Object { (([string]$_) -replace '[\r\n]+', ' ').Trim() } | Where-Object { $_ })
 }
+# ConvertFrom-Json replaces a lone JSON surrogate with U+FFFD. Check the raw
+# hook strings too, so malformed input is refused instead of silently changed.
+if ($psadtConfig.Contains('postInstallPowerShell') -or $psadtConfig.Contains('postUninstallPowerShell')) {
+    $hookJson = $null
+    try {
+        $hookJson = [System.Text.Json.JsonDocument]::Parse([string]$env:PSADT_CONFIG)
+        foreach ($hookName in @('postInstallPowerShell', 'postUninstallPowerShell')) {
+            if ($psadtConfig.Contains($hookName)) {
+                $hookValue = $hookJson.RootElement.GetProperty($hookName)
+                if ($hookValue.ValueKind -eq [System.Text.Json.JsonValueKind]::String) { [void]$hookValue.GetString() }
+            }
+        }
+    } catch { throw 'PSADT PowerShell hooks must contain valid Unicode string values.' }
+    finally { if ($null -ne $hookJson) { $hookJson.Dispose() } }
+}
+$postInstallPowerShell = if ($psadtConfig.Contains('postInstallPowerShell')) {
+    Get-PostPowerShellHook -Value $psadtConfig['postInstallPowerShell'] -Name 'postInstallPowerShell'
+} else { '' }
+$postUninstallPowerShell = if ($psadtConfig.Contains('postUninstallPowerShell')) {
+    Get-PostPowerShellHook -Value $psadtConfig['postUninstallPowerShell'] -Name 'postUninstallPowerShell'
+} else { '' }
 # Custom detection marker root from PSADT config (issue #106)
 # Subpath under the hive (no hive prefix), e.g. SOFTWARE\Contoso\Apps
 # Normalization mirrors normalizeMarkerPath in lib/registry-marker.ts - keep in sync
@@ -3714,6 +3799,10 @@ if ($postInstallCommands.Count -gt 0) {
     }
 }
 
+if ($postInstallPowerShell) {
+    $lines += @(Get-PostPowerShellHookLines -Text $postInstallPowerShell -Phase 'Install')
+}
+
 # Write registry marker - scope-aware
 $userUninstallMarkerLines = @()
 $machineUninstallMarkerLines = @()
@@ -4677,6 +4766,10 @@ if ($postUninstallCommands.Count -gt 0) {
             "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $postCmdEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
         )
     }
+}
+
+if ($postUninstallPowerShell) {
+    $lines += @(Get-PostPowerShellHookLines -Text $postUninstallPowerShell -Phase 'Uninstall')
 }
 
 # Add registry marker removal - scope-aware cleanup
