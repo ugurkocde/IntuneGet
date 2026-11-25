@@ -67,6 +67,9 @@ export function sanitizePackageDefaults(value: unknown): PackageDefaults | null 
     const parsed = boundedInteger(value[key], INTEGER_LIMITS[key]);
     if (parsed !== undefined) result[key] = parsed;
   }
+  if (isPlainObject(value.progressDialog) && typeof value.progressDialog.enabled === 'boolean') {
+    result.progressDialog = { enabled: value.progressDialog.enabled };
+  }
   if (isPlainObject(value.restartPrompt)) {
     const prompt = value.restartPrompt;
     const countdownSeconds = boundedInteger(prompt.countdownSeconds, RESTART_COUNTDOWN_LIMITS);
@@ -82,7 +85,7 @@ export function sanitizePackageDefaults(value: unknown): PackageDefaults | null 
 /** Picks the saveable defaults out of a package's current PSADT config. */
 export function pickPackageDefaults(config: PSADTConfig): PackageDefaults | null {
   const clean = sanitizePackageDefaults(config);
-  const keys = ['deployMode', 'restartBehavior', 'windowLocation', ...BOOLEAN_KEYS, ...Object.keys(INTEGER_LIMITS), 'restartPrompt'] as const;
+  const keys = ['deployMode', 'restartBehavior', 'windowLocation', ...BOOLEAN_KEYS, ...Object.keys(INTEGER_LIMITS), 'restartPrompt', 'progressDialog'] as const;
   for (const key of keys) {
     if ((key === 'deferTimes' || key === 'deferDays') && config.allowDefer !== true) continue;
     if (config[key as keyof PSADTConfig] !== undefined && (!clean || !(key in clean))) {
@@ -99,6 +102,7 @@ export function applyPackageDefaults(config: PSADTConfig, defaults: PackageDefau
   return {
     ...config,
     ...clean,
+    ...(clean.progressDialog ? { progressDialog: { ...config.progressDialog, ...clean.progressDialog } } : {}),
     ...(clean.restartPrompt ? { restartPrompt: { ...clean.restartPrompt } } : {}),
   };
 }

@@ -24,6 +24,7 @@ export interface PackageDefaults {
   deferTimes?: number;
   deferDays?: number;
   restartPrompt?: RestartPromptConfig;
+  progressDialog?: { enabled: boolean };
 }
 
 export interface UserSettings {
