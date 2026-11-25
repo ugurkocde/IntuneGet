@@ -16,7 +16,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '1cc5fb513cf3c23120f2b0741d66f11ee435d409',
+  packagerCommit: '37cbdcdbbaedf092b39e18777c44c8d613725e14',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -648,6 +648,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // The next delta adds registration diagnostics and fixes a portable archive
   // failure path that no passing package could have exercised.
   '665d6f4ec65d457edbd455605a54b4b223392457',
+  // Preserve the preceding release for unchanged execution profiles. Hook and
+  // MSI override behavior changed at the current release and is excluded below.
+  '1cc5fb513cf3c23120f2b0741d66f11ee435d409',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -824,6 +827,9 @@ function lowerTextValue(value: unknown): string {
   return textValue(value).toLowerCase();
 }
 
+// Keep this case-insensitive grammar aligned with the pinned generator guard.
+const MSI_REVIEWED_OVERRIDE_PATTERN = new RegExp(String.raw`^(?:\s*(?:/(?:quiet|passive|norestart|promptrestart|forcerestart|q[nbrfu]?[+!-]?)|[A-Za-z_][A-Za-z0-9_.]*=(?:"[^"]*"|[^\s"]*)))+\s*$`, 'i');
+
 function passingProfileCompatibilityReason(
   priorPackagerCommit: string,
   profile: Record<string, unknown>
@@ -847,6 +853,20 @@ function passingProfileCompatibilityReason(
     : [];
 
   for (const release of QA_PACKAGER_RELEASE_HISTORY.slice(priorIndex + 1, currentIndex + 1)) {
+    if (release === '37cbdcdbbaedf092b39e18777c44c8d613725e14') {
+      // Older generators ignored these fields even when the profile contained
+      // identical hook text. Their passes cannot certify hook execution.
+      if (textValue(psadtConfig.postInstallPowerShell) || textValue(psadtConfig.postUninstallPowerShell)) {
+        return 'compatible-powershell-hook-changed';
+      }
+      const registeredType = lowerTextValue(installer.sourceType) === 'zip'
+        ? lowerTextValue(installer.nestedInstallerType)
+        : lowerTextValue(installer.sourceType);
+      const override = textValue(psadtConfig.reviewedInstallArgumentsOverride);
+      if (['msi', 'wix'].includes(registeredType) && override && !MSI_REVIEWED_OVERRIDE_PATTERN.test(override)) {
+        return 'compatible-msi-reviewed-override-changed';
+      }
+    }
     if (
       release === '25849ac512c211e616c135149ef1e059db367ebc' &&
       lowerTextValue(record(profile.app)?.wingetId) === 'wacom.wacomtabletdriver'
