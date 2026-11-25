@@ -529,7 +529,7 @@ describe('POST /api/package (workflow dispatch)', () => {
   it.each([
     { updateMode: 'unknown' },
     { updateMode: 'sameApp', targetIntuneAppId: 'not-a-guid' },
-    ...[{ appSource: 'store' }, { sourceType: 'custom' }, { forceCreate: true }, { sourceIntuneAppId: 'old' }, { autoSupersede: true }, { assignmentMigration: {} }].map(extra => ({ updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111', ...extra })),
+    ...[{ appSource: 'store' }, { sourceType: 'custom' }, { forceCreate: true }, { sourceIntuneAppId: 'old' }, { autoSupersede: true }, { assignmentMigration: {} }, { categories: [] }, { relationships: [] }, { assignments: [] }, { espProfiles: [] }].map(extra => ({ updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111', ...extra })),
   ])('rejects incompatible same-app binding before database access: %j', async binding => {
     const response = await POST(new NextRequest('http://localhost/api/package', { method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [makeWin32Item(binding)] }) }));
     expect(response.status).toBe(400);
@@ -564,7 +564,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     ['wrong tenant history', true, 200, 409, 'SAME_APP_TARGET_NOT_DEPLOYED'],
     ['archived history', true, 200, 409, 'SAME_APP_TARGET_NOT_DEPLOYED'],
     ['Graph network error', true, 200, 503, 'SAME_APP_TARGET_UNAVAILABLE'],
-    ['valid binding', true, 200, 400, undefined],
+    ['valid binding', true, 200, 200, undefined],
   ])('reauthorizes same-app admission and retry: %s', async (scenario, history, graphStatus, status, code) => {
     const target = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
     getLatestDeployedMock.mockResolvedValue(history ? makeJob({ user_id: scenario === 'wrong user history' ? 'other-user' : 'user-1', tenant_id: scenario === 'wrong tenant history' ? 'other-tenant' : 'tenant-1', winget_id: 'Test.App', intune_app_id: target.toLowerCase(), status: 'deployed', archived_at: scenario === 'archived history' ? '2026-01-01T00:00:00Z' : null }) : null);
@@ -579,10 +579,13 @@ describe('POST /api/package (workflow dispatch)', () => {
       expect(getLatestDeployedMock).toHaveBeenCalledWith('user-1', 'tenant-1', 'Test.App', target.toLowerCase());
       if (!history || scenario.endsWith('history')) expect(graph).not.toHaveBeenCalled();
       else expect(acquireGraphToken).toHaveBeenCalledWith('tenant-1');
-      expect(createMock).not.toHaveBeenCalled();
-      expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
-      expect(ensureQaDemandMock).not.toHaveBeenCalled();
-      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      if (scenario === 'valid binding') {
+        expect(createMock).toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.objectContaining({ updateMode: 'sameApp', targetIntuneAppId: target.toLowerCase(), assignments: undefined, categories: undefined, relationships: undefined }), undefined, expect.anything());
+      } else {
+        expect(createMock).not.toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      }
     } finally { vi.unstubAllGlobals(); }
   });
 

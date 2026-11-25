@@ -73,9 +73,9 @@ export function buildStoredJobWorkflowInputs(
     assignments: !sameApp && item.assignments ? JSON.stringify(sanitizeAssignments
       ? sanitizeAssignmentsForDispatch(item.assignments, Boolean(item.requirementRules?.length))
       : item.assignments) : undefined,
-    categories: item.categories ? JSON.stringify(item.categories) : undefined,
-    espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
-    relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
+    categories: !sameApp && item.categories ? JSON.stringify(item.categories) : undefined,
+    espProfiles: !sameApp && item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
+    relationships: !sameApp && item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
     installScope: (item.installScope || job.install_scope) === 'user' ? 'user' : 'machine',
     forceCreate: sameApp ? false : item.forceCreate,
     sourceIntuneAppId: sameApp ? undefined : autoUpdate?.sourceIntuneAppId,

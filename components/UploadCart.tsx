@@ -578,7 +578,7 @@ export function UploadCart() {
                       {/* Teammate-duplicate warning: this app was already
                           deployed to the tenant by someone. Deploying again
                           would create a second Intune app unless forced. */}
-                      {tenantDeployedBy.has(item.wingetId) && !item.forceCreate && (
+                      {tenantDeployedBy.has(item.wingetId) && !item.forceCreate && !(isWin32CartItem(item) && item.updateMode === 'sameApp') && (
                         <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-500/20 dark:bg-amber-500/10">
                           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                           <div className="text-xs flex-1">

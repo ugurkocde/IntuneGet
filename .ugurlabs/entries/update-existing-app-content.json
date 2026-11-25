@@ -1,0 +1,6 @@
+{
+  "title": "Update an existing app without replacing its identity",
+  "summary": "Choose content replacement for a catalog Win32 app you previously deployed. Keep its Intune app ID, assignments, categories, dependencies and supersedence while replacing installer content and package metadata. Create a new app remains the default; assignment and relationship edits stay in Update Settings.",
+  "type": "new",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/2106"
+}

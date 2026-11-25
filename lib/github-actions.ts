@@ -140,7 +140,8 @@ export async function triggerPackagingWorkflow(
   options?: { skipRunCapture?: boolean; requireQaPass?: boolean;
     newJobAdmission?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
 ): Promise<TriggerResult> {
-  // Never let a staged same app job fall through the existing create workflow.
+  let sameAppOwner: string | undefined;
+  // Bind explicit content replacement to an existing deployment.
   if (inputs.updateMode === 'sameApp') {
     // All deferred dispatch callers enter here again. Re-read persisted ownership
     // and the live target rather than trusting an earlier cart admission.
@@ -158,6 +159,7 @@ export async function triggerPackagingWorkflow(
         stored.targetIntuneAppId?.toLowerCase() !== target || stored.wingetId !== inputs.wingetId) {
       throw new Error('Same app stored job binding changed.');
     }
+    sameAppOwner = job.user_id;
     const deployed = await db.jobs.getLatestDeployed(job.user_id, inputs.tenantId, inputs.wingetId, target);
     if (!deployed || deployed.user_id !== job.user_id || deployed.tenant_id !== inputs.tenantId ||
         deployed.winget_id !== inputs.wingetId || deployed.status !== 'deployed' ||
@@ -172,7 +174,7 @@ export async function triggerPackagingWorkflow(
     if (app?.id?.toLowerCase() !== target || app?.['@odata.type'] !== '#microsoft.graph.win32LobApp') {
       throw new Error('Same app target is unavailable.');
     }
-    throw new Error('Same app updates require a workflow that supports content replacement.');
+
   }
   const cfg = config || getGitHubActionsConfig();
 
@@ -384,20 +386,21 @@ export async function triggerPackagingWorkflow(
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {
+          ...(inputs.updateMode === 'sameApp' ? { updateMode: 'sameApp', targetIntuneAppId: inputs.targetIntuneAppId!.toLowerCase() } : {}),
           psadtConfig: normalizedPackageInput?.psadtConfigJson || inputs.psadtConfig || '{}',
           detectionRules:
             normalizedPackageInput?.detectionRulesJson || inputs.detectionRules || '[]',
           requirementRules: inputs.requirementRules || '[]',
-          assignments: inputs.assignments || '[]',
-          categories: inputs.categories || '[]',
-          espProfiles: inputs.espProfiles || '[]',
-          relationships: inputs.relationships || '[]',
+          assignments: inputs.updateMode === 'sameApp' ? '[]' : inputs.assignments || '[]',
+          categories: inputs.updateMode === 'sameApp' ? '[]' : inputs.categories || '[]',
+          espProfiles: inputs.updateMode === 'sameApp' ? '[]' : inputs.espProfiles || '[]',
+          ...(inputs.updateMode === 'sameApp' ? {} : { relationships: inputs.relationships || '[]' }),
           installScope: inputs.installScope || 'machine',
-          forceCreate: inputs.forceCreate ? 'true' : 'false',
-          sourceIntuneAppId: inputs.sourceIntuneAppId || '',
-          carryOverAssignments: inputs.carryOverAssignments ? 'true' : 'false',
-          removeAssignmentsFromPreviousApp: inputs.removeAssignmentsFromPreviousApp ? 'true' : 'false',
-          autoSupersede: inputs.autoSupersede ? 'true' : 'false',
+          forceCreate: inputs.updateMode !== 'sameApp' && inputs.forceCreate ? 'true' : 'false',
+          sourceIntuneAppId: inputs.updateMode === 'sameApp' ? '' : inputs.sourceIntuneAppId || '',
+          carryOverAssignments: inputs.updateMode !== 'sameApp' && inputs.carryOverAssignments ? 'true' : 'false',
+          removeAssignmentsFromPreviousApp: inputs.updateMode !== 'sameApp' && inputs.removeAssignmentsFromPreviousApp ? 'true' : 'false',
+          autoSupersede: inputs.updateMode !== 'sameApp' && inputs.autoSupersede ? 'true' : 'false',
           supersedenceType: inputs.supersedenceType || '',
         },
       },
@@ -410,6 +413,15 @@ export async function triggerPackagingWorkflow(
   })).digest('hex');
   await options?.beforeDispatch?.(dispatchIdentity);
   const newAdmissionIdentity = options?.newJobAdmission && inputs.sourceType !== 'custom' ? dispatchIdentity : undefined;
+  if (inputs.updateMode === 'sameApp') {
+    const current = await getDatabase().jobs.getById(inputs.jobId);
+    const stored = current?.package_config as unknown as Win32CartItem | undefined;
+    if (!current || current.user_id !== sameAppOwner || current.cancelled_at || current.archived_at || !['queued', 'awaiting_qa', 'packaging'].includes(current.status) ||
+        current.tenant_id !== inputs.tenantId || current.winget_id !== inputs.wingetId || current.version !== inputs.version ||
+        stored?.updateMode !== 'sameApp' || stored.targetIntuneAppId?.toLowerCase() !== inputs.targetIntuneAppId?.toLowerCase()) {
+      throw new Error('Same app stored job binding changed before dispatch.');
+    }
+  }
   const response = await fetch(url, {
     method: 'POST',
     headers: {

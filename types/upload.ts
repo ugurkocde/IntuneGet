@@ -185,8 +185,8 @@ interface CartItemBase {
 // Win32 LOB app - goes through packaging pipeline (PSADT + .intunewin + GitHub Actions)
 export interface Win32CartItem extends CartItemBase {
   appSource: 'win32';
-  // Reserved for the explicit same app update path. Dispatch stays blocked
-  // until the workflow supports replacing content without creating an app.
+  // Explicit content replacement keeps the authorized existing app identity.
+  // Omitting this retains the create new app path.
   updateMode?: 'create' | 'sameApp';
   targetIntuneAppId?: string;
   curatedReleaseId?: string;

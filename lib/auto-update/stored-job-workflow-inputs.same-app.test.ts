@@ -6,7 +6,7 @@ vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { getById: vi.fn().mock
 const target = '11111111-1111-4111-8111-111111111111';
 const options = { callbackUrl: 'https://example.test/callback', qaOverride: false, sanitizeAssignments: true };
 const item = { appSource: 'win32', wingetId: 'Contoso.App', sourceType: 'winget', installerType: 'exe', updateMode: 'sameApp', targetIntuneAppId: target,
-  forceCreate: true, assignments: [{ target: 'allDevices', intent: 'required' }],
+  categories: [{ id: 'category', displayName: 'Category' }], espProfiles: [], relationships: [], forceCreate: true, assignments: [{ target: 'allDevices', intent: 'required' }],
   assignmentMigration: { carryOverAssignments: true, removeAssignmentsFromPreviousApp: true } } as unknown as Win32CartItem;
 const job = (config: Win32CartItem) => ({ id: 'fixture-job', tenant_id: 'fixture-tenant', winget_id: 'Contoso.App', version: '2', package_config: config,
   is_auto_update: true }) as unknown as Parameters<typeof buildStoredJobWorkflowInputs>[0];
@@ -26,7 +26,7 @@ describe('same app stored dispatch binding', () => {
   it('keeps the persisted target and prevents creation or assignment mutation on retry', () => {
     expect(buildStoredJobWorkflowInputs(job(item), item, options)).toMatchObject({ updateMode: 'sameApp', targetIntuneAppId: target,
       forceCreate: false, carryOverAssignments: false, removeAssignmentsFromPreviousApp: false, autoSupersede: false,
-      sourceIntuneAppId: undefined, assignments: undefined });
+      sourceIntuneAppId: undefined, assignments: undefined, categories: undefined, espProfiles: undefined, relationships: undefined });
   });
   it.each([undefined, '', 'not-an-app-id'])('rejects a stored same app job without a valid binding: %s', targetIntuneAppId => {
     const config = { ...item, targetIntuneAppId } as Win32CartItem;

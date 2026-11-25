@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
           (sameApp && (typeof binding.targetIntuneAppId !== 'string' ||
             !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(binding.targetIntuneAppId) ||
             isStoreCartItem(item) || item.sourceType === 'custom' || forceCreate === true ||
-            ['forceCreate', 'sourceIntuneAppId', 'autoSupersede', 'assignmentMigration'].some(key => binding[key] !== undefined)))) {
+            ['forceCreate', 'sourceIntuneAppId', 'autoSupersede', 'assignmentMigration', 'assignments', 'categories', 'espProfiles', 'relationships'].some(key => binding[key] !== undefined)))) {
         return NextResponse.json({ error: 'Same-app content updates are not available yet' }, { status: 400 });
       }
       const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
@@ -308,10 +308,8 @@ export async function POST(request: NextRequest) {
           code: 'SAME_APP_TARGET_UNAVAILABLE', retryable: true }, { status: 503 });
       }
     }
-    // Keep admission and dispatch locked until workflow, deferred reauthorization,
-    // full relationship resolution and UI are ready to activate together.
-    if (win32Items.some(item => item.updateMode === 'sameApp')) {
-      return NextResponse.json({ error: 'Same-app content updates are not available yet' }, { status: 400 });
+    if (win32Items.some(item => item.updateMode === 'sameApp') && getFeatureFlags().localPackager) {
+      return NextResponse.json({ error: 'Content replacement requires GitHub Actions packaging' }, { status: 400 });
     }
 
     // Publisher licence agreements are accepted per tenant, never per cart.
@@ -886,6 +884,7 @@ export async function POST(request: NextRequest) {
           pendingDispatches.map(async ({ item, jobId, createdAt }) => {
             const installerSha256 = item.installerSha256?.trim() || '';
             const workflowInputs: WorkflowInputs = {
+              ...(item.updateMode === 'sameApp' ? { updateMode: 'sameApp', targetIntuneAppId: item.targetIntuneAppId } : {}),
               jobId,
               tenantId,
               wingetId: item.wingetId,
@@ -914,7 +913,7 @@ export async function POST(request: NextRequest) {
               psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
               detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
               requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
-              assignments: item.assignments
+              assignments: item.updateMode !== 'sameApp' && item.assignments
                 ? JSON.stringify(
                     sanitizeAssignmentsForDispatch(
                       item.assignments,
@@ -922,9 +921,9 @@ export async function POST(request: NextRequest) {
                     )
                   )
                 : undefined,
-              categories: item.categories ? JSON.stringify(item.categories) : undefined,
-              espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
-              relationships: item.relationships && item.relationships.length > 0
+              categories: item.updateMode !== 'sameApp' && item.categories ? JSON.stringify(item.categories) : undefined,
+              espProfiles: item.updateMode !== 'sameApp' && item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
+              relationships: item.updateMode !== 'sameApp' && item.relationships && item.relationships.length > 0
                 ? JSON.stringify(item.relationships)
                 : undefined,
               installScope: item.installScope,
