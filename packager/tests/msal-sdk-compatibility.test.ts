@@ -44,7 +44,13 @@ describe('real MSAL SDK compatibility without authentication or network access',
     expect(get).not.toHaveBeenCalled();
     expect(post).toHaveBeenCalledTimes(1);
     const [url, options] = post.mock.calls[0] as unknown as [string, { body: string }];
-    expect(url).toBe(`${authority}/oauth2/v2.0/token`);
+    const endpoint = new URL(url);
+    expect(endpoint.origin + endpoint.pathname).toBe(`${authority}/oauth2/v2.0/token`);
+    expect([...endpoint.searchParams.keys()]).toEqual(['client-request-id']);
+    expect(endpoint.searchParams.get('client-request-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(endpoint.hash).toBe('');
     const form = new URLSearchParams(options.body);
     expect(form.get('scope')).toContain('https://graph.microsoft.com/.default');
     expect(form.get('grant_type')).toBe('client_credentials');
