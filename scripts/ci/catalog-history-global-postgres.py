@@ -147,10 +147,20 @@ def contracts(sql):
         def full_history_scans(plan):
             return sum(1 for n in plan if n.get('Relation Name') == 'version_history'
                        and n.get('Actual Rows', 0) * n.get('Actual Loops', 0) >= 74842)
-        assert full_history_scans(plans('')) > 1, 'OLD global metadata duplicate scan not reproduced'
+        def metadata_plan_summary(plan):
+            return {'full_history_scans': full_history_scans(plan),
+                    'nodes': [{key: n.get(key) for key in (
+                        'Node Type', 'Alias', 'Index Name', 'Parallel Aware',
+                        'Actual Rows', 'Actual Loops', 'Rows Removed by Filter')}
+                        for n in plan if n.get('Relation Name') == 'version_history']}
+        old_metadata_plan = plans('')
+        print('Global metadata OLD plan ' + json.dumps(metadata_plan_summary(old_metadata_plan)), flush=True)
+        assert full_history_scans(old_metadata_plan) > 1, 'OLD global metadata duplicate scan not reproduced'
         print('RED global metadata reads the complete history relation more than once', flush=True)
         run('begin;' + (ROOT/'supabase/migrations/20261125033000_catalog_history_single_global_aggregate.sql').read_text() + 'commit;')
-        assert full_history_scans(plans('')) == 1, 'Global metadata still rescans the complete history relation'
+        metadata_plan = plans('')
+        print('Global metadata candidate plan ' + json.dumps(metadata_plan_summary(metadata_plan)), flush=True)
+        assert full_history_scans(metadata_plan) == 1, 'Global metadata scan-count gate failed; inspect the printed executed plan before changing the gate or migration'
         metadata_after = value("select json_build_array(md5(prosrc),proacl::text,proowner,proconfig,prosecdef,provolatile,prolang) from pg_proc where oid='"+signature+"'::regprocedure")
         assert metadata_after[1:] == metadata_before[1:]
         for app, month, kind, page, search, architecture, start, end in cases:
