@@ -19,6 +19,34 @@ CREATE OR REPLACE FUNCTION public.get_catalog_release_history_v2(
   app_filter text DEFAULT '', date_from date DEFAULT NULL, date_to date DEFAULT NULL, architecture_filter text DEFAULT ''
 ) RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path = '' AS $$
 SELECT CASE WHEN coalesce(app_filter,'')='' AND coalesce(search_text,'')='' AND coalesce(month_filter,'')=''
+ AND date_from IS NULL AND date_to IS NULL AND coalesce(architecture_filter,'')='' AND kind_filter='all' AND greatest(1,least(coalesce(page_number,1),10000))<=100 THEN (
+WITH visible AS NOT MATERIALIZED (
+ SELECT v.winget_id,c.name,c.publisher,v.version,v.release_date,v.created_at AS detected_at,v.id
+ FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
+ WHERE v.created_at IS NOT NULL AND c.is_locale_variant IS NOT TRUE
+), page_rows AS MATERIALIZED (
+ SELECT * FROM visible ORDER BY detected_at DESC,id DESC
+ LIMIT 40 OFFSET ((greatest(1,least(coalesce(page_number,1),10000))-1)*40)
+), complete_page AS (
+  SELECT p.*, prev_row.version AS previous_version
+  FROM page_rows p
+  LEFT JOIN LATERAL (
+    SELECT prev_v.version FROM public.version_history prev_v
+    WHERE prev_v.winget_id = p.winget_id AND prev_v.created_at IS NOT NULL
+      AND (prev_v.created_at, prev_v.id) < (p.detected_at, p.id)
+    ORDER BY prev_v.created_at DESC, prev_v.id DESC LIMIT 1
+  ) prev_row ON true
+), global_metadata AS MATERIALIZED (
+ SELECT count(*) AS total,count(DISTINCT winget_id) AS apps,min(detected_at) AS coverage_start,
+ coalesce(jsonb_agg(DISTINCT to_char(detected_at AT TIME ZONE 'UTC','YYYY-MM') ORDER BY to_char(detected_at AT TIME ZONE 'UTC','YYYY-MM') DESC),'[]'::jsonb) AS months
+ FROM visible
+)
+SELECT jsonb_build_object(
+ 'rows',coalesce((SELECT jsonb_agg(to_jsonb(p)-'id' ORDER BY detected_at DESC,id DESC) FROM complete_page p),'[]'::jsonb),
+ 'total',m.total,'apps',m.apps,'firstTracked',m.apps,'months',m.months,'coverageStart',m.coverage_start,
+ 'sync',(SELECT jsonb_build_object('status',last_run_status,'completedAt',last_run_completed_at,'lastSuccessfulAt',last_successful_sync_at) FROM public.curated_sync_status WHERE id='sync-manifests')
+) FROM global_metadata m
+) WHEN coalesce(app_filter,'')='' AND coalesce(search_text,'')='' AND coalesce(month_filter,'')=''
  AND date_from IS NULL AND date_to IS NULL AND coalesce(architecture_filter,'')='' AND kind_filter='all' THEN (
 WITH hist AS MATERIALIZED (
  -- Keep an uncovered column in this materialized projection: an index-only
@@ -161,7 +189,7 @@ $$;
 $definition$;
  SELECT proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) AS body_md5
  INTO replacement FROM pg_proc WHERE oid='public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure;
- IF replacement.body_md5 NOT IN ('8866c51cb4e76c6d18b3d197f7d11f1e','13c7edfd916ab0c81d53d73f48a3a7f7')
+ IF replacement.body_md5 NOT IN ('3b3b6d8f9efa33c170b01b9147187eea','904a07f06db1b8eb9fa27fd2e1d717aa')
   OR replacement.proowner IS DISTINCT FROM original.proowner OR replacement.proacl IS DISTINCT FROM original.proacl
   OR replacement.proconfig IS DISTINCT FROM original.proconfig OR replacement.prosecdef IS DISTINCT FROM original.prosecdef
   OR replacement.provolatile IS DISTINCT FROM original.provolatile OR replacement.prolang IS DISTINCT FROM original.prolang
@@ -185,6 +213,30 @@ CREATE OR REPLACE FUNCTION public.get_catalog_release_history_global_rows(page_n
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = '' AS $function$
 DECLARE result jsonb;
 BEGIN
+ IF greatest(1,least(coalesce(page_number,1),10000))<=100 THEN
+ EXECUTE $query$
+WITH visible AS NOT MATERIALIZED (
+ SELECT v.winget_id,c.name,c.publisher,v.version,v.release_date,v.created_at AS detected_at,v.id
+ FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
+ WHERE v.created_at IS NOT NULL AND c.is_locale_variant IS NOT TRUE
+), page_rows AS MATERIALIZED (
+ SELECT * FROM visible ORDER BY detected_at DESC,id DESC
+ LIMIT 40 OFFSET ((greatest(1,least(coalesce($1,1),10000))-1)*40)
+), complete_page AS (
+  SELECT p.*, prev_row.version AS previous_version
+  FROM page_rows p
+  LEFT JOIN LATERAL (
+    SELECT prev_v.version FROM public.version_history prev_v
+    WHERE prev_v.winget_id = p.winget_id AND prev_v.created_at IS NOT NULL
+      AND (prev_v.created_at, prev_v.id) < (p.detected_at, p.id)
+    ORDER BY prev_v.created_at DESC, prev_v.id DESC LIMIT 1
+  ) prev_row ON true
+
+)
+SELECT coalesce((SELECT jsonb_agg(to_jsonb(p) - 'id' ORDER BY detected_at DESC, id DESC)
+  FROM complete_page p), '[]'::jsonb)
+  $query$ INTO result USING page_number;
+ ELSE
   EXECUTE $query$
 WITH hist AS MATERIALIZED (
  -- Keep an uncovered column in this materialized projection: an index-only
@@ -218,6 +270,7 @@ WITH hist AS MATERIALIZED (
 SELECT coalesce((SELECT jsonb_agg(to_jsonb(p) - 'id' ORDER BY detected_at DESC, id DESC)
   FROM complete_page p), '[]'::jsonb)
   $query$ INTO result USING page_number;
+ END IF;
   RETURN result;
 END;
 $function$;
@@ -225,7 +278,7 @@ $function$;
 $definition$;
  SELECT proowner,proacl,proconfig,prosecdef,provolatile,prolang,proisstrict,md5(prosrc) AS body_md5
  INTO replacement FROM pg_proc WHERE oid='public.get_catalog_release_history_global_rows(integer)'::regprocedure;
- IF replacement.body_md5 NOT IN ('4c21f3c8e7424d8d7b40695fc8e61eab','4f1d061810253dc993873b7d2bdbaf52')
+ IF replacement.body_md5 NOT IN ('635dfeca8bf03089ed5f0b36dfd63697','911343084098963bcd0b099862ee3d2a')
   OR replacement.proowner IS DISTINCT FROM original.proowner OR replacement.proacl IS DISTINCT FROM original.proacl
   OR replacement.proconfig IS DISTINCT FROM original.proconfig OR replacement.prosecdef IS DISTINCT FROM original.prosecdef
   OR replacement.provolatile IS DISTINCT FROM original.provolatile OR replacement.prolang IS DISTINCT FROM original.prolang
