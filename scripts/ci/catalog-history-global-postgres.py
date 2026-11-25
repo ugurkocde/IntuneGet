@@ -170,7 +170,10 @@ def contracts(sql):
         def wait_for(tag, event):
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                if value("select to_json(exists(select 1 from pg_stat_activity where datname=current_database() and application_name=" + quote(tag) + " and wait_event=" + quote(event) + "))"):
+                # CI connects as postgres then SET ROLE fixture_owner. Wait events
+                # belong to the session user, so observe as the fixture admin;
+                # the concurrent DDL itself still runs as the restricted owner.
+                if json.loads(sql("select to_json(exists(select 1 from pg_stat_activity where datname=current_database() and application_name=" + quote(tag) + " and wait_event=" + quote(event) + "))", database=database, role=None).stdout):
                     return
                 time.sleep(.05)
             raise AssertionError('Concurrent DDL did not reach ' + event)
