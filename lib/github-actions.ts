@@ -34,6 +34,8 @@ import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller } from '@/types/winget';
 
 export interface WorkflowInputs {
+  updateMode?: 'create' | 'sameApp';
+  targetIntuneAppId?: string;
   jobId: string;
   tenantId: string;
   wingetId: string;
@@ -136,6 +138,10 @@ export async function triggerPackagingWorkflow(
   options?: { skipRunCapture?: boolean; requireQaPass?: boolean;
     newJobAdmission?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
 ): Promise<TriggerResult> {
+  // Never let a staged same app job fall through the existing create workflow.
+  if (inputs.updateMode === 'sameApp') {
+    throw new Error('Same app updates require a workflow that supports content replacement.');
+  }
   const cfg = config || getGitHubActionsConfig();
 
   let effectiveInputs = inputs;
