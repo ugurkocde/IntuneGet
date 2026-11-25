@@ -503,6 +503,25 @@ describe('POST /api/package (workflow dispatch)', () => {
     isSupabaseServerConfiguredMock.mockReturnValue(true);
   });
 
+  it.each([
+    { updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' },
+    { updateMode: 'sameApp' },
+    { targetIntuneAppId: '11111111-1111-4111-8111-111111111111' },
+  ])('rejects unsupported client same-app binding before accepting any item: %j', async binding => {
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item(), makeWin32Item(binding)] }),
+    }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe('Same-app content updates are not available yet');
+    expect(getDatabaseMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('creates a queued local-packager job without Supabase or QA', async () => {
     isSupabaseServerConfiguredMock.mockReturnValue(false);
     getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: true });

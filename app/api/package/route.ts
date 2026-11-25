@@ -201,6 +201,12 @@ export async function POST(request: NextRequest) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         return NextResponse.json({ error: 'Invalid package item' }, { status: 400 });
       }
+      // Admission must not persist a client target until server binding and
+      // content replacement are implemented together. Reject the whole batch.
+      const binding = item as unknown as { updateMode?: unknown; targetIntuneAppId?: unknown };
+      if (binding.updateMode !== undefined || binding.targetIntuneAppId !== undefined) {
+        return NextResponse.json({ error: 'Same-app content updates are not available yet' }, { status: 400 });
+      }
       const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
       if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
         return NextResponse.json({ error: 'Invalid PSADT settings' }, { status: 400 });
