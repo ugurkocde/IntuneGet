@@ -666,6 +666,10 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  get '37cbdcdbbaedf092b39e18777c44c8d613725e14'() {
+    // Carry the fixed target list only; hook activation authorizes no new replay.
+    return [...terminalToolchainRetryTargets('1cc5fb513cf3c23120f2b0741d66f11ee435d409')];
+  },
   get '1cc5fb513cf3c23120f2b0741d66f11ee435d409'() {
     return [...terminalToolchainRetryTargets('665d6f4ec65d457edbd455605a54b4b223392457')];
   },
