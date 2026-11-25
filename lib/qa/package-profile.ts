@@ -859,11 +859,11 @@ function passingProfileCompatibilityReason(
       if (textValue(psadtConfig.postInstallPowerShell) || textValue(psadtConfig.postUninstallPowerShell)) {
         return 'compatible-powershell-hook-changed';
       }
-      const registeredType = lowerTextValue(installer.sourceType) === 'zip'
-        ? lowerTextValue(installer.nestedInstallerType)
-        : lowerTextValue(installer.sourceType);
+      // The generator can select MSI from the downloaded filename even when
+      // the profile declares EXE or ZIP. The profile does not identify that
+      // filename, so retain no old non-MSI-form override as compatible.
       const override = textValue(psadtConfig.reviewedInstallArgumentsOverride);
-      if (['msi', 'wix'].includes(registeredType) && override && !MSI_REVIEWED_OVERRIDE_PATTERN.test(override)) {
+      if (override && !MSI_REVIEWED_OVERRIDE_PATTERN.test(override)) {
         return 'compatible-msi-reviewed-override-changed';
       }
     }

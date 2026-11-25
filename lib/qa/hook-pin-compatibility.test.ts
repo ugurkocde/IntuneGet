@@ -44,13 +44,16 @@ describe('coupled hook activation compatibility', () => {
   it('does not invalidate hook coverage already produced at the new release', () => {
     expect(check({ postInstallPowerShell: "Write-Output 'fixture'" }, 'exe', '', newPin)).toMatchObject({ valid: true });
   });
-  it.each([['msi', ''], ['wix', ''], ['zip', 'msi'], ['zip', 'wix']])('rejects changed %s/%s override behavior', (type, nested) => {
+  it.each([['msi', ''], ['wix', ''], ['zip', 'msi'], ['zip', 'wix'],
+    ['exe', ''], ['inno', ''], ['nullsoft', ''], ['burn', ''], ['zip', 'exe'], ['zip', '']
+  ])('rejects changed %s/%s overrides when an unseen filename may select MSI', (type, nested) => {
     expect(check({ reviewedInstallArgumentsOverride: '/S' }, type, nested)).toEqual({ valid: false, reason: 'compatible-msi-reviewed-override-changed' });
   });
-  it('retains unchanged MSI-form and executable override behavior', () => {
+  it('retains MSI-form overrides regardless of declared type', () => {
     expect(check({ reviewedInstallArgumentsOverride: '/qn PROP=1' }, 'msi')).toMatchObject({ valid: true });
     expect(check({ reviewedInstallArgumentsOverride: '/QUIET PROP="two words"' }, 'zip', 'wix')).toMatchObject({ valid: true });
-    expect(check({ reviewedInstallArgumentsOverride: '/S' }, 'exe')).toMatchObject({ valid: true });
+    expect(check({ reviewedInstallArgumentsOverride: '/qn PROP=1' }, 'exe')).toMatchObject({ valid: true });
+    expect(check({ reviewedInstallArgumentsOverride: '/qn /L*v x.log' }, 'exe')).toEqual({ valid: false, reason: 'compatible-msi-reviewed-override-changed' });
   });
   it('carries only the existing fixed retry targets, without adding apps', () => {
     expect(terminalToolchainRetryTargets(newPin)).toEqual(terminalToolchainRetryTargets(oldPin));
