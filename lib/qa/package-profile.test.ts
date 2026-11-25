@@ -672,7 +672,7 @@ describe('PSADT QA package identity', () => {
     expect(normalized.uninstallCommand).toBe(exact);
     const profile = normalized.identity.profile as { installer: { uninstallCommand: string }; toolchain: { packagerCommit: string } };
     expect(profile.installer.uninstallCommand).toBe(exact);
-    expect(profile.toolchain.packagerCommit).toBe('1cc5fb513cf3c23120f2b0741d66f11ee435d409');
+    expect(profile.toolchain.packagerCommit).toBe('37cbdcdbbaedf092b39e18777c44c8d613725e14');
     const oldProfile = structuredClone(normalized.identity.profile) as typeof profile;
     oldProfile.installer.uninstallCommand = workflow.uninstallCommand;
     expect(qaSha256(canonicalQaJson(oldProfile))).not.toBe(normalized.identity.packageProfileSha256);
