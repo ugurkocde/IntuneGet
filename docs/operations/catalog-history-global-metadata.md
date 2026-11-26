@@ -63,7 +63,10 @@ Do not manually truncate or modify the private cache tables.
    acceptance windows and caller throughput evidence. A cache hit or local timing
    result alone does not prove that the production no headers timeout is fixed.
 
-The refresh function rejects stronger isolation levels, takes a nonblocking refresh
+The refresh function rejects stronger isolation levels and transactions with an
+already assigned XID. Use a fresh transaction without earlier writes or calls to
+`pg_current_xact_id()`. This prevents later writes in an older refresh transaction
+from being mistaken for changes included in the build snapshot. It takes a nonblocking refresh
 advisory lock and source access share locks, and captures the data, build snapshot
 and both physical table paths in one statement. An older snapshot spanning a
 truncate or heap rewrite falls back. Triggerless rewrites are repaired by the next

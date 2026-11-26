@@ -107,6 +107,11 @@ BEGIN
  IF pg_catalog.current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'refresh_catalog_release_history_cache requires read committed isolation';
  END IF;
+ -- An older assigned XID can appear visible in a later build snapshot even
+ -- though this same transaction may still write after the cache is built.
+ IF pg_catalog.pg_current_xact_id_if_assigned() IS NOT NULL THEN
+  RAISE EXCEPTION 'Catalog history cache refresh requires an unassigned transaction';
+ END IF;
  IF NOT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended('catalog_release_history_cache',0)) THEN RETURN false; END IF;
  LOCK TABLE public.version_history,public.curated_apps IN ACCESS SHARE MODE;
  IF NOT catalog_internal.invoker_has_unrestricted_history_visibility() THEN

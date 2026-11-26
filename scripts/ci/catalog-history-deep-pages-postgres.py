@@ -295,6 +295,19 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         checks.append({'name': 'Clamped pages, timestamp ties, locale/orphan exclusions and wide dates', 'verdict': 'PASS'})
         restore()
         a = session()
+        send(a, 'begin;select pg_current_xact_id()::text;')
+        assert line(a).isdigit()
+        sql("insert into version_history(winget_id,version,created_at)values('Fixture.1','advance-snapshot-horizon','2027-01-02')")
+        send(a, "do $$begin perform public.refresh_catalog_release_history_cache();raise exception 'Assigned-XID refresh unexpectedly accepted';exception when others then if sqlerrm<>'Catalog history cache refresh requires an unassigned transaction' then raise;end if;end$$;select 'guarded';")
+        assert line(a) == 'guarded'
+        send(a, "insert into version_history(winget_id,version,created_at)values('Fixture.1','write-after-rejected-refresh','2027-01-03');commit;select 'committed';")
+        assert line(a) == 'committed'
+        a.stdin.close()
+        a.wait(timeout=5)
+        parity()
+        refresh()
+        checks.append({'name': 'Assigned XID refresh rejected across newer transaction and later own write', 'verdict': 'PASS'})
+        a = session()
         send(a, "begin;insert into version_history(winget_id,version,created_at)values('Fixture.1','writer-a','2027-01-01');select 'writer-ready';")
         assert line(a) == 'writer-ready'
         sql("insert into version_history(winget_id,version,created_at)values('Fixture.1','writer-b','2027-01-02')")
