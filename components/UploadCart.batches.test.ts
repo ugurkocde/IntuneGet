@@ -176,7 +176,7 @@ describe('bulk deployment confirmation', () => {
    : entry);
   const button = await mountCart(started, { items: entries });
   await act(async () => button.click());
-  const dialog = document.querySelector('[role="dialog"]')!;
+  const dialog = [...document.querySelectorAll('[role="dialog"]')].find(value => value.textContent?.includes('Deploy All'))!;
   const text = dialog.textContent!.replace(/\s+/g, ' ');
   expect(text).toContain('queue 10 packaging jobs');
   expect(text).toContain(expected);
