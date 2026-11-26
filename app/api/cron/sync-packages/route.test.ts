@@ -66,9 +66,26 @@ beforeEach(() => {
   mocks.client.fetchInstallerManifest.mockResolvedValue({ InstallerType: 'exe', Installers: [] });
   mocks.client.fetchLocaleManifest.mockResolvedValue({ ShortDescription: 'Example' });
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe('conditional hourly package sync', () => {
+  it('returns the sync result without starting refresh at the invocation deadline', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(299500);
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('caps refresh to the remaining budget and returns after the final write', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(298000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    mocks.rpc.mockImplementation(() => {
+      expect(completion()).toBeDefined();
+      return { abortSignal: mocks.cacheRefresh };
+    });
+    expect((await GET(request())).status).toBe(200);
+    expect(timeout).toHaveBeenCalledWith(1000);
+  });
+
   it('refreshes history metadata after syncing without changing sync results', async () => {
     expect((await GET(request())).status).toBe(200);
     expect(mocks.rpc).toHaveBeenCalledWith('refresh_catalog_release_history_cache');

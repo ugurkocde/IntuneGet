@@ -74,8 +74,12 @@ refresh. Index-only rewrites do not invalidate unchanged history data.
 
 Hourly package sync and both daily catalog writers request refresh after writing.
 Their five second client deadline and fixed warning preserve original sync results
-when refresh is unavailable. Such a failure is not cache acceptance: subsequent
-history calls remain on exact live SQL until refresh succeeds. Record attempted
+when refresh is unavailable. Hourly sync also reserves one second to return its
+response, caps refresh to the remaining invocation budget, and skips it when that
+budget is exhausted. Such a failure is not cache acceptance: history calls use
+exact live SQL when the cache is absent or invalid. A failed request does not
+invalidate an already valid cache, and the warning alone cannot establish which
+path the history RPC used. Record attempted
 and completed refreshes separately for each writer when validating deployment.
 
 ## Rollback
@@ -85,7 +89,7 @@ packet through the normal reviewed rollback path. Recheck their original securit
 attributes and live response parity. Do not replay the entire predecessor migration:
 its source guards target a different predecessor body.
 
-After restoring the RPCs, remove the four `history_cache_structure` and
+After restoring the RPCs, remove the six `history_cache_insert`, `history_cache_structure` and
 `history_cache_identity` triggers on the two source tables, the public refresh
 function, and the private cache functions/tables/schema in dependency order. Use
 explicit object names and no `CASCADE`. Preserve all catalog rows. The disposable

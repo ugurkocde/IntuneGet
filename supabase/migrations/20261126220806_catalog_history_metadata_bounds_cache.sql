@@ -71,18 +71,27 @@ GRANT INSERT,DELETE ON catalog_internal.catalog_release_history_invalidation TO 
 CREATE FUNCTION catalog_internal.mark_history_cache_dirty() RETURNS trigger
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $$
 BEGIN
+ IF TG_OP='INSERT' THEN
+  IF NOT EXISTS(SELECT 1 FROM inserted_history_rows) THEN RETURN NULL; END IF;
+ END IF;
  INSERT INTO catalog_internal.catalog_release_history_invalidation(xid)
  VALUES(pg_catalog.pg_current_xact_id()) ON CONFLICT(xid) DO NOTHING;
  RETURN NULL;
 END;
 $$;
 REVOKE ALL ON FUNCTION catalog_internal.mark_history_cache_dirty() FROM PUBLIC,anon,authenticated,service_role;
-CREATE TRIGGER history_cache_structure AFTER INSERT OR DELETE OR TRUNCATE
+CREATE TRIGGER history_cache_insert AFTER INSERT ON public.version_history
+ REFERENCING NEW TABLE AS inserted_history_rows
+ FOR EACH STATEMENT EXECUTE FUNCTION catalog_internal.mark_history_cache_dirty();
+CREATE TRIGGER history_cache_structure AFTER DELETE OR TRUNCATE
  ON public.version_history FOR EACH STATEMENT EXECUTE FUNCTION catalog_internal.mark_history_cache_dirty();
 CREATE TRIGGER history_cache_identity AFTER UPDATE ON public.version_history FOR EACH ROW
  WHEN(OLD.id IS DISTINCT FROM NEW.id OR OLD.winget_id IS DISTINCT FROM NEW.winget_id OR OLD.created_at IS DISTINCT FROM NEW.created_at)
  EXECUTE FUNCTION catalog_internal.mark_history_cache_dirty();
-CREATE TRIGGER history_cache_structure AFTER INSERT OR DELETE OR TRUNCATE
+CREATE TRIGGER history_cache_insert AFTER INSERT ON public.curated_apps
+ REFERENCING NEW TABLE AS inserted_history_rows
+ FOR EACH STATEMENT EXECUTE FUNCTION catalog_internal.mark_history_cache_dirty();
+CREATE TRIGGER history_cache_structure AFTER DELETE OR TRUNCATE
  ON public.curated_apps FOR EACH STATEMENT EXECUTE FUNCTION catalog_internal.mark_history_cache_dirty();
 CREATE TRIGGER history_cache_identity AFTER UPDATE ON public.curated_apps FOR EACH ROW
  WHEN(OLD.winget_id IS DISTINCT FROM NEW.winget_id OR (OLD.is_locale_variant IS NOT TRUE) IS DISTINCT FROM (NEW.is_locale_variant IS NOT TRUE))

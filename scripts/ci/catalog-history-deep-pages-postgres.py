@@ -286,6 +286,22 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         parity()
         restore()
         checks.append({'name': 'Nonstructural fields remain live; locale membership invalidates', 'verdict': 'PASS'})
+        # Conflict updates and empty inserts must not discard correct rank metadata.
+        for query in [
+            "insert into curated_apps(winget_id,name,is_locale_variant) values('Fixture.1','renamed',false) on conflict(winget_id) do update set name=excluded.name",
+            "insert into version_history(id,winget_id,version,created_at) select id,winget_id,version,created_at from version_history where id=1 on conflict(id) do update set version=excluded.version",
+            "insert into curated_apps(winget_id) select 'Empty.App' where false",
+        ]:
+            sql(query)
+            assert value('select catalog_internal.history_cache_is_usable()') is True, 'No-op upsert invalidated valid history cache'
+            assert sql('select public.refresh_catalog_release_history_cache()').stdout.strip() == 'f'
+            parity()
+        sql("insert into curated_apps(winget_id,is_locale_variant) values('Fixture.1',true) on conflict(winget_id) do update set is_locale_variant=excluded.is_locale_variant")
+        assert value('select catalog_internal.history_cache_is_usable()') is False
+        parity()
+        restore()
+        checks.append({'name': 'Conflict-only and zero-row inserts preserve cache; structural upsert invalidates', 'verdict': 'PASS'})
+
         for page in ['NULL', -5, 0, 2, 10001]:
             parity(page)
         sql("insert into version_history(winget_id,version,created_at) select 'Fixture.1','tie-'||g,'2026-02-02' from generate_series(1,20000) g;insert into version_history(winget_id,version,created_at) values('Locale.App','tie-locale','2026-02-02'),('Missing.App','tie-orphan','2026-02-02'),('Fixture.1','infinity','infinity'),('Fixture.1','negative-infinity','-infinity'),('Fixture.1','wide','10000-01-01'),('Fixture.1','bc','0001-01-01 BC');")
@@ -397,7 +413,7 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         assert value('select catalog_internal.history_cache_is_usable()', 'anon') is False
         assert value('select public.get_catalog_release_history_v2(page_number=>101)=public.oracle_v2(page_number=>101)', 'anon') is True
         sql(definition + ';\n' + rows_definition + ';')
-        sql('drop trigger history_cache_structure on version_history;drop trigger history_cache_identity on version_history;drop trigger history_cache_structure on curated_apps;drop trigger history_cache_identity on curated_apps;drop function public.refresh_catalog_release_history_cache();drop function catalog_internal.history_cache_is_usable();drop function catalog_internal.mark_history_cache_dirty();drop table catalog_internal.catalog_release_history_meta,catalog_internal.catalog_release_history_page_bounds,catalog_internal.catalog_release_history_invalidation;drop function catalog_internal.invoker_has_unrestricted_history_visibility();drop schema catalog_internal;')
+        sql('drop trigger history_cache_insert on version_history;drop trigger history_cache_structure on version_history;drop trigger history_cache_identity on version_history;drop trigger history_cache_insert on curated_apps;drop trigger history_cache_structure on curated_apps;drop trigger history_cache_identity on curated_apps;drop function public.refresh_catalog_release_history_cache();drop function catalog_internal.history_cache_is_usable();drop function catalog_internal.mark_history_cache_dirty();drop table catalog_internal.catalog_release_history_meta,catalog_internal.catalog_release_history_page_bounds,catalog_internal.catalog_release_history_invalidation;drop function catalog_internal.invoker_has_unrestricted_history_visibility();drop schema catalog_internal;')
         assert value(security_query) == security
         parity()
         checks.append({'name': 'Clean source rollback preserves original RPC security and parity', 'verdict': 'PASS'})

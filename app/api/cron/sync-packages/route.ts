@@ -57,6 +57,7 @@ interface CuratedAppUpdate {
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   // Verify cron secret (Vercel adds this header for cron jobs)
   if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -358,9 +359,10 @@ export async function GET(request: Request) {
   } finally {
     // Dirty metadata always falls back to live SQL. Refresh is optional and
     // must not change an otherwise completed sync or hide its original error.
-    try {
+    const refreshBudget = Math.floor(Math.min(5000, maxDuration * 1000 - (performance.now() - startedAt) - 1000));
+    if (refreshBudget > 0) try {
       const { error } = await supabase.rpc('refresh_catalog_release_history_cache')
-        .abortSignal(AbortSignal.timeout(5000));
+        .abortSignal(AbortSignal.timeout(refreshBudget));
       if (error) console.warn('Catalog history metadata refresh deferred');
     } catch {
       console.warn('Catalog history metadata refresh deferred');
