@@ -1,6 +1,6 @@
 /**
  * Process Batches Cron Job
- * Runs every 2 minutes via Vercel Cron to process pending batch deployments
+ * Runs every 5 minutes via Vercel Cron to process pending batch deployments
  * and recover stale items.
  */
 
