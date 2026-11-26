@@ -111,3 +111,15 @@ describe('PowerShell session hooks', () => {
     expect(useCartStore.getState().items[0]).toMatchObject({ psadtConfig: { postInstallPowerShell: install, postUninstallPowerShell: uninstall } });
   });
 });
+
+it('preserves a content update binding when editing its cart configuration', async () => {
+  const cart = { ...item(), updateMode: 'sameApp' as const, targetIntuneAppId: '44444444-4444-4444-8444-444444444444' };
+  await render(cart);
+  expect(document.body.textContent).toContain('Change these with Update Settings.');
+  expect(document.body.textContent).not.toContain('Assignment Configuration');
+  await save();
+  const stored = useCartStore.getState().items[0] as Win32CartItem;
+  expect(stored.updateMode).toBe('sameApp');
+  expect(stored.targetIntuneAppId).toBe(cart.targetIntuneAppId);
+  for (const field of ['forceCreate', 'assignmentMigration', 'relationships', 'categories', 'assignments', 'espProfiles']) expect((stored as unknown as Record<string, unknown>)[field]).toBeUndefined();
+});

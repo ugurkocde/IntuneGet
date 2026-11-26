@@ -176,3 +176,32 @@ it('keeps copy assignments non-destructive when adding an automatic update polic
     assignmentMigration: { carryOverAssignments: true, removeAssignmentsFromPreviousApp: false },
   });
 });
+
+describe('same app content selection', () => {
+  it.each([false, true])('keeps create as default and supports explicit replacement: %s', async update => {
+    useCartStore.setState({ items: [] });
+    await act(async () => root.render(createElement(PackageConfig, { package: { id: oldItem.wingetId, name: oldItem.displayName, publisher: oldItem.publisher, version: '2.0' }, installers: [installer], isDeployed: true, intuneAppId: '44444444-4444-4444-8444-444444444444', deployedConfig: { ...oldItem, version: '2.0' }, onClose: vi.fn() })));
+    const radio = document.querySelector<HTMLInputElement>('input[value="sameApp"]');
+    expect(radio).not.toBeNull();
+    if (update) await act(async () => radio!.click());
+    if (update) expect(document.body.textContent).toContain('Changes made to those fields directly in Intune will be overwritten.');
+    const add = [...document.querySelectorAll('button')].find(x => /Redeploy|Add to Selection|Update Content/.test(x.textContent || ''))!;
+    await act(async () => add.click());
+    const item = useCartStore.getState().items[0];
+    if (update) {
+      expect(item).toMatchObject({ updateMode: 'sameApp', targetIntuneAppId: '44444444-4444-4444-8444-444444444444' });
+      for (const key of ['forceCreate','assignments','categories','espProfiles','relationships','assignmentMigration']) expect((item as unknown as Record<string, unknown>)[key]).toBeUndefined();
+    } else { expect(item).toMatchObject({ forceCreate: true }); expect(item).not.toHaveProperty('updateMode'); }
+  });
+});
+
+it('retains an existing same app target while recovering its selected installer', async () => {
+  const saved: Win32CartItem = { ...oldItem, forceCreate: undefined, updateMode: 'sameApp', targetIntuneAppId: '44444444-4444-4444-8444-444444444444', categories: undefined };
+  useCartStore.setState({ items: [saved] });
+  await act(async () => root.render(createElement(PackageConfig, { package: { id: saved.wingetId, name: saved.displayName, publisher: saved.publisher, version: '2.0' }, installers: [installer], deployedConfig: { ...saved, version: '2.0' }, replaceCartItemId: saved.id, onClose: vi.fn() })));
+  expect(document.querySelector<HTMLInputElement>('input[value="create"]')!.disabled).toBe(true);
+  const add = [...document.querySelectorAll('button')].find(x => x.textContent?.includes('Update Content'))!;
+  await act(async () => add.click());
+  expect(useCartStore.getState().items[0]).toMatchObject({ updateMode: 'sameApp', targetIntuneAppId: saved.targetIntuneAppId, version: '2.0' });
+  expect((useCartStore.getState().items[0] as Win32CartItem).forceCreate).toBeUndefined();
+});

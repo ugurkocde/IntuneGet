@@ -383,6 +383,8 @@ export function UploadCart() {
   };
 
   // Large batches get an explicit review step; small carts stay one-click.
+  const contentReplacementCount = items.filter(item => isWin32CartItem(item) && item.updateMode === 'sameApp').length;
+  const newAppCount = items.length - contentReplacementCount;
   const LARGE_DEPLOY_THRESHOLD = 10;
   const handleDeployClick = () => {
     if (items.length >= LARGE_DEPLOY_THRESHOLD) {
@@ -578,7 +580,7 @@ export function UploadCart() {
                       {/* Teammate-duplicate warning: this app was already
                           deployed to the tenant by someone. Deploying again
                           would create a second Intune app unless forced. */}
-                      {tenantDeployedBy.has(item.wingetId) && !item.forceCreate && (
+                      {tenantDeployedBy.has(item.wingetId) && !item.forceCreate && !(isWin32CartItem(item) && item.updateMode === 'sameApp') && (
                         <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-500/20 dark:bg-amber-500/10">
                           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                           <div className="text-xs flex-1">
@@ -787,8 +789,11 @@ export function UploadCart() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Deploy {items.length} apps to {destinationLabel}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will queue {items.length} packaging jobs and create {items.length} apps
-                  in {destinationLabel}. Review your selection before continuing.
+                  This will queue {items.length} packaging jobs in {destinationLabel}:{' '}
+                  {newAppCount > 0 && <>create {newAppCount} new app{newAppCount !== 1 ? 's' : ''}</>}
+                  {newAppCount > 0 && contentReplacementCount > 0 && ' and '}
+                  {contentReplacementCount > 0 && <>replace content in {contentReplacementCount} existing app{contentReplacementCount !== 1 ? 's' : ''}</>}.
+                  {' '}Review your selection before continuing.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
