@@ -383,6 +383,8 @@ export function UploadCart() {
   };
 
   // Large batches get an explicit review step; small carts stay one-click.
+  const contentReplacementCount = items.filter(item => isWin32CartItem(item) && item.updateMode === 'sameApp').length;
+  const newAppCount = items.length - contentReplacementCount;
   const LARGE_DEPLOY_THRESHOLD = 10;
   const handleDeployClick = () => {
     if (items.length >= LARGE_DEPLOY_THRESHOLD) {
@@ -787,8 +789,11 @@ export function UploadCart() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Deploy {items.length} apps to {destinationLabel}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will queue {items.length} packaging jobs and create {items.length} apps
-                  in {destinationLabel}. Review your selection before continuing.
+                  This will queue {items.length} packaging jobs in {destinationLabel}:{' '}
+                  {newAppCount > 0 && <>create {newAppCount} new app{newAppCount !== 1 ? 's' : ''}</>}
+                  {newAppCount > 0 && contentReplacementCount > 0 && ' and '}
+                  {contentReplacementCount > 0 && <>replace content in {contentReplacementCount} existing app{contentReplacementCount !== 1 ? 's' : ''}</>}.
+                  {' '}Review your selection before continuing.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
