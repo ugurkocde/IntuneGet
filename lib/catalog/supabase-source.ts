@@ -176,9 +176,13 @@ export class SupabaseCatalogSource implements CatalogSource {
       const clientInfo = headers.get('x-client-info');
       headers.set('x-client-info', `${clientInfo ? `${clientInfo}; ` : ''}ig-hist=${historyInstance}.${seq}.${historyRpcLabel(rpcName)}`);
       dispatchMs = elapsed();
+      // Deep global reads can legitimately need most of the total budget.
+      // Restarting at four seconds discards that work and can run it twice.
+      const deepGlobal = filters.page > 100 && !filters.app && !filters.query && !filters.month
+        && !filters.from && !filters.to && !filters.architecture && filters.kind === 'all';
       const response = await isolatedHistoryFetch(input, { ...init, headers }, phase => {
         transportPhases[phase] = Math.round(elapsed());
-      }, rpcName === 'get_catalog_release_history_v2' && Boolean(deadline));
+      }, rpcName === 'get_catalog_release_history_v2' && Boolean(deadline) && !deepGlobal);
       headersMs = elapsed();
       status = response.status;
       return response;
