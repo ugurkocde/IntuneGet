@@ -1,0 +1,5 @@
+{
+  "title": "More reliable browsing of older releases",
+  "summary": "Older release history pages can finish loading without a premature retry interrupting a slow response.",
+  "type": "fixed"
+}
