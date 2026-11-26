@@ -141,6 +141,11 @@ export function PackageConfig(props: PackageConfigProps) {
 
 function AccountPackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest, configurationRefreshNotice }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
+  const canReplaceContent = Boolean(isDeployed && intuneAppId && !isStoreApp && deployedConfig && isWin32CartItem(deployedConfig) && deployedConfig.sourceType !== 'custom');
+  const [updateMode, setUpdateMode] = useState<'create' | 'sameApp'>('create');
+  const retainedSameApp = Boolean(replaceCartItemId && deployedConfig && isWin32CartItem(deployedConfig) && deployedConfig.updateMode === 'sameApp' && deployedConfig.targetIntuneAppId);
+  const sameApp = retainedSameApp || (canReplaceContent && updateMode === 'sameApp');
+  const contentTarget = retainedSameApp && deployedConfig && isWin32CartItem(deployedConfig) ? deployedConfig.targetIntuneAppId : intuneAppId;
   const hostedQaArchGate = !isStoreApp && getClientFeatureFlags().hostedServices
     && deployedConfig?.sourceType !== 'custom'
     && deployedConfig?.sourceType !== 'curated'
@@ -618,27 +623,23 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
           psadtConfig: sanitizedProcesses
             ? { ...config, processesToClose: sanitizedProcesses.processes }
             : config,
-          assignments: assignments.length > 0 ? assignments : undefined,
+          ...(!sameApp ? { assignments: assignments.length > 0 ? assignments : undefined } : {}),
           requirementRules: buildCartItemRequirementRules(
             displayName,
             selectedInstaller!.type,
             selectedInstaller!.productCode,
-            assignments
+            sameApp ? [] : assignments
           ),
-          categories: categories.length > 0 ? categories : undefined,
-          espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
-          relationships: relationships.length > 0 ? relationships : undefined,
+          ...(!sameApp ? {
+            categories: categories.length > 0 ? categories : undefined,
+            espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
+            relationships: relationships.length > 0 ? relationships : undefined,
+            updatePolicy,
+            assignmentMigration: updatePolicy === 'auto_update' ? { carryOverAssignments, removeAssignmentsFromPreviousApp: false } : undefined,
+            ...(isDeployed ? { forceCreate: true } : {}),
+          } : { updateMode: 'sameApp' as const, targetIntuneAppId: contentTarget!, forceCreate: undefined, assignments: undefined, categories: undefined, espProfiles: undefined, relationships: undefined, assignmentMigration: undefined }),
           localeCode: selectedLocale || undefined,
           iconPath: pkg.iconPath,
-          updatePolicy,
-          assignmentMigration:
-            updatePolicy === 'auto_update'
-              ? {
-                  carryOverAssignments,
-                  removeAssignmentsFromPreviousApp: false,
-                }
-              : undefined,
-          ...(isDeployed ? { forceCreate: true } : {}),
         });
       }
       setAddedToCartSuccess(true);
@@ -1976,7 +1977,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               </ConfigSection>}
 
               {/* Assignment Configuration (quick + advanced, all app types) */}
-              {(isStoreApp || visibleSections === null || visibleSections.includes('assignment')) && <ConfigSection
+              {!sameApp && (isStoreApp || visibleSections === null || visibleSections.includes('assignment')) && <ConfigSection
                 title="Assignment Configuration"
                 icon={<Target className="w-4 h-4" />}
                 expanded={expandedSection === 'assignment'}
@@ -1990,7 +1991,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               </ConfigSection>}
 
               {/* Category Configuration (quick + advanced, all app types) */}
-              {(isStoreApp || visibleSections === null || visibleSections.includes('category')) && <ConfigSection
+              {!sameApp && (isStoreApp || visibleSections === null || visibleSections.includes('category')) && <ConfigSection
                 title="Category Configuration"
                 icon={<FolderTree className="w-4 h-4" />}
                 expanded={expandedSection === 'category'}
@@ -2003,7 +2004,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               </ConfigSection>}
 
               {/* ESP Configuration (quick + advanced, all app types) */}
-              {(isStoreApp || visibleSections === null || visibleSections.includes('esp')) && <ConfigSection
+              {!sameApp && (isStoreApp || visibleSections === null || visibleSections.includes('esp')) && <ConfigSection
                 title="Enrollment Status Page"
                 icon={<Shield className="w-4 h-4" />}
                 expanded={expandedSection === 'esp'}
@@ -2018,7 +2019,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               </ConfigSection>}
 
               {/* App Updates (quick + advanced, win32 only) */}
-              {!isStoreApp && (visibleSections === null || visibleSections.includes('updates')) && <ConfigSection
+              {!sameApp && !isStoreApp && (visibleSections === null || visibleSections.includes('updates')) && <ConfigSection
                 title="App Updates"
                 icon={<ArrowUpCircle className="w-4 h-4" />}
                 expanded={expandedSection === 'updates'}
@@ -2038,7 +2039,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               </ConfigSection>}
 
               {/* Dependencies & Supersedence (quick + advanced, win32 only) */}
-              {!isStoreApp && (visibleSections === null || visibleSections.includes('dependencies')) && <ConfigSection
+              {!sameApp && !isStoreApp && (visibleSections === null || visibleSections.includes('dependencies')) && <ConfigSection
                 title="Dependencies & Supersedence"
                 icon={<Link2 className="w-4 h-4" />}
                 expanded={expandedSection === 'dependencies'}
@@ -2310,6 +2311,15 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
             {versionInstallerError.message}
           </p>
         )}
+        {(canReplaceContent || retainedSameApp) && <fieldset className="px-4 py-3 space-y-2 border-t border-overlay/10">
+          <legend className="text-sm font-medium">Deployment method</legend>
+          <label className="block text-sm"><input disabled={retainedSameApp} type="radio" name="content-update-mode" value="create" checked={!sameApp} onChange={() => setUpdateMode('create')} /> Create a new app</label>
+          <label className="block text-sm"><input type="radio" name="content-update-mode" value="sameApp" checked={sameApp} onChange={() => setUpdateMode('sameApp')} /> Update this app's content</label>
+          {sameApp && <div className="text-xs text-text-secondary space-y-2">
+            <p>IntuneGet replaces the installer content of this app and keeps its app ID, assignments, categories, dependencies and supersedence. Change these with Update Settings.</p>
+            <p>The app name, version, publisher, description, notes, icon, file name, setup path, install and uninstall commands, architecture, install behavior, return codes, detection and requirement rules, MSI information and minimum Windows version are rewritten from this package. Changes made to those fields directly in Intune will be overwritten.</p>
+          </div>}
+        </fieldset>}
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-overlay/10 p-4 bg-bg-surface/95 space-y-2">
           {settingsSuccess && (
@@ -2324,7 +2334,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               {settingsError}
             </div>
           )}
-          {canUpdateSettings ? (
+          {canUpdateSettings && !sameApp ? (
             <div className="space-y-2">
               {!changeState.hasGraphChanges && !settingsSuccess && !isUpdating && (
                 <p className="text-text-muted text-xs text-center">
@@ -2401,6 +2411,8 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                 </>
               ) : inCart || addedToCartSuccess ? (
                 <Check className="w-5 h-5" />
+              ) : sameApp ? (
+                <>Update Content</>
               ) : isDeployed ? (
                 <>
                   <RefreshCw className="w-5 h-5 mr-2" />

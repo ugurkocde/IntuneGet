@@ -163,3 +163,24 @@ it('labels uncertain and unsent items separately after a later request loses its
  expect((text.match(/Outcome unknown/g) ?? []).length).toBe(10);
  expect((text.match(/Not sent/g) ?? []).length).toBe(5);
 });
+
+
+describe('bulk deployment confirmation', () => {
+ it.each([
+  { replacements: 0, expected: 'create 10 new apps' },
+  { replacements: 4, expected: 'create 6 new apps and replace content in 4 existing apps' },
+  { replacements: 10, expected: 'replace content in 10 existing apps' },
+ ])('describes $replacements content replacements accurately before dispatch', async ({ replacements, expected }) => {
+  const entries = many(10).map((entry, index) => index < replacements
+   ? { ...entry, updateMode: 'sameApp' as const, targetIntuneAppId: '11111111-1111-4111-8111-111111111111' }
+   : entry);
+  const button = await mountCart(started, { items: entries });
+  await act(async () => button.click());
+  const dialog = [...document.querySelectorAll('[role="dialog"]')].find(value => value.textContent?.includes('Deploy All'))!;
+  const text = dialog.textContent!.replace(/\s+/g, ' ');
+  expect(text).toContain('queue 10 packaging jobs');
+  expect(text).toContain(expected);
+  if (replacements === 10) expect(text).not.toMatch(/create \d/);
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/package')).toHaveLength(0);
+ });
+});

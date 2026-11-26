@@ -88,6 +88,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const updateItem = useCartStore((state) => state.updateItem);
   const isStore = isStoreCartItem(item);
   const isWin32 = isWin32CartItem(item);
+  const sameApp = isWin32 && item.updateMode === 'sameApp';
   const isCurated = isWin32 && item.sourceType === 'curated';
   const isEditableWin32 = isWin32 && !isCurated;
   const [curatedSettingsMode, setCuratedSettingsMode] = useState<'tested-defaults' | 'custom'>(
@@ -298,7 +299,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               item.displayName,
               item.installerType,
               msiProductCode,
-              assignments
+              sameApp ? [] : assignments
             )
           : undefined;
 
@@ -307,17 +308,17 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           psadtConfig: sanitizedProcesses
             ? { ...config, processesToClose: sanitizedProcesses.processes }
             : config,
-          assignments: assignments.length > 0 ? assignments : undefined,
-          categories: categories.length > 0 ? categories : undefined,
-          espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
-          relationships: relationships.length > 0 ? relationships : undefined,
+          assignments: !sameApp && assignments.length > 0 ? assignments : undefined,
+          categories: !sameApp && categories.length > 0 ? categories : undefined,
+          espProfiles: !sameApp && espProfiles.length > 0 ? espProfiles : undefined,
+          relationships: !sameApp && relationships.length > 0 ? relationships : undefined,
           requirementRules,
           installCommand,
           uninstallCommand,
           description: description.trim() || item.description,
-          updatePolicy,
+          updatePolicy: sameApp ? undefined : updatePolicy,
           assignmentMigration:
-            updatePolicy === 'auto_update'
+            !sameApp && updatePolicy === 'auto_update'
               ? {
                   carryOverAssignments,
                   removeAssignmentsFromPreviousApp: false,
@@ -1268,8 +1269,9 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                 </div>
               </ConfigSection>}
 
+              {sameApp && <p className="text-sm text-text-secondary">The existing app ID, assignments, categories, dependencies and supersedence are kept. Change these with Update Settings.</p>}
               {/* Assignment Configuration (all app types) */}
-              <ConfigSection
+              {!sameApp && <ConfigSection
                 title="Assignment Configuration"
                 icon={<Target className="w-4 h-4" />}
                 expanded={expandedSection === 'assignment'}
@@ -1280,10 +1282,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   onChange={setAssignments}
                   supportsAutoUpdateSuperseded={!isStore}
                 />
-              </ConfigSection>
+              </ConfigSection>}
 
               {/* Category Configuration */}
-              <ConfigSection
+              {!sameApp && <ConfigSection
                 title="Category Configuration"
                 icon={<FolderTree className="w-4 h-4" />}
                 expanded={expandedSection === 'category'}
@@ -1293,10 +1295,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   categories={categories}
                   onChange={setCategories}
                 />
-              </ConfigSection>
+              </ConfigSection>}
 
               {/* ESP Configuration */}
-              <ConfigSection
+              {!sameApp && <ConfigSection
                 title="Enrollment Status Page"
                 icon={<Shield className="w-4 h-4" />}
                 expanded={expandedSection === 'esp'}
@@ -1308,10 +1310,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   mode="pre-deploy"
                   hasRequiredAssignment={assignments.some((a) => a.intent === 'required')}
                 />
-              </ConfigSection>
+              </ConfigSection>}
 
               {/* App Updates (win32 only) */}
-              {isWin32 && <ConfigSection
+              {!sameApp && isWin32 && <ConfigSection
                 title="App Updates"
                 icon={<ArrowUpCircle className="w-4 h-4" />}
                 expanded={expandedSection === 'updates'}
@@ -1331,7 +1333,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Dependencies & Supersedence (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {!sameApp && isEditableWin32 && <ConfigSection
                 title="Dependencies & Supersedence"
                 icon={<Link2 className="w-4 h-4" />}
                 expanded={expandedSection === 'dependencies'}

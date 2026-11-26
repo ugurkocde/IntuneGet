@@ -6,6 +6,7 @@ import { WorkflowDispatchRateLimitError, WorkflowDispatchUnconfirmedError } from
 
 const {
   getDatabaseMock,
+  getLatestDeployedMock,
   getByUserIdMock,
   enrichQaMock,
   getByTenantIdMock,
@@ -35,6 +36,7 @@ const {
   reputationFetch: vi.fn(),
   curatedState: { envelope: {} as Record<string, unknown> },
   getDatabaseMock: vi.fn(),
+  getLatestDeployedMock: vi.fn(),
   getByUserIdMock: vi.fn(),
   enrichQaMock: vi.fn(async (jobs: PackagingJob[]) => jobs),
   getByTenantIdMock: vi.fn(),
@@ -119,8 +121,8 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
 vi.mock('@/lib/supabase', async () => { const { createClient } = await import('@supabase/supabase-js'); return { createServerClient: () => actualDispatch.realSupabase ? createClient('https://database.example.test', 'fake-key', { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: reputationFetch } }) : undefined, isSupabaseServerConfigured: isSupabaseServerConfiguredMock }; });
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
-  resolveTargetTenantId: vi.fn(async ({ tokenTenantId }: { tokenTenantId: string }) => ({
-    tenantId: tokenTenantId,
+  resolveTargetTenantId: vi.fn(async ({ tokenTenantId, requestedTenantId }: { tokenTenantId: string; requestedTenantId?: string }) => ({
+    tenantId: requestedTenantId || tokenTenantId,
     errorResponse: null,
   })),
 }));
@@ -133,6 +135,7 @@ vi.mock('@/lib/store-app-deploy', () => ({
   deployStoreApp: vi.fn(),
 }));
 
+import { acquireGraphToken } from '@/lib/graph-token';
 import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
@@ -398,10 +401,12 @@ describe('POST /api/package (workflow dispatch)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getLatestDeployedMock.mockResolvedValue(null);
     delete process.env.QA_MAINTENANCE_MODE;
     delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     getDatabaseMock.mockReturnValue({
       jobs: {
+        getLatestDeployed: getLatestDeployedMock,
         create: createMock,
         update: updateMock,
         getApprovalFailures: getApprovalFailuresMock,
@@ -501,6 +506,87 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
     getPackageEligibilityBlocksMock.mockResolvedValue([]);
     isSupabaseServerConfiguredMock.mockReturnValue(true);
+  });
+
+  it.each([
+    { updateMode: 'sameApp' },
+    { targetIntuneAppId: '11111111-1111-4111-8111-111111111111' },
+  ])('rejects unsupported client same-app binding before accepting any item: %j', async binding => {
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item(), makeWin32Item(binding)] }),
+    }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe('Same-app content updates are not available yet');
+    expect(getDatabaseMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { updateMode: 'unknown' },
+    { updateMode: 'sameApp', targetIntuneAppId: 'not-a-guid' },
+    ...[{ appSource: 'store' }, { sourceType: 'custom' }, { forceCreate: true }, { sourceIntuneAppId: 'old' }, { autoSupersede: true }, { assignmentMigration: {} }, { categories: [] }, { relationships: [] }, { assignments: [] }, { espProfiles: [] }].map(extra => ({ updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111', ...extra })),
+  ])('rejects incompatible same-app binding before database access: %j', async binding => {
+    const response = await POST(new NextRequest('http://localhost/api/package', { method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [makeWin32Item(binding)] }) }));
+    expect(response.status).toBe(400);
+    expect(getDatabaseMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the current retry user and resolved MSP tenant against deployment history', async () => {
+    parseAccessTokenMock.mockResolvedValue({ userId: 'retry-user', tenantId: 'token-tenant', userEmail: 'fixture@example.test' });
+    getLatestDeployedMock.mockResolvedValue(null);
+    const response = await POST(new NextRequest('http://localhost/api/package', { method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json', 'X-MSP-Tenant-Id': 'resolved-tenant' }, body: JSON.stringify({ items: [makeWin32Item({ updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' })] }) }));
+    expect(response.status).toBe(409);
+    expect(getLatestDeployedMock).toHaveBeenCalledWith('retry-user', 'resolved-tenant', 'Test.App', '11111111-1111-4111-8111-111111111111');
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects request forceCreate for a same-app update before database access', async () => {
+    const response = await POST(new NextRequest('http://localhost/api/package', { method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ forceCreate: true, items: [makeWin32Item({ updateMode: 'sameApp', targetIntuneAppId: '11111111-1111-4111-8111-111111111111' })] }) }));
+    expect(response.status).toBe(400);
+    expect(getDatabaseMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['history miss', null, 200, 409, 'SAME_APP_TARGET_NOT_DEPLOYED'],
+    ['missing Graph app', true, 404, 409, 'SAME_APP_TARGET_MISSING'],
+    ['Graph error', true, 500, 503, 'SAME_APP_TARGET_UNAVAILABLE'],
+    ['wrong app type', true, 200, 409, 'SAME_APP_TARGET_MISSING'],
+    ['wrong app id', true, 200, 409, 'SAME_APP_TARGET_MISSING'],
+    ['wrong user history', true, 200, 409, 'SAME_APP_TARGET_NOT_DEPLOYED'],
+    ['wrong tenant history', true, 200, 409, 'SAME_APP_TARGET_NOT_DEPLOYED'],
+    ['archived history', true, 200, 409, 'SAME_APP_TARGET_NOT_DEPLOYED'],
+    ['Graph network error', true, 200, 503, 'SAME_APP_TARGET_UNAVAILABLE'],
+    ['valid binding', true, 200, 200, undefined],
+  ])('reauthorizes same-app admission and retry: %s', async (scenario, history, graphStatus, status, code) => {
+    const target = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+    getLatestDeployedMock.mockResolvedValue(history ? makeJob({ user_id: scenario === 'wrong user history' ? 'other-user' : 'user-1', tenant_id: scenario === 'wrong tenant history' ? 'other-tenant' : 'tenant-1', winget_id: 'Test.App', intune_app_id: target.toLowerCase(), status: 'deployed', archived_at: scenario === 'archived history' ? '2026-01-01T00:00:00Z' : null }) : null);
+    vi.mocked(acquireGraphToken).mockResolvedValue({ accessToken: 'fake-token' } as Awaited<ReturnType<typeof acquireGraphToken>>);
+    const graph = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: scenario === 'wrong app id' ? '22222222-2222-4222-8222-222222222222' : target.toLowerCase(), '@odata.type': scenario === 'wrong app type' ? '#microsoft.graph.microsoftStoreForBusinessApp' : '#microsoft.graph.win32LobApp' }), { status: graphStatus as number }));
+    if (scenario === 'Graph network error') graph.mockRejectedValue(new Error('synthetic network failure'));
+    vi.stubGlobal('fetch', graph);
+    try {
+      const response = await POST(new NextRequest('http://localhost:3000/api/package', { method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [makeWin32Item(), makeWin32Item({ updateMode: 'sameApp', targetIntuneAppId: target })] }) }));
+      expect(response.status).toBe(status);
+      if (code) expect(await response.json()).toMatchObject({ code });
+      expect(getLatestDeployedMock).toHaveBeenCalledWith('user-1', 'tenant-1', 'Test.App', target.toLowerCase());
+      if (!history || scenario.endsWith('history')) expect(graph).not.toHaveBeenCalled();
+      else expect(acquireGraphToken).toHaveBeenCalledWith('tenant-1');
+      if (scenario === 'valid binding') {
+        expect(createMock).toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.objectContaining({ updateMode: 'sameApp', targetIntuneAppId: target.toLowerCase(), assignments: undefined, categories: undefined, relationships: undefined }), undefined, expect.anything());
+      } else {
+        expect(createMock).not.toHaveBeenCalled();
+        expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      }
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('creates a queued local-packager job without Supabase or QA', async () => {

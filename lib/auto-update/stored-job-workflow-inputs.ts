@@ -22,12 +22,25 @@ export function buildStoredJobWorkflowInputs(
     callbackUrl: string; qaOverride: boolean; sanitizeAssignments: boolean;
   }
 ): WorkflowInputs {
+  const stored = job.package_config as unknown as Win32CartItem;
+  const sameApp = stored?.updateMode === 'sameApp';
+  if (sameApp) {
+    if (!stored.targetIntuneAppId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(stored.targetIntuneAppId)) {
+      throw new Error('Same app update target is missing or invalid.');
+    }
+    if (item.updateMode !== 'sameApp' || item.targetIntuneAppId !== stored.targetIntuneAppId || item.wingetId !== job.winget_id) {
+      throw new Error('Same app update binding differs from the stored job.');
+    }
+  } else if (item.updateMode === 'sameApp') {
+    throw new Error('Same app update binding is absent from the stored job.');
+  }
   const selectedHash = item.installerSha256 || job.installer_sha256 || '';
   const installerSha256 = item.sourceType === 'custom' ? selectedHash.trim() : selectedHash;
   const autoUpdate = job.is_auto_update ? item as Win32CartItem & {
     sourceIntuneAppId?: string; autoSupersede?: boolean; supersedenceType?: string;
   } : undefined;
   return {
+    ...(sameApp ? { updateMode: 'sameApp' as const, targetIntuneAppId: stored.targetIntuneAppId } : {}),
     qaOverride,
     jobId: job.id,
     tenantId: job.tenant_id || '',
@@ -57,20 +70,20 @@ export function buildStoredJobWorkflowInputs(
     psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
     detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
     requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
-    assignments: item.assignments ? JSON.stringify(sanitizeAssignments
+    assignments: !sameApp && item.assignments ? JSON.stringify(sanitizeAssignments
       ? sanitizeAssignmentsForDispatch(item.assignments, Boolean(item.requirementRules?.length))
       : item.assignments) : undefined,
-    categories: item.categories ? JSON.stringify(item.categories) : undefined,
-    espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
-    relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
+    categories: !sameApp && item.categories ? JSON.stringify(item.categories) : undefined,
+    espProfiles: !sameApp && item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
+    relationships: !sameApp && item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
     installScope: (item.installScope || job.install_scope) === 'user' ? 'user' : 'machine',
-    forceCreate: item.forceCreate,
-    sourceIntuneAppId: autoUpdate?.sourceIntuneAppId,
-    carryOverAssignments: autoUpdate?.assignmentMigration?.carryOverAssignments,
+    forceCreate: sameApp ? false : item.forceCreate,
+    sourceIntuneAppId: sameApp ? undefined : autoUpdate?.sourceIntuneAppId,
+    carryOverAssignments: sameApp ? false : autoUpdate?.assignmentMigration?.carryOverAssignments,
     // Queued policies may still contain the old implicit copy/removal flag.
-    removeAssignmentsFromPreviousApp: autoUpdate ? false : undefined,
-    autoSupersede: autoUpdate?.autoSupersede,
-    supersedenceType: autoUpdate?.supersedenceType,
+    removeAssignmentsFromPreviousApp: sameApp || autoUpdate ? false : undefined,
+    autoSupersede: sameApp ? false : autoUpdate?.autoSupersede,
+    supersedenceType: sameApp ? undefined : autoUpdate?.supersedenceType,
     sourceType: item.sourceType,
     curatedReleaseId: item.curatedReleaseId,
   };
