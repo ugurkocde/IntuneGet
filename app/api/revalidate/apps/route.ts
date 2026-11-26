@@ -51,11 +51,15 @@ export async function POST(request: NextRequest) {
 
   const revalidated: string[] = [];
   const skipped: string[] = [];
+  const seen = new Set<string>();
   for (const id of wingetIds) {
     if (typeof id !== 'string' || !APP_ID_PATTERN.test(id)) {
       skipped.push(String(id));
       continue;
     }
+    // One path per id. A repeated id would purge the same page cache again.
+    if (seen.has(id)) continue;
+    seen.add(id);
     revalidatePath(`/apps/${encodeURIComponent(id)}`);
     revalidated.push(id);
   }
