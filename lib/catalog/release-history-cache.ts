@@ -141,7 +141,8 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
       const seen = confirmedAt.get(key);
       const confirmed = typeof seen === 'number' && Number.isFinite(seen) && now >= seen
         && now - seen < HISTORY_RETAINED_MAX_AGE_MS
-        && fresh?.refreshFailedAt === undefined
+        && fresh !== undefined
+        && fresh.refreshFailedAt === undefined
         && historyContentKey(fresh) === historyContentKey(result);
       if (!confirmed) {
         result = fresh && usable(fresh, now) && fresh.loadedAt! > result.loadedAt
