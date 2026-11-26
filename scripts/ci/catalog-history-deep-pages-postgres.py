@@ -5,6 +5,7 @@ import uuid
 import concurrent.futures
 import threading
 import time
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -156,3 +157,242 @@ def contracts(sql):
         print('PASS 95013 visible rows, tie ordering, locale/null exclusion, all edge pages, both RPCs, filters, ACL and empty catalog', flush=True)
     finally:
         sql('drop database ' + database + ' with (force)', database='postgres', role=None)
+
+
+def metadata_bounds_cache_contracts(provided_sql, command, env):
+    """Cache hits reduce repeated history work while preserving invoker, transaction and live fallback contracts."""
+    database = 'history_metadata_' + uuid.uuid4().hex
+    db = database
+    sessions = []
+    checks = []
+
+    def sql(text, role='fixture_owner', database=database, fail=False):
+        return provided_sql(text, role=role, database=database, check=not fail)
+
+    def value(q, role='fixture_owner'):
+        text = sql(q, role).stdout.strip()
+        return text == 't' if text in ['t', 'f'] else json.loads(text)
+
+    def session():
+        s = subprocess.Popen(command(database=db), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        sessions.append(s)
+        send(s, "set statement_timeout='10s';set lock_timeout='5s';set role fixture_owner;")
+        return s
+
+    def send(s, q):
+        s.stdin.write(q + '\n')
+        s.stdin.flush()
+
+    def line(s):
+        r = s.stdout.readline().strip()
+        if not r:
+            raise RuntimeError('Session missing output')
+        return r
+
+    def close(s):
+        send(s, 'rollback;')
+        s.stdin.close()
+        s.wait(timeout=5)
+
+    def parity(page=101, session_=None):
+        q = 'select json_build_array(public.get_catalog_release_history_v2(page_number=>' + str(page) + ')=public.oracle_v2(page_number=>' + str(page) + '),public.get_catalog_release_history_global_rows(' + str(page) + ')=(public.oracle_v2(page_number=>' + str(page) + ")->'rows'));"
+        actual = value(q) if session_ is None else send(session_, q) or json.loads(line(session_))
+        assert actual == [True, True], ('RPC parity', page, actual)
+
+    def plan(rpc, page):
+        q = "load 'auto_explain';set auto_explain.log_min_duration=0;set auto_explain.log_nested_statements=on;set auto_explain.log_analyze=on;set auto_explain.log_buffers=on;set auto_explain.log_timing=off;set auto_explain.log_format='json';set auto_explain.log_level='notice';set work_mem='3500kB';set role fixture_owner;select public." + rpc + '(' + ('page_number=>' if rpc.endswith('_v2') else '') + str(page) + ');'
+        r = sql(q, None)
+        decoder = json.JSONDecoder()
+        position = 0
+        decoded = []
+        while True:
+            position = r.stderr.find('{', position)
+            if position < 0:
+                break
+            try:
+                item, size = decoder.raw_decode(r.stderr[position:])
+                decoded.append(item)
+                position += size
+            except ValueError:
+                position += 1
+
+        def walk(x):
+            if isinstance(x, dict):
+                if 'Node Type' in x and x.get('Actual Loops', 0) > 0:
+                    yield x
+                for child in x.values():
+                    yield from walk(child)
+            elif isinstance(x, list):
+                for child in x:
+                    yield from walk(child)
+        nodes = list(walk(decoded))
+        assert nodes, 'No nested plan evidence'
+        return nodes
+
+    def work(nodes):
+        return sum((n['Actual Rows'] * n['Actual Loops'] for n in nodes if n.get('Relation Name') == 'version_history'))
+
+    def refresh():
+        assert sql('select public.refresh_catalog_release_history_cache()').stdout.strip() == 't'
+
+    def restore():
+        sql('truncate public.version_history,public.curated_apps;insert into public.curated_apps select * from public.apps_backup;insert into public.version_history select * from public.history_backup;')
+        refresh()
+        assert sql('select catalog_internal.history_cache_is_usable()').stdout.strip() == 't'
+    try:
+        for role in ['anon', 'authenticated', 'service_role']:
+            sql("do $$begin if not exists(select 1 from pg_roles where rolname='" + role + "') then create role " + role + ';end if;end$$;', None, 'postgres')
+        sql('create database ' + db + ' owner fixture_owner', None, 'postgres')
+        sql("create table curated_apps(id serial unique,winget_id text primary key,name text,publisher text,is_locale_variant boolean);\n     create table version_history(id serial primary key,winget_id text,version text,release_date text,created_at timestamptz,installers jsonb);\n     create index idx_version_history_winget_id_created_at_id on version_history(winget_id,created_at,id);\n     create index idx_version_history_observed on version_history(created_at desc,id desc);\n     create table curated_sync_status(id text primary key,last_run_status text,last_run_completed_at timestamptz,last_successful_sync_at timestamptz);\n     insert into curated_apps(winget_id,name,publisher,is_locale_variant) select 'Fixture.'||g,'Application '||g,'Publisher',false from generate_series(1,16500)g;\n     insert into version_history(winget_id,version,created_at,installers) select 'Fixture.'||((g-1)%16500+1),g::text,'2026-01-01'::timestamptz+(g/2)*interval '1 minute','[]' from generate_series(1,95013)g;\n     insert into curated_apps(winget_id,name,is_locale_variant) values('Locale.App','Locale',true);\n     insert into version_history(winget_id,version,created_at) values('Locale.App','excluded',now()),('Fixture.1','undated',null);\n     insert into curated_sync_status values('sync-manifests','success','2026-11-26','2026-11-26');\n     analyze curated_apps;analyze version_history;")
+        for name in ['20261115083235_catalog_history_global_page_plan.sql', '20261125033000_catalog_history_single_global_aggregate.sql', '20261115133712_catalog_history_global_rows.sql', '20261125124000_catalog_history_deep_page_lookup.sql']:
+            sql('begin;' + (ROOT / 'supabase/migrations' / name).read_text() + 'commit;')
+        definition = value("select to_json(pg_get_functiondef('public.get_catalog_release_history_v2(text,text,text,integer,text,date,date,text)'::regprocedure))")
+        rows_definition = value("select to_json(pg_get_functiondef('public.get_catalog_release_history_global_rows(integer)'::regprocedure))")
+        security_query = "select json_agg(json_build_array(proname,proowner,proacl::text,proconfig,prosecdef,provolatile,prolang,proisstrict) order by proname) from pg_proc where pronamespace='public'::regnamespace and proname in ('get_catalog_release_history_v2','get_catalog_release_history_global_rows')"
+        security = value(security_query)
+        sql(definition.replace('public.get_catalog_release_history_v2(', 'public.oracle_v2(', 1))
+        before = work(plan('get_catalog_release_history_v2', 1911))
+        assert before >= 95013
+        checks.append({'name': 'Current V2 full-history scan on deep page', 'verdict': 'RED', 'historyRowsVisited': before})
+        print('RED current full-history work ' + str(before), flush=True)
+        candidate = (ROOT / 'supabase/migrations/20261126220806_catalog_history_metadata_bounds_cache.sql').read_text()
+        sql('begin;' + candidate + 'rollback;')
+        assert value(security_query) == security
+        sql('begin;' + candidate + 'commit;')
+        assert value(security_query) == security
+        parity()
+        checks.append({'name': 'Empty cache exact fallback', 'verdict': 'PASS'})
+        refresh()
+        for page in [1, 100, 101, 1324, 1911, 2376, 2377, 10000]:
+            parity(page)
+            for rpc in ['get_catalog_release_history_v2', 'get_catalog_release_history_global_rows']:
+                if rpc.endswith('_global_rows') and page <= 100:
+                    continue
+                nodes = plan(rpc, page)
+                visited = work(nodes)
+                bound = page * 40 + 100 if page <= 100 else 500
+                assert visited <= bound, (rpc, page, visited, bound)
+                assert not any((n.get('Temp Read Blocks', 0) or n.get('Temp Written Blocks', 0) for n in nodes))
+                checks.append({'name': rpc + ' page ' + str(page), 'verdict': 'GREEN', 'historyRowsVisited': visited})
+        for args in ["kind_filter=>'updated',page_number=>2", "app_filter=>'Fixture.1'", "search_text=>'Application 1',page_number=>2", "month_filter=>'2026-01',page_number=>2", "date_from=>'2026-01-10',date_to=>'2026-01-12'", "architecture_filter=>'x64'"]:
+            assert value('select public.get_catalog_release_history_v2(' + args + ')=public.oracle_v2(' + args + ')') is True
+        checks.append({'name': 'Filtered branch parity', 'verdict': 'PASS'})
+        sql('create table apps_backup as table curated_apps;create table history_backup as table version_history;')
+        sql("update curated_apps set name=name||' updated';update version_history set release_date='2026-11-26' where id=(select max(id) from version_history);")
+        assert value('select catalog_internal.history_cache_is_usable()') is True
+        parity(1)
+        sql("update curated_apps set is_locale_variant=true where winget_id='Fixture.1';")
+        assert value('select catalog_internal.history_cache_is_usable()') is False
+        parity()
+        restore()
+        checks.append({'name': 'Nonstructural fields remain live; locale membership invalidates', 'verdict': 'PASS'})
+        for page in ['NULL', -5, 0, 2, 10001]:
+            parity(page)
+        sql("insert into version_history(winget_id,version,created_at) select 'Fixture.1','tie-'||g,'2026-02-02' from generate_series(1,20000) g;insert into version_history(winget_id,version,created_at) values('Locale.App','tie-locale','2026-02-02'),('Missing.App','tie-orphan','2026-02-02'),('Fixture.1','infinity','infinity'),('Fixture.1','negative-infinity','-infinity'),('Fixture.1','wide','10000-01-01'),('Fixture.1','bc','0001-01-01 BC');")
+        refresh()
+        for page in [101, 150, 300, 1324, 1911]:
+            parity(page)
+        checks.append({'name': 'Clamped pages, timestamp ties, locale/orphan exclusions and wide dates', 'verdict': 'PASS'})
+        restore()
+        a = session()
+        send(a, "begin;insert into version_history(winget_id,version,created_at)values('Fixture.1','writer-a','2027-01-01');select 'writer-ready';")
+        assert line(a) == 'writer-ready'
+        sql("insert into version_history(winget_id,version,created_at)values('Fixture.1','writer-b','2027-01-02')")
+        refresh()
+        send(a, "commit;select 'writer-done';")
+        assert line(a) == 'writer-done'
+        a.stdin.close()
+        a.wait(timeout=5)
+        assert sql('select catalog_internal.history_cache_is_usable()').stdout.strip() == 'f'
+        parity()
+        refresh()
+        checks.append({'name': 'Out of order writer commit invalidates full RPC snapshot', 'verdict': 'PASS'})
+        with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+            calls = [pool.submit(parity, page) for page in [1, 2, 3, 100, 101, 1324, 1730, 1911]]
+            pool.submit(sql, 'select public.refresh_catalog_release_history_cache()').result(timeout=20)
+            for call in calls:
+                call.result(timeout=20)
+        checks.append({'name': 'Eight concurrent RPC sessions plus refresh retain exact parity', 'verdict': 'PASS'})
+        sql("begin;insert into version_history(winget_id,version,created_at)values('Fixture.1','new','2027-01-01');")
+        a = session()
+        send(a, "begin;insert into version_history(winget_id,version,created_at)values('Fixture.1','new','2027-01-01');select catalog_internal.history_cache_is_usable();")
+        assert line(a) == 'f'
+        parity(101, a)
+        close(a)
+        assert sql('select catalog_internal.history_cache_is_usable()').stdout.strip() == 't'
+        checks.append({'name': 'Own write invalidation and rollback with full RPC parity', 'verdict': 'PASS'})
+        a = session()
+        send(a, "begin;savepoint cache_probe;truncate version_history;select 'truncated';")
+        assert line(a) == 'truncated'
+        parity(101, a)
+        send(a, 'rollback to savepoint cache_probe;commit;select catalog_internal.history_cache_is_usable();')
+        assert line(a) == 't'
+        a.stdin.close()
+        a.wait(timeout=5)
+        checks.append({'name': 'TRUNCATE savepoint rollback restores exact warm cache', 'verdict': 'PASS'})
+        for table in ['version_history', 'curated_apps']:
+            restore()
+            a = session()
+            send(a, 'select public.get_catalog_release_history_global_rows(101) is not null;')
+            assert line(a) == 't'
+            send(a, "begin isolation level repeatable read;select 'snapshot';")
+            assert line(a) == 'snapshot'
+            sql('truncate public.' + table)
+            parity(101, a)
+            close(a)
+            checks.append({'name': 'Warm session older snapshot TRUNCATE ' + table, 'verdict': 'PASS'})
+        restore()
+        sql('vacuum full public.version_history')
+        assert sql('select catalog_internal.history_cache_is_usable()').stdout.strip() == 'f'
+        parity()
+        refresh()
+        checks.append({'name': 'Triggerless heap rewrite self-heals on refresh', 'verdict': 'PASS'})
+        for level in ['repeatable read', 'serializable']:
+            denied = sql('begin isolation level ' + level + ';select public.refresh_catalog_release_history_cache();', 'fixture_owner', fail=True)
+            assert denied.returncode and 'requires read committed isolation' in denied.stderr
+        checks.append({'name': 'Refresh rejects stale isolation levels', 'verdict': 'PASS'})
+        restore()
+        sql('reindex table version_history;reindex table curated_apps;')
+        assert sql('select catalog_internal.history_cache_is_usable()').stdout.strip() == 't'
+        parity()
+        checks.append({'name': 'Index rewrite retains exact cache', 'verdict': 'PASS'})
+        sql('grant usage on schema public to anon,authenticated;grant select on version_history,curated_apps,curated_sync_status to anon,authenticated;')
+        assert value("select json_build_array(has_function_privilege('anon','public.refresh_catalog_release_history_cache()','execute'),has_function_privilege('anon','public.get_catalog_release_history_global_rows(integer)','execute'),has_table_privilege('anon','catalog_internal.catalog_release_history_meta','insert'))") == [False, False, False]
+        a = session()
+        send(a, 'select public.get_catalog_release_history_global_rows(101) is not null;')
+        assert line(a) == 't'
+        send(a, "begin isolation level repeatable read;select 'snapshot';")
+        assert line(a) == 'snapshot'
+        sql("alter table curated_apps enable row level security;alter table curated_apps force row level security;create policy fixture_visibility on curated_apps for select using(winget_id='Fixture.1');")
+        send(a, 'select count(*) from catalog_internal.catalog_release_history_meta;')
+        assert line(a) == '0'
+        parity(1, a)
+        parity(101, a)
+        close(a)
+        assert value('select count(*) from catalog_internal.catalog_release_history_meta') == 0
+        denied = sql('select public.refresh_catalog_release_history_cache();', fail=True)
+        assert denied.returncode and 'unrestricted source visibility' in denied.stderr
+        checks.append({'name': 'Concurrent FORCE RLS fail-closed metadata and full RPC parity', 'verdict': 'PASS'})
+        restricted = sql("begin;insert into version_history(winget_id,version,created_at)values('Fixture.1','restricted-writer','2027-01-01');insert into version_history(winget_id,version,created_at)values('Fixture.1','restricted-writer-again','2027-01-02');select json_build_array((select count(*) from catalog_internal.catalog_release_history_meta),(select count(*) from catalog_internal.catalog_release_history_page_bounds),(select count(*) from catalog_internal.catalog_release_history_invalidation),(select bool_and(xid=pg_current_xact_id()) from catalog_internal.catalog_release_history_invalidation));rollback;")
+        assert json.loads(restricted.stdout.strip()) == [0, 0, 1, True], restricted.stdout
+        checks.append({'name': 'Restricted writer still invalidates without cache access', 'verdict': 'PASS'})
+        for role in ['anon', 'authenticated']:
+            assert value('select count(*) from catalog_internal.catalog_release_history_meta', role) == 0
+            assert value('select public.get_catalog_release_history_v2(page_number=>101)=public.oracle_v2(page_number=>101)', role) is True
+        checks.append({'name': 'Anonymous/authenticated RLS fallback and denied writes', 'verdict': 'PASS'})
+        sql('drop policy fixture_visibility on curated_apps;create policy public_read on curated_apps for select using(true);')
+        assert value('select catalog_internal.history_cache_is_usable()', 'anon') is False
+        assert value('select public.get_catalog_release_history_v2(page_number=>101)=public.oracle_v2(page_number=>101)', 'anon') is True
+        sql(definition + ';\n' + rows_definition + ';')
+        sql('drop trigger history_cache_structure on version_history;drop trigger history_cache_identity on version_history;drop trigger history_cache_structure on curated_apps;drop trigger history_cache_identity on curated_apps;drop function public.refresh_catalog_release_history_cache();drop function catalog_internal.history_cache_is_usable();drop function catalog_internal.mark_history_cache_dirty();drop table catalog_internal.catalog_release_history_meta,catalog_internal.catalog_release_history_page_bounds,catalog_internal.catalog_release_history_invalidation;drop function catalog_internal.invoker_has_unrestricted_history_visibility();drop schema catalog_internal;')
+        assert value(security_query) == security
+        parity()
+        checks.append({'name': 'Clean source rollback preserves original RPC security and parity', 'verdict': 'PASS'})
+        print('PASS metadata cache bounds, parity, RLS, physical rewrite and transaction contracts', flush=True)
+        return checks
+    finally:
+        for s in sessions:
+            if s.poll() is None:
+                s.kill()
+                s.wait(timeout=5)
+        sql('drop database if exists ' + db + ' with(force)', None, 'postgres')

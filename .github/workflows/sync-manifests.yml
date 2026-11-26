@@ -770,6 +770,22 @@ jobs:
             if (!response.ok) {
               throw new Error(`Sync status update failed: ${response.status} ${await response.text()}`);
             }
+            // Refresh is optional; invalid metadata remains on exact live SQL.
+            try {
+              const refreshed = await fetch(`${SUPABASE_URL}/rest/v1/rpc/refresh_catalog_release_history_cache`, {
+                method: 'POST',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: '{}',
+                signal: AbortSignal.timeout(5000)
+              });
+              if (!refreshed.ok) console.warn('Catalog history metadata refresh deferred');
+            } catch {
+              console.warn('Catalog history metadata refresh deferred');
+            }
             if (classification.shouldFail) process.exit(1);
           }
 

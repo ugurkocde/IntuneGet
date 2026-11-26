@@ -355,6 +355,16 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ error: errorMessage }, { status: 500 });
+  } finally {
+    // Dirty metadata always falls back to live SQL. Refresh is optional and
+    // must not change an otherwise completed sync or hide its original error.
+    try {
+      const { error } = await supabase.rpc('refresh_catalog_release_history_cache')
+        .abortSignal(AbortSignal.timeout(5000));
+      if (error) console.warn('Catalog history metadata refresh deferred');
+    } catch {
+      console.warn('Catalog history metadata refresh deferred');
+    }
   }
 }
 
