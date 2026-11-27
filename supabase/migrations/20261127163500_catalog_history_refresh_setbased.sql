@@ -106,7 +106,12 @@ BEGIN
   version_history_filepath=excluded.version_history_filepath,curated_apps_filepath=excluded.curated_apps_filepath;
  DELETE FROM catalog_internal.catalog_release_history_page_bounds WHERE page_number IS NOT NULL;
  INSERT INTO catalog_internal.catalog_release_history_page_bounds(page_number,hi,lo,tie_skip)
- SELECT p,hi,lo,tie_skip FROM pg_catalog.unnest(b_pages,b_hi,b_lo,b_tie_skip) AS u(p,hi,lo,tie_skip);
+ SELECT p,hi,lo,tie_skip FROM ROWS FROM (
+  pg_catalog.unnest(b_pages),
+  pg_catalog.unnest(b_hi),
+  pg_catalog.unnest(b_lo),
+  pg_catalog.unnest(b_tie_skip)
+ ) AS u(p,hi,lo,tie_skip);
  DELETE FROM catalog_internal.catalog_release_history_invalidation i WHERE pg_catalog.pg_visible_in_snapshot(i.xid,snap);
  RETURN true;
 END;
