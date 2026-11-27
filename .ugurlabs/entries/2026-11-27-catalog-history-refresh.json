@@ -1,0 +1,5 @@
+{
+  "title": "More reliable release history refreshes",
+  "summary": "Corrects a database safety guard conflict that prevented release history metadata from refreshing after catalog updates.",
+  "type": "fixed"
+}
