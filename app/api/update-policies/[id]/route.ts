@@ -6,6 +6,7 @@
  */
 
 import { isAutoUpdateScope } from '@/types/update-policies';
+import { hasInvalidAllowAvailableUninstall } from '@/lib/allow-available-uninstall';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
@@ -172,6 +173,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body: PolicyPatchBody = await request.json();
     if (body.auto_update_scope !== undefined && !isAutoUpdateScope(body.auto_update_scope)) {
       return NextResponse.json({ error: 'Invalid auto_update_scope' }, { status: 400 });
+    }
+    if (hasInvalidAllowAvailableUninstall(body.deployment_config)) {
+      return NextResponse.json({ error: 'deployment_config.allowAvailableUninstall must be a boolean' }, { status: 400 });
     }
 
     if (isSqliteMode()) {

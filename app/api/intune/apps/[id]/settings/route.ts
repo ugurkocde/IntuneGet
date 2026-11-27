@@ -16,7 +16,9 @@ import {
   convertToGraphAssignments,
   syncAppCategories,
   setAppRules,
+  updateWin32AllowAvailableUninstall,
 } from '@/lib/intune-api';
+import { logAllowAvailableUninstallDecision } from '@/lib/allow-available-uninstall';
 import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { PackageAssignment, IntuneAppCategorySelection } from '@/types/upload';
@@ -26,7 +28,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  let phase: 'params' | 'authentication' | 'tenant-resolution' | 'consent' | 'graph-token' | 'app-lookup' | 'request-body' | 'local-config' | 'requirement-rules' | 'set-rules' | 'convert-assignments' | 'assignments' | 'categories' | 'config-read' | 'config-save' = 'params';
+  let phase: 'params' | 'authentication' | 'tenant-resolution' | 'consent' | 'graph-token' | 'app-lookup' | 'request-body' | 'local-config' | 'allow-available-uninstall' | 'requirement-rules' | 'set-rules' | 'convert-assignments' | 'assignments' | 'categories' | 'config-read' | 'config-save' | 'policy-sync' = 'params';
   const applied: string[] = [];
   try {
     const { id: intuneAppId } = await params;
@@ -107,13 +109,32 @@ export async function PATCH(
       wingetId,
       relationships,
       baselineRelationships,
+      allowAvailableUninstall,
     } = body as {
       assignments?: PackageAssignment[];
       categories?: IntuneAppCategorySelection[];
       wingetId?: string;
       relationships?: AppRelationship[];
       baselineRelationships?: AppRelationship[];
+      allowAvailableUninstall?: unknown;
     };
+
+    if (allowAvailableUninstall !== undefined) {
+      if (typeof allowAvailableUninstall !== 'boolean') {
+        return NextResponse.json(
+          { error: 'allowAvailableUninstall must be a boolean' },
+          { status: 400 }
+        );
+      }
+      if (existingApp['@odata.type'] !== '#microsoft.graph.win32LobApp') {
+        return NextResponse.json(
+          { error: 'Allow available uninstall is only supported for Win32 apps' },
+          { status: 400 }
+        );
+      }
+    }
+    const validatedAllowAvailableUninstall: boolean | undefined =
+      typeof allowAvailableUninstall === 'boolean' ? allowAvailableUninstall : undefined;
 
     phase = 'local-config';
     // Validate the exact local deployment before changing its Intune settings.
@@ -157,6 +178,20 @@ export async function PATCH(
       }
     }
 
+    // Apply allowAvailableUninstall on Win32 app
+    if (validatedAllowAvailableUninstall !== undefined) {
+      phase = 'allow-available-uninstall';
+      await updateWin32AllowAvailableUninstall(graphToken, intuneAppId, validatedAllowAvailableUninstall);
+      applied.push('allowAvailableUninstall');
+      logAllowAvailableUninstallDecision({
+        wingetId,
+        updateMode: 'settings_patch',
+        allowAvailableUninstall: validatedAllowAvailableUninstall,
+        source: 'explicit_settings_patch',
+        graphReadStatus: 'not_needed',
+      });
+    }
+
     // Apply assignments
     if (assignments) {
       phase = 'requirement-rules';
@@ -193,8 +228,9 @@ export async function PATCH(
       await syncAppCategories(graphToken, intuneAppId, categories);
     }
 
-    // Persist updated assignments/categories in the most recent packaging_jobs row
-    if (wingetId && supabase && (assignments || categories)) {
+    // Persist updated assignments/categories/allowAvailableUninstall in the most recent packaging_jobs row
+    const hasConfigChanges = Boolean(assignments || categories || validatedAllowAvailableUninstall !== undefined);
+    if (wingetId && supabase && hasConfigChanges) {
       phase = 'config-read';
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
@@ -219,6 +255,9 @@ export async function PATCH(
         }
         if (categories) {
           updatedConfig.categories = categories as unknown as Json;
+        }
+        if (validatedAllowAvailableUninstall !== undefined) {
+          updatedConfig.allowAvailableUninstall = validatedAllowAvailableUninstall;
         }
         phase = 'config-save';
         const { data: saved, error: saveError } = await supabase
@@ -245,17 +284,53 @@ export async function PATCH(
           { status: 409 }
         );
       }
-    } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig)) {
+
+      if (validatedAllowAvailableUninstall !== undefined) {
+        phase = 'policy-sync';
+        const { data: policyRow } = await supabase
+          .from('app_update_policies')
+          .select('id, deployment_config')
+          .eq('user_id', user.userId)
+          .eq('tenant_id', tenantId)
+          .eq('winget_id', wingetId)
+          .maybeSingle();
+        if (policyRow?.deployment_config && typeof policyRow.deployment_config === 'object' && !Array.isArray(policyRow.deployment_config)) {
+          const nextPolicyConfig: Record<string, Json | undefined> = {
+            ...(policyRow.deployment_config as Record<string, Json | undefined>),
+            allowAvailableUninstall: validatedAllowAvailableUninstall,
+          };
+          await supabase
+            .from('app_update_policies')
+            .update({ deployment_config: nextPolicyConfig, updated_at: new Date().toISOString() })
+            .eq('id', policyRow.id)
+            .eq('user_id', user.userId)
+            .maybeSingle();
+        }
+      }
+    } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig) && hasConfigChanges) {
       phase = 'config-save';
       const { sqliteDeployedConfig } = await import('@/lib/db/sqlite');
       const saved = sqliteDeployedConfig.mergeFields(localJob.id, {
         userId: user.userId, tenantId, wingetId: wingetId!, intuneAppId,
-      }, { assignments, categories });
+      }, { assignments, categories, allowAvailableUninstall: validatedAllowAvailableUninstall });
       if (!saved) {
         return NextResponse.json(
           { error: 'Intune settings were updated, but the local deployment changed before they could be saved. Refresh the deployment before trying again.' },
           { status: 409 }
         );
+      }
+      if (validatedAllowAvailableUninstall !== undefined && wingetId) {
+        phase = 'policy-sync';
+        const existingPolicy = await localDb.updatePolicies.getByKey(user.userId, tenantId, wingetId);
+        if (existingPolicy?.deployment_config) {
+          await localDb.updatePolicies.update(existingPolicy.id, user.userId, {
+            deployment_config: {
+              ...existingPolicy.deployment_config,
+              allowAvailableUninstall: validatedAllowAvailableUninstall,
+            },
+            updated_at: new Date().toISOString(),
+          });
+        }
       }
     }
 

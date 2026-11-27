@@ -111,6 +111,23 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const [assignments, setAssignments] = useState<PackageAssignment[]>(
     item.assignments || []
   );
+  const initialAllowAvailableUninstall = isWin32 ? item.allowAvailableUninstall : undefined;
+  const [allowAvailableUninstall, setAllowAvailableUninstall] = useState<boolean | undefined>(
+    initialAllowAvailableUninstall
+  );
+  const handleAllowAvailableUninstallChange = (checked: boolean) => {
+    if (checked) {
+      setAllowAvailableUninstall(true);
+    } else {
+      setAllowAvailableUninstall(initialAllowAvailableUninstall === true ? false : undefined);
+    }
+  };
+  const showAllowAvailableUninstallToggle =
+    isWin32 &&
+    !sameApp &&
+    (typeof item.allowAvailableUninstall === 'boolean' ||
+      process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
+      !process.env.NEXT_PUBLIC_SUPABASE_URL);
   const [categories, setCategories] = useState<IntuneAppCategorySelection[]>(
     item.categories || []
   );
@@ -147,7 +164,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const configSnapshot = JSON.stringify({
     storeInstallExperience, selectedScope, config, assignments, categories,
-    espProfiles, relationships, installCommand, uninstallCommand, description,
+    espProfiles, relationships, allowAvailableUninstall: allowAvailableUninstall ?? null,
+    installCommand, uninstallCommand, description,
     updatePolicy: updatePolicy ?? null,
     carryOverAssignments,
     curatedSettingsMode,
@@ -257,6 +275,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
         assignments: assignments.length ? assignments : undefined,
         categories: categories.length ? categories : undefined,
         espProfiles: espProfiles.length ? espProfiles : undefined,
+        allowAvailableUninstall: !sameApp && typeof allowAvailableUninstall === 'boolean' ? allowAvailableUninstall : undefined,
         updatePolicy,
         assignmentMigration: updatePolicy === 'auto_update'
           ? { carryOverAssignments, removeAssignmentsFromPreviousApp: false } : undefined,
@@ -312,6 +331,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           categories: !sameApp && categories.length > 0 ? categories : undefined,
           espProfiles: !sameApp && espProfiles.length > 0 ? espProfiles : undefined,
           relationships: !sameApp && relationships.length > 0 ? relationships : undefined,
+          allowAvailableUninstall: !sameApp && typeof allowAvailableUninstall === 'boolean' ? allowAvailableUninstall : undefined,
           requirementRules,
           installCommand,
           uninstallCommand,
@@ -1282,6 +1302,16 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   onChange={setAssignments}
                   supportsAutoUpdateSuperseded={!isStore}
                 />
+                {showAllowAvailableUninstallToggle && (
+                  <div className="mt-4 pt-4 border-t border-overlay/10">
+                    <ToggleOption
+                      label="Allow available uninstall"
+                      description="Allow users to uninstall this Win32 app from Company Portal when assigned as Available. Applies to the entire app and is preserved across auto-updates."
+                      checked={allowAvailableUninstall === true}
+                      onChange={handleAllowAvailableUninstallChange}
+                    />
+                  </div>
+                )}
               </ConfigSection>}
 
               {/* Category Configuration */}

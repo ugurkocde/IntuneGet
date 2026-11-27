@@ -14,6 +14,7 @@ interface UpdateAppSettingsRequest {
   categories?: IntuneAppCategorySelection[];
   relationships?: AppRelationship[];
   baselineRelationships?: AppRelationship[];
+  allowAvailableUninstall?: boolean;
 }
 
 export function useUpdateAppSettings() {
@@ -23,7 +24,7 @@ export function useUpdateAppSettings() {
   const tenantKey = isMspUser ? selectedTenantId || 'primary' : 'self';
 
   const mutation = useMutation<{ success: boolean }, Error, UpdateAppSettingsRequest>({
-    mutationFn: async ({ intuneAppId, wingetId, assignments, categories, relationships, baselineRelationships }) => {
+    mutationFn: async ({ intuneAppId, wingetId, assignments, categories, relationships, baselineRelationships, allowAvailableUninstall }) => {
       const token = await getAccessToken();
       if (!token) {
         throw new Error('Not authenticated');
@@ -40,7 +41,7 @@ export function useUpdateAppSettings() {
               ? { 'X-MSP-Tenant-Id': selectedTenantId }
               : {}),
           },
-          body: JSON.stringify({ assignments, categories, wingetId, relationships, baselineRelationships }),
+          body: JSON.stringify({ assignments, categories, wingetId, relationships, baselineRelationships, allowAvailableUninstall }),
         }
       );
 

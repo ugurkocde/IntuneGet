@@ -48,6 +48,15 @@ import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/
 import { DEFAULT_PSADT_CONFIG, type DetectionRule } from '@/types/psadt';
 import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
+import { getServicePrincipalToken } from '@/lib/intune/graph-client';
+import { readWin32AllowAvailableUninstall } from '@/lib/intune-api';
+import {
+  isValidUuid,
+  logAllowAvailableUninstallDecision,
+  parseAllowAvailableUninstallFromRecord,
+  type AllowAvailableUninstallGraphReadStatus,
+  type AllowAvailableUninstallSource,
+} from '@/lib/allow-available-uninstall';
 
 interface TriggerResult {
   success: boolean;
@@ -71,7 +80,8 @@ interface TriggerResult {
     | 'CURATED_CONFIG_VERIFICATION_FAILED'
     | 'UPDATE_SCOPE_HELD'
     | 'RATE_LIMIT_UNVERIFIED'
-    | 'PSADT_BACKFILL_UNAVAILABLE';
+    | 'PSADT_BACKFILL_UNAVAILABLE'
+    | 'INTUNE_SETTINGS_UNVERIFIED';
 }
 
 export interface UpdateInfo {
@@ -226,7 +236,14 @@ export class AutoUpdateTrigger {
   async triggerAutoUpdate(
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
-    options?: { skipRateLimits?: boolean; skipPriorDeploymentCheck?: boolean; bypassUpdateScope?: boolean; admitViaQaResume?: boolean; assignmentMigrationOverride?: DeploymentConfig['assignmentMigration'] }
+    options?: {
+      skipRateLimits?: boolean;
+      skipPriorDeploymentCheck?: boolean;
+      bypassUpdateScope?: boolean;
+      admitViaQaResume?: boolean;
+      assignmentMigrationOverride?: DeploymentConfig['assignmentMigration'];
+      allowAvailableUninstallOverride?: boolean;
+    }
   ): Promise<TriggerResult> {
     let historyId: string | undefined;
     try {
@@ -452,6 +469,20 @@ export class AutoUpdateTrigger {
       // Determine update type
       const updateType = classifyUpdateType(updateInfo.currentVersion, updateInfo.latestVersion);
 
+      const allowAvailableUninstallResolution = await this.resolveAllowAvailableUninstall(
+        policy,
+        updateInfo,
+        options?.allowAvailableUninstallOverride
+      );
+      if (!allowAvailableUninstallResolution.ok) {
+        return {
+          success: false,
+          skipped: true,
+          code: 'INTUNE_SETTINGS_UNVERIFIED',
+          skipReason: 'IntuneGet could not verify the existing app allowAvailableUninstall setting. The update was deferred and will retry automatically.',
+        };
+      }
+
       // Create auto-update history record
       const historyRecord = await this.createHistoryRecord(policy.id, updateInfo, updateType);
       historyId = historyRecord.id;
@@ -463,7 +494,8 @@ export class AutoUpdateTrigger {
         historyRecord.id,
         qaDemand,
         options?.admitViaQaResume === true,
-        options?.assignmentMigrationOverride
+        options?.assignmentMigrationOverride,
+        allowAvailableUninstallResolution.value
       );
 
       // Update history with job reference
@@ -850,6 +882,114 @@ export class AutoUpdateTrigger {
   }
 
   /**
+   * Resolve allowAvailableUninstall for a new-app auto-update with deterministic precedence:
+   * 1. explicit_override -> 2. explicit_config -> 3. inherited_upload_history ->
+   * 4. inherited_graph (live win32LobApp, without persisting back to deployment_config) -> 5. default_omitted.
+   * Transient read errors fail closed (INTUNE_SETTINGS_UNVERIFIED) without tripping the circuit breaker.
+   */
+  private async resolveAllowAvailableUninstall(
+    policy: AppUpdatePolicy,
+    updateInfo: UpdateInfo,
+    override?: boolean
+  ): Promise<{ ok: true; value: boolean | undefined } | { ok: false }> {
+    const logDecision = (
+      value: boolean | undefined,
+      source: AllowAvailableUninstallSource,
+      graphReadStatus: AllowAvailableUninstallGraphReadStatus
+    ) => {
+      logAllowAvailableUninstallDecision({
+        policyId: policy.id,
+        wingetId: updateInfo.wingetId,
+        updateMode: 'auto_update',
+        allowAvailableUninstall: value ?? null,
+        source,
+        graphReadStatus,
+      });
+    };
+
+    if (typeof override === 'boolean') {
+      logDecision(override, 'explicit_override', 'not_needed');
+      return { ok: true, value: override };
+    }
+
+    const config = policy.deployment_config as DeploymentConfig | null;
+    if (typeof config?.allowAvailableUninstall === 'boolean') {
+      logDecision(config.allowAvailableUninstall, 'explicit_config', 'not_needed');
+      return { ok: true, value: config.allowAvailableUninstall };
+    }
+
+    // Step 3: Check prior upload_history -> packaging_jobs.package_config
+    try {
+      const { data: uploadHistory, error: historyError } = await this.supabase
+        .from('upload_history')
+        .select('packaging_job_id')
+        .eq('user_id', policy.user_id)
+        .eq('intune_tenant_id', policy.tenant_id)
+        .eq('winget_id', policy.winget_id)
+        .not('packaging_job_id', 'is', null)
+        .order('deployed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (historyError) {
+        logDecision(undefined, 'default_omitted', 'error');
+        return { ok: false };
+      }
+
+      if (uploadHistory?.packaging_job_id) {
+        const { data: priorJob, error: jobError } = await this.supabase
+          .from('packaging_jobs')
+          .select('package_config')
+          .eq('id', uploadHistory.packaging_job_id)
+          .maybeSingle();
+        if (jobError) {
+          logDecision(undefined, 'default_omitted', 'error');
+          return { ok: false };
+        }
+        const inheritedFromHistory = parseAllowAvailableUninstallFromRecord(priorJob?.package_config);
+        if (inheritedFromHistory !== undefined) {
+          logDecision(inheritedFromHistory, 'inherited_upload_history', 'not_needed');
+          return { ok: true, value: inheritedFromHistory };
+        }
+      }
+    } catch {
+      logDecision(undefined, 'default_omitted', 'error');
+      return { ok: false };
+    }
+
+    // Step 4: Live Intune Graph read for the current Win32 app (UUID only)
+    if (isValidUuid(updateInfo.currentIntuneAppId)) {
+      try {
+        const graphToken = await getServicePrincipalToken(policy.tenant_id);
+        if (!graphToken) {
+          logDecision(undefined, 'default_omitted', 'error');
+          return { ok: false };
+        }
+        const readResult = await readWin32AllowAvailableUninstall(
+          graphToken,
+          updateInfo.currentIntuneAppId
+        );
+        if (readResult.status === 'hit') {
+          logDecision(readResult.value, 'inherited_graph', 'hit');
+          return { ok: true, value: readResult.value };
+        }
+        if (readResult.status === 'field_missing') {
+          logDecision(undefined, 'default_graph_field_missing', 'field_missing');
+          return { ok: true, value: undefined };
+        }
+        logDecision(undefined, 'default_source_missing', 'not_found');
+        return { ok: true, value: undefined };
+      } catch {
+        logDecision(undefined, 'default_omitted', 'error');
+        return { ok: false };
+      }
+    }
+
+    logDecision(undefined, 'default_omitted', 'not_needed');
+    return { ok: true, value: undefined };
+  }
+
+  /**
    * Create a packaging job for the update
    */
   private async createPackagingJob(
@@ -858,7 +998,8 @@ export class AutoUpdateTrigger {
     historyId: string,
     qaDemand?: QaDemandResult,
     admitViaQaResume = false,
-    assignmentMigrationOverride?: DeploymentConfig['assignmentMigration']
+    assignmentMigrationOverride?: DeploymentConfig['assignmentMigration'],
+    resolvedAllowAvailableUninstall?: boolean
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
     const assignments = normalizeAssignments(config);
@@ -921,6 +1062,9 @@ export class AutoUpdateTrigger {
         nestedInstallerType: updateInfo.nestedInstallerType,
         nestedInstallerPath: updateInfo.nestedInstallerPath,
         installerSuccessCodes: updateInfo.installerSuccessCodes,
+        ...(typeof resolvedAllowAvailableUninstall === 'boolean'
+          ? { allowAvailableUninstall: resolvedAllowAvailableUninstall }
+          : {}),
         forceCreate: config.forceCreateNewApp !== false,
         sourceIntuneAppId,
         autoSupersede,

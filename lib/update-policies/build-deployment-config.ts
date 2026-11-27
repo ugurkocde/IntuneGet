@@ -24,6 +24,7 @@ import type { DeploymentConfig } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship, DetectionRule, RequirementRule } from '@/types/intune';
 import type { NormalizedInstaller, WingetInstaller } from '@/types/winget';
+import { parseAllowAvailableUninstallFromRecord } from '@/lib/allow-available-uninstall';
 
 export interface PackageConfigWithAssignments {
   assignments?: PackageAssignment[];
@@ -372,6 +373,10 @@ export type BuildDeploymentConfigResult =
   | { status: 'orphaned_job' }
   | { status: 'unavailable' };
 
+export function parseAllowAvailableUninstall(packageConfig: unknown): boolean | undefined {
+  return parseAllowAvailableUninstallFromRecord(packageConfig);
+}
+
 /**
  * Assemble a deployment config from a stored packaging job. Shared by the
  * Supabase and adapter-backed builders so both produce identical configs.
@@ -396,6 +401,7 @@ function assembleDeploymentConfigFromJob(job: {
   // config, leave it undefined so the auto-update trigger falls back to the
   // user's current global carryOverAssignments setting at update time.
   const assignmentMigration = parseAssignmentMigration(packageConfig);
+  const allowAvailableUninstall = parseAllowAvailableUninstall(packageConfig);
 
   return {
     displayName: job.display_name,
@@ -416,6 +422,7 @@ function assembleDeploymentConfigFromJob(job: {
     relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
     psadtConfig: parsePsadtConfig(packageConfig),
     forceCreateNewApp: true,
+    ...(allowAvailableUninstall !== undefined ? { allowAvailableUninstall } : {}),
     assignmentMigration,
   };
 }

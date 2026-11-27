@@ -64,6 +64,7 @@ export interface WorkflowInputs {
   espProfiles?: string; // JSON-serialized EspProfileSelection[]
   relationships?: string; // JSON-serialized AppRelationship[]
   installScope?: 'machine' | 'user'; // Install scope for per-user vs per-machine
+  allowAvailableUninstall?: boolean; // Win32-only; omitted when undefined or sameApp
   forceCreate?: boolean; // Skip duplicate check and force create new app
   qaOverride?: boolean; // Server-side QA acknowledgement; never forwarded to GitHub
   sourceIntuneAppId?: string; // Previous app ID for assignment carry-over
@@ -396,6 +397,9 @@ export async function triggerPackagingWorkflow(
           espProfiles: inputs.updateMode === 'sameApp' ? '[]' : inputs.espProfiles || '[]',
           ...(inputs.updateMode === 'sameApp' ? {} : { relationships: inputs.relationships || '[]' }),
           installScope: inputs.installScope || 'machine',
+          ...(inputs.updateMode !== 'sameApp' && typeof inputs.allowAvailableUninstall === 'boolean'
+            ? { allowAvailableUninstall: inputs.allowAvailableUninstall ? 'true' : 'false' }
+            : {}),
           forceCreate: inputs.updateMode !== 'sameApp' && inputs.forceCreate ? 'true' : 'false',
           sourceIntuneAppId: inputs.updateMode === 'sameApp' ? '' : inputs.sourceIntuneAppId || '',
           carryOverAssignments: inputs.updateMode !== 'sameApp' && inputs.carryOverAssignments ? 'true' : 'false',

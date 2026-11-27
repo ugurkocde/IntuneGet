@@ -24,6 +24,7 @@ import type { Json } from '@/types/database';
 import type { DetectionRule } from '@/types/intune';
 import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
 import { parseAssignmentMigration } from '@/lib/update-policies/build-deployment-config';
+import { logAllowAvailableUninstallDecision } from '@/lib/allow-available-uninstall';
 import { getCatalogSource } from '@/lib/catalog';
 import { compareVersions } from '@/lib/version-compare';
 import { getLatestInstallerInfo } from '@/lib/auto-update/trigger';
@@ -236,6 +237,16 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
       const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
       const migration = parseAssignmentMigration(config);
       const autoSupersede = Boolean(sourceIntuneAppId);
+      const explicitAllowAvailableUninstall =
+        typeof config.allowAvailableUninstall === 'boolean' ? config.allowAvailableUninstall : undefined;
+      logAllowAvailableUninstallDecision({
+        policyId: policy.id,
+        wingetId: updateInfo.wingetId,
+        updateMode: 'auto_update',
+        allowAvailableUninstall: explicitAllowAvailableUninstall ?? null,
+        source: explicitAllowAvailableUninstall !== undefined ? 'explicit_config' : 'default_omitted',
+        graphReadStatus: 'not_needed',
+      });
 
       const job = await db.jobs.create({
         user_id: policy.user_id,
@@ -265,6 +276,9 @@ const scopeReason = !options?.bypassUpdateScope && autoUpdateScopeReason(policy.
           nestedInstallerType: updateInfo.nestedInstallerType,
           nestedInstallerPath: updateInfo.nestedInstallerPath,
           installerSuccessCodes: updateInfo.installerSuccessCodes,
+          ...(explicitAllowAvailableUninstall !== undefined
+            ? { allowAvailableUninstall: explicitAllowAvailableUninstall }
+            : {}),
           forceCreate: config.forceCreateNewApp !== false,
           sourceIntuneAppId,
           autoSupersede,

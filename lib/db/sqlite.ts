@@ -145,7 +145,7 @@ export const sqliteDeployedConfig = {
   mergeFields(
     id: string,
     identity: { userId: string; tenantId: string; wingetId: string; intuneAppId: string },
-    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[]; relationships?: AppRelationship[] },
+    patch: { assignments?: PackageAssignment[]; categories?: IntuneAppCategorySelection[]; relationships?: AppRelationship[]; allowAvailableUninstall?: boolean },
     expectedUpdatedAt?: string
   ): PackagingJob | null {
     const database = getDb();
@@ -162,6 +162,7 @@ export const sqliteDeployedConfig = {
       if (patch.assignments) merged.assignments = patch.assignments as unknown as Json;
       if (patch.categories) merged.categories = patch.categories as unknown as Json;
       if (patch.relationships) merged.relationships = patch.relationships as unknown as Json;
+      if (typeof patch.allowAvailableUninstall === 'boolean') merged.allowAvailableUninstall = patch.allowAvailableUninstall;
       const result = database.prepare(`UPDATE packaging_jobs SET package_config = ?, updated_at = ? WHERE ${where}`)
         .run(JSON.stringify(merged), new Date().toISOString(), ...values);
       return result.changes === 1 ? { ...job, package_config: merged } : null;
