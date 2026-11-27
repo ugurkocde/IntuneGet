@@ -102,12 +102,23 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
 
     const uploadedUrls: string[] = [];
     let block1AuthFailures = 0;
+    const block0Id = encodeURIComponent(Buffer.from('000000').toString('base64'));
+    const block1Id = encodeURIComponent(Buffer.from('000001').toString('base64'));
+    let markBlock0Staged!: () => void;
+    const block0Staged = new Promise<void>((resolve) => {
+      markBlock0Staged = resolve;
+    });
 
     const fetchMock = vi.fn(async (url: string, init?: { method?: string; body?: unknown }) => {
       uploadedUrls.push(url);
       if (url.includes('comp=block&')) {
-        const block1Id = encodeURIComponent(Buffer.from('000001').toString('base64'));
+        if (url.includes(`blockid=${block0Id}`) && url.startsWith(initialUri)) {
+          markBlock0Staged();
+          return makeResponse(201, 'Created');
+        }
         if (url.includes(`blockid=${block1Id}`) && url.startsWith(initialUri) && block1AuthFailures === 0) {
+          // Ensure block 0 has already been accepted on initialUri before block 1 triggers renewal
+          await block0Staged;
           block1AuthFailures++;
           return makeResponse(
             403,
@@ -120,9 +131,9 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
       if (url.includes('comp=blocklist')) {
         expect(url.startsWith(renewedUri)).toBe(true);
         const xml = String(init?.body ?? '');
-        const block0Id = Buffer.from('000000').toString('base64');
-        const block1Id = Buffer.from('000001').toString('base64');
-        expect(xml).toContain(`<Latest>${block0Id}</Latest><Latest>${block1Id}</Latest>`);
+        const rawBlock0Id = Buffer.from('000000').toString('base64');
+        const rawBlock1Id = Buffer.from('000001').toString('base64');
+        expect(xml).toContain(`<Latest>${rawBlock0Id}</Latest><Latest>${rawBlock1Id}</Latest>`);
         return makeResponse(201, 'Created');
       }
       throw new Error(`Unexpected URL: ${url}`);
@@ -185,13 +196,11 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
 
     expect(result.id).toBe('app-2142');
     expect(postSpy).toHaveBeenCalledWith(
-      '/deviceAppManagement/mobileApps/app-2142/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/renewUpload',
-      {}
+      '/deviceAppManagement/mobileApps/app-2142/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/renewUpload'
     );
-    // Block 0 must not have been re-uploaded after renewal
-    const block0Id = encodeURIComponent(Buffer.from('000000').toString('base64'));
-    expect(uploadedUrls.filter((u) => u.includes(`blockid=${block0Id}`))).toHaveLength(1);
-    const block1Id = encodeURIComponent(Buffer.from('000001').toString('base64'));
+    // Block 0 must have been staged once on the original SAS and never re-uploaded on the renewed SAS
+    expect(uploadedUrls.filter((u) => u.includes(`blockid=${block0Id}`) && u.startsWith(initialUri))).toHaveLength(1);
+    expect(uploadedUrls.filter((u) => u.includes(`blockid=${block0Id}`) && u.startsWith(renewedUri))).toHaveLength(0);
     expect(uploadedUrls.filter((u) => u.includes(`blockid=${block1Id}`) && u.startsWith(renewedUri))).toHaveLength(1);
   });
 
@@ -286,11 +295,32 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
     let commitXml = '';
     const progresses: number[] = [];
 
+    // Barrier requiring all 4 concurrent workers to arrive on initialUri before any 403 returns
+    let originalArrivals = 0;
+    let releaseBarrier!: () => void;
+    const allFourArrived = new Promise<void>((resolve) => {
+      releaseBarrier = resolve;
+    });
+
+    let delivered403s = 0;
+    let releaseRenewal!: () => void;
+    const all403Delivered = new Promise<void>((resolve) => {
+      releaseRenewal = resolve;
+    });
+
     const fetchMock = vi.fn(async (url: string, init?: { body?: unknown }) => {
       if (url.includes('comp=block&')) {
         if (url.startsWith(initialUri)) {
-          // Small delay so all 4 concurrent workers observe 403 against the same initialUri
-          await new Promise((r) => setTimeout(r, 10));
+          originalArrivals++;
+          if (originalArrivals === 4) {
+            releaseBarrier();
+          }
+          await allFourArrived;
+          delivered403s++;
+          if (delivered403s === 4) {
+            // Allow microtasks so all 4 workers enter ensureFreshSession while renewal is pending
+            queueMicrotask(() => releaseRenewal());
+          }
           return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
         }
         return makeResponse(201, 'Created');
@@ -303,7 +333,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
     });
 
     const renewFn = vi.fn(async () => {
-      await new Promise((r) => setTimeout(r, 20));
+      await all403Delivered;
       return { azureStorageUri: renewedUri, expiresAtMs: Date.now() + 15 * 60_000 };
     });
 
@@ -325,6 +355,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
       { chunkSize: 16, concurrency: 4, retryBaseDelayMs: 0 }
     );
 
+    expect(originalArrivals).toBe(4);
     expect(renewFn).toHaveBeenCalledTimes(1);
     const expectedOrder = [0, 1, 2, 3]
       .map((i) => `<Latest>${Buffer.from(String(i).padStart(6, '0')).toString('base64')}</Latest>`)
@@ -490,8 +521,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
     });
 
     expect(graph.post).toHaveBeenCalledWith(
-      '/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/renewUpload',
-      {}
+      '/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/renewUpload'
     );
     expect(graph.get).toHaveBeenCalledTimes(3);
     expect(renewed).toEqual({
@@ -612,5 +642,140 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
     expect(String(caught)).toContain('Failed to upload block 0');
     expect(String(caught)).toContain('https://blob.example.test/c/b?[redacted]');
     expect(String(caught)).not.toContain('NETWORK_SECRET_TOKEN');
+  });
+
+  it('retries transient Graph GET failures during renewAzureStorageUri without repeating renewUpload POST', async () => {
+    const oldUri = 'https://blob.example.test/c/b?sig=OLD_SIG';
+    const newUri = 'https://blob.example.test/c/b?sig=NEW_SIG';
+    const newExpiry = '2026-11-27T15:30:00.000Z';
+
+    const graph = {
+      post: vi.fn().mockResolvedValue({}),
+      get: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('Graph API GET failed: 503 - Service Unavailable'))
+        .mockRejectedValueOnce(new Error('Graph API GET failed: 429 - Too Many Requests'))
+        .mockResolvedValueOnce({
+          azureStorageUri: newUri,
+          azureStorageUriExpirationDateTime: newExpiry,
+          uploadState: 'azureStorageUriRenewalSuccess',
+        }),
+    };
+
+    const uploader = new IntuneUploader(makeConfig(vi.fn())) as unknown as {
+      sleep: (ms: number) => Promise<void>;
+      renewAzureStorageUri: (
+        graphClient: typeof graph,
+        appId: string,
+        contentVersionId: string,
+        contentFileId: string,
+        previousSession: { azureStorageUri: string; expiresAtMs?: number }
+      ) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>;
+    };
+    vi.spyOn(uploader, 'sleep').mockResolvedValue();
+
+    const renewed = await uploader.renewAzureStorageUri(graph, 'app-1', 'cv-1', 'file-1', {
+      azureStorageUri: oldUri,
+    });
+
+    expect(graph.post).toHaveBeenCalledTimes(1);
+    expect(graph.get).toHaveBeenCalledTimes(3);
+    expect(renewed).toEqual({
+      azureStorageUri: newUri,
+      expiresAtMs: Date.parse(newExpiry),
+    });
+  });
+
+  it('treats a same-URI renewal with advanced expiry as a new session generation so late 403s do not trigger duplicate renewals', async () => {
+    const filePath = createTempFile(32); // 2 x 16-byte chunks
+    const sharedUri = 'https://blob.example.test/c/b?sig=SAME_URI';
+    let arrivals = 0;
+    let releaseBoth!: () => void;
+    const bothArrived = new Promise<void>((resolve) => {
+      releaseBoth = resolve;
+    });
+    let renewedOnce = false;
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('comp=block&')) {
+        if (!renewedOnce) {
+          arrivals++;
+          if (arrivals === 2) {
+            releaseBoth();
+          }
+          await bothArrived;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        return makeResponse(201, 'Created');
+      }
+      return makeResponse(201, 'Created');
+    });
+
+    const renewFn = vi.fn(async () => {
+      renewedOnce = true;
+      return { azureStorageUri: sharedUri, expiresAtMs: Date.now() + 20 * 60_000 };
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; retryBaseDelayMs?: number; maxRenewals?: number }
+      ) => Promise<void>;
+    };
+
+    await uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: sharedUri, expiresAtMs: Date.now() + 10 * 60_000 },
+      renewFn,
+      undefined,
+      { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0, maxRenewals: 1 }
+    );
+
+    expect(arrivals).toBe(2);
+    expect(renewFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries HTTP 503 without waiting on response.text()', async () => {
+    const filePath = createTempFile(16);
+    const uri = 'https://blob.example.test/c/b?sig=VALID';
+    let attempts = 0;
+    const textSpy = vi.fn(() => new Promise<string>(() => {})); // never resolves if awaited
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('comp=block&') && attempts === 0) {
+        attempts++;
+        return {
+          ok: false,
+          status: 503,
+          statusText: 'Service Unavailable',
+          text: textSpy,
+        };
+      }
+      return makeResponse(201, 'Created');
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; retryBaseDelayMs?: number }
+      ) => Promise<void>;
+    };
+
+    await uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: uri, expiresAtMs: Date.now() + 10 * 60_000 },
+      vi.fn(),
+      undefined,
+      { chunkSize: 16, concurrency: 1, retryBaseDelayMs: 0 }
+    );
+
+    expect(attempts).toBe(1);
+    expect(textSpy).not.toHaveBeenCalled();
   });
 });

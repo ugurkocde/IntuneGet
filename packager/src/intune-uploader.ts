@@ -77,6 +77,52 @@ function isTransientUploadStatus(status: number): boolean {
   return status === 408 || status === 429 || (status >= 500 && status <= 599);
 }
 
+function isTransientGraphGetError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.startsWith('Graph API GET failed:')) {
+    return /^Graph API GET failed:\s*(408|429|5\d\d)\b/.test(message);
+  }
+  return true;
+}
+
+function releaseResponseBody(response: { body?: unknown }): void {
+  const body = response.body as { destroy?: () => void; cancel?: () => Promise<unknown> } | null | undefined;
+  if (!body) {
+    return;
+  }
+  try {
+    if (typeof body.destroy === 'function') {
+      body.destroy();
+    } else if (typeof body.cancel === 'function') {
+      void body.cancel().catch(() => {});
+    }
+  } catch {
+    // ignore cleanup failures
+  }
+}
+
+async function readBoundedErrorBody(
+  response: { text: () => Promise<string>; body?: unknown },
+  timeoutMs: number = 5000
+): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      response.text().catch(() => ''),
+      new Promise<string>((resolve) => {
+        timer = setTimeout(() => {
+          releaseResponseBody(response);
+          resolve('');
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 function redactUrlQueries(text: string): string {
   return text.replace(/(https?:\/\/[^\s'"`?]+)\?[^\s'"`)]+/gi, '$1?[redacted]');
 }
@@ -628,10 +674,24 @@ export class IntuneUploader {
 
     const filePath = `/deviceAppManagement/mobileApps/${appId}/microsoft.graph.win32LobApp/contentVersions/${contentVersionId}/files/${contentFileId}`;
     this.logger.info('Renewing Azure Storage SAS URI', { appId, contentFileId });
-    await graphClient.post(`${filePath}/renewUpload`, {});
+    await graphClient.post(`${filePath}/renewUpload`);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const file = await graphClient.get<ContentFileResponse>(filePath);
+      let file: ContentFileResponse;
+      try {
+        file = await graphClient.get<ContentFileResponse>(filePath);
+      } catch (error) {
+        if (isTransientGraphGetError(error) && attempt < maxAttempts - 1) {
+          this.logger.warn('Transient Graph error while polling renewed Azure Storage URI', {
+            appId,
+            contentFileId,
+            attempt: attempt + 1,
+          });
+          await this.sleep(delayMs);
+          continue;
+        }
+        throw error;
+      }
 
       if (
         file.uploadState === 'azureStorageUriRenewalFailed' ||
@@ -703,6 +763,11 @@ export class IntuneUploader {
       throw new Error(`Invalid upload concurrency: ${requestedConcurrency}`);
     }
 
+    interface TrackedUploadSession {
+      session: AzureStorageUploadSession;
+      generation: number;
+    }
+
     const fileHandle = await fs.promises.open(filePath, 'r');
     try {
       const stats = await fileHandle.stat();
@@ -713,9 +778,10 @@ export class IntuneUploader {
       );
 
       let currentSession: AzureStorageUploadSession = { ...initialSession };
+      let currentGeneration = 0;
       let acquiredAtMs = now();
       let renewalCount = 0;
-      let inFlightRenewal: Promise<AzureStorageUploadSession> | null = null;
+      let inFlightRenewal: Promise<TrackedUploadSession> | null = null;
 
       const isExpiringSoon = (): boolean => {
         if (currentSession.expiresAtMs !== undefined) {
@@ -724,15 +790,15 @@ export class IntuneUploader {
         return now() >= acquiredAtMs + SAS_FALLBACK_LIFETIME_MS;
       };
 
-      const ensureFreshSession = async (failedUri?: string): Promise<AzureStorageUploadSession> => {
-        if (failedUri !== undefined && currentSession.azureStorageUri !== failedUri) {
-          return currentSession;
-        }
-        if (failedUri === undefined && !isExpiringSoon()) {
-          return currentSession;
+      const ensureFreshSession = async (failedGeneration?: number): Promise<TrackedUploadSession> => {
+        if (failedGeneration !== undefined && currentGeneration !== failedGeneration) {
+          return { session: currentSession, generation: currentGeneration };
         }
         if (inFlightRenewal) {
           return inFlightRenewal;
+        }
+        if (failedGeneration === undefined && !isExpiringSoon()) {
+          return { session: currentSession, generation: currentGeneration };
         }
         if (renewalCount >= maxRenewals) {
           throw new Error(`Exceeded maximum Azure Storage SAS URI renewals (${maxRenewals})`);
@@ -742,9 +808,10 @@ export class IntuneUploader {
         inFlightRenewal = (async () => {
           const renewed = await renewUri(previousSession);
           renewalCount++;
+          currentGeneration++;
           currentSession = renewed;
           acquiredAtMs = now();
-          return currentSession;
+          return { session: currentSession, generation: currentGeneration };
         })().finally(() => {
           inFlightRenewal = null;
         });
@@ -762,8 +829,8 @@ export class IntuneUploader {
         let authRenewalAttempt = 0;
 
         while (true) {
-          const session = await ensureFreshSession();
-          const requestUrl = buildUrl(session.azureStorageUri);
+          const tracked = await ensureFreshSession();
+          const requestUrl = buildUrl(tracked.session.azureStorageUri);
 
           let response: Awaited<ReturnType<typeof fetch>>;
           try {
@@ -786,22 +853,41 @@ export class IntuneUploader {
           }
 
           if (response.ok) {
+            releaseResponseBody(response);
             return;
           }
 
-          const errorBody = await response.text().catch(() => '');
-          if (isSasAuthFailure(response.status, errorBody) && authRenewalAttempt < 2) {
-            authRenewalAttempt++;
-            await ensureFreshSession(session.azureStorageUri);
-            continue;
+          // Classify known HTTP status codes before reading the response body so
+          // a stalled error body cannot block retries or SAS renewals.
+          if (response.status === 401 || response.status === 403) {
+            releaseResponseBody(response);
+            if (authRenewalAttempt < 2) {
+              authRenewalAttempt++;
+              await ensureFreshSession(tracked.generation);
+              continue;
+            }
+            const reason = response.statusText || `HTTP ${response.status}`;
+            throw new Error(`Failed to ${label}: ${redactUrlQueries(reason)}`);
           }
 
-          if (isTransientUploadStatus(response.status) && transientAttempt < maxRetriesPerOperation) {
-            transientAttempt++;
-            const delayMs = retryBaseDelayMs * Math.pow(2, transientAttempt - 1);
-            if (delayMs > 0) {
-              await this.sleep(delayMs);
+          if (isTransientUploadStatus(response.status)) {
+            releaseResponseBody(response);
+            if (transientAttempt < maxRetriesPerOperation) {
+              transientAttempt++;
+              const delayMs = retryBaseDelayMs * Math.pow(2, transientAttempt - 1);
+              if (delayMs > 0) {
+                await this.sleep(delayMs);
+              }
+              continue;
             }
+            const reason = response.statusText || `HTTP ${response.status}`;
+            throw new Error(`Failed to ${label}: ${redactUrlQueries(reason)}`);
+          }
+
+          const errorBody = await readBoundedErrorBody(response);
+          if (isSasAuthFailure(response.status, errorBody) && authRenewalAttempt < 2) {
+            authRenewalAttempt++;
+            await ensureFreshSession(tracked.generation);
             continue;
           }
 
