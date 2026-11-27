@@ -263,8 +263,22 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         assert value(security_query) == security
         parity()
         checks.append({'name': 'Empty cache exact fallback', 'verdict': 'PASS'})
+        predecessor_definition = value("select to_json(pg_get_functiondef('public.refresh_catalog_release_history_cache()'::regprocedure))")
+        refresh_security_query = "select json_build_array(proowner,proacl::text,proconfig,prosecdef,provolatile,prolang,proisstrict) from pg_proc where oid='public.refresh_catalog_release_history_cache()'::regprocedure"
+        refresh_security = value(refresh_security_query)
         for correction in sorted((ROOT / 'supabase/migrations').glob('*_catalog_history_refresh_safeupdate.sql')):
+            migration_sql = correction.read_text()
+            for newline_definition in [predecessor_definition, predecessor_definition.replace('\n', '\r\n')]:
+                sql('begin;' + newline_definition + ';' + migration_sql + 'rollback;')
+                assert value(refresh_security_query) == refresh_security
+            changed = predecessor_definition.replace('RETURN true;', 'RETURN false;')
+            denied = sql('begin;' + changed + ';' + migration_sql + 'rollback;', fail=True)
+            assert denied.returncode and 'Unexpected catalog history refresh predecessor' in denied.stderr
+            denied = sql('begin;alter function public.refresh_catalog_release_history_cache() strict;' + migration_sql + 'rollback;', fail=True)
+            assert denied.returncode and 'Unexpected catalog history refresh predecessor' in denied.stderr
             sql('begin;' + correction.read_text() + 'commit;')
+            assert value(refresh_security_query) == refresh_security
+            checks.append({'name': 'Refresh migration LF/CRLF replay, changed-body/STRICT denials and security parity', 'verdict': 'PASS'})
         # SIMULATED safeupdate boundary: local PG distributions need not ship the
         # extension. Reproduce its WHERE-clause rejection inside the executed
         # refresh, without claiming that this is a real extension runtime test.
@@ -286,6 +300,20 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         assert value('select count(*) from catalog_internal.catalog_release_history_invalidation') == 0
         parity(1)
         parity(101)
+        sql('create table safeupdate_history_backup as table version_history;delete from version_history where id>100;')
+        refresh()
+        assert value('select count(*) from catalog_internal.catalog_release_history_page_bounds') == 3
+        parity(1)
+        parity(101)
+        sql('delete from version_history where id is not null;')
+        refresh()
+        assert value('select count(*) from catalog_internal.catalog_release_history_page_bounds') == 0
+        assert value('select total from catalog_internal.catalog_release_history_meta') == 0
+        parity(1)
+        parity(101)
+        sql('insert into version_history select * from safeupdate_history_backup;drop table safeupdate_history_backup;')
+        refresh()
+        checks.append({'name': 'SIMULATED guarded shrink and empty rebuild remove stale pages with full RPC parity', 'verdict': 'PASS'})
         checks.append({'name': 'SIMULATED safeupdate refresh clears all bounds and invalidations with full RPC parity', 'verdict': 'PASS', 'realExtensionRuntime': 'NOT_RUN_UNAVAILABLE'})
         sql(refresh_definition)
         assert sql('select public.refresh_catalog_release_history_cache()').stdout.strip() == 'f'
