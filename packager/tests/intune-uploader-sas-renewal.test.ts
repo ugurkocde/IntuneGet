@@ -778,4 +778,188 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
     expect(attempts).toBe(1);
     expect(textSpy).not.toHaveBeenCalled();
   });
+
+  it('does not spend authRenewalAttempt budget on 401/403 responses from superseded SAS sessions', async () => {
+    const filePath = createTempFile(48); // 3 x 16-byte chunks
+    const uris = [
+      'https://blob.example.test/c/b?sig=GEN0',
+      'https://blob.example.test/c/b?sig=GEN1',
+      'https://blob.example.test/c/b?sig=GEN2',
+      'https://blob.example.test/c/b?sig=GEN3',
+    ];
+    let renewIdx = 0;
+
+    let releaseBlock1Gen0!: () => void;
+    const block1Gen0CanFail = new Promise<void>((r) => { releaseBlock1Gen0 = r; });
+    let block1Gen0Started!: () => void;
+    const block1Gen0Arrived = new Promise<void>((r) => { block1Gen0Started = r; });
+
+    let releaseBlock1Gen1!: () => void;
+    const block1Gen1CanFail = new Promise<void>((r) => { releaseBlock1Gen1 = r; });
+    let block1Gen1Started!: () => void;
+    const block1Gen1Arrived = new Promise<void>((r) => { block1Gen1Started = r; });
+
+    const blockId0 = encodeURIComponent(Buffer.from('000000').toString('base64'));
+    const blockId1 = encodeURIComponent(Buffer.from('000001').toString('base64'));
+    const blockId2 = encodeURIComponent(Buffer.from('000002').toString('base64'));
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes(`blockid=${blockId0}`)) {
+        if (url.includes('sig=GEN0')) {
+          await block1Gen0Arrived;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=GEN1')) {
+          releaseBlock1Gen0();
+          return makeResponse(201, 'Created');
+        }
+      }
+      if (url.includes(`blockid=${blockId2}`)) {
+        if (url.includes('sig=GEN1')) {
+          await block1Gen1Arrived;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=GEN2')) {
+          releaseBlock1Gen1();
+          return makeResponse(201, 'Created');
+        }
+      }
+      if (url.includes(`blockid=${blockId1}`)) {
+        if (url.includes('sig=GEN0')) {
+          block1Gen0Started();
+          await block1Gen0CanFail;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=GEN1')) {
+          block1Gen1Started();
+          await block1Gen1CanFail;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=GEN2')) {
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=GEN3')) {
+          return makeResponse(201, 'Created');
+        }
+      }
+      return makeResponse(201, 'Created');
+    });
+
+    const renewFn = vi.fn(async () => {
+      renewIdx++;
+      return { azureStorageUri: uris[renewIdx], expiresAtMs: Date.now() + 20 * 60_000 };
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; retryBaseDelayMs?: number; maxRenewals?: number }
+      ) => Promise<void>;
+    };
+
+    await uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: uris[0], expiresAtMs: Date.now() + 10 * 60_000 },
+      renewFn,
+      undefined,
+      { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0, maxRenewals: 4 }
+    );
+
+    expect(renewFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not spend authRenewalAttempt budget on body-classified SAS auth failures from superseded sessions', async () => {
+    const filePath = createTempFile(48); // 3 x 16-byte chunks
+    const uris = [
+      'https://blob.example.test/c/b?sig=BGEN0',
+      'https://blob.example.test/c/b?sig=BGEN1',
+      'https://blob.example.test/c/b?sig=BGEN2',
+      'https://blob.example.test/c/b?sig=BGEN3',
+    ];
+    let renewIdx = 0;
+
+    let releaseBlock1Gen0!: () => void;
+    const block1Gen0CanFail = new Promise<void>((r) => { releaseBlock1Gen0 = r; });
+    let block1Gen0Started!: () => void;
+    const block1Gen0Arrived = new Promise<void>((r) => { block1Gen0Started = r; });
+
+    let releaseBlock1Gen1!: () => void;
+    const block1Gen1CanFail = new Promise<void>((r) => { releaseBlock1Gen1 = r; });
+    let block1Gen1Started!: () => void;
+    const block1Gen1Arrived = new Promise<void>((r) => { block1Gen1Started = r; });
+
+    const blockId0 = encodeURIComponent(Buffer.from('000000').toString('base64'));
+    const blockId1 = encodeURIComponent(Buffer.from('000001').toString('base64'));
+    const blockId2 = encodeURIComponent(Buffer.from('000002').toString('base64'));
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes(`blockid=${blockId0}`)) {
+        if (url.includes('sig=BGEN0')) {
+          await block1Gen0Arrived;
+          return makeResponse(400, 'Bad Request', '<Error><Code>AuthenticationFailed</Code></Error>');
+        }
+        if (url.includes('sig=BGEN1')) {
+          releaseBlock1Gen0();
+          return makeResponse(201, 'Created');
+        }
+      }
+      if (url.includes(`blockid=${blockId2}`)) {
+        if (url.includes('sig=BGEN1')) {
+          await block1Gen1Arrived;
+          return makeResponse(400, 'Bad Request', '<Error><Code>AuthenticationFailed</Code></Error>');
+        }
+        if (url.includes('sig=BGEN2')) {
+          releaseBlock1Gen1();
+          return makeResponse(201, 'Created');
+        }
+      }
+      if (url.includes(`blockid=${blockId1}`)) {
+        if (url.includes('sig=BGEN0')) {
+          block1Gen0Started();
+          await block1Gen0CanFail;
+          return makeResponse(400, 'Bad Request', '<Error><Code>AuthenticationFailed</Code></Error>');
+        }
+        if (url.includes('sig=BGEN1')) {
+          block1Gen1Started();
+          await block1Gen1CanFail;
+          return makeResponse(400, 'Bad Request', '<Error><Code>AuthenticationFailed</Code></Error>');
+        }
+        if (url.includes('sig=BGEN2')) {
+          return makeResponse(400, 'Bad Request', '<Error><Code>AuthenticationFailed</Code></Error>');
+        }
+        if (url.includes('sig=BGEN3')) {
+          return makeResponse(201, 'Created');
+        }
+      }
+      return makeResponse(201, 'Created');
+    });
+
+    const renewFn = vi.fn(async () => {
+      renewIdx++;
+      return { azureStorageUri: uris[renewIdx], expiresAtMs: Date.now() + 20 * 60_000 };
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; retryBaseDelayMs?: number; maxRenewals?: number }
+      ) => Promise<void>;
+    };
+
+    await uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: uris[0], expiresAtMs: Date.now() + 10 * 60_000 },
+      renewFn,
+      undefined,
+      { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0, maxRenewals: 4 }
+    );
+
+    expect(renewFn).toHaveBeenCalledTimes(3);
+  });
 });

@@ -861,6 +861,10 @@ export class IntuneUploader {
           // a stalled error body cannot block retries or SAS renewals.
           if (response.status === 401 || response.status === 403) {
             releaseResponseBody(response);
+            if (tracked.generation !== currentGeneration) {
+              // Response came from a superseded SAS session; retry with the installed session.
+              continue;
+            }
             if (authRenewalAttempt < 2) {
               authRenewalAttempt++;
               await ensureFreshSession(tracked.generation);
@@ -885,10 +889,16 @@ export class IntuneUploader {
           }
 
           const errorBody = await readBoundedErrorBody(response);
-          if (isSasAuthFailure(response.status, errorBody) && authRenewalAttempt < 2) {
-            authRenewalAttempt++;
-            await ensureFreshSession(tracked.generation);
-            continue;
+          if (isSasAuthFailure(response.status, errorBody)) {
+            if (tracked.generation !== currentGeneration) {
+              // Response came from a superseded SAS session; retry with the installed session.
+              continue;
+            }
+            if (authRenewalAttempt < 2) {
+              authRenewalAttempt++;
+              await ensureFreshSession(tracked.generation);
+              continue;
+            }
           }
 
           const reason = response.statusText || `HTTP ${response.status}`;
