@@ -125,18 +125,21 @@ export class GraphClient {
   /**
    * Make a POST request to Graph API
    */
-  async post<T = unknown>(path: string, body: unknown): Promise<T> {
+  async post<T = unknown>(path: string, body?: unknown): Promise<T> {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
     const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
 
     if (!response.ok) {

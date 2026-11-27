@@ -7,6 +7,7 @@ import { isExactPackagingRun } from './runner-loss';
  */
 
 import { createHash, createHmac } from 'node:crypto';
+import { isHostedAllowAvailableUninstallEnabled } from '@/lib/allow-available-uninstall';
 import { dispatchRateLimitError, WorkflowDispatchUnconfirmedError } from './workflow-dispatch-rate-limit';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
@@ -64,6 +65,7 @@ export interface WorkflowInputs {
   espProfiles?: string; // JSON-serialized EspProfileSelection[]
   relationships?: string; // JSON-serialized AppRelationship[]
   installScope?: 'machine' | 'user'; // Install scope for per-user vs per-machine
+  allowAvailableUninstall?: boolean; // Win32-only; omitted when undefined or sameApp
   forceCreate?: boolean; // Skip duplicate check and force create new app
   qaOverride?: boolean; // Server-side QA acknowledgement; never forwarded to GitHub
   sourceIntuneAppId?: string; // Previous app ID for assignment carry-over
@@ -138,7 +140,7 @@ export async function triggerPackagingWorkflow(
   inputs: WorkflowInputs,
   config?: GitHubActionsConfig,
   options?: { skipRunCapture?: boolean; requireQaPass?: boolean;
-    newJobAdmission?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
+    newJobAdmission?: boolean; reconcileUnconfirmedDispatch?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
 ): Promise<TriggerResult> {
   let sameAppOwner: string | undefined;
   // Bind explicit content replacement to an existing deployment.
@@ -396,6 +398,11 @@ export async function triggerPackagingWorkflow(
           espProfiles: inputs.updateMode === 'sameApp' ? '[]' : inputs.espProfiles || '[]',
           ...(inputs.updateMode === 'sameApp' ? {} : { relationships: inputs.relationships || '[]' }),
           installScope: inputs.installScope || 'machine',
+          ...(inputs.updateMode !== 'sameApp' &&
+            typeof inputs.allowAvailableUninstall === 'boolean' &&
+            (inputs.allowAvailableUninstall === true || isHostedAllowAvailableUninstallEnabled())
+            ? { allowAvailableUninstall: inputs.allowAvailableUninstall ? 'true' : 'false' }
+            : {}),
           forceCreate: inputs.updateMode !== 'sameApp' && inputs.forceCreate ? 'true' : 'false',
           sourceIntuneAppId: inputs.updateMode === 'sameApp' ? '' : inputs.sourceIntuneAppId || '',
           carryOverAssignments: inputs.updateMode !== 'sameApp' && inputs.carryOverAssignments ? 'true' : 'false',
@@ -411,7 +418,21 @@ export async function triggerPackagingWorkflow(
     packageProfileSha256: packageProfileSha256 ?? null,
     curatedReleaseId: inputs.curatedReleaseId ?? null,
   })).digest('hex');
+  const hostedAllowAvailableUninstallBlocked =
+    inputs.updateMode !== 'sameApp' &&
+    inputs.allowAvailableUninstall === true &&
+    !isHostedAllowAvailableUninstallEnabled();
+  if (hostedAllowAvailableUninstallBlocked && !options?.reconcileUnconfirmedDispatch) {
+    throw new Error(
+      'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
+    );
+  }
   await options?.beforeDispatch?.(dispatchIdentity);
+  if (hostedAllowAvailableUninstallBlocked) {
+    throw new Error(
+      'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
+    );
+  }
   const newAdmissionIdentity = options?.newJobAdmission && inputs.sourceType !== 'custom' ? dispatchIdentity : undefined;
   if (inputs.updateMode === 'sameApp') {
     const current = await getDatabase().jobs.getById(inputs.jobId);
