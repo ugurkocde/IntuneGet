@@ -279,6 +279,38 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
             sql('begin;' + correction.read_text() + 'commit;')
             assert value(refresh_security_query) == refresh_security
             checks.append({'name': 'Refresh migration LF/CRLF replay, changed-body/STRICT denials and security parity', 'verdict': 'PASS'})
+        for optimization in sorted((ROOT / 'supabase/migrations').glob('*_catalog_history_refresh_setbased.sql')):
+            pre_setbased_definition = value("select to_json(pg_get_functiondef('public.refresh_catalog_release_history_cache()'::regprocedure))")
+            assert 'width_bucket' in pre_setbased_definition
+            t0 = time.monotonic()
+            refresh()
+            pre_ms = round((time.monotonic() - t0) * 1000, 1)
+            expected_meta = value('select json_build_array(total,apps,months,coverage_start) from catalog_internal.catalog_release_history_meta where id=1')
+            expected_bounds = value('select json_agg(json_build_array(page_number,hi,lo,tie_skip) order by page_number) from catalog_internal.catalog_release_history_page_bounds')
+            migration_sql = optimization.read_text()
+            for newline_definition in [pre_setbased_definition, pre_setbased_definition.replace('\n', '\r\n')]:
+                sql('begin;' + newline_definition + ';' + migration_sql + 'rollback;')
+                assert value(refresh_security_query) == refresh_security
+            changed = pre_setbased_definition.replace('RETURN true;', 'RETURN false;')
+            denied = sql('begin;' + changed + ';' + migration_sql + 'rollback;', fail=True)
+            assert denied.returncode and 'Unexpected catalog history refresh predecessor' in denied.stderr
+            denied = sql('begin;alter function public.refresh_catalog_release_history_cache() strict;' + migration_sql + 'rollback;', fail=True)
+            assert denied.returncode and 'Unexpected catalog history refresh predecessor' in denied.stderr
+            sql('begin;' + migration_sql + 'commit;')
+            assert value(refresh_security_query) == refresh_security
+            post_setbased_definition = value("select to_json(pg_get_functiondef('public.refresh_catalog_release_history_cache()'::regprocedure))")
+            assert 'width_bucket' not in post_setbased_definition
+            sql('delete from catalog_internal.catalog_release_history_meta where id=1;')
+            t1 = time.monotonic()
+            refresh()
+            post_ms = round((time.monotonic() - t1) * 1000, 1)
+            actual_meta = value('select json_build_array(total,apps,months,coverage_start) from catalog_internal.catalog_release_history_meta where id=1')
+            actual_bounds = value('select json_agg(json_build_array(page_number,hi,lo,tie_skip) order by page_number) from catalog_internal.catalog_release_history_page_bounds')
+            assert actual_meta == expected_meta, ('Meta mismatch', actual_meta, expected_meta)
+            assert actual_bounds == expected_bounds, 'Page bounds mismatch against predecessor'
+            print(f'GREEN set-based refresh parity PASS (predecessor={pre_ms}ms, setbased={post_ms}ms, pages={len(actual_bounds)})', flush=True)
+            checks.append({'name': 'Set-based refresh migration parity, LF/CRLF replay, denials and security parity', 'verdict': 'PASS', 'predecessorMs': pre_ms, 'setbasedMs': post_ms, 'pages': len(actual_bounds)})
+            sql('delete from catalog_internal.catalog_release_history_meta where id=1;')
         # SIMULATED safeupdate boundary: local PG distributions need not ship the
         # extension. Reproduce its WHERE-clause rejection inside the executed
         # refresh, without claiming that this is a real extension runtime test.
@@ -363,6 +395,15 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         for page in [101, 150, 300, 1324, 1911]:
             parity(page)
         checks.append({'name': 'Clamped pages, timestamp ties, locale/orphan exclusions and wide dates', 'verdict': 'PASS'})
+        for case_name, case_rows in [
+            ('infinity_without_neg_infinity', "('Fixture.1','inf-only','infinity'),('Fixture.1','fin-1','2026-01-15+00')"),
+            ('neg_infinity_only', "('Fixture.1','ninf-only','-infinity')"),
+            ('same_page_ad_bc_era_span', "('Fixture.1','ad-jan','0001-01-15+00'),('Fixture.1','bc-dec','0001-12-01+00 BC'),('Fixture.1','bc-jan','0001-01-01+00 BC')"),
+        ]:
+            sql('truncate public.version_history;insert into public.version_history(winget_id,version,created_at) values' + case_rows + ';')
+            refresh()
+            parity(1)
+        checks.append({'name': 'Single-sided non-finite timestamps and same-page AD/BC era span parity', 'verdict': 'PASS'})
         restore()
         a = session()
         send(a, 'begin;select pg_current_xact_id()::text;')
