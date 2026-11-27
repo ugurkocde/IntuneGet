@@ -886,11 +886,7 @@ export class IntuneUploader {
               continue;
             }
             if (inFlightRenewal) {
-              try {
-                await inFlightRenewal;
-              } catch {
-                // Fall through to reactive renewal or error handling below.
-              }
+              await inFlightRenewal;
               if (tracked.generation !== currentGeneration) {
                 continue;
               }
@@ -925,11 +921,7 @@ export class IntuneUploader {
               continue;
             }
             if (inFlightRenewal) {
-              try {
-                await inFlightRenewal;
-              } catch {
-                // Fall through to reactive renewal or error handling below.
-              }
+              await inFlightRenewal;
               if (tracked.generation !== currentGeneration) {
                 continue;
               }

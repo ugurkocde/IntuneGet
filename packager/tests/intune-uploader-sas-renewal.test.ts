@@ -1011,6 +1011,8 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
 
     let releaseBlock1ToJoin!: () => void;
     const block1CanFailOnGen2 = new Promise<void>((r) => { releaseBlock1ToJoin = r; });
+    let block1ReturnedGen2!: () => void;
+    const block1Gen2Returned = new Promise<void>((r) => { block1ReturnedGen2 = r; });
     let releaseRenewal3!: () => void;
     const renewal3Gate = new Promise<void>((r) => { releaseRenewal3 = r; });
     let block0Gen2Arrived!: () => void;
@@ -1028,6 +1030,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
         // On GEN2, wait until block 0 has started in-flight renewal 3, then return 403 on GEN2
         if (url.includes('sig=JGEN2')) {
           await block1CanFailOnGen2;
+          block1ReturnedGen2();
           return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
         }
         if (url.includes('sig=JGEN3')) {
@@ -1073,7 +1076,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
       ) => Promise<void>;
     };
 
-    // Release renewal 3 shortly after block 1 sees the 403 and joins inFlightRenewal
+    // Release renewal 3 deterministically after block 1 returns 403 and joins inFlightRenewal
     const runPromise = uploader.uploadFileChunks(
       filePath,
       { azureStorageUri: uris[0], expiresAtMs: Date.now() + 10 * 60_000 },
@@ -1081,11 +1084,68 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
       undefined,
       { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0, maxRenewals: 5 }
     );
-    await block1CanFailOnGen2;
-    await new Promise((r) => setTimeout(r, 20));
+    await block1Gen2Returned;
+    await new Promise((r) => setImmediate(r));
     releaseRenewal3();
     await runPromise;
 
     expect(renewFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not invoke renewUri a second time when an in-flight reactive renewal rejects under concurrent 403s', async () => {
+    const filePath = createTempFile(32); // 2 x 16-byte chunks
+    let markBlock1InFetch!: () => void;
+    const block1InFetch = new Promise<void>((r) => { markBlock1InFetch = r; });
+    let releaseBlock1!: () => void;
+    const block1CanFail = new Promise<void>((r) => { releaseBlock1 = r; });
+    let block1Returned!: () => void;
+    const block1DidReturn = new Promise<void>((r) => { block1Returned = r; });
+    let rejectRenewal!: () => void;
+    const renewalGate = new Promise<void>((r) => { rejectRenewal = r; });
+
+    const blockId1 = encodeURIComponent(Buffer.from('000001').toString('base64'));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes(`blockid=${blockId1}`)) {
+        markBlock1InFetch();
+        await block1CanFail;
+        block1Returned();
+        return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+      }
+      // Wait until block 1 is already inside fetch with GEN0 so both workers
+      // hit the 403 reactive path concurrently and block 1 joins inFlightRenewal.
+      await block1InFetch;
+      return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+    });
+
+    const renewFn = vi.fn(async () => {
+      // Renewal is now inFlightRenewal; let block 1 fail with 403 and join it before rejecting
+      releaseBlock1();
+      await renewalGate;
+      throw new Error('Graph API POST failed: 503 - Service Unavailable');
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; retryBaseDelayMs?: number }
+      ) => Promise<void>;
+    };
+
+    const runPromise = uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: 'https://blob.example.test/c/b?sig=EXPIRED', expiresAtMs: Date.now() + 10 * 60_000 },
+      renewFn,
+      undefined,
+      { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0 }
+    );
+    await block1DidReturn;
+    await new Promise((r) => setImmediate(r));
+    rejectRenewal();
+
+    await expect(runPromise).rejects.toThrow('Graph API POST failed: 503 - Service Unavailable');
+    expect(renewFn).toHaveBeenCalledTimes(1);
   });
 });
