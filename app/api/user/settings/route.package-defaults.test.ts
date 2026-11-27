@@ -2,28 +2,50 @@ import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
-  const state: { stored: unknown; configured: boolean; lastUpsert: unknown } = {
-    stored: null,
+  const rows = new Map<string, unknown>();
+  const state: { stored: unknown; configured: boolean; lastUpsert: unknown; upsertOwners: string[] } = {
+    get stored() { return rows.get('user-a') ?? null; },
+    set stored(value: unknown) {
+      if (value === null) rows.delete('user-a');
+      else rows.set('user-a', value);
+    },
     configured: true,
     lastUpsert: null,
+    upsertOwners: [],
   };
   const client = {
-    from() {
+    from(table: string) {
+      if (table !== 'user_settings') throw new Error('Unexpected table');
+      let owner: string | undefined;
+      let writtenOwner: string | undefined;
       const builder: Record<string, unknown> = {
         select: () => builder,
-        eq: () => builder,
-        maybeSingle: () => Promise.resolve({ data: state.stored === null ? null : { settings: state.stored }, error: null }),
-        upsert: (row: { settings: unknown }) => {
-          state.lastUpsert = row.settings;
-          state.stored = row.settings;
+        eq: (column: string, value: string) => {
+          if (column !== 'user_id') throw new Error('Unexpected ownership filter');
+          owner = value;
           return builder;
         },
-        single: () => Promise.resolve({ data: { settings: state.stored }, error: null }),
+        maybeSingle: () => {
+          const matches = owner === undefined
+            ? [...rows.values()]
+            : rows.has(owner) ? [rows.get(owner)] : [];
+          if (matches.length > 1) return Promise.resolve({ data: null, error: { code: 'PGRST116' } });
+          return Promise.resolve({ data: matches.length ? { settings: matches[0] } : null, error: null });
+        },
+        upsert: (row: { user_id: string; settings: unknown }, options: { onConflict: string }) => {
+          if (typeof row.user_id !== 'string' || options.onConflict !== 'user_id') throw new Error('Missing upsert owner');
+          state.lastUpsert = row.settings;
+          state.upsertOwners.push(row.user_id);
+          writtenOwner = row.user_id;
+          rows.set(row.user_id, row.settings);
+          return builder;
+        },
+        single: () => Promise.resolve({ data: { settings: rows.get(writtenOwner!) }, error: null }),
       };
       return builder;
     },
   };
-  return { state, client };
+  return { state, client, rows };
 });
 
 vi.mock('@/lib/supabase', () => ({
@@ -31,20 +53,24 @@ vi.mock('@/lib/supabase', () => ({
   isSupabaseServerConfigured: () => h.state.configured,
 }));
 vi.mock('@/lib/auth-utils', () => ({
-  parseAccessToken: async (header: string | null) => (header ? { userId: 'user-a' } : null),
+  parseAccessToken: async (header: string | null) => {
+    if (header === 'Bearer t' || header === 'Bearer user-a') return { userId: 'user-a' };
+    if (header === 'Bearer user-b') return { userId: 'user-b' };
+    return null;
+  },
 }));
 
 import { GET, PATCH } from './route';
 
-function patch(body: unknown) {
+function patch(body: unknown, token = 't') {
   return PATCH(new NextRequest('http://localhost/api/user/settings', {
     method: 'PATCH',
-    headers: { Authorization: 'Bearer t', 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }));
 }
-function get() {
-  return GET(new NextRequest('http://localhost/api/user/settings', { headers: { Authorization: 'Bearer t' } }));
+function get(token = 't') {
+  return GET(new NextRequest('http://localhost/api/user/settings', { headers: { Authorization: `Bearer ${token}` } }));
 }
 
 const forbidden = {
@@ -56,12 +82,43 @@ const forbidden = {
 };
 
 beforeEach(() => {
+  h.rows.clear();
   h.state.stored = null;
   h.state.configured = true;
   h.state.lastUpsert = null;
+  h.state.upsertOwners = [];
 });
 
 describe('package defaults in user settings', () => {
+  it('isolates GET and PATCH by authenticated user when selected tenants change', async () => {
+    h.rows.set('user-a', { selectedTenantId: 'tenant-a', packageDefaults: { brandingCompanyName: 'Company A' } });
+    h.rows.set('user-b', { selectedTenantId: 'tenant-b', packageDefaults: { brandingCompanyName: 'Company B' } });
+    expect((await (await get('user-a')).json()).settings.packageDefaults.brandingCompanyName).toBe('Company A');
+    expect((await (await get('user-b')).json()).settings.packageDefaults.brandingCompanyName).toBe('Company B');
+
+    const beforeB = structuredClone(h.rows.get('user-b'));
+    const responseA = await patch({ selectedTenantId: 'tenant-b', user_id: 'user-b', packageDefaults: { brandingCompanyName: 'Updated A' } }, 'user-a');
+    expect(responseA.status).toBe(200);
+    expect(h.rows.get('user-a')).toMatchObject({ selectedTenantId: 'tenant-b', packageDefaults: { brandingCompanyName: 'Updated A' } });
+    expect(h.rows.get('user-b')).toEqual(beforeB);
+    expect((await (await get('user-a')).json()).settings.packageDefaults.brandingCompanyName).toBe('Updated A');
+    expect((await (await get('user-b')).json()).settings.packageDefaults.brandingCompanyName).toBe('Company B');
+
+    const beforeA = structuredClone(h.rows.get('user-a'));
+    const responseB = await patch({ selectedTenantId: 'tenant-a', user_id: 'user-a', packageDefaults: { brandingCompanyName: 'Updated B' } }, 'user-b');
+    expect(responseB.status).toBe(200);
+    expect(h.rows.get('user-b')).toMatchObject({ selectedTenantId: 'tenant-a', packageDefaults: { brandingCompanyName: 'Updated B' } });
+    expect(h.rows.get('user-a')).toEqual(beforeA);
+    expect((await (await get('user-a')).json()).settings.packageDefaults.brandingCompanyName).toBe('Updated A');
+    expect((await (await get('user-b')).json()).settings.packageDefaults.brandingCompanyName).toBe('Updated B');
+
+    expect((await patch({ packageDefaults: null }, 'user-a')).status).toBe(200);
+    expect((await (await get('user-a')).json()).settings.packageDefaults).toBeNull();
+    expect((await (await get('user-b')).json()).settings.packageDefaults.brandingCompanyName).toBe('Updated B');
+    expect(h.state.upsertOwners).toEqual(['user-a', 'user-b', 'user-a']);
+    expect([...h.rows.keys()].sort()).toEqual(['user-a', 'user-b']);
+  });
+
   it.each(['x', 1, true])('rejects scalar defaults %s even alongside a valid setting', async (value) => {
     for (const body of [{ packageDefaults: value }, { theme: 'dark', packageDefaults: value }]) {
       expect((await patch(body)).status).toBe(400);
