@@ -544,6 +544,16 @@ def contracts():
     sql(migration('20261112153855_qa_vt_admission_prefilters'))
     sql(prefilters)
     print('PASS admission prefilters: original predicate-call regression fails, identical customer-first batches drain 100/100/99/0 without decoy calls or budget reset')
+    antijoin = (ROOT/'supabase/tests/qa_vt_admission_antijoin_fence.sql').read_text()
+    before_antijoin = sql(antijoin, check=False)
+    assert before_antijoin.returncode != 0 and 'Already-admitted rows reached opaque identity predicate' in before_antijoin.stderr, before_antijoin.stderr
+    sql(migration('20261127171800_qa_vt_admission_antijoin_fence'))
+    sql(antijoin)
+    sql(prefilters)
+    assert value("select has_function_privilege('anon','public.admit_qa_vt_terminal_metadata_rechecks(text)','EXECUTE')") is True
+    assert value("select has_function_privilege('authenticated','public.admit_qa_vt_terminal_metadata_rechecks(text)','EXECUTE')") is False
+    assert value("select has_function_privilege('service_role','public.admit_qa_vt_terminal_metadata_rechecks(text)','EXECUTE')") is True
+    print('PASS admission antijoin fence: already-admitted rows skip opaque identity predicate, partial index used, parity and ACLs preserved')
     print("LIMIT: CI cannot observe unmetered production callers; fresh live S3 caller-drain proof remains required.")
 
 
