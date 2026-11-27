@@ -313,12 +313,41 @@ it.each(['success', 'immediate', 'failure'] as const)('refreshes an idle 31-minu
     const settled=await results;
     await Promise.all(stores.flatMap(store=>Object.values(store.pendingRevalidates)));
     for(const result of settled){
-      if(outcome==='failure')expect(result).toMatchObject({status:'rejected',reason:failure});
+      if(outcome==='failure')expect(result).toMatchObject({status:'fulfilled',value:original});
       else expect(result).toMatchObject({status:'fulfilled',value:{...fresh,loadedAt:Date.now()}});
     }
     expect(load).toHaveBeenCalledTimes(1);
     if(outcome==='failure')expect(cache.set).not.toHaveBeenCalled();
   } finally {release();await results;await Promise.all(stores.flatMap(store=>Object.values(store.pendingRevalidates)));vi.useRealTimers();}
+});
+
+it('returns a persisted unchanged body when a new loader cannot refresh it', async () => {
+  vi.useFakeTimers();
+  const { createHistoryLoader, HISTORY_RETAINED_MAX_AGE_MS } = await import('./release-history-cache');
+  const loadedAt = Date.now() - HISTORY_RETAINED_MAX_AGE_MS;
+  const cachedBody = {
+    rows: [{ winget_id: 'Fixture.Stable', name: 'Stable', publisher: null, version: '1', previous_version: null, detected_at: '2026-11-01T00:00:00Z', release_date: null }],
+    total: 1, apps: 1, firstTracked: 0, months: ['2026-11'], coverageStart: '2026-11-01T00:00:00Z',
+    sync: { status: 'success', completedAt: '2026-11-01T00:00:00Z', lastSuccessfulAt: '2026-11-01T00:00:00Z' },
+    loadedAt,
+  };
+  const cache = {
+    generateSimpleCacheKey: async (key: string) => key,
+    get: vi.fn(async () => ({ isStale: true, value: { kind: 'FETCH', data: { body: JSON.stringify(cachedBody) } } })),
+    set: vi.fn(async () => {}),
+  };
+  vi.stubGlobal('__incrementalCache', cache);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const load = vi.fn(async () => { throw new Error('upstream unavailable'); });
+  const callback = createHistoryLoader(load);
+  const store = { nextFetchId: 1, route: '/apps/releases', pendingRevalidates: {}, isStaticGeneration: false };
+  try {
+    const value = await workAsyncStorage.run(store as never, () => callback({ query: '', month: '', kind: 'all', page: 1 }));
+    await Promise.allSettled(Object.values(store.pendingRevalidates));
+    expect(value).toEqual(cachedBody);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(cache.set).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
 });
 
 it('does not rewrite the cache timestamp when a refresh returns the same catalog payload', async () => {

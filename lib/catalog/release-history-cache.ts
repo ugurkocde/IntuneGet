@@ -145,8 +145,20 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
         && fresh.refreshFailedAt === undefined
         && historyContentKey(fresh) === historyContentKey(result);
       if (!confirmed) {
-        result = fresh && usable(fresh, now) && fresh.loadedAt! > result.loadedAt
-          ? fresh : await refresh(filters);
+        const persisted = result;
+        if (fresh && usable(fresh, now) && fresh.loadedAt! > persisted.loadedAt!) {
+          result = fresh;
+        } else {
+          try {
+            result = await refresh(filters);
+          } catch {
+            // loadedAt stays at the last real change so an unchanged refresh does
+            // not rewrite the data cache. A new loader has no in-memory
+            // confirmation, so this successful body looks idle. Keep serving it
+            // when the source refresh fails instead of failing the read.
+            result = persisted;
+          }
+        }
       }
     }
     if (result.refreshFailedAt !== undefined && !usable(result, Date.now())) {
