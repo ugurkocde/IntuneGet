@@ -28,9 +28,29 @@ export function createHistoryCacheLoader(load: HistoryLoader): HistoryLoader {
   };
 }
 
+/** Catalog payload only. loadedAt and refreshFailedAt are cache bookkeeping. */
+function historyContentKey(value: ReleaseHistoryResult): string {
+  const { loadedAt: _loadedAt, refreshFailedAt: _refreshFailedAt, ...content } = value;
+  return stableStringify(content);
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().flatMap((key) => {
+    if (record[key] === undefined) return [];
+    return `${JSON.stringify(key)}:${stableStringify(record[key])}`;
+  }).join(',')}}`;
+}
+
 export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
   const retained = new Map<string, ReleaseHistoryResult>();
   const pending = new Map<string, Promise<ReleaseHistoryResult>>();
+  // When a refresh confirms the same catalog payload, loadedAt stays put so the
+  // data cache body does not change. This map records that confirmation so the
+  // 30-minute source-age guard does not refetch on every later request.
+  const confirmedAt = new Map<string, number>();
   let nextFailureWarningAt = -Infinity;
   const admit = createHistoryCacheLoader(load);
   const keyOf = (f: ReleaseHistoryFilters) => JSON.stringify([
@@ -45,7 +65,11 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
       && current.loadedAt > result.loadedAt) return;
     retained.delete(key);
     retained.set(key, result);
-    if (retained.size > RETAINED_KEYS) retained.delete(retained.keys().next().value!);
+    if (retained.size > RETAINED_KEYS) {
+      const oldest = retained.keys().next().value!;
+      retained.delete(oldest);
+      confirmedAt.delete(oldest);
+    }
   };
   // Both Next's background refresh and an expired idle-key foreground read
   // join the same source operation. Store before invoking the source.
@@ -56,7 +80,20 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
     const operation = Promise.resolve().then(async () => {
     try {
       const result = await admit(filters);
-      const fresh = { ...result, loadedAt: Date.now(), refreshFailedAt: undefined };
+      const previous = retained.get(key);
+      // Identical catalog data keeps the stored timestamp. A new loadedAt on
+      // every 5-minute refresh rewrote the data cache and billed an ISR write.
+      let loadedAt = Date.now();
+      if (
+        previous !== undefined
+        && previous.refreshFailedAt === undefined
+        && typeof previous.loadedAt === 'number'
+        && historyContentKey(previous) === historyContentKey(result)
+      ) {
+        loadedAt = previous.loadedAt;
+      }
+      const fresh = { ...result, loadedAt, refreshFailedAt: undefined };
+      confirmedAt.set(key, Date.now());
       remember(key, fresh);
       return fresh;
     } catch (error) {
@@ -97,9 +134,32 @@ export function createHistoryLoader(load: HistoryLoader): HistoryLoader {
       // An unmarked idle cache entry is not proof that its source is failing.
       // A fast background refresh may already have settled before cached()
       // returns its stale value; reuse that observation rather than reload.
+      // A recent confirmation of this same payload is enough: its loadedAt
+      // intentionally stays old so the stored cache body does not change.
+      const now = Date.now();
       const fresh = retained.get(key);
-      result = fresh && usable(fresh, Date.now()) && fresh.loadedAt! > result.loadedAt
-        ? fresh : await refresh(filters);
+      const seen = confirmedAt.get(key);
+      const confirmed = typeof seen === 'number' && Number.isFinite(seen) && now >= seen
+        && now - seen < HISTORY_RETAINED_MAX_AGE_MS
+        && fresh !== undefined
+        && fresh.refreshFailedAt === undefined
+        && historyContentKey(fresh) === historyContentKey(result);
+      if (!confirmed) {
+        const persisted = result;
+        if (fresh && usable(fresh, now) && fresh.loadedAt! > persisted.loadedAt!) {
+          result = fresh;
+        } else {
+          try {
+            result = await refresh(filters);
+          } catch {
+            // loadedAt stays at the last real change so an unchanged refresh does
+            // not rewrite the data cache. A new loader has no in-memory
+            // confirmation, so this successful body looks idle. Keep serving it
+            // when the source refresh fails instead of failing the read.
+            result = persisted;
+          }
+        }
+      }
     }
     if (result.refreshFailedAt !== undefined && !usable(result, Date.now())) {
       throw new Error('Catalog history retained result expired');
