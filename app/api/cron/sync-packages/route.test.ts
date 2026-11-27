@@ -86,22 +86,83 @@ describe('conditional hourly package sync', () => {
     expect(timeout).toHaveBeenCalledWith(1000);
   });
 
-  it('refreshes history metadata after syncing without changing sync results', async () => {
+  it('refreshes history metadata with a 10s client budget without changing sync results', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(34_000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
     expect((await GET(request())).status).toBe(200);
     expect(mocks.rpc).toHaveBeenCalledWith('refresh_catalog_release_history_cache');
+    expect(timeout).toHaveBeenCalledWith(10_000);
     expect(mocks.cacheRefresh).toHaveBeenCalledWith(expect.any(AbortSignal));
   });
 
-  it('keeps sync success when the optional metadata refresh returns an error', async () => {
-    mocks.cacheRefresh.mockResolvedValue({ data: null, error: { message: 'synthetic unavailable' } });
+  it('logs redacted SQLSTATE and timing when metadata refresh returns an RPC error without changing sync success', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(1_000).mockReturnValueOnce(1_000).mockReturnValue(9_012);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.cacheRefresh.mockResolvedValue({
+      data: null,
+      error: { code: '57014', message: 'canceling statement due to statement timeout secret=tenant-123' },
+    });
     expect((await GET(request())).status).toBe(200);
     expect(mocks.cacheRefresh).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('Catalog history metadata refresh deferred', {
+      elapsedMs: 8012,
+      budgetMs: 10_000,
+      outcome: 'rpc_error',
+      code: '57014',
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('tenant-123');
   });
 
-  it('keeps sync success when the optional metadata refresh throws', async () => {
-    mocks.cacheRefresh.mockRejectedValue(new Error('synthetic network failure'));
+  it('drops unsafe RPC error codes when logging metadata refresh deferral', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.cacheRefresh.mockResolvedValue({
+      data: null,
+      error: { code: 'bad code with spaces!', message: 'synthetic unavailable' },
+    });
+    expect((await GET(request())).status).toBe(200);
+    expect(warn).toHaveBeenCalledWith('Catalog history metadata refresh deferred', expect.objectContaining({
+      outcome: 'rpc_error',
+      code: null,
+    }));
+  });
+
+  it('classifies an aborted client timeout returned as an SDK error without leaking message text', async () => {
+    const controller = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.cacheRefresh.mockImplementation(async () => {
+      controller.abort(new DOMException('timed out', 'TimeoutError'));
+      return { data: null, error: { code: '20', message: 'AbortError: signal timed out' } };
+    });
+    expect((await GET(request())).status).toBe(200);
+    expect(warn).toHaveBeenCalledWith('Catalog history metadata refresh deferred', expect.objectContaining({
+      budgetMs: 10_000,
+      outcome: 'timeout',
+      code: null,
+    }));
+  });
+
+  it('keeps sync success and logs redacted outcome when the optional metadata refresh throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.cacheRefresh.mockRejectedValue(new Error('synthetic network failure token=abc'));
     expect((await GET(request())).status).toBe(200);
     expect(mocks.cacheRefresh).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('Catalog history metadata refresh deferred', expect.objectContaining({
+      budgetMs: 10_000,
+      outcome: 'error',
+      code: null,
+    }));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('token=abc');
+  });
+
+  it('classifies a thrown TimeoutError as timeout deferral', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.cacheRefresh.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+    expect((await GET(request())).status).toBe(200);
+    expect(warn).toHaveBeenCalledWith('Catalog history metadata refresh deferred', expect.objectContaining({
+      outcome: 'timeout',
+      code: null,
+    }));
   });
 
   it('tries metadata refresh after a partial write failure without hiding that failure', async () => {
