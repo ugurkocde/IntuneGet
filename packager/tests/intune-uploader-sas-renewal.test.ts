@@ -451,8 +451,10 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
     expect(attempts).toBe(3);
     expect(renewFn).not.toHaveBeenCalled();
 
-    // Verify permanent failure error message does not contain the SAS token
-    const failingFetch = vi.fn(async () => makeResponse(400, 'InvalidBlockId'));
+    // Verify permanent failure error message redacts the SAS token even when the URL appears in statusText
+    const failingFetch = vi.fn(async (url: string) =>
+      makeResponse(400, `InvalidBlockId for ${url}`)
+    );
     const failingUploader = new IntuneUploader(makeConfig(failingFetch)) as unknown as typeof uploader;
     await expect(
       failingUploader.uploadFileChunks(
@@ -462,7 +464,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
         undefined,
         { chunkSize: 16, concurrency: 1, retryBaseDelayMs: 0 }
       )
-    ).rejects.toThrow(/Failed to upload block 0/);
+    ).rejects.toThrow(/Failed to upload block 0.*https:\/\/blob\.example\.test\/c\/b\?\[redacted\]/);
     try {
       await failingUploader.uploadFileChunks(
         filePath,
@@ -472,6 +474,7 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
         { chunkSize: 16, concurrency: 1, retryBaseDelayMs: 0 }
       );
     } catch (err) {
+      expect(String(err)).toContain('https://blob.example.test/c/b?[redacted]');
       expect(String(err)).not.toContain('SUPER_SECRET_TOKEN_VALUE');
     }
   });
@@ -959,6 +962,129 @@ describe('IntuneUploader SAS token renewal and block upload resilience (#2142)',
       undefined,
       { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0, maxRenewals: 4 }
     );
+
+    expect(renewFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('continues using an unexpired SAS and backs off when proactive renewal fails transiently', async () => {
+    const filePath = createTempFile(32); // 2 x 16-byte chunks
+    const baseNow = Date.parse('2026-11-27T16:00:00.000Z');
+    const currentUri = 'https://blob.example.test/c/b?sig=STILL_VALID';
+    const fetchMock = vi.fn(async () => makeResponse(201, 'Created'));
+    const renewFn = vi.fn(async () => {
+      throw new Error('Graph API POST failed: 503 - Service Unavailable');
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; now?: () => number; retryBaseDelayMs?: number }
+      ) => Promise<void>;
+    };
+
+    // 90s remaining: within 2-minute proactive buffer, but not yet expired
+    await uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: currentUri, expiresAtMs: baseNow + 90_000 },
+      renewFn,
+      undefined,
+      { chunkSize: 16, concurrency: 1, now: () => baseNow, retryBaseDelayMs: 0 }
+    );
+
+    // Proactive renewal attempted once, backed off for subsequent blocks/commit, upload succeeded on current SAS
+    expect(renewFn).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // 2 blocks + blocklist commit
+  });
+
+  it('joins an in-flight renewal on 403 even when authRenewalAttempt budget was already used', async () => {
+    const filePath = createTempFile(32); // 2 x 16-byte chunks
+    const uris = [
+      'https://blob.example.test/c/b?sig=JGEN0',
+      'https://blob.example.test/c/b?sig=JGEN1',
+      'https://blob.example.test/c/b?sig=JGEN2',
+      'https://blob.example.test/c/b?sig=JGEN3',
+    ];
+    let renewIdx = 0;
+
+    let releaseBlock1ToJoin!: () => void;
+    const block1CanFailOnGen2 = new Promise<void>((r) => { releaseBlock1ToJoin = r; });
+    let releaseRenewal3!: () => void;
+    const renewal3Gate = new Promise<void>((r) => { releaseRenewal3 = r; });
+    let block0Gen2Arrived!: () => void;
+    const block0Gen2Ready = new Promise<void>((r) => { block0Gen2Arrived = r; });
+
+    const blockId0 = encodeURIComponent(Buffer.from('000000').toString('base64'));
+    const blockId1 = encodeURIComponent(Buffer.from('000001').toString('base64'));
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes(`blockid=${blockId1}`)) {
+        // Block 1 triggers two genuine renewals (spends authRenewalAttempt = 1 and 2)
+        if (url.includes('sig=JGEN0') || url.includes('sig=JGEN1')) {
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        // On GEN2, wait until block 0 has started in-flight renewal 3, then return 403 on GEN2
+        if (url.includes('sig=JGEN2')) {
+          await block1CanFailOnGen2;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=JGEN3')) {
+          return makeResponse(201, 'Created');
+        }
+      }
+      if (url.includes(`blockid=${blockId0}`)) {
+        if (url.includes('sig=JGEN0') || url.includes('sig=JGEN1')) {
+          // Wait until block 1 moves past GEN0/GEN1 by returning 403 only after GEN2
+          await block0Gen2Ready;
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=JGEN2')) {
+          return makeResponse(403, 'AuthenticationFailed', 'AuthenticationFailed');
+        }
+        if (url.includes('sig=JGEN3')) {
+          return makeResponse(201, 'Created');
+        }
+      }
+      return makeResponse(201, 'Created');
+    });
+
+    const renewFn = vi.fn(async () => {
+      renewIdx++;
+      if (renewIdx === 2) {
+        block0Gen2Arrived();
+      }
+      if (renewIdx === 3) {
+        // Renewal 3 is now inFlightRenewal while currentGeneration is still 2
+        releaseBlock1ToJoin();
+        await renewal3Gate;
+      }
+      return { azureStorageUri: uris[renewIdx], expiresAtMs: Date.now() + 20 * 60_000 };
+    });
+
+    const uploader = new IntuneUploader(makeConfig(fetchMock)) as unknown as {
+      uploadFileChunks: (
+        filePath: string,
+        session: { azureStorageUri: string; expiresAtMs?: number },
+        renewUri: (prev: { azureStorageUri: string; expiresAtMs?: number }) => Promise<{ azureStorageUri: string; expiresAtMs?: number }>,
+        onProgress?: (percent: number) => Promise<void>,
+        options?: { chunkSize?: number; concurrency?: number; retryBaseDelayMs?: number; maxRenewals?: number }
+      ) => Promise<void>;
+    };
+
+    // Release renewal 3 shortly after block 1 sees the 403 and joins inFlightRenewal
+    const runPromise = uploader.uploadFileChunks(
+      filePath,
+      { azureStorageUri: uris[0], expiresAtMs: Date.now() + 10 * 60_000 },
+      renewFn,
+      undefined,
+      { chunkSize: 16, concurrency: 2, retryBaseDelayMs: 0, maxRenewals: 5 }
+    );
+    await block1CanFailOnGen2;
+    await new Promise((r) => setTimeout(r, 20));
+    releaseRenewal3();
+    await runPromise;
 
     expect(renewFn).toHaveBeenCalledTimes(3);
   });

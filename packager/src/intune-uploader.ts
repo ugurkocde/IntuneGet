@@ -53,6 +53,7 @@ const DEFAULT_UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024; // 6 MiB chunks
 const DEFAULT_UPLOAD_CONCURRENCY = 4;
 const SAS_RENEWAL_BUFFER_MS = 2 * 60 * 1000; // Renew 2 minutes before SAS expiry
 const SAS_FALLBACK_LIFETIME_MS = 7 * 60 * 1000; // Fallback renewal interval when expiry timestamp is absent
+const PROACTIVE_RENEWAL_BACKOFF_MS = 30 * 1000; // Back off proactive retries while current SAS is still unexpired
 const MAX_SAS_RENEWALS = 30;
 const MAX_BLOCK_RETRIES = 3;
 const DEFAULT_RETRY_BASE_DELAY_MS = 1000;
@@ -780,10 +781,14 @@ export class IntuneUploader {
       let currentSession: AzureStorageUploadSession = { ...initialSession };
       let currentGeneration = 0;
       let acquiredAtMs = now();
+      let proactiveBackoffUntilMs = 0;
       let renewalCount = 0;
       let inFlightRenewal: Promise<TrackedUploadSession> | null = null;
 
       const isExpiringSoon = (): boolean => {
+        if (now() < proactiveBackoffUntilMs) {
+          return false;
+        }
         if (currentSession.expiresAtMs !== undefined) {
           return now() >= currentSession.expiresAtMs - SAS_RENEWAL_BUFFER_MS;
         }
@@ -804,14 +809,29 @@ export class IntuneUploader {
           throw new Error(`Exceeded maximum Azure Storage SAS URI renewals (${maxRenewals})`);
         }
 
+        const isProactive = failedGeneration === undefined;
         const previousSession = currentSession;
         inFlightRenewal = (async () => {
-          const renewed = await renewUri(previousSession);
-          renewalCount++;
-          currentGeneration++;
-          currentSession = renewed;
-          acquiredAtMs = now();
-          return { session: currentSession, generation: currentGeneration };
+          try {
+            const renewed = await renewUri(previousSession);
+            renewalCount++;
+            currentGeneration++;
+            currentSession = renewed;
+            acquiredAtMs = now();
+            proactiveBackoffUntilMs = 0;
+            return { session: currentSession, generation: currentGeneration };
+          } catch (error) {
+            if (
+              isProactive &&
+              currentSession.expiresAtMs !== undefined &&
+              now() < currentSession.expiresAtMs
+            ) {
+              proactiveBackoffUntilMs = now() + PROACTIVE_RENEWAL_BACKOFF_MS;
+              this.logger.warn('Proactive Azure Storage SAS URI renewal failed; continuing with unexpired SAS');
+              return { session: currentSession, generation: currentGeneration };
+            }
+            throw error;
+          }
         })().finally(() => {
           inFlightRenewal = null;
         });
@@ -865,6 +885,16 @@ export class IntuneUploader {
               // Response came from a superseded SAS session; retry with the installed session.
               continue;
             }
+            if (inFlightRenewal) {
+              try {
+                await inFlightRenewal;
+              } catch {
+                // Fall through to reactive renewal or error handling below.
+              }
+              if (tracked.generation !== currentGeneration) {
+                continue;
+              }
+            }
             if (authRenewalAttempt < 2) {
               authRenewalAttempt++;
               await ensureFreshSession(tracked.generation);
@@ -893,6 +923,16 @@ export class IntuneUploader {
             if (tracked.generation !== currentGeneration) {
               // Response came from a superseded SAS session; retry with the installed session.
               continue;
+            }
+            if (inFlightRenewal) {
+              try {
+                await inFlightRenewal;
+              } catch {
+                // Fall through to reactive renewal or error handling below.
+              }
+              if (tracked.generation !== currentGeneration) {
+                continue;
+              }
             }
             if (authRenewalAttempt < 2) {
               authRenewalAttempt++;
