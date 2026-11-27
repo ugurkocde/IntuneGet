@@ -3,6 +3,7 @@ import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
 import { buildQaPackageIdentityFromWorkflowInput } from '@/lib/qa/package-profile';
 import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import { storedJobItem, buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
+import { isHostedAllowAvailableUninstallEnabled } from '@/lib/allow-available-uninstall';
 import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
@@ -652,6 +653,46 @@ export async function GET(request: Request) {
       }).eq('id', job.id).eq('status', 'awaiting_qa');
       if (holdError) throw new Error('Could not schedule approval verification retry');
       held++;
+      continue;
+    }
+
+    if (
+      !features.localPackager &&
+      item.updateMode !== 'sameApp' &&
+      item.allowAvailableUninstall === true &&
+      !isHostedAllowAvailableUninstallEnabled()
+    ) {
+      const message =
+        'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.';
+      const { data: unsupportedJob, error: unsupportedError } = await guardObservedIdentity(
+        supabase
+          .from('packaging_jobs')
+          .update({
+            status: 'failed',
+            status_message: message,
+            error_message: message,
+            error_code: 'ALLOW_AVAILABLE_UNINSTALL_UNSUPPORTED_HOSTED',
+            error_stage: 'validation',
+            error_category: 'validation',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id)
+          .eq('status', 'awaiting_qa')
+          .is('callback_run_id', null)
+          .is('github_run_id', null)
+          .is('cancelled_at', null)
+          .is('archived_at', null),
+        true
+      )
+        .select('id')
+        .maybeSingle();
+      if (unsupportedError) {
+        waitingIds.push(job.id);
+        waiting++;
+      } else if (unsupportedJob) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', message);
+      }
       continue;
     }
 

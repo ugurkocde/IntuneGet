@@ -246,7 +246,10 @@ export async function PATCH(
         .limit(1)
         .maybeSingle();
 
+      let savedJobRow: { id: string; updated_at?: string | null } | null = null;
+      let previousJobConfig: Json | null = null;
       if (latestJob?.package_config && typeof latestJob.package_config === 'object' && !Array.isArray(latestJob.package_config)) {
+        previousJobConfig = latestJob.package_config;
         const updatedConfig: Record<string, Json | undefined> = {
           ...(latestJob.package_config as Record<string, Json | undefined>),
         };
@@ -271,7 +274,7 @@ export async function PATCH(
           .eq('winget_id', wingetId)
           .eq('intune_app_id', intuneAppId)
           .eq('status', 'deployed')
-          .select('id')
+          .select('id, updated_at')
           .maybeSingle();
         if (saveError || !saved) {
           return NextResponse.json(
@@ -279,6 +282,7 @@ export async function PATCH(
             { status: 409 }
           );
         }
+        savedJobRow = saved;
       } else {
         return NextResponse.json(
           { error: 'Intune settings were updated, but no matching deployment configuration was available to save. Refresh before trying again.' },
@@ -287,17 +291,42 @@ export async function PATCH(
       }
 
       if (validatedAllowAvailableUninstall !== undefined) {
+        const rollbackJobConfig = async (): Promise<boolean> => {
+          if (!savedJobRow || !previousJobConfig) return false;
+          let rollbackQuery = supabase
+            .from('packaging_jobs')
+            .update({ package_config: previousJobConfig })
+            .eq('id', savedJobRow.id)
+            .eq('user_id', user.userId)
+            .eq('tenant_id', tenantId)
+            .eq('winget_id', wingetId)
+            .eq('intune_app_id', intuneAppId)
+            .eq('status', 'deployed');
+          if (savedJobRow.updated_at) {
+            rollbackQuery = rollbackQuery.eq('updated_at', savedJobRow.updated_at);
+          }
+          const { data: rolledBack, error: rollbackError } = await rollbackQuery
+            .select('id')
+            .maybeSingle();
+          return !rollbackError && Boolean(rolledBack);
+        };
+
         phase = 'policy-sync';
         const { data: policyRow, error: policyReadError } = await supabase
           .from('app_update_policies')
-          .select('id, deployment_config')
+          .select('id, deployment_config, updated_at')
           .eq('user_id', user.userId)
           .eq('tenant_id', tenantId)
           .eq('winget_id', wingetId)
           .maybeSingle();
         if (policyReadError) {
+          const jobRolledBack = await rollbackJobConfig();
           return NextResponse.json(
-            { error: 'Intune settings were updated, but the auto-update policy configuration could not be read. Refresh before trying again.' },
+            {
+              error: 'Intune settings were updated, but the auto-update policy still holds the previous value because it could not be read. Refresh and retry before the next auto-update.',
+              policySyncStale: true,
+              jobRolledBack,
+            },
             { status: 409 }
           );
         }
@@ -306,16 +335,25 @@ export async function PATCH(
             ...(policyRow.deployment_config as Record<string, Json | undefined>),
             allowAvailableUninstall: validatedAllowAvailableUninstall,
           };
-          const { data: savedPolicy, error: policyUpdateError } = await supabase
+          let policyUpdateQuery = supabase
             .from('app_update_policies')
             .update({ deployment_config: nextPolicyConfig, updated_at: new Date().toISOString() })
             .eq('id', policyRow.id)
-            .eq('user_id', user.userId)
+            .eq('user_id', user.userId);
+          if (policyRow.updated_at != null) {
+            policyUpdateQuery = policyUpdateQuery.eq('updated_at', policyRow.updated_at);
+          }
+          const { data: savedPolicy, error: policyUpdateError } = await policyUpdateQuery
             .select('id')
             .maybeSingle();
           if (policyUpdateError || !savedPolicy) {
+            const jobRolledBack = await rollbackJobConfig();
             return NextResponse.json(
-              { error: 'Intune settings were updated, but the auto-update policy configuration could not be saved. Refresh before trying again.' },
+              {
+                error: 'Intune settings were updated, but the auto-update policy still holds the previous value and could not be synchronized. Refresh and retry before the next auto-update.',
+                policySyncStale: true,
+                jobRolledBack,
+              },
               { status: 409 }
             );
           }

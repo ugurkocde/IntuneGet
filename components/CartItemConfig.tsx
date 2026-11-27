@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowUpCircle,
   X,
@@ -1725,28 +1725,40 @@ interface ToggleOptionProps {
 }
 
 function ToggleOption({ label, description, checked, onChange }: ToggleOptionProps) {
+  const switchId = useId();
+  const labelId = `${switchId}-label`;
+  const descriptionId = `${switchId}-description`;
   return (
-    <label className="flex items-start gap-3 cursor-pointer">
+    <div className="flex items-start gap-3">
       <div className="pt-0.5">
-        <div
+        <button
+          id={switchId}
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-labelledby={labelId}
+          aria-describedby={descriptionId}
+          onClick={() => onChange(!checked)}
           className={cn(
-            'w-10 h-6 rounded-full transition-colors relative',
+            'w-10 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70',
             checked ? 'bg-blue-600' : 'bg-overlay/15'
           )}
-          onClick={() => onChange(!checked)}
         >
-          <div
+          <span
+            aria-hidden="true"
             className={cn(
-              'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
+              'block absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
               checked ? 'translate-x-5' : 'translate-x-1'
             )}
           />
-        </div>
+        </button>
       </div>
       <div>
-        <span className="text-text-primary text-sm font-medium">{label}</span>
-        <p className="text-text-muted text-xs">{description}</p>
+        <label htmlFor={switchId} id={labelId} className="text-text-primary text-sm font-medium cursor-pointer">
+          {label}
+        </label>
+        <p id={descriptionId} className="text-text-muted text-xs">{description}</p>
       </div>
-    </label>
+    </div>
   );
 }

@@ -460,7 +460,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const configSnapshot = JSON.stringify({
     storeInstallExperience, selectedVersion, selectedArch, selectedScope,
-    selectedLocale, config, description, assignments, categories,
+    selectedLocale, config, description, assignments, allowAvailableUninstall, categories,
     espProfiles, relationships,
   });
   const latestSnapshotRef = useRef(configSnapshot);

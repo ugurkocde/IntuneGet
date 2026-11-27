@@ -156,6 +156,9 @@ describe('allowAvailableUninstall core Graph, deployment config, workflow inputs
 
     expect(parse({ allowAvailableUninstall: true })).toBe(true);
     expect(parse({ allowAvailableUninstall: false })).toBe(false);
+    expect(parse({ allowAvailableUninstall: true, allowAvailableUninstallSource: 'explicit_settings_patch' })).toBe(true);
+    expect(parse({ allowAvailableUninstall: false, allowAvailableUninstallSource: 'inherited_graph' })).toBeUndefined();
+    expect(parse({ allowAvailableUninstall: false, allowAvailableUninstallSource: 'default_graph_field_missing' })).toBeUndefined();
     expect(parse({ allowAvailableUninstall: 'true' })).toBeUndefined();
     expect(parse({ allowAvailableUninstall: 1 })).toBeUndefined();
     expect(parse({})).toBeUndefined();

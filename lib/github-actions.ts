@@ -350,6 +350,16 @@ export async function triggerPackagingWorkflow(
     curatedReleaseId: inputs.curatedReleaseId,
   });
 
+  if (
+    inputs.updateMode !== 'sameApp' &&
+    inputs.allowAvailableUninstall === true &&
+    !isHostedAllowAvailableUninstallEnabled()
+  ) {
+    throw new Error(
+      'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
+    );
+  }
+
   // Record time before triggering to help find the run
   const triggerTime = new Date();
 

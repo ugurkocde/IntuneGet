@@ -181,9 +181,15 @@ describe('POST /api/package, update-policies, and GitHub Actions dispatch for al
 
     const prevFlag = process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
     try {
-      // Phase 1 (flag disabled): omitted even when boolean is passed
+      // Phase 1 (flag disabled): fail closed on true; omit false (Intune default)
       delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
-      await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
+      await expect(
+        triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
+          skipRunCapture: true,
+        })
+      ).rejects.toThrow(/allow available uninstall/i);
+      expect(payloads).toHaveLength(0);
+      await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: false }), ghConfig, {
         skipRunCapture: true,
       });
       const cfgFlagOff = (payloads[0].client_payload as { config: Record<string, unknown> }).config;

@@ -158,7 +158,12 @@ describe('PackageConfig Allow available uninstall toggle', () => {
   });
 
   it('hides toggle for Store apps and sameApp content updates', async () => {
-    await render({ package: { ...pkg, source: 'msstore' } });
+    await render({
+      package: { ...pkg, appSource: 'store' },
+      isDeployed: true,
+      intuneAppId: '11111111-1111-4111-8111-111111111111',
+      deployedConfig: deployedWin32,
+    });
     expect(switchByLabel('Allow available uninstall')).toBeUndefined();
 
     await render({
@@ -170,6 +175,32 @@ describe('PackageConfig Allow available uninstall toggle', () => {
     expect(sameAppRadio).toBeTruthy();
     await act(async () => { sameAppRadio!.click(); });
     expect(switchByLabel('Allow available uninstall')).toBeUndefined();
+  });
+
+  it('prompts before discarding when only allowAvailableUninstall changed', async () => {
+    const onClose = vi.fn();
+    await render({
+      isDeployed: true,
+      intuneAppId: '11111111-1111-4111-8111-111111111111',
+      deployedConfig: deployedWin32,
+      onClose,
+    });
+    const assignBtn = button('Assignment Configuration')!;
+    await act(async () => {
+      assignBtn.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      assignBtn.click();
+    });
+    const sw = switchByLabel('Allow available uninstall');
+    expect(sw).toBeTruthy();
+    await act(async () => {
+      sw!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      sw!.click();
+    });
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('omits allowAvailableUninstall from cart item on hosted Phase 1 Redeploy so POST /api/package never 400s', async () => {

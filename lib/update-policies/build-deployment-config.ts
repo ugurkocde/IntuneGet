@@ -373,7 +373,21 @@ export type BuildDeploymentConfigResult =
   | { status: 'orphaned_job' }
   | { status: 'unavailable' };
 
+const NON_EXPLICIT_ALLOW_AVAILABLE_UNINSTALL_SOURCES = new Set([
+  'inherited_graph',
+  'default_graph_field_missing',
+  'default_source_missing',
+  'default_omitted',
+]);
+
 export function parseAllowAvailableUninstall(packageConfig: unknown): boolean | undefined {
+  if (
+    isObject(packageConfig) &&
+    typeof packageConfig.allowAvailableUninstallSource === 'string' &&
+    NON_EXPLICIT_ALLOW_AVAILABLE_UNINSTALL_SOURCES.has(packageConfig.allowAvailableUninstallSource)
+  ) {
+    return undefined;
+  }
   return parseAllowAvailableUninstallFromRecord(packageConfig);
 }
 

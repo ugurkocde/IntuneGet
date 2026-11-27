@@ -10,8 +10,13 @@ const state = vi.hoisted(() => ({
   },
   policyRow: {
     id: 'policy-1',
+    updated_at: '2026-11-27T00:00:00.000Z',
     deployment_config: { displayName: 'Contoso', publisher: 'Contoso', architecture: 'x64', installerType: 'exe', installCommand: '/S', uninstallCommand: '/U', installScope: 'machine', detectionRules: [] } as Record<string, unknown>,
   },
+  policyUpdateConflict: false,
+  policyReadError: false,
+  policyUpdateEqFilters: [] as Array<[string, unknown]>,
+  jobUpdates: [] as Array<{ payload: Record<string, unknown>; filters: Array<[string, unknown]> }>,
   savedJobConfig: null as Record<string, unknown> | null,
   savedPolicyConfig: null as Record<string, unknown> | null,
   updateAllowAvailableUninstall: vi.fn(async () => undefined),
@@ -39,11 +44,15 @@ vi.mock('@/lib/supabase', () => ({
   getServerClientOrNull: () => ({
     from: (table: string) => {
       let updatePayload: Record<string, unknown> | null = null;
+      const eqFilters: Array<[string, unknown]> = [];
       const chain = {
         select: () => chain,
         order: () => chain,
         limit: () => chain,
-        eq: () => chain,
+        eq: (col: string, val: unknown) => {
+          eqFilters.push([col, val]);
+          return chain;
+        },
         is: () => chain,
         single: async () => ({ data: table === 'tenant_consent', error: null }),
         update: (value: Record<string, unknown>) => {
@@ -53,15 +62,23 @@ vi.mock('@/lib/supabase', () => ({
         maybeSingle: async () => {
           if (table === 'packaging_jobs') {
             if (updatePayload) {
+              state.jobUpdates.push({ payload: updatePayload, filters: [...eqFilters] });
               state.savedJobConfig = updatePayload.package_config as Record<string, unknown>;
-              return { data: { id: state.row.id }, error: null };
+              return { data: { id: state.row.id, updated_at: '2026-11-27T00:01:00.000Z' }, error: null };
             }
             return { data: state.row, error: null };
           }
           if (table === 'app_update_policies') {
             if (updatePayload) {
+              state.policyUpdateEqFilters = [...eqFilters];
+              if (state.policyUpdateConflict) {
+                return { data: null, error: null };
+              }
               state.savedPolicyConfig = updatePayload.deployment_config as Record<string, unknown>;
               return { data: { id: state.policyRow.id }, error: null };
+            }
+            if (state.policyReadError) {
+              return { data: null, error: { message: 'policy read failed' } };
             }
             return { data: state.policyRow, error: null };
           }
@@ -89,6 +106,10 @@ function call(body: Record<string, unknown>) {
 describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
   beforeEach(() => {
     state.appType = '#microsoft.graph.win32LobApp';
+    state.policyUpdateConflict = false;
+    state.policyReadError = false;
+    state.policyUpdateEqFilters = [];
+    state.jobUpdates = [];
     state.savedJobConfig = null;
     state.savedPolicyConfig = null;
     state.updateAllowAvailableUninstall.mockClear();
@@ -107,7 +128,7 @@ describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
     expect(state.updateAllowAvailableUninstall).not.toHaveBeenCalled();
   });
 
-  it('patches Graph and persists allowAvailableUninstall to packaging_jobs and app_update_policies', async () => {
+  it('patches Graph and persists allowAvailableUninstall to packaging_jobs and app_update_policies with optimistic updated_at guard', async () => {
     const res = await call({ wingetId: 'Contoso.App', allowAvailableUninstall: true });
     expect(res.status).toBe(200);
     expect(state.updateAllowAvailableUninstall).toHaveBeenCalledWith(
@@ -118,5 +139,19 @@ describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
     expect(state.savedJobConfig?.allowAvailableUninstall).toBe(true);
     expect(state.savedJobConfig?.allowAvailableUninstallSource).toBe('explicit_settings_patch');
     expect(state.savedPolicyConfig?.allowAvailableUninstall).toBe(true);
+    expect(state.policyUpdateEqFilters).toContainEqual(['updated_at', state.policyRow.updated_at]);
+  });
+
+  it('rolls back packaging_jobs and reports stale policy state when app_update_policies update conflicts', async () => {
+    state.policyUpdateConflict = true;
+    const res = await call({ wingetId: 'Contoso.App', allowAvailableUninstall: true });
+    expect(res.status).toBe(409);
+    const body = await res.json() as Record<string, unknown>;
+    expect(String(body.error)).toMatch(/auto-update policy.*(stale|out of sync|previous value)/i);
+    expect(body.policySyncStale).toBe(true);
+    // First update wrote the new config; second update rolled packaging_jobs back using saved updated_at
+    expect(state.jobUpdates).toHaveLength(2);
+    expect(state.jobUpdates[1].payload.package_config).toEqual(state.row.package_config);
+    expect(state.jobUpdates[1].filters).toContainEqual(['updated_at', '2026-11-27T00:01:00.000Z']);
   });
 });

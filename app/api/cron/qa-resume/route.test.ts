@@ -2215,4 +2215,86 @@ describe('GET /api/cron/qa-resume', () => {
     expect(from.mock.calls.some(([name]) => name === 'qa_installer_security_holds')).toBe(false);
   });
 
+  it('fails closed when resuming a hosted job with allowAvailableUninstall=true while hosted support is disabled', async () => {
+    const prevHostedFlag = process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+    const prevPublicFlag = process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+    delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+    delete process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+    try {
+      getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+      enforceQaGateMock.mockResolvedValue(undefined);
+      getPackageCompatibilityBlockMock.mockResolvedValue(null);
+      findPendingApprovalBlocksMock.mockResolvedValue([]);
+      const hash = 'A'.repeat(64);
+      const profile = 'B'.repeat(64);
+      const job = {
+        id: 'job-hosted-uninstall-blocked',
+        status: 'awaiting_qa',
+        tenant_id: 'tenant-1',
+        winget_id: 'Example.App',
+        display_name: 'Example App',
+        publisher: 'Example',
+        version: '1.0',
+        architecture: 'x64',
+        installer_type: 'exe',
+        installer_url: 'https://example.test/app.exe',
+        installer_sha256: hash,
+        install_command: 'app.exe /S',
+        uninstall_command: 'app.exe /U',
+        install_scope: 'machine',
+        detection_rules: [],
+        execution_profile_sha256: profile,
+        qa_candidate_id: 'cand-pass',
+        package_config: {
+          sourceType: 'winget',
+          architecture: 'x64',
+          installerSha256: hash,
+          allowAvailableUninstall: true,
+        },
+        error_code: null,
+        error_details: null,
+        cancelled_at: null,
+        archived_at: null,
+        github_run_id: null,
+        callback_run_id: null,
+        intune_app_id: null,
+        qa_resume_due_at: null,
+        updated_at: '2026-11-27T00:00:00Z',
+      };
+      const candidate = {
+        id: 'cand-pass',
+        status: 'passed',
+        phase: 'completed',
+        github_run_id: '42',
+        failure_summary: null,
+        winget_id: job.winget_id,
+        version: job.version,
+        architecture: job.architecture,
+        installer_sha256: hash,
+        package_profile_sha256: profile,
+      };
+      const store = jobStore(job);
+      let calls = 0;
+      const from = vi.fn((table: string) => {
+        if (table === 'packaging_jobs') return ++calls === 1 ? chain({ data: [structuredClone(store.row)], error: null }) : store.updateQuery();
+        if (table === 'qa_candidates') return candidateQuery([candidate]);
+        if (table === 'qa_package_results') return chain({ data: { outcome: 'Passed' }, error: null });
+        throw new Error('Unexpected table ' + table);
+      });
+      createServerClientMock.mockReturnValue({ from });
+      const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+      const result = await response.json();
+      expect(result).toMatchObject({ failed: 1, resumed: 0 });
+      expect(store.row.status).toBe('failed');
+      expect(store.row.error_code).toBe('ALLOW_AVAILABLE_UNINSTALL_UNSUPPORTED_HOSTED');
+      expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+      expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id, 'failed', expect.stringMatching(/allow available uninstall/i));
+    } finally {
+      if (prevHostedFlag === undefined) delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+      else process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED = prevHostedFlag;
+      if (prevPublicFlag === undefined) delete process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+      else process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL = prevPublicFlag;
+    }
+  });
+
 });
