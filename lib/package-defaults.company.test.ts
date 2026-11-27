@@ -21,7 +21,7 @@ it('keeps explicit company clear without erasing other defaults', () => {
   expect(sanitizePackageDefaults(null)).toBeNull();
 });
 
-it.each(['a'.repeat(129), '\nprivate', '\u202Eprivate', '\u200Bprivate', '\ud800', '\udfff'])('rejects invalid company text without echoing it: %j', (brandingCompanyName) => {
+it.each(['a'.repeat(129), '\nprivate', '\u202Eprivate', '\u061Cprivate', '\u200Bprivate', '\ud800', '\udfff'])('rejects invalid company text without echoing it: %j', (brandingCompanyName) => {
   expect(sanitizePackageDefaults({ brandingCompanyName })).toBeNull();
   expect(() => pickPackageDefaults({ ...DEFAULT_PSADT_CONFIG, brandingCompanyName })).toThrow('brandingCompanyName');
   try { pickPackageDefaults({ ...DEFAULT_PSADT_CONFIG, brandingCompanyName }); } catch (error) {

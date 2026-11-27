@@ -48,6 +48,7 @@ function boundedInteger(value: unknown, [min, max]: readonly [number, number]): 
 /** Company text is data, never an asset reference or executable expression. */
 export function isValidDefaultCompanyName(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 128
+    && !/\p{Bidi_Control}/u.test(value)
     && !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/u.test(value)
     && !/[\ud800-\udfff]/u.test(value);
 }

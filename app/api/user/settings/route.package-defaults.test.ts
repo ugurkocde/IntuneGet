@@ -152,7 +152,7 @@ it('round trips and clears company defaults while preserving other preferences',
   expect((await (await get()).json()).settings.packageDefaults).toBeNull();
 });
 
-it.each(['x'.repeat(129), '\u202Eprivate', 42, null])('rejects invalid company text alongside valid preferences', async (brandingCompanyName) => {
+it.each(['x'.repeat(129), '\u202Eprivate', '\u061Cprivate', 42, null])('rejects invalid company text alongside valid preferences', async (brandingCompanyName) => {
   expect((await patch({ packageDefaults: { brandingCompanyName, allowDefer: true } })).status).toBe(400);
   expect(h.state.lastUpsert).toBeNull();
 });
