@@ -1,5 +1,6 @@
 """Random global history pages select forty IDs without scanning skipped rows."""
 import json
+import re
 from pathlib import Path
 import uuid
 import concurrent.futures
@@ -262,7 +263,32 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         assert value(security_query) == security
         parity()
         checks.append({'name': 'Empty cache exact fallback', 'verdict': 'PASS'})
+        for correction in sorted((ROOT / 'supabase/migrations').glob('*_catalog_history_refresh_safeupdate.sql')):
+            sql('begin;' + correction.read_text() + 'commit;')
+        # SIMULATED safeupdate boundary: local PG distributions need not ship the
+        # extension. Reproduce its WHERE-clause rejection inside the executed
+        # refresh, without claiming that this is a real extension runtime test.
+        refresh_definition = value("select to_json(pg_get_functiondef('public.refresh_catalog_release_history_cache()'::regprocedure))")
+        def guard_delete(match):
+            statement = match.group(0)
+            if re.search(r'\bWHERE\b', statement, re.I):
+                return statement
+            return "RAISE EXCEPTION 'DELETE requires a WHERE clause' USING ERRCODE='21000';"
+        guarded = re.sub(r'\bDELETE\s+FROM\s+[^;]+;', guard_delete, refresh_definition, flags=re.I)
+        sql(guarded)
         refresh()
+        # Seed every legal key range, including out-of-range keys: the bounds
+        # table has a non-null primary key but no positive-page CHECK.
+        sql("insert into catalog_internal.catalog_release_history_page_bounds values(-1,now(),now(),0),(10001,now(),now(),0);"
+            "insert into version_history(winget_id,version,created_at)values('Fixture.1','safeupdate-refresh','2027-01-01');")
+        refresh()
+        assert value('select count(*) from catalog_internal.catalog_release_history_page_bounds where page_number<1 or page_number>10000') == 0
+        assert value('select count(*) from catalog_internal.catalog_release_history_invalidation') == 0
+        parity(1)
+        parity(101)
+        checks.append({'name': 'SIMULATED safeupdate refresh clears all bounds and invalidations with full RPC parity', 'verdict': 'PASS', 'realExtensionRuntime': 'NOT_RUN_UNAVAILABLE'})
+        sql(refresh_definition)
+        assert sql('select public.refresh_catalog_release_history_cache()').stdout.strip() == 'f'
         for page in [1, 100, 101, 1324, 1911, 2376, 2377, 10000]:
             parity(page)
             for rpc in ['get_catalog_release_history_v2', 'get_catalog_release_history_global_rows']:
