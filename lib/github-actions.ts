@@ -140,7 +140,7 @@ export async function triggerPackagingWorkflow(
   inputs: WorkflowInputs,
   config?: GitHubActionsConfig,
   options?: { skipRunCapture?: boolean; requireQaPass?: boolean;
-    newJobAdmission?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
+    newJobAdmission?: boolean; reconcileUnconfirmedDispatch?: boolean; beforeDispatch?: (identity: string) => Promise<void> }
 ): Promise<TriggerResult> {
   let sameAppOwner: string | undefined;
   // Bind explicit content replacement to an existing deployment.
@@ -400,7 +400,7 @@ export async function triggerPackagingWorkflow(
           installScope: inputs.installScope || 'machine',
           ...(inputs.updateMode !== 'sameApp' &&
             typeof inputs.allowAvailableUninstall === 'boolean' &&
-            isHostedAllowAvailableUninstallEnabled()
+            (inputs.allowAvailableUninstall === true || isHostedAllowAvailableUninstallEnabled())
             ? { allowAvailableUninstall: inputs.allowAvailableUninstall ? 'true' : 'false' }
             : {}),
           forceCreate: inputs.updateMode !== 'sameApp' && inputs.forceCreate ? 'true' : 'false',
@@ -418,12 +418,17 @@ export async function triggerPackagingWorkflow(
     packageProfileSha256: packageProfileSha256 ?? null,
     curatedReleaseId: inputs.curatedReleaseId ?? null,
   })).digest('hex');
-  await options?.beforeDispatch?.(dispatchIdentity);
-  if (
+  const hostedAllowAvailableUninstallBlocked =
     inputs.updateMode !== 'sameApp' &&
     inputs.allowAvailableUninstall === true &&
-    !isHostedAllowAvailableUninstallEnabled()
-  ) {
+    !isHostedAllowAvailableUninstallEnabled();
+  if (hostedAllowAvailableUninstallBlocked && !options?.reconcileUnconfirmedDispatch) {
+    throw new Error(
+      'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
+    );
+  }
+  await options?.beforeDispatch?.(dispatchIdentity);
+  if (hostedAllowAvailableUninstallBlocked) {
     throw new Error(
       'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
     );

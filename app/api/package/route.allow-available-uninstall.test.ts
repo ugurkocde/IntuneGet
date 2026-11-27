@@ -181,13 +181,16 @@ describe('POST /api/package, update-policies, and GitHub Actions dispatch for al
 
     const prevFlag = process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
     try {
-      // Phase 1 (flag disabled): fail closed on true; omit false (Intune default)
+      // Phase 1 (flag disabled): fail closed on true BEFORE beforeDispatch runs; omit false (Intune default)
       delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+      const blockedBeforeDispatch = vi.fn(async () => undefined);
       await expect(
         triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
           skipRunCapture: true,
+          beforeDispatch: blockedBeforeDispatch,
         })
       ).rejects.toThrow(/allow available uninstall/i);
+      expect(blockedBeforeDispatch).not.toHaveBeenCalled();
       expect(payloads).toHaveLength(0);
       await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: false }), ghConfig, {
         skipRunCapture: true,
@@ -209,6 +212,22 @@ describe('POST /api/package, update-policies, and GitHub Actions dispatch for al
         skipRunCapture: true,
         beforeDispatch: async (id) => { identities.push(id); },
       });
+
+      // If the hosted flag is later disabled while reconciling an earlier unconfirmed dispatch,
+      // reconcileUnconfirmedDispatch preserves the exact dispatchIdentity without ever calling fetch.
+      delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+      const reconciledIds: string[] = [];
+      const payloadCountBeforeReconcile = payloads.length;
+      await expect(
+        triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
+          skipRunCapture: true,
+          reconcileUnconfirmedDispatch: true,
+          beforeDispatch: async (id) => { reconciledIds.push(id); },
+        })
+      ).rejects.toThrow(/allow available uninstall/i);
+      expect(reconciledIds).toEqual([identities[1]]);
+      expect(payloads).toHaveLength(payloadCountBeforeReconcile);
+      process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED = 'true';
 
       const cfg0 = (payloads[1].client_payload as { config: Record<string, unknown> }).config;
       const cfg1 = (payloads[2].client_payload as { config: Record<string, unknown> }).config;

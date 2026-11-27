@@ -661,16 +661,19 @@ export async function GET(request: Request) {
     const hasUnconfirmedDispatch =
       job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED' ||
       Object.hasOwn(retryDetails, UNCONFIRMED_AT_KEY);
+    const canReconcileUnconfirmedDispatch =
+      customRetry && job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
 
     if (
-      !hasUnconfirmedDispatch &&
+      !canReconcileUnconfirmedDispatch &&
       !features.localPackager &&
       item.updateMode !== 'sameApp' &&
       item.allowAvailableUninstall === true &&
       !isHostedAllowAvailableUninstallEnabled()
     ) {
-      const message =
-        'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.';
+      const message = hasUnconfirmedDispatch
+        ? 'GitHub did not confirm packaging startup and hosted packaging does not yet support Allow available uninstall. Check deployment status before trying again.'
+        : 'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.';
       const { data: unsupportedJob, error: unsupportedError } = await guardObservedIdentity(
         supabase
           .from('packaging_jobs')
@@ -678,7 +681,9 @@ export async function GET(request: Request) {
             status: 'failed',
             status_message: message,
             error_message: message,
-            error_code: 'ALLOW_AVAILABLE_UNINSTALL_UNSUPPORTED_HOSTED',
+            error_code: hasUnconfirmedDispatch
+              ? 'WORKFLOW_DISPATCH_UNRECONCILED'
+              : 'ALLOW_AVAILABLE_UNINSTALL_UNSUPPORTED_HOSTED',
             error_stage: 'validation',
             error_category: 'validation',
             completed_at: new Date().toISOString(),
@@ -774,6 +779,7 @@ export async function GET(request: Request) {
         callbackUrl, qaOverride: skipCustomerQa, sanitizeAssignments: deferredClaim,
       });
       const trigger = await triggerPackagingWorkflow(workflowInputs, undefined, deferredClaim ? {
+        reconcileUnconfirmedDispatch: canReconcileUnconfirmedDispatch,
         beforeDispatch: async identity => {
           if (identity !== retryIdentity) await rejectChangedRetry();
           if (customRetry && job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED') {
