@@ -22,6 +22,7 @@ import {
 import { getAppConfig } from '@/lib/config';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getFeatureFlags } from '@/lib/features';
+import { isHostedAllowAvailableUninstallEnabled } from '@/lib/allow-available-uninstall';
 import { isValidInstallerUrl, isValidSha256 } from '@/lib/custom-app';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
@@ -208,8 +209,22 @@ export async function POST(request: NextRequest) {
           (sameApp && (typeof binding.targetIntuneAppId !== 'string' ||
             !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(binding.targetIntuneAppId) ||
             isStoreCartItem(item) || item.sourceType === 'custom' || forceCreate === true ||
-            ['forceCreate', 'sourceIntuneAppId', 'autoSupersede', 'assignmentMigration', 'assignments', 'categories', 'espProfiles', 'relationships'].some(key => binding[key] !== undefined)))) {
+            ['forceCreate', 'sourceIntuneAppId', 'autoSupersede', 'assignmentMigration', 'assignments', 'categories', 'espProfiles', 'relationships', 'allowAvailableUninstall'].some(key => binding[key] !== undefined)))) {
         return NextResponse.json({ error: 'Same-app content updates are not available yet' }, { status: 400 });
+      }
+      if (binding.allowAvailableUninstall !== undefined) {
+        if (typeof binding.allowAvailableUninstall !== 'boolean') {
+          return NextResponse.json({ error: 'Invalid allowAvailableUninstall setting' }, { status: 400 });
+        }
+        if (isStoreCartItem(item)) {
+          return NextResponse.json({ error: 'Allow available uninstall is only supported for Win32 apps' }, { status: 400 });
+        }
+        if (!getFeatureFlags().localPackager && !isHostedAllowAvailableUninstallEnabled()) {
+          return NextResponse.json(
+            { error: 'Allow available uninstall on new hosted packages is not enabled yet. Configure it after deployment via Update Settings.' },
+            { status: 400 }
+          );
+        }
       }
       const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
       if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
@@ -927,6 +942,9 @@ export async function POST(request: NextRequest) {
                 ? JSON.stringify(item.relationships)
                 : undefined,
               installScope: item.installScope,
+              allowAvailableUninstall: item.updateMode !== 'sameApp' && typeof item.allowAvailableUninstall === 'boolean'
+                ? item.allowAvailableUninstall
+                : undefined,
               forceCreate: item.forceCreate || forceCreate,
               qaOverride: item.sourceType === 'curated' ? false : isQaMaintenanceMode() || item.qaOverride,
               sourceType: item.sourceType,
