@@ -395,6 +395,15 @@ def metadata_bounds_cache_contracts(provided_sql, command, env):
         for page in [101, 150, 300, 1324, 1911]:
             parity(page)
         checks.append({'name': 'Clamped pages, timestamp ties, locale/orphan exclusions and wide dates', 'verdict': 'PASS'})
+        for case_name, case_rows in [
+            ('infinity_without_neg_infinity', "('Fixture.1','inf-only','infinity'),('Fixture.1','fin-1','2026-01-15+00')"),
+            ('neg_infinity_only', "('Fixture.1','ninf-only','-infinity')"),
+            ('same_page_ad_bc_era_span', "('Fixture.1','ad-jan','0001-01-15+00'),('Fixture.1','bc-dec','0001-12-01+00 BC'),('Fixture.1','bc-jan','0001-01-01+00 BC')"),
+        ]:
+            sql('truncate public.version_history;insert into public.version_history(winget_id,version,created_at) values' + case_rows + ';')
+            refresh()
+            parity(1)
+        checks.append({'name': 'Single-sided non-finite timestamps and same-page AD/BC era span parity', 'verdict': 'PASS'})
         restore()
         a = session()
         send(a, 'begin;select pg_current_xact_id()::text;')

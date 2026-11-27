@@ -43,6 +43,7 @@ DECLARE
  lo_m text;
  prev_m text;
  cur_m text;
+ have_prev boolean := false;
  k integer;
  b_pages integer[];
  b_hi timestamptz[];
@@ -66,7 +67,7 @@ BEGIN
  IF catalog_internal.history_cache_is_usable() THEN RETURN false; END IF;
  -- A single statement pins the source data, physical identity and build snapshot.
  SELECT pg_catalog.array_agg(v.created_at ORDER BY v.created_at DESC),
-  count(DISTINCT c.id)::bigint,
+  pg_catalog.count(DISTINCT c.id)::bigint,
   pg_catalog.pg_current_snapshot(),
   pg_catalog.pg_relation_filepath('public.version_history'::regclass),
   pg_catalog.pg_relation_filepath('public.curated_apps'::regclass)
@@ -84,6 +85,7 @@ BEGIN
   b_lo := pg_catalog.array_fill(v_coverage_start,ARRAY[n_pages]);
   b_tie_skip := pg_catalog.array_fill(0,ARRAY[n_pages]);
   prev_m := NULL;
+  have_prev := false;
   FOR p IN 1..n_pages LOOP
    pos := (p-1)*40+1;
    lo_pos := least(p*40,v_total);
@@ -109,33 +111,37 @@ BEGIN
    END IF;
    hi_m := pg_catalog.to_char(hi_ts AT TIME ZONE 'UTC','YYYY-MM');
    lo_m := pg_catalog.to_char(lo_ts AT TIME ZONE 'UTC','YYYY-MM');
-   IF hi_m IS DISTINCT FROM prev_m THEN
+   IF NOT have_prev OR hi_m IS DISTINCT FROM prev_m THEN
     m_list := pg_catalog.array_append(m_list,hi_m);
     prev_m := hi_m;
+    have_prev := true;
    END IF;
    IF NOT pg_catalog.isfinite(hi_ts) OR NOT pg_catalog.isfinite(lo_ts)
-    OR hi_m<>lo_m
-    OR pg_catalog.date_trunc('month',hi_ts AT TIME ZONE 'UTC')<>pg_catalog.date_trunc('month',lo_ts AT TIME ZONE 'UTC')
+    OR hi_m IS DISTINCT FROM lo_m
+    OR (hi_ts>='0001-01-01 00:00:00+00'::timestamptz)<>(lo_ts>='0001-01-01 00:00:00+00'::timestamptz)
    THEN
     FOR k IN (pos+1)..(lo_pos-1) LOOP
      cur_m := pg_catalog.to_char(ts[k] AT TIME ZONE 'UTC','YYYY-MM');
-     IF cur_m IS DISTINCT FROM prev_m THEN
+     IF NOT have_prev OR cur_m IS DISTINCT FROM prev_m THEN
       m_list := pg_catalog.array_append(m_list,cur_m);
       prev_m := cur_m;
+      have_prev := true;
      END IF;
     END LOOP;
-    IF lo_m IS DISTINCT FROM prev_m THEN
+    IF NOT have_prev OR lo_m IS DISTINCT FROM prev_m THEN
      m_list := pg_catalog.array_append(m_list,lo_m);
      prev_m := lo_m;
+     have_prev := true;
     END IF;
    END IF;
   END LOOP;
   IF v_total>400000 THEN
    FOR k IN 400001..v_total LOOP
     cur_m := pg_catalog.to_char(ts[k] AT TIME ZONE 'UTC','YYYY-MM');
-    IF cur_m IS DISTINCT FROM prev_m THEN
+    IF NOT have_prev OR cur_m IS DISTINCT FROM prev_m THEN
      m_list := pg_catalog.array_append(m_list,cur_m);
      prev_m := cur_m;
+     have_prev := true;
     END IF;
    END LOOP;
   END IF;
