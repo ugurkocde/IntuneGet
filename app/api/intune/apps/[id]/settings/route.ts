@@ -247,11 +247,58 @@ export async function PATCH(
         .maybeSingle();
 
       let savedJobRow: { id: string; updated_at?: string | null } | null = null;
-      let previousJobConfig: Json | null = null;
+      let rollbackJobConfigPayload: Record<string, Json | undefined> | null = null;
+      let policyRow: { id: string; deployment_config: Json; updated_at?: string | null } | null = null;
+      if (validatedAllowAvailableUninstall !== undefined) {
+        phase = 'policy-sync';
+        const { data: readPolicy, error: policyReadError } = await supabase
+          .from('app_update_policies')
+          .select('id, deployment_config, updated_at')
+          .eq('user_id', user.userId)
+          .eq('tenant_id', tenantId)
+          .eq('winget_id', wingetId)
+          .maybeSingle();
+        if (policyReadError) {
+          if (
+            (assignments || categories) &&
+            latestJob?.package_config &&
+            typeof latestJob.package_config === 'object' &&
+            !Array.isArray(latestJob.package_config)
+          ) {
+            const partialConfig: Record<string, Json | undefined> = {
+              ...(latestJob.package_config as Record<string, Json | undefined>),
+            };
+            if (assignments) partialConfig.assignments = assignments as unknown as Json;
+            if (categories) partialConfig.categories = categories as unknown as Json;
+            await supabase
+              .from('packaging_jobs')
+              .update({ package_config: partialConfig })
+              .eq('id', latestJob.id)
+              .eq('updated_at', latestJob.updated_at)
+              .eq('user_id', user.userId)
+              .eq('tenant_id', tenantId)
+              .eq('winget_id', wingetId)
+              .eq('intune_app_id', intuneAppId)
+              .eq('status', 'deployed')
+              .select('id')
+              .maybeSingle();
+          }
+          return NextResponse.json(
+            {
+              error: 'Intune settings were updated, but the auto-update policy still holds the previous value because it could not be read. Refresh and retry before the next auto-update.',
+              policySyncStale: true,
+              jobRolledBack: true,
+            },
+            { status: 409 }
+          );
+        }
+        policyRow = readPolicy as { id: string; deployment_config: Json; updated_at?: string | null } | null;
+      }
+
       if (latestJob?.package_config && typeof latestJob.package_config === 'object' && !Array.isArray(latestJob.package_config)) {
-        previousJobConfig = latestJob.package_config;
+        const priorConfig = latestJob.package_config as Record<string, Json | undefined>;
         const updatedConfig: Record<string, Json | undefined> = {
-          ...(latestJob.package_config as Record<string, Json | undefined>),
+          ...priorConfig,
         };
         if (assignments) {
           updatedConfig.assignments = assignments as unknown as Json;
@@ -260,6 +307,19 @@ export async function PATCH(
           updatedConfig.categories = categories as unknown as Json;
         }
         if (validatedAllowAvailableUninstall !== undefined) {
+          // Preserve successfully applied assignments/categories if policy sync fails and only allowAvailableUninstall must revert.
+          const reverted: Record<string, Json | undefined> = { ...updatedConfig };
+          if (Object.hasOwn(priorConfig, 'allowAvailableUninstall')) {
+            reverted.allowAvailableUninstall = priorConfig.allowAvailableUninstall;
+          } else {
+            delete reverted.allowAvailableUninstall;
+          }
+          if (Object.hasOwn(priorConfig, 'allowAvailableUninstallSource')) {
+            reverted.allowAvailableUninstallSource = priorConfig.allowAvailableUninstallSource;
+          } else {
+            delete reverted.allowAvailableUninstallSource;
+          }
+          rollbackJobConfigPayload = reverted;
           updatedConfig.allowAvailableUninstall = validatedAllowAvailableUninstall;
           updatedConfig.allowAvailableUninstallSource = 'explicit_settings_patch';
         }
@@ -292,10 +352,10 @@ export async function PATCH(
 
       if (validatedAllowAvailableUninstall !== undefined) {
         const rollbackJobConfig = async (): Promise<boolean> => {
-          if (!savedJobRow || !previousJobConfig) return false;
+          if (!savedJobRow || !rollbackJobConfigPayload) return false;
           let rollbackQuery = supabase
             .from('packaging_jobs')
-            .update({ package_config: previousJobConfig })
+            .update({ package_config: rollbackJobConfigPayload })
             .eq('id', savedJobRow.id)
             .eq('user_id', user.userId)
             .eq('tenant_id', tenantId)
@@ -312,24 +372,6 @@ export async function PATCH(
         };
 
         phase = 'policy-sync';
-        const { data: policyRow, error: policyReadError } = await supabase
-          .from('app_update_policies')
-          .select('id, deployment_config, updated_at')
-          .eq('user_id', user.userId)
-          .eq('tenant_id', tenantId)
-          .eq('winget_id', wingetId)
-          .maybeSingle();
-        if (policyReadError) {
-          const jobRolledBack = await rollbackJobConfig();
-          return NextResponse.json(
-            {
-              error: 'Intune settings were updated, but the auto-update policy still holds the previous value because it could not be read. Refresh and retry before the next auto-update.',
-              policySyncStale: true,
-              jobRolledBack,
-            },
-            { status: 409 }
-          );
-        }
         if (policyRow?.deployment_config && typeof policyRow.deployment_config === 'object' && !Array.isArray(policyRow.deployment_config)) {
           const nextPolicyConfig: Record<string, Json | undefined> = {
             ...(policyRow.deployment_config as Record<string, Json | undefined>),

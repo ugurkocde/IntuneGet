@@ -656,7 +656,14 @@ export async function GET(request: Request) {
       continue;
     }
 
+    const retryDetails = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
+      ? job.error_details : {};
+    const hasUnconfirmedDispatch =
+      job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED' ||
+      Object.hasOwn(retryDetails, UNCONFIRMED_AT_KEY);
+
     if (
+      !hasUnconfirmedDispatch &&
       !features.localPackager &&
       item.updateMode !== 'sameApp' &&
       item.allowAvailableUninstall === true &&
@@ -698,8 +705,6 @@ export async function GET(request: Request) {
 
     const now = new Date().toISOString();
     const nextStatus = features.localPackager ? 'queued' : 'packaging';
-    const retryDetails = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
-      ? job.error_details : {};
     const retryIdentity = retryDetails[DISPATCH_IDENTITY_KEY];
     const deferredClaim = customRetry || Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
     let claimedPackaging = false;

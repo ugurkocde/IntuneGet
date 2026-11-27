@@ -350,16 +350,6 @@ export async function triggerPackagingWorkflow(
     curatedReleaseId: inputs.curatedReleaseId,
   });
 
-  if (
-    inputs.updateMode !== 'sameApp' &&
-    inputs.allowAvailableUninstall === true &&
-    !isHostedAllowAvailableUninstallEnabled()
-  ) {
-    throw new Error(
-      'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
-    );
-  }
-
   // Record time before triggering to help find the run
   const triggerTime = new Date();
 
@@ -429,6 +419,15 @@ export async function triggerPackagingWorkflow(
     curatedReleaseId: inputs.curatedReleaseId ?? null,
   })).digest('hex');
   await options?.beforeDispatch?.(dispatchIdentity);
+  if (
+    inputs.updateMode !== 'sameApp' &&
+    inputs.allowAvailableUninstall === true &&
+    !isHostedAllowAvailableUninstallEnabled()
+  ) {
+    throw new Error(
+      'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.'
+    );
+  }
   const newAdmissionIdentity = options?.newJobAdmission && inputs.sourceType !== 'custom' ? dispatchIdentity : undefined;
   if (inputs.updateMode === 'sameApp') {
     const current = await getDatabase().jobs.getById(inputs.jobId);

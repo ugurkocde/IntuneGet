@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   },
   policyUpdateConflict: false,
   policyReadError: false,
+  policyReadOrder: [] as string[],
   policyUpdateEqFilters: [] as Array<[string, unknown]>,
   jobUpdates: [] as Array<{ payload: Record<string, unknown>; filters: Array<[string, unknown]> }>,
   savedJobConfig: null as Record<string, unknown> | null,
@@ -62,14 +63,17 @@ vi.mock('@/lib/supabase', () => ({
         maybeSingle: async () => {
           if (table === 'packaging_jobs') {
             if (updatePayload) {
+              state.policyReadOrder.push('job-update');
               state.jobUpdates.push({ payload: updatePayload, filters: [...eqFilters] });
               state.savedJobConfig = updatePayload.package_config as Record<string, unknown>;
               return { data: { id: state.row.id, updated_at: '2026-11-27T00:01:00.000Z' }, error: null };
             }
+            state.policyReadOrder.push('job-read');
             return { data: state.row, error: null };
           }
           if (table === 'app_update_policies') {
             if (updatePayload) {
+              state.policyReadOrder.push('policy-update');
               state.policyUpdateEqFilters = [...eqFilters];
               if (state.policyUpdateConflict) {
                 return { data: null, error: null };
@@ -77,6 +81,7 @@ vi.mock('@/lib/supabase', () => ({
               state.savedPolicyConfig = updatePayload.deployment_config as Record<string, unknown>;
               return { data: { id: state.policyRow.id }, error: null };
             }
+            state.policyReadOrder.push('policy-read');
             if (state.policyReadError) {
               return { data: null, error: { message: 'policy read failed' } };
             }
@@ -108,6 +113,7 @@ describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
     state.appType = '#microsoft.graph.win32LobApp';
     state.policyUpdateConflict = false;
     state.policyReadError = false;
+    state.policyReadOrder = [];
     state.policyUpdateEqFilters = [];
     state.jobUpdates = [];
     state.savedJobConfig = null;
@@ -128,7 +134,7 @@ describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
     expect(state.updateAllowAvailableUninstall).not.toHaveBeenCalled();
   });
 
-  it('patches Graph and persists allowAvailableUninstall to packaging_jobs and app_update_policies with optimistic updated_at guard', async () => {
+  it('patches Graph and persists allowAvailableUninstall to packaging_jobs and app_update_policies with optimistic updated_at guard read before job save', async () => {
     const res = await call({ wingetId: 'Contoso.App', allowAvailableUninstall: true });
     expect(res.status).toBe(200);
     expect(state.updateAllowAvailableUninstall).toHaveBeenCalledWith(
@@ -140,18 +146,30 @@ describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
     expect(state.savedJobConfig?.allowAvailableUninstallSource).toBe('explicit_settings_patch');
     expect(state.savedPolicyConfig?.allowAvailableUninstall).toBe(true);
     expect(state.policyUpdateEqFilters).toContainEqual(['updated_at', state.policyRow.updated_at]);
+    expect(state.policyReadOrder.indexOf('policy-read')).toBeLessThan(state.policyReadOrder.indexOf('job-update'));
   });
 
-  it('rolls back packaging_jobs and reports stale policy state when app_update_policies update conflicts', async () => {
+  it('rolls back only allowAvailableUninstall fields while preserving applied assignments and categories when policy update conflicts', async () => {
     state.policyUpdateConflict = true;
-    const res = await call({ wingetId: 'Contoso.App', allowAvailableUninstall: true });
+    const newAssignments = [{ type: 'allUsers', intent: 'available' }];
+    const newCategories = [{ id: 'cat-1', displayName: 'Productivity' }];
+    const res = await call({
+      wingetId: 'Contoso.App',
+      allowAvailableUninstall: true,
+      assignments: newAssignments,
+      categories: newCategories,
+    });
     expect(res.status).toBe(409);
     const body = await res.json() as Record<string, unknown>;
     expect(String(body.error)).toMatch(/auto-update policy.*(stale|out of sync|previous value)/i);
     expect(body.policySyncStale).toBe(true);
-    // First update wrote the new config; second update rolled packaging_jobs back using saved updated_at
+    // First update wrote the new config; second update rolled back ONLY allowAvailableUninstall fields while keeping assignments/categories
     expect(state.jobUpdates).toHaveLength(2);
-    expect(state.jobUpdates[1].payload.package_config).toEqual(state.row.package_config);
+    expect(state.jobUpdates[1].payload.package_config).toEqual({
+      description: 'Contoso',
+      assignments: newAssignments,
+      categories: newCategories,
+    });
     expect(state.jobUpdates[1].filters).toContainEqual(['updated_at', '2026-11-27T00:01:00.000Z']);
   });
 });
