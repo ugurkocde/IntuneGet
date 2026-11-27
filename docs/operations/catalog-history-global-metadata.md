@@ -73,8 +73,10 @@ truncate or heap rewrite falls back. Triggerless rewrites are repaired by the ne
 refresh. Index-only rewrites do not invalidate unchanged history data.
 
 Hourly package sync and both daily catalog writers request refresh after writing.
-Their five second client deadline and fixed warning preserve original sync results
-when refresh is unavailable. Hourly sync also reserves one second to return its
+Hourly sync uses a ten second client deadline and emits redacted deferral diagnostics
+(`elapsedMs`, `budgetMs`, `outcome`, and allowlisted SQLSTATE/PostgREST `code` only);
+the daily catalog workflows retain their five second client deadline and fixed warning.
+Both preserve original sync results when refresh is unavailable. Hourly sync also reserves one second to return its
 response, caps refresh to the remaining invocation budget, and skips it when that
 budget is exhausted. Such a failure is not cache acceptance: history calls use
 exact live SQL when the cache is absent or invalid. A failed request does not

@@ -11,6 +11,12 @@ import { selectAppsToSync } from './select-apps';
 
 const BATCH_SIZE = 10;
 const SYNC_STATUS_ID = 'sync-manifests-hot';
+const REFRESH_BUDGET_MS = 10_000;
+const SAFE_REFRESH_CODE_PATTERN = /^[0-9A-Za-z_-]{1,20}$/;
+
+function safeRefreshErrorCode(value: unknown): string | null {
+  return typeof value === 'string' && SAFE_REFRESH_CODE_PATTERN.test(value) ? value : null;
+}
 // Bump when installer normalization or locale derivation changes.
 const SYNC_DERIVATION_VERSION = 1;
 const FULL_REFRESH_MS = 24 * 60 * 60 * 1000;
@@ -359,13 +365,39 @@ export async function GET(request: Request) {
   } finally {
     // Dirty metadata always falls back to live SQL. Refresh is optional and
     // must not change an otherwise completed sync or hide its original error.
-    const refreshBudget = Math.floor(Math.min(5000, maxDuration * 1000 - (performance.now() - startedAt) - 1000));
-    if (refreshBudget > 0) try {
-      const { error } = await supabase.rpc('refresh_catalog_release_history_cache')
-        .abortSignal(AbortSignal.timeout(refreshBudget));
-      if (error) console.warn('Catalog history metadata refresh deferred');
-    } catch {
-      console.warn('Catalog history metadata refresh deferred');
+    const refreshBudget = Math.floor(Math.min(REFRESH_BUDGET_MS, maxDuration * 1000 - (performance.now() - startedAt) - 1000));
+    if (refreshBudget > 0) {
+      const refreshStartedAt = performance.now();
+      const signal = AbortSignal.timeout(refreshBudget);
+      try {
+        const { error } = await supabase.rpc('refresh_catalog_release_history_cache')
+          .abortSignal(signal);
+        if (error) {
+          const rawCode = error && typeof error === 'object' && 'code' in error
+            ? (error as { code?: unknown }).code
+            : null;
+          console.warn('Catalog history metadata refresh deferred', {
+            elapsedMs: Math.max(0, Math.round(performance.now() - refreshStartedAt)),
+            budgetMs: refreshBudget,
+            outcome: signal.aborted ? 'timeout' : 'rpc_error',
+            code: signal.aborted ? null : safeRefreshErrorCode(rawCode),
+          });
+        }
+      } catch (refreshError) {
+        const errorName = refreshError && typeof refreshError === 'object' && 'name' in refreshError && typeof refreshError.name === 'string'
+          ? refreshError.name
+          : null;
+        console.warn('Catalog history metadata refresh deferred', {
+          elapsedMs: Math.max(0, Math.round(performance.now() - refreshStartedAt)),
+          budgetMs: refreshBudget,
+          outcome: signal.aborted || errorName === 'TimeoutError'
+            ? 'timeout'
+            : errorName === 'AbortError'
+              ? 'abort'
+              : 'error',
+          code: null,
+        });
+      }
     }
   }
 }
