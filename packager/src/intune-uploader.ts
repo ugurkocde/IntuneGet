@@ -35,6 +35,69 @@ export interface EncryptionInfo {
 
 type ProgressCallback = (percent: number, message: string) => Promise<void>;
 
+interface AzureStorageUploadSession {
+  azureStorageUri: string;
+  expiresAtMs?: number;
+}
+
+interface UploadFileChunksOptions {
+  chunkSize?: number;
+  concurrency?: number;
+  now?: () => number;
+  retryBaseDelayMs?: number;
+  maxRenewals?: number;
+  maxRetriesPerOperation?: number;
+}
+
+const DEFAULT_UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024; // 6 MiB chunks
+const DEFAULT_UPLOAD_CONCURRENCY = 4;
+const SAS_RENEWAL_BUFFER_MS = 2 * 60 * 1000; // Renew 2 minutes before SAS expiry
+const SAS_FALLBACK_LIFETIME_MS = 7 * 60 * 1000; // Fallback renewal interval when expiry timestamp is absent
+const MAX_SAS_RENEWALS = 30;
+const MAX_BLOCK_RETRIES = 3;
+const DEFAULT_RETRY_BASE_DELAY_MS = 1000;
+
+function parseExpirationMs(value?: string): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function isSasAuthFailure(status: number, bodyText: string): boolean {
+  return (
+    status === 401 ||
+    status === 403 ||
+    /AuthenticationFailed|SAS identifier|Signature did not match|Signed expiry/i.test(bodyText)
+  );
+}
+
+function isTransientUploadStatus(status: number): boolean {
+  return status === 408 || status === 429 || (status >= 500 && status <= 599);
+}
+
+function redactUrlQueries(text: string): string {
+  return text.replace(/(https?:\/\/[^\s'"`?]+)\?[^\s'"`)]+/gi, '$1?[redacted]');
+}
+
+async function readExactSlice(
+  fileHandle: fs.promises.FileHandle,
+  position: number,
+  length: number
+): Promise<Buffer> {
+  const buffer = Buffer.alloc(length);
+  let offset = 0;
+  while (offset < length) {
+    const { bytesRead } = await fileHandle.read(buffer, offset, length - offset, position + offset);
+    if (bytesRead === 0) {
+      throw new Error(`Unexpected end of file while reading chunk at offset ${position + offset}`);
+    }
+    offset += bytesRead;
+  }
+  return buffer;
+}
+
 /**
  * Thrown by uploadToIntune when the same app is already deployed to the tenant
  * via IntuneGet (by any user) and the job does not carry forceCreate.
@@ -246,7 +309,15 @@ export class IntuneUploader {
     await onProgress?.(25, 'Uploading package...');
     await this.uploadFileChunks(
       encryptedContentPath,
-      uploadInfo.azureStorageUri,
+      uploadInfo,
+      (previousSession) =>
+        this.renewAzureStorageUri(
+          graphClient,
+          app.id,
+          contentVersion.id,
+          contentFile.id,
+          previousSession
+        ),
       async (percent) => {
         // Map chunk upload progress (0-100) to overall (25-80)
         const mappedPercent = 25 + Math.floor(percent * 0.55);
@@ -500,12 +571,13 @@ export class IntuneUploader {
     appId: string,
     contentVersionId: string,
     contentFileId: string
-  ): Promise<{ azureStorageUri: string }> {
+  ): Promise<AzureStorageUploadSession> {
     const maxAttempts = 60;
     const delayMs = 2000;
 
     interface ContentFileResponse {
       azureStorageUri?: string;
+      azureStorageUriExpirationDateTime?: string;
       uploadState?: string;
     }
 
@@ -514,12 +586,18 @@ export class IntuneUploader {
         `/deviceAppManagement/mobileApps/${appId}/microsoft.graph.win32LobApp/contentVersions/${contentVersionId}/files/${contentFileId}`
       );
 
-      if (file.azureStorageUri) {
-        return { azureStorageUri: file.azureStorageUri };
+      if (
+        file.uploadState === 'azureStorageUriRequestFailed' ||
+        file.uploadState === 'azureStorageUriRequestTimedOut'
+      ) {
+        throw new Error(`Azure Storage URI request failed (state: ${file.uploadState})`);
       }
 
-      if (file.uploadState === 'azureStorageUriRequestFailed') {
-        throw new Error('Azure Storage URI request failed');
+      if (file.azureStorageUri && file.uploadState !== 'azureStorageUriRequestPending') {
+        return {
+          azureStorageUri: file.azureStorageUri,
+          expiresAtMs: parseExpirationMs(file.azureStorageUriExpirationDateTime),
+        };
       }
 
       await this.sleep(delayMs);
@@ -529,67 +607,272 @@ export class IntuneUploader {
   }
 
   /**
-   * Upload file in chunks to Azure Storage
+   * Renew an expiring or expired Azure Storage SAS URI on the existing content file.
+   * Already-staged Azure Storage blocks remain intact on the same blob.
+   */
+  private async renewAzureStorageUri(
+    graphClient: GraphClient,
+    appId: string,
+    contentVersionId: string,
+    contentFileId: string,
+    previousSession: AzureStorageUploadSession
+  ): Promise<AzureStorageUploadSession> {
+    const maxAttempts = 60;
+    const delayMs = 2000;
+
+    interface ContentFileResponse {
+      azureStorageUri?: string;
+      azureStorageUriExpirationDateTime?: string;
+      uploadState?: string;
+    }
+
+    const filePath = `/deviceAppManagement/mobileApps/${appId}/microsoft.graph.win32LobApp/contentVersions/${contentVersionId}/files/${contentFileId}`;
+    this.logger.info('Renewing Azure Storage SAS URI', { appId, contentFileId });
+    await graphClient.post(`${filePath}/renewUpload`, {});
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const file = await graphClient.get<ContentFileResponse>(filePath);
+
+      if (
+        file.uploadState === 'azureStorageUriRenewalFailed' ||
+        file.uploadState === 'azureStorageUriRenewalTimedOut' ||
+        file.uploadState === 'azureStorageUriRequestFailed' ||
+        file.uploadState === 'azureStorageUriRequestTimedOut'
+      ) {
+        throw new Error(`Azure Storage URI renewal failed (state: ${file.uploadState})`);
+      }
+
+      if (
+        file.uploadState === 'azureStorageUriRenewalPending' ||
+        file.uploadState === 'azureStorageUriRequestPending'
+      ) {
+        await this.sleep(delayMs);
+        continue;
+      }
+
+      if (file.azureStorageUri) {
+        const nextExpiresAtMs = parseExpirationMs(file.azureStorageUriExpirationDateTime);
+        const hasRenewed =
+          file.azureStorageUri !== previousSession.azureStorageUri ||
+          (nextExpiresAtMs !== undefined &&
+            previousSession.expiresAtMs !== undefined &&
+            nextExpiresAtMs > previousSession.expiresAtMs);
+
+        if (hasRenewed) {
+          this.logger.info('Renewed Azure Storage SAS URI', {
+            appId,
+            contentFileId,
+            expiresAt: file.azureStorageUriExpirationDateTime ?? null,
+          });
+          return {
+            azureStorageUri: file.azureStorageUri,
+            expiresAtMs: nextExpiresAtMs,
+          };
+        }
+      }
+
+      await this.sleep(delayMs);
+    }
+
+    throw new Error('Timeout waiting for renewed Azure Storage URI');
+  }
+
+  /**
+   * Upload file in chunks to Azure Storage with bounded concurrency,
+   * proactive/reactive SAS URI renewal, and transient error retries.
    */
   private async uploadFileChunks(
     filePath: string,
-    azureStorageUri: string,
-    onProgress?: (percent: number) => Promise<void>
+    initialSession: AzureStorageUploadSession,
+    renewUri: (previousSession: AzureStorageUploadSession) => Promise<AzureStorageUploadSession>,
+    onProgress?: (percent: number) => Promise<void>,
+    options?: UploadFileChunksOptions
   ): Promise<void> {
     const fetch = this.config.proxy?.fetch.bind(this.config.proxy) ?? (await import('node-fetch')).default;
+    const chunkSize = options?.chunkSize ?? DEFAULT_UPLOAD_CHUNK_SIZE_BYTES;
+    const requestedConcurrency = options?.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY;
+    const now = options?.now ?? (() => Date.now());
+    const retryBaseDelayMs = options?.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
+    const maxRenewals = options?.maxRenewals ?? MAX_SAS_RENEWALS;
+    const maxRetriesPerOperation = options?.maxRetriesPerOperation ?? MAX_BLOCK_RETRIES;
+
+    if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
+      throw new Error(`Invalid upload chunk size: ${chunkSize}`);
+    }
+    if (!Number.isInteger(requestedConcurrency) || requestedConcurrency <= 0) {
+      throw new Error(`Invalid upload concurrency: ${requestedConcurrency}`);
+    }
+
     const fileHandle = await fs.promises.open(filePath, 'r');
-    const stats = await fileHandle.stat();
-    const fileSize = stats.size;
-
-    const chunkSize = 6 * 1024 * 1024; // 6 MB chunks
-    const totalChunks = Math.ceil(fileSize / chunkSize);
-    const blockIds: string[] = [];
-
     try {
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const start = chunkIndex * chunkSize;
-        const end = Math.min(start + chunkSize, fileSize);
-        const chunk = Buffer.alloc(end - start);
+      const stats = await fileHandle.stat();
+      const fileSize = stats.size;
+      const totalChunks = Math.ceil(fileSize / chunkSize);
+      const blockIds: string[] = Array.from({ length: totalChunks }, (_, chunkIndex) =>
+        Buffer.from(String(chunkIndex).padStart(6, '0')).toString('base64')
+      );
 
-        await fileHandle.read(chunk, 0, chunk.length, start);
+      let currentSession: AzureStorageUploadSession = { ...initialSession };
+      let acquiredAtMs = now();
+      let renewalCount = 0;
+      let inFlightRenewal: Promise<AzureStorageUploadSession> | null = null;
 
-        // Create block ID (must be base64 encoded and same length)
-        const blockId = Buffer.from(String(chunkIndex).padStart(6, '0')).toString('base64');
-        blockIds.push(blockId);
+      const isExpiringSoon = (): boolean => {
+        if (currentSession.expiresAtMs !== undefined) {
+          return now() >= currentSession.expiresAtMs - SAS_RENEWAL_BUFFER_MS;
+        }
+        return now() >= acquiredAtMs + SAS_FALLBACK_LIFETIME_MS;
+      };
 
-        // Upload block
-        const blockUrl = `${azureStorageUri}&comp=block&blockid=${encodeURIComponent(blockId)}`;
-        const response = await fetch(blockUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Length': chunk.length.toString(),
-            'x-ms-blob-type': 'BlockBlob',
-          },
-          body: chunk,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to upload block ${chunkIndex}: ${response.statusText}`);
+      const ensureFreshSession = async (failedUri?: string): Promise<AzureStorageUploadSession> => {
+        if (failedUri !== undefined && currentSession.azureStorageUri !== failedUri) {
+          return currentSession;
+        }
+        if (failedUri === undefined && !isExpiringSoon()) {
+          return currentSession;
+        }
+        if (inFlightRenewal) {
+          return inFlightRenewal;
+        }
+        if (renewalCount >= maxRenewals) {
+          throw new Error(`Exceeded maximum Azure Storage SAS URI renewals (${maxRenewals})`);
         }
 
-        const percent = Math.floor(((chunkIndex + 1) / totalChunks) * 100);
-        await onProgress?.(percent);
+        const previousSession = currentSession;
+        inFlightRenewal = (async () => {
+          const renewed = await renewUri(previousSession);
+          renewalCount++;
+          currentSession = renewed;
+          acquiredAtMs = now();
+          return currentSession;
+        })().finally(() => {
+          inFlightRenewal = null;
+        });
+
+        return inFlightRenewal;
+      };
+
+      const executeAzurePut = async (
+        label: string,
+        buildUrl: (baseUri: string) => string,
+        headers: Record<string, string>,
+        body: Buffer | string
+      ): Promise<void> => {
+        let transientAttempt = 0;
+        let authRenewalAttempt = 0;
+
+        while (true) {
+          const session = await ensureFreshSession();
+          const requestUrl = buildUrl(session.azureStorageUri);
+
+          let response: Awaited<ReturnType<typeof fetch>>;
+          try {
+            response = await fetch(requestUrl, {
+              method: 'PUT',
+              headers,
+              body,
+            });
+          } catch (error) {
+            if (transientAttempt < maxRetriesPerOperation) {
+              transientAttempt++;
+              const delayMs = retryBaseDelayMs * Math.pow(2, transientAttempt - 1);
+              if (delayMs > 0) {
+                await this.sleep(delayMs);
+              }
+              continue;
+            }
+            const safeMessage = redactUrlQueries(error instanceof Error ? error.message : String(error));
+            throw new Error(`Failed to ${label}: ${safeMessage}`);
+          }
+
+          if (response.ok) {
+            return;
+          }
+
+          const errorBody = await response.text().catch(() => '');
+          if (isSasAuthFailure(response.status, errorBody) && authRenewalAttempt < 2) {
+            authRenewalAttempt++;
+            await ensureFreshSession(session.azureStorageUri);
+            continue;
+          }
+
+          if (isTransientUploadStatus(response.status) && transientAttempt < maxRetriesPerOperation) {
+            transientAttempt++;
+            const delayMs = retryBaseDelayMs * Math.pow(2, transientAttempt - 1);
+            if (delayMs > 0) {
+              await this.sleep(delayMs);
+            }
+            continue;
+          }
+
+          const reason = response.statusText || `HTTP ${response.status}`;
+          throw new Error(`Failed to ${label}: ${redactUrlQueries(reason)}`);
+        }
+      };
+
+      if (totalChunks > 0) {
+        let nextChunkIndex = 0;
+        let completedChunks = 0;
+        let lastReportedPercent = -1;
+        let fatalError: unknown = null;
+        let progressChain = Promise.resolve();
+
+        const workerCount = Math.min(requestedConcurrency, totalChunks);
+        const workers = Array.from({ length: workerCount }, async () => {
+          while (!fatalError) {
+            const chunkIndex = nextChunkIndex++;
+            if (chunkIndex >= totalChunks) {
+              return;
+            }
+
+            const start = chunkIndex * chunkSize;
+            const length = Math.min(chunkSize, fileSize - start);
+            const blockId = blockIds[chunkIndex];
+
+            try {
+              const chunk = await readExactSlice(fileHandle, start, length);
+              await executeAzurePut(
+                `upload block ${chunkIndex}`,
+                (baseUri) => `${baseUri}&comp=block&blockid=${encodeURIComponent(blockId)}`,
+                {
+                  'Content-Length': chunk.length.toString(),
+                  'x-ms-blob-type': 'BlockBlob',
+                },
+                chunk
+              );
+
+              completedChunks++;
+              const percent = Math.floor((completedChunks / totalChunks) * 100);
+              if (onProgress && percent > lastReportedPercent) {
+                lastReportedPercent = percent;
+                progressChain = progressChain.then(() => onProgress(percent));
+                await progressChain;
+              }
+            } catch (error) {
+              fatalError ??= error;
+              return;
+            }
+          }
+        });
+
+        await Promise.all(workers);
+        await progressChain;
+
+        if (fatalError) {
+          throw fatalError;
+        }
       }
 
       // Commit blocks
       const blockListXml = this.createBlockListXml(blockIds);
-      const commitUrl = `${azureStorageUri}&comp=blocklist`;
-      const commitResponse = await fetch(commitUrl, {
-        method: 'PUT',
-        headers: {
+      await executeAzurePut(
+        'commit blocks',
+        (baseUri) => `${baseUri}&comp=blocklist`,
+        {
           'Content-Type': 'application/xml',
         },
-        body: blockListXml,
-      });
-
-      if (!commitResponse.ok) {
-        throw new Error(`Failed to commit blocks: ${commitResponse.statusText}`);
-      }
+        blockListXml
+      );
     } finally {
       await fileHandle.close();
     }
