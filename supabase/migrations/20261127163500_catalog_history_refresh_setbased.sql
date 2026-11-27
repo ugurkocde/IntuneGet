@@ -48,7 +48,7 @@ BEGIN
  END IF;
  IF catalog_internal.history_cache_is_usable() THEN RETURN false; END IF;
  -- A single statement pins the source data, physical identity and build snapshot
- -- without materializing full history timestamp arrays or running width_bucket.
+ -- without materializing full history timestamp arrays or per-page bucket scans.
  WITH base AS MATERIALIZED (
   SELECT v.created_at,c.id AS app_id
   FROM public.version_history v JOIN public.curated_apps c ON c.winget_id=v.winget_id
