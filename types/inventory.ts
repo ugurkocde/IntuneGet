@@ -22,6 +22,7 @@ export interface IntuneWin32App {
   lastModifiedDateTime: string;
   size: number | null;
   isFeatured: boolean;
+  allowAvailableUninstall?: boolean;
   privacyInformationUrl: string | null;
   informationUrl: string | null;
   owner: string | null;

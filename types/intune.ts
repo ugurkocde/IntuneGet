@@ -5,12 +5,14 @@
 
 // Win32 LOB App
 export interface IntuneWin32App {
+  '@odata.type'?: string;
   id: string;
   displayName: string;
   description?: string;
   publisher?: string;
   largeIcon?: MimeContent;
   isFeatured?: boolean;
+  allowAvailableUninstall?: boolean;
   privacyInformationUrl?: string;
   informationUrl?: string;
   owner?: string;

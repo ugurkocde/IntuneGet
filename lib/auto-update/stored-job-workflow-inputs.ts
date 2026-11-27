@@ -77,6 +77,9 @@ export function buildStoredJobWorkflowInputs(
     espProfiles: !sameApp && item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
     relationships: !sameApp && item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
     installScope: (item.installScope || job.install_scope) === 'user' ? 'user' : 'machine',
+    allowAvailableUninstall: !sameApp && typeof item.allowAvailableUninstall === 'boolean'
+      ? item.allowAvailableUninstall
+      : undefined,
     forceCreate: sameApp ? false : item.forceCreate,
     sourceIntuneAppId: sameApp ? undefined : autoUpdate?.sourceIntuneAppId,
     carryOverAssignments: sameApp ? false : autoUpdate?.assignmentMigration?.carryOverAssignments,

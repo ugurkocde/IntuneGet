@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowUpCircle,
   X,
@@ -111,6 +111,24 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const [assignments, setAssignments] = useState<PackageAssignment[]>(
     item.assignments || []
   );
+  const initialAllowAvailableUninstall = isWin32 ? item.allowAvailableUninstall : undefined;
+  const [allowAvailableUninstall, setAllowAvailableUninstall] = useState<boolean | undefined>(
+    initialAllowAvailableUninstall
+  );
+  const handleAllowAvailableUninstallChange = (checked: boolean) => {
+    if (checked) {
+      setAllowAvailableUninstall(true);
+    } else {
+      setAllowAvailableUninstall(initialAllowAvailableUninstall === true ? false : undefined);
+    }
+  };
+  const canSetAllowAvailableUninstallOnCreate =
+    process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const showAllowAvailableUninstallToggle =
+    isWin32 &&
+    !sameApp &&
+    canSetAllowAvailableUninstallOnCreate;
   const [categories, setCategories] = useState<IntuneAppCategorySelection[]>(
     item.categories || []
   );
@@ -147,7 +165,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const configSnapshot = JSON.stringify({
     storeInstallExperience, selectedScope, config, assignments, categories,
-    espProfiles, relationships, installCommand, uninstallCommand, description,
+    espProfiles, relationships, allowAvailableUninstall: allowAvailableUninstall ?? null,
+    installCommand, uninstallCommand, description,
     updatePolicy: updatePolicy ?? null,
     carryOverAssignments,
     curatedSettingsMode,
@@ -257,6 +276,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
         assignments: assignments.length ? assignments : undefined,
         categories: categories.length ? categories : undefined,
         espProfiles: espProfiles.length ? espProfiles : undefined,
+        allowAvailableUninstall:
+          !sameApp && canSetAllowAvailableUninstallOnCreate && typeof allowAvailableUninstall === 'boolean'
+            ? allowAvailableUninstall
+            : undefined,
         updatePolicy,
         assignmentMigration: updatePolicy === 'auto_update'
           ? { carryOverAssignments, removeAssignmentsFromPreviousApp: false } : undefined,
@@ -312,6 +335,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           categories: !sameApp && categories.length > 0 ? categories : undefined,
           espProfiles: !sameApp && espProfiles.length > 0 ? espProfiles : undefined,
           relationships: !sameApp && relationships.length > 0 ? relationships : undefined,
+          allowAvailableUninstall:
+          !sameApp && canSetAllowAvailableUninstallOnCreate && typeof allowAvailableUninstall === 'boolean'
+            ? allowAvailableUninstall
+            : undefined,
           requirementRules,
           installCommand,
           uninstallCommand,
@@ -1282,6 +1309,16 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   onChange={setAssignments}
                   supportsAutoUpdateSuperseded={!isStore}
                 />
+                {showAllowAvailableUninstallToggle && (
+                  <div className="mt-4 pt-4 border-t border-overlay/10">
+                    <ToggleOption
+                      label="Allow available uninstall"
+                      description="Allow users to uninstall this Win32 app from Company Portal when assigned as Available. Applies to the entire app and is preserved across auto-updates."
+                      checked={allowAvailableUninstall === true}
+                      onChange={handleAllowAvailableUninstallChange}
+                    />
+                  </div>
+                )}
               </ConfigSection>}
 
               {/* Category Configuration */}
@@ -1688,28 +1725,40 @@ interface ToggleOptionProps {
 }
 
 function ToggleOption({ label, description, checked, onChange }: ToggleOptionProps) {
+  const switchId = useId();
+  const labelId = `${switchId}-label`;
+  const descriptionId = `${switchId}-description`;
   return (
-    <label className="flex items-start gap-3 cursor-pointer">
+    <div className="flex items-start gap-3">
       <div className="pt-0.5">
-        <div
+        <button
+          id={switchId}
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-labelledby={labelId}
+          aria-describedby={descriptionId}
+          onClick={() => onChange(!checked)}
           className={cn(
-            'w-10 h-6 rounded-full transition-colors relative',
+            'w-10 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70',
             checked ? 'bg-blue-600' : 'bg-overlay/15'
           )}
-          onClick={() => onChange(!checked)}
         >
-          <div
+          <span
+            aria-hidden="true"
             className={cn(
-              'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
+              'block absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
               checked ? 'translate-x-5' : 'translate-x-1'
             )}
           />
-        </div>
+        </button>
       </div>
       <div>
-        <span className="text-text-primary text-sm font-medium">{label}</span>
-        <p className="text-text-muted text-xs">{description}</p>
+        <label htmlFor={switchId} id={labelId} className="text-text-primary text-sm font-medium cursor-pointer">
+          {label}
+        </label>
+        <p id={descriptionId} className="text-text-muted text-xs">{description}</p>
       </div>
-    </label>
+    </div>
   );
 }

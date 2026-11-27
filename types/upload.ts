@@ -189,6 +189,9 @@ export interface Win32CartItem extends CartItemBase {
   // Omitting this retains the create new app path.
   updateMode?: 'create' | 'sameApp';
   targetIntuneAppId?: string;
+  // Win32-only Intune setting: allow users to uninstall an Available app from Company Portal.
+  // Tri-state: undefined = omitted (Intune defaults to false on create; eligible for inheritance on auto-update).
+  allowAvailableUninstall?: boolean;
   curatedReleaseId?: string;
   curatedSettingsMode?: 'tested-defaults' | 'custom';
   // Server-set audit snapshot of the tenant's licence acceptance (curated apps)

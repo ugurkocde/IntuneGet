@@ -40,6 +40,9 @@ export async function createWin32App(
         description: app.description || '',
         publisher: app.publisher || '',
         ...(app.largeIcon ? { largeIcon: app.largeIcon } : {}),
+        ...(typeof app.allowAvailableUninstall === 'boolean'
+          ? { allowAvailableUninstall: app.allowAvailableUninstall }
+          : {}),
         fileName: app.fileName,
         installCommandLine: app.installCommandLine,
         uninstallCommandLine: app.uninstallCommandLine,
@@ -598,6 +601,70 @@ export async function setAppRules(
   if (!response.ok) {
     throw new Error('Failed to update app requirement rules');
   }
+}
+
+/** Update allowAvailableUninstall on an existing Win32 LOB app without altering other fields. */
+export async function updateWin32AllowAvailableUninstall(
+  accessToken: string,
+  appId: string,
+  allowAvailableUninstall: boolean
+): Promise<void> {
+  const response = await fetch(
+    `${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${appId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        '@odata.type': '#microsoft.graph.win32LobApp',
+        allowAvailableUninstall,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to update allowAvailableUninstall (HTTP ${response.status})`);
+  }
+}
+
+export type ReadAllowAvailableUninstallResult =
+  | { status: 'hit'; value: boolean }
+  | { status: 'field_missing' }
+  | { status: 'not_found' };
+
+/** Read allowAvailableUninstall from a live Win32 LOB app entity without derived-type $select. */
+export async function readWin32AllowAvailableUninstall(
+  accessToken: string,
+  appId: string
+): Promise<ReadAllowAvailableUninstallResult> {
+  const response = await fetch(
+    `${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${appId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      signal: AbortSignal.timeout(10_000),
+    }
+  );
+
+  if (response.status === 404) {
+    return { status: 'not_found' };
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to read Intune app settings (HTTP ${response.status})`);
+  }
+
+  const app = (await response.json()) as Record<string, unknown> | null;
+  if (!app || app['@odata.type'] !== '#microsoft.graph.win32LobApp') {
+    return { status: 'not_found' };
+  }
+  if (typeof app.allowAvailableUninstall === 'boolean') {
+    return { status: 'hit', value: app.allowAvailableUninstall };
+  }
+  return { status: 'field_missing' };
 }
 
 /**

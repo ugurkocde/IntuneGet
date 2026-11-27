@@ -278,6 +278,20 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [assignments, setAssignments] = useState<PackageAssignment[]>(
     deployedConfig?.assignments || []
   );
+  const deployedAllowAvailableUninstall =
+    deployedConfig && isWin32CartItem(deployedConfig)
+      ? deployedConfig.allowAvailableUninstall
+      : undefined;
+  const [allowAvailableUninstall, setAllowAvailableUninstall] = useState<boolean | undefined>(
+    deployedAllowAvailableUninstall
+  );
+  const handleAllowAvailableUninstallChange = (checked: boolean) => {
+    if (checked) {
+      setAllowAvailableUninstall(true);
+    } else {
+      setAllowAvailableUninstall(deployedAllowAvailableUninstall === true ? false : undefined);
+    }
+  };
   const [categories, setCategories] = useState<IntuneAppCategorySelection[]>(
     deployedConfig?.categories || []
   );
@@ -326,6 +340,13 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const canUpdateSettings = isDeployed && !!intuneAppId;
+  const canSetAllowAvailableUninstallOnCreate =
+    process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const showAllowAvailableUninstallToggle =
+    !isStoreApp &&
+    !sameApp &&
+    (canUpdateSettings || canSetAllowAvailableUninstallOnCreate);
 
   // Change detection: categorize modifications as Graph-patchable vs requires-redeploy
   const changeState = useMemo(() => {
@@ -341,7 +362,14 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
     const hasEspChanges =
       JSON.stringify(espProfiles) !== JSON.stringify(deployedConfig.espProfiles || []);
     const hasRelationshipChanges = JSON.stringify(relationships) !== JSON.stringify(baselineRelationships);
-    const hasGraphChanges = hasAssignmentChanges || hasCategoryChanges || hasEspChanges || hasRelationshipChanges;
+    const hasAllowAvailableUninstallChange =
+      !isStoreApp && (allowAvailableUninstall === true) !== (deployedAllowAvailableUninstall === true);
+    const hasGraphChanges =
+      hasAssignmentChanges ||
+      hasCategoryChanges ||
+      hasEspChanges ||
+      hasRelationshipChanges ||
+      hasAllowAvailableUninstallChange;
 
     // Redeploy-required: version, architecture, scope, locale, PSADT config
     const hasVersionChange = selectedVersion !== deployedConfig.version;
@@ -360,7 +388,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
       hasVersionChange || hasArchChange || hasScopeChange || hasLocaleChange || hasPsadtChange || hasDescriptionChange;
 
     return { hasGraphChanges, hasRedeployChanges };
-  }, [isDeployed, deployedConfig, assignments, categories, espProfiles,
+  }, [isDeployed, isStoreApp, deployedConfig, assignments, categories, espProfiles, allowAvailableUninstall, deployedAllowAvailableUninstall,
       selectedVersion, selectedArch, selectedScope, selectedLocale, config, description, pkg.description, relationships, baselineRelationships]);
 
   // Installers always arrive for the package's default (latest) version. When the
@@ -432,7 +460,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const configSnapshot = JSON.stringify({
     storeInstallExperience, selectedVersion, selectedArch, selectedScope,
-    selectedLocale, config, description, assignments, categories,
+    selectedLocale, config, description, assignments, allowAvailableUninstall, categories,
     espProfiles, relationships,
   });
   const latestSnapshotRef = useRef(configSnapshot);
@@ -634,10 +662,14 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
             categories: categories.length > 0 ? categories : undefined,
             espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
             relationships: relationships.length > 0 ? relationships : undefined,
+            allowAvailableUninstall:
+              canSetAllowAvailableUninstallOnCreate && typeof allowAvailableUninstall === 'boolean'
+                ? allowAvailableUninstall
+                : undefined,
             updatePolicy,
             assignmentMigration: updatePolicy === 'auto_update' ? { carryOverAssignments, removeAssignmentsFromPreviousApp: false } : undefined,
             ...(isDeployed ? { forceCreate: true } : {}),
-          } : { updateMode: 'sameApp' as const, targetIntuneAppId: contentTarget!, forceCreate: undefined, assignments: undefined, categories: undefined, espProfiles: undefined, relationships: undefined, assignmentMigration: undefined }),
+          } : { updateMode: 'sameApp' as const, targetIntuneAppId: contentTarget!, forceCreate: undefined, assignments: undefined, categories: undefined, espProfiles: undefined, relationships: undefined, allowAvailableUninstall: undefined, assignmentMigration: undefined }),
           localeCode: selectedLocale || undefined,
           iconPath: pkg.iconPath,
         });
@@ -662,6 +694,10 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
         categories: JSON.stringify(categories) !== JSON.stringify(deployedConfig?.categories || []) ? categories : undefined,
         relationships: JSON.stringify(relationships) !== JSON.stringify(baselineRelationships) ? relationships : undefined,
         baselineRelationships,
+        allowAvailableUninstall:
+          !isStoreApp && (allowAvailableUninstall === true) !== (deployedAllowAvailableUninstall === true)
+            ? allowAvailableUninstall === true
+            : undefined,
       });
       setSettingsSuccess(true);
       setTimeout(() => onClose(), 1200);
@@ -1988,6 +2024,16 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                   onChange={setAssignments}
                   supportsAutoUpdateSuperseded={!isStoreApp}
                 />
+                {showAllowAvailableUninstallToggle && (
+                  <div className="mt-4 pt-4 border-t border-overlay/10">
+                    <ToggleOption
+                      label="Allow available uninstall"
+                      description="Allow users to uninstall this Win32 app from Company Portal when assigned as Available. Applies to the entire app and is preserved across auto-updates."
+                      checked={allowAvailableUninstall === true}
+                      onChange={handleAllowAvailableUninstallChange}
+                    />
+                  </div>
+                )}
               </ConfigSection>}
 
               {/* Category Configuration (quick + advanced, all app types) */}

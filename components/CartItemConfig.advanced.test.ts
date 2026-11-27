@@ -88,6 +88,19 @@ describe('cart item advanced options (#162)', () => {
     expect(useCartStore.getState().items[0]).toMatchObject({ psadtConfig: { postInstallCommands: ['second'] } });
   });
 
+  it('renders Allow available uninstall as a keyboard-operable switch button in CartItemConfig', async () => {
+    await render(item());
+    await act(async () => button('Assignment Configuration').click());
+    const sw = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')].find((el) => {
+      const labelId = el.getAttribute('aria-labelledby');
+      return labelId ? document.getElementById(labelId)?.textContent?.includes('Allow available uninstall') : false;
+    });
+    expect(sw).toBeTruthy();
+    expect(sw!.getAttribute('aria-checked')).toBe('false');
+    await act(async () => sw!.click());
+    expect(sw!.getAttribute('aria-checked')).toBe('true');
+  });
+
   it('keeps the current description when the override is cleared', async () => {
     await render(item());
     await openAdvanced();

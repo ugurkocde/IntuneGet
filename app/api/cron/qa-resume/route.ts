@@ -3,6 +3,7 @@ import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
 import { buildQaPackageIdentityFromWorkflowInput } from '@/lib/qa/package-profile';
 import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import { storedJobItem, buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
+import { isHostedAllowAvailableUninstallEnabled } from '@/lib/allow-available-uninstall';
 import { loadInstallerSecurityHolds, installerSecurityReason } from '@/lib/qa/installer-security-holds';
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
@@ -655,10 +656,60 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const now = new Date().toISOString();
-    const nextStatus = features.localPackager ? 'queued' : 'packaging';
     const retryDetails = job.error_details && typeof job.error_details === 'object' && !Array.isArray(job.error_details)
       ? job.error_details : {};
+    const hasUnconfirmedDispatch =
+      job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED' ||
+      Object.hasOwn(retryDetails, UNCONFIRMED_AT_KEY);
+    const canReconcileUnconfirmedDispatch =
+      customRetry && job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
+
+    if (
+      !canReconcileUnconfirmedDispatch &&
+      !features.localPackager &&
+      item.updateMode !== 'sameApp' &&
+      item.allowAvailableUninstall === true &&
+      !isHostedAllowAvailableUninstallEnabled()
+    ) {
+      const message = hasUnconfirmedDispatch
+        ? 'GitHub did not confirm packaging startup and hosted packaging does not yet support Allow available uninstall. Check deployment status before trying again.'
+        : 'Hosted packaging does not yet support Allow available uninstall. Disable this option or use the self-hosted packager.';
+      const { data: unsupportedJob, error: unsupportedError } = await guardObservedIdentity(
+        supabase
+          .from('packaging_jobs')
+          .update({
+            status: 'failed',
+            status_message: message,
+            error_message: message,
+            error_code: hasUnconfirmedDispatch
+              ? 'WORKFLOW_DISPATCH_UNRECONCILED'
+              : 'ALLOW_AVAILABLE_UNINSTALL_UNSUPPORTED_HOSTED',
+            error_stage: 'validation',
+            error_category: 'validation',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id)
+          .eq('status', 'awaiting_qa')
+          .is('callback_run_id', null)
+          .is('github_run_id', null)
+          .is('cancelled_at', null)
+          .is('archived_at', null),
+        true
+      )
+        .select('id')
+        .maybeSingle();
+      if (unsupportedError) {
+        waitingIds.push(job.id);
+        waiting++;
+      } else if (unsupportedJob) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', message);
+      }
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus = features.localPackager ? 'queued' : 'packaging';
     const retryIdentity = retryDetails[DISPATCH_IDENTITY_KEY];
     const deferredClaim = customRetry || Object.hasOwn(retryDetails, DISPATCH_IDENTITY_KEY) || job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED';
     let claimedPackaging = false;
@@ -728,6 +779,7 @@ export async function GET(request: Request) {
         callbackUrl, qaOverride: skipCustomerQa, sanitizeAssignments: deferredClaim,
       });
       const trigger = await triggerPackagingWorkflow(workflowInputs, undefined, deferredClaim ? {
+        reconcileUnconfirmedDispatch: canReconcileUnconfirmedDispatch,
         beforeDispatch: async identity => {
           if (identity !== retryIdentity) await rejectChangedRetry();
           if (customRetry && job.error_code === 'WORKFLOW_DISPATCH_UNCONFIRMED') {
