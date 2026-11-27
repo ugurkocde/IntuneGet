@@ -281,4 +281,6 @@ if __name__ == '__main__':
     inspected = transport['subprocess'].run(['docker', 'inspect', '--format', '{{json .HostConfig.PortBindings}}', transport['CONTAINER']], capture_output=True, text=True, check=True, env=transport['ENV'], timeout=10)
     assert json.loads(inspected.stdout) in (None, {})
     contracts(transport['sql'])
-    runpy.run_path(str(ROOT / 'scripts/ci/catalog-history-deep-pages-postgres.py'))['contracts'](transport['sql'])
+    deep_contracts = runpy.run_path(str(ROOT / 'scripts/ci/catalog-history-deep-pages-postgres.py'))
+    deep_contracts['contracts'](transport['sql'])
+    deep_contracts['metadata_bounds_cache_contracts'](transport['sql'], transport['command'], transport['ENV'])

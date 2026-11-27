@@ -23,11 +23,11 @@
     },
     {
       "path": "/api/cron/qa-dispatch",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/qa-resume",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/qa-live-cleanup",
@@ -39,7 +39,7 @@
     },
     {
       "path": "/api/cron/process-batches",
-      "schedule": "*/2 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/cleanup-stale-jobs",

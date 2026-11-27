@@ -29,3 +29,71 @@ The independent 500 ms production design gate is FAILED. Retained full V2 candid
 The 2026-11-25 Root-authorized baseline decision supersedes the agent-chosen absolute 500 ms design ceiling as a release veto. All earlier first-sample and page-one failures remain recorded above. Those measurements describe preceding candidates, not production capacity of the final source. The release contract is full JSON and security parity, unchanged shallow pages 1 through 100, and improvement of the deep path against the current eight-second customer failure. Latest-source production timings, API settings and raw tie sizes remain unverified. Standing Full automation permits post-merge natural verification with immediate guarded rollback on demonstrated regression. There is no cold claim or replacement absolute threshold. Two complete UTC hours with zero deep errors begin only after actual activation; shallow failures are tracked separately.
 
 Before activation capture both function definitions and their owner, ACL, config, language, volatility, strictness and signature. Apply the reviewed migration inside one transaction. A rollback must use one transaction and acquire both function catalog locks in activation order: V2 first, then global rows, using the existing same-value COST 100 alterations. After both locks are held, check both expected replacement body hashes and the full captured security metadata before restoring either definition. Abort on any lock failure or mismatch. Restore both exact captured definitions, including their statement terminators, verify both predecessor hashes and security snapshots, then notify PostgREST and commit. Keep the activation and rollback migration ledger entries for audit. If an apply response is ambiguous, read both function states and the ledger before any retry.
+
+## Transactionally invalidated metadata and bounds
+
+Global history requests reuse exact metadata and page boundaries when the source
+tables are unchanged and PostgreSQL reports that RLS is inactive for the invoker.
+An absent, invalidated or physically outdated cache uses the preceding live SQL.
+Filtered requests retain their existing implementation. Anonymous and authenticated
+callers subject to RLS always use the live query, including permissive policies.
+The public response shape, page clamp, ordering and history coverage are unchanged.
+
+The private `catalog_internal` schema must not be exposed through the Data API.
+Its metadata and boundaries use forced RLS. Restricted writers may see only the
+opaque invalidation marker for their own transaction, which is needed for trigger
+deduplication; they cannot see other writers' markers or unrestricted metadata.
+Do not manually truncate or modify the private cache tables.
+
+## Activation
+
+1. Retain a reviewed rollback packet containing `pg_get_functiondef` and the owner,
+   ACL, language, volatility, strictness and configuration of both existing RPCs.
+   Verify the exact predecessor body guards in the migration against the active
+   database before applying it. Use the established authenticated migration path.
+2. Apply `20261126220806_catalog_history_metadata_bounds_cache.sql` in its own
+   transaction outside the hourly and daily catalog write windows. Its one second
+   lock timeout bounds trigger installation. Do not put the initial refresh in
+   that transaction: trigger DDL holds a stronger source lock until commit.
+3. After DDL commits, call `public.refresh_catalog_release_history_cache()` in a
+   separate read committed transaction with the existing authorized server role.
+   Empty metadata remains a safe live fallback before this completes.
+4. Verify source attributes and grants, exact response parity, invalidation and
+   the deployed writer refresh paths. Preserve the existing natural production
+   acceptance windows and caller throughput evidence. A cache hit or local timing
+   result alone does not prove that the production no headers timeout is fixed.
+
+The refresh function rejects stronger isolation levels and transactions with an
+already assigned XID. Use a fresh transaction without earlier writes or calls to
+`pg_current_xact_id()`. This prevents later writes in an older refresh transaction
+from being mistaken for changes included in the build snapshot. It takes a nonblocking refresh
+advisory lock and source access share locks, and captures the data, build snapshot
+and both physical table paths in one statement. An older snapshot spanning a
+truncate or heap rewrite falls back. Triggerless rewrites are repaired by the next
+refresh. Index-only rewrites do not invalidate unchanged history data.
+
+Hourly package sync and both daily catalog writers request refresh after writing.
+Their five second client deadline and fixed warning preserve original sync results
+when refresh is unavailable. Hourly sync also reserves one second to return its
+response, caps refresh to the remaining invocation budget, and skips it when that
+budget is exhausted. Such a failure is not cache acceptance: history calls use
+exact live SQL when the cache is absent or invalid. A failed request does not
+invalidate an already valid cache, and the warning alone cannot establish which
+path the history RPC used. Record attempted
+and completed refreshes separately for each writer when validating deployment.
+
+## Rollback
+
+Restore both exact predecessor function definitions from the reviewed rollback
+packet through the normal reviewed rollback path. Recheck their original security
+attributes and live response parity. Do not replay the entire predecessor migration:
+its source guards target a different predecessor body.
+
+After restoring the RPCs, remove the six `history_cache_insert`, `history_cache_structure` and
+`history_cache_identity` triggers on the two source tables, the public refresh
+function, and the private cache functions/tables/schema in dependency order. Use
+explicit object names and no `CASCADE`. Preserve all catalog rows. The disposable
+Postgres contracts exercise this rollback and the unchanged RPC ACLs.
+
+If writer refresh code remains deployed briefly after SQL rollback, its missing RPC
+warning is nonfatal. Remove that wiring through the same reviewed source rollback.

@@ -8,12 +8,14 @@ const mocks = vi.hoisted(() => ({
   deletes: [] as Array<{ table: string; filters: Record<string, unknown> }>,
   historyError: null as { message: string } | null,
   appError: null as { message: string } | null,
+  rpc: vi.fn(),
+  cacheRefresh: vi.fn(),
   client: {
     fetchVersionsWithValidator: vi.fn(), fetchVersions: vi.fn(),
     fetchInstallerManifest: vi.fn(), fetchLocaleManifest: vi.fn(),
   },
 }));
-vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: (table: string) => ({
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ rpc: mocks.rpc, from: (table: string) => ({
   select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { metadata: mocks.metadata }, error: null }) }) }),
   upsert: async (value: Record<string, unknown>) => {
     mocks.writes.push({ table, value });
@@ -57,14 +59,57 @@ beforeEach(() => {
   mocks.apps = [{ winget_id: 'Example.App', latest_version: '2.0', description: 'Example', upstream_miss_count: 0 }];
   mocks.metadata = { upstream_etags: { 'Example.App': entry(), 'Not.Selected': entry() } };
   mocks.writes = []; mocks.deletes = []; mocks.historyError = null; mocks.appError = null;
+  mocks.rpc.mockReturnValue({ abortSignal: mocks.cacheRefresh });
+  mocks.cacheRefresh.mockResolvedValue({ data: true, error: null });
   mocks.client.fetchVersions.mockResolvedValue(['2.0']);
   mocks.client.fetchVersionsWithValidator.mockResolvedValue({ notModified: false, versions: ['2.0'], etag: '"new"' });
   mocks.client.fetchInstallerManifest.mockResolvedValue({ InstallerType: 'exe', Installers: [] });
   mocks.client.fetchLocaleManifest.mockResolvedValue({ ShortDescription: 'Example' });
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe('conditional hourly package sync', () => {
+  it('returns the sync result without starting refresh at the invocation deadline', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(299500);
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('caps refresh to the remaining budget and returns after the final write', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(298000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    mocks.rpc.mockImplementation(() => {
+      expect(completion()).toBeDefined();
+      return { abortSignal: mocks.cacheRefresh };
+    });
+    expect((await GET(request())).status).toBe(200);
+    expect(timeout).toHaveBeenCalledWith(1000);
+  });
+
+  it('refreshes history metadata after syncing without changing sync results', async () => {
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledWith('refresh_catalog_release_history_cache');
+    expect(mocks.cacheRefresh).toHaveBeenCalledWith(expect.any(AbortSignal));
+  });
+
+  it('keeps sync success when the optional metadata refresh returns an error', async () => {
+    mocks.cacheRefresh.mockResolvedValue({ data: null, error: { message: 'synthetic unavailable' } });
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.cacheRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps sync success when the optional metadata refresh throws', async () => {
+    mocks.cacheRefresh.mockRejectedValue(new Error('synthetic network failure'));
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.cacheRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('tries metadata refresh after a partial write failure without hiding that failure', async () => {
+    mocks.appError = { message: 'synthetic application update failure' };
+    expect((await GET(request())).status).toBe(500);
+    expect(mocks.rpc).toHaveBeenCalledWith('refresh_catalog_release_history_cache');
+  });
+
   it('skips unchanged packages without renewing the full refresh deadline or writing derived rows', async () => {
     mocks.client.fetchVersionsWithValidator.mockResolvedValue({ notModified: true, versions: [], etag: '"old"' });
     const response = await GET(request());
