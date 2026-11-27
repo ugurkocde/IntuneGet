@@ -42,6 +42,7 @@ vi.mock('@/lib/supabase', () => ({
 import { POST as packagePost } from './route';
 import { POST as updatePolicyPost } from '@/app/api/update-policies/route';
 import { PATCH as updatePolicyPatch } from '@/app/api/update-policies/[id]/route';
+import { buildStoredJobWorkflowInputs } from '@/lib/auto-update/stored-job-workflow-inputs';
 
 const ghConfig: GitHubActionsConfig = {
   token: 'test-token',
@@ -167,7 +168,7 @@ describe('POST /api/package, update-policies, and GitHub Actions dispatch for al
     expect(patchRes.status).toBe(400);
   });
 
-  it('emits client_payload.config.allowAvailableUninstall as string only when boolean and reflects it in dispatchIdentity', async () => {
+  it('emits client_payload.config.allowAvailableUninstall only when hosted flag is enabled, boolean, and not sameApp', async () => {
     const payloads: Array<Record<string, unknown>> = [];
     const identities: string[] = [];
     vi.stubGlobal(
@@ -178,26 +179,73 @@ describe('POST /api/package, update-policies, and GitHub Actions dispatch for al
       })
     );
 
-    await triggerPackagingWorkflow(baseWorkflowInputs(), ghConfig, {
-      skipRunCapture: true,
-      beforeDispatch: async (id) => { identities.push(id); },
-    });
-    await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
-      skipRunCapture: true,
-      beforeDispatch: async (id) => { identities.push(id); },
-    });
-    await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: false }), ghConfig, {
-      skipRunCapture: true,
-      beforeDispatch: async (id) => { identities.push(id); },
-    });
+    const prevFlag = process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+    try {
+      // Phase 1 (flag disabled): omitted even when boolean is passed
+      delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+      await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
+        skipRunCapture: true,
+      });
+      const cfgFlagOff = (payloads[0].client_payload as { config: Record<string, unknown> }).config;
+      expect('allowAvailableUninstall' in cfgFlagOff).toBe(false);
 
-    const cfg0 = (payloads[0].client_payload as { config: Record<string, unknown> }).config;
-    const cfg1 = (payloads[1].client_payload as { config: Record<string, unknown> }).config;
-    const cfg2 = (payloads[2].client_payload as { config: Record<string, unknown> }).config;
+      // Phase 2 (flag enabled): emitted for boolean create, omitted for undefined and sameApp
+      process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED = 'true';
+      await triggerPackagingWorkflow(baseWorkflowInputs(), ghConfig, {
+        skipRunCapture: true,
+        beforeDispatch: async (id) => { identities.push(id); },
+      });
+      await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: true }), ghConfig, {
+        skipRunCapture: true,
+        beforeDispatch: async (id) => { identities.push(id); },
+      });
+      await triggerPackagingWorkflow(baseWorkflowInputs({ allowAvailableUninstall: false }), ghConfig, {
+        skipRunCapture: true,
+        beforeDispatch: async (id) => { identities.push(id); },
+      });
 
-    expect('allowAvailableUninstall' in cfg0).toBe(false);
-    expect(cfg1.allowAvailableUninstall).toBe('true');
-    expect(cfg2.allowAvailableUninstall).toBe('false');
-    expect(new Set(identities).size).toBe(3);
+      const cfg0 = (payloads[1].client_payload as { config: Record<string, unknown> }).config;
+      const cfg1 = (payloads[2].client_payload as { config: Record<string, unknown> }).config;
+      const cfg2 = (payloads[3].client_payload as { config: Record<string, unknown> }).config;
+
+      expect('allowAvailableUninstall' in cfg0).toBe(false);
+      expect(cfg1.allowAvailableUninstall).toBe('true');
+      expect(cfg2.allowAvailableUninstall).toBe('false');
+      expect(new Set(identities).size).toBe(3);
+
+      // sameApp stored jobs always omit allowAvailableUninstall
+      const sameAppItem = {
+        ...makeWin32Item({
+          updateMode: 'sameApp',
+          targetIntuneAppId: '11111111-1111-4111-8111-111111111111',
+          allowAvailableUninstall: true,
+        }),
+      };
+      const sameAppInputs = buildStoredJobWorkflowInputs(
+        {
+          id: 'job-same',
+          tenant_id: 'tenant-1',
+          winget_id: 'Contoso.App',
+          display_name: 'Contoso App',
+          publisher: 'Contoso',
+          version: '2.0.0',
+          architecture: 'x64',
+          installer_url: 'https://example.test/setup.exe',
+          installer_sha256: 'a'.repeat(64),
+          installer_type: 'exe',
+          install_command: 'setup.exe /S',
+          uninstall_command: 'uninstall.exe /S',
+          install_scope: 'machine',
+          is_auto_update: false,
+          package_config: sameAppItem,
+        } as never,
+        sameAppItem as never,
+        { callbackUrl: 'https://example.test/cb', qaOverride: false, sanitizeAssignments: false }
+      );
+      expect(sameAppInputs.allowAvailableUninstall).toBeUndefined();
+    } finally {
+      if (prevFlag === undefined) delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+      else process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED = prevFlag;
+    }
   });
 });

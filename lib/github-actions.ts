@@ -7,6 +7,7 @@ import { isExactPackagingRun } from './runner-loss';
  */
 
 import { createHash, createHmac } from 'node:crypto';
+import { isHostedAllowAvailableUninstallEnabled } from '@/lib/allow-available-uninstall';
 import { dispatchRateLimitError, WorkflowDispatchUnconfirmedError } from './workflow-dispatch-rate-limit';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
@@ -397,7 +398,9 @@ export async function triggerPackagingWorkflow(
           espProfiles: inputs.updateMode === 'sameApp' ? '[]' : inputs.espProfiles || '[]',
           ...(inputs.updateMode === 'sameApp' ? {} : { relationships: inputs.relationships || '[]' }),
           installScope: inputs.installScope || 'machine',
-          ...(inputs.updateMode !== 'sameApp' && typeof inputs.allowAvailableUninstall === 'boolean'
+          ...(inputs.updateMode !== 'sameApp' &&
+            typeof inputs.allowAvailableUninstall === 'boolean' &&
+            isHostedAllowAvailableUninstallEnabled()
             ? { allowAvailableUninstall: inputs.allowAvailableUninstall ? 'true' : 'false' }
             : {}),
           forceCreate: inputs.updateMode !== 'sameApp' && inputs.forceCreate ? 'true' : 'false',

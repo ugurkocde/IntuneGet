@@ -171,4 +171,36 @@ describe('PackageConfig Allow available uninstall toggle', () => {
     await act(async () => { sameAppRadio!.click(); });
     expect(switchByLabel('Allow available uninstall')).toBeUndefined();
   });
+
+  it('omits allowAvailableUninstall from cart item on hosted Phase 1 Redeploy so POST /api/package never 400s', async () => {
+    const prevSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const prevHostedFlag = process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://hosted.supabase.co';
+    delete process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+    try {
+      await render({
+        isDeployed: true,
+        intuneAppId: '11111111-1111-4111-8111-111111111111',
+        deployedConfig: { ...deployedWin32, allowAvailableUninstall: true },
+      });
+
+      // Toggle remains available for Graph-only Update Settings
+      await act(async () => button('Assignment Configuration')!.click());
+      expect(switchByLabel('Allow available uninstall')?.getAttribute('aria-checked')).toBe('true');
+
+      // Trigger a Redeploy (Add to Selection (Redeploy)) and verify allowAvailableUninstall is omitted
+      const redeployBtn = button('Redeploy') ?? button('Add to Selection (Redeploy)');
+      expect(redeployBtn).toBeTruthy();
+      await act(async () => redeployBtn!.click());
+
+      const items = useCartStore.getState().items;
+      expect(items).toHaveLength(1);
+      expect((items[0] as Win32CartItem).allowAvailableUninstall).toBeUndefined();
+    } finally {
+      if (prevSupabaseUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = prevSupabaseUrl;
+      if (prevHostedFlag === undefined) delete process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+      else process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL = prevHostedFlag;
+    }
+  });
 });

@@ -127,8 +127,11 @@ function buildSupabaseMock(opts: {
 }
 
 describe('AutoUpdateTrigger allowAvailableUninstall precedence and fail-closed Graph inheritance', () => {
+  const prevHostedFlag = process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED = 'true';
     mocks.ensureQaDemand.mockResolvedValue({
       state: 'passed',
       candidateId: 'cand-1',
@@ -138,6 +141,11 @@ describe('AutoUpdateTrigger allowAvailableUninstall precedence and fail-closed G
   });
 
   afterEach(() => {
+    if (prevHostedFlag === undefined) {
+      delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+    } else {
+      process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED = prevHostedFlag;
+    }
     vi.restoreAllMocks();
   });
 
@@ -274,5 +282,50 @@ describe('AutoUpdateTrigger allowAvailableUninstall precedence and fail-closed G
     );
     expect(res2.success).toBe(true);
     expect('allowAvailableUninstall' in (createdJobs[1].package_config as Record<string, unknown>)).toBe(false);
+  });
+
+  it('re-reads live Intune Graph when prior job value was Graph-inferred so Intune Portal edits are honored', async () => {
+    const insertedJobs: Array<Record<string, unknown>> = [];
+    const policyUpdates: Array<Record<string, unknown>> = [];
+    vi.mocked(createClient).mockReturnValue(
+      buildSupabaseMock({
+        priorJobPackageConfig: {
+          allowAvailableUninstall: true,
+          allowAvailableUninstallSource: 'inherited_graph',
+        },
+        insertedJobs,
+        policyUpdates,
+      }) as never
+    );
+    mocks.readWin32AllowAvailableUninstall.mockResolvedValue({ status: 'hit', value: false });
+
+    const trigger = new AutoUpdateTrigger('https://sb.test', 'key');
+    const result = await trigger.triggerAutoUpdate(makePolicy(), makeUpdateInfo(), { skipRateLimits: true });
+
+    expect(result.success).toBe(true);
+    expect(mocks.readWin32AllowAvailableUninstall).toHaveBeenCalledWith('secret-bearer-token-do-not-log', SOURCE_APP_UUID);
+    expect((insertedJobs[0].package_config as Record<string, unknown>).allowAvailableUninstall).toBe(false);
+    expect((insertedJobs[0].package_config as Record<string, unknown>).allowAvailableUninstallSource).toBe('inherited_graph');
+  });
+
+  it('defers hosted auto-update fail-closed without incrementing consecutive_failures when allowAvailableUninstall=true and hosted workflow flag is disabled', async () => {
+    delete process.env.HOSTED_ALLOW_AVAILABLE_UNINSTALL_ENABLED;
+    delete process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL;
+    const insertedJobs: Array<Record<string, unknown>> = [];
+    const policyUpdates: Array<Record<string, unknown>> = [];
+    vi.mocked(createClient).mockReturnValue(buildSupabaseMock({ insertedJobs, policyUpdates }) as never);
+
+    const trigger = new AutoUpdateTrigger('https://sb.test', 'key');
+    const result = await trigger.triggerAutoUpdate(
+      makePolicy({ allowAvailableUninstall: true } as Partial<DeploymentConfig>),
+      makeUpdateInfo(),
+      { skipRateLimits: true }
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.skipped).toBe(true);
+    expect(result.code).toBe('INTUNE_SETTINGS_UNVERIFIED');
+    expect(insertedJobs).toHaveLength(0);
+    expect(policyUpdates).toHaveLength(0);
   });
 });

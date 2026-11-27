@@ -50,7 +50,9 @@ import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import { readWin32AllowAvailableUninstall } from '@/lib/intune-api';
+import { getFeatureFlags } from '@/lib/features';
 import {
+  isHostedAllowAvailableUninstallEnabled,
   isValidUuid,
   logAllowAvailableUninstallDecision,
   parseAllowAvailableUninstallFromRecord,
@@ -482,6 +484,16 @@ export class AutoUpdateTrigger {
           skipReason: 'IntuneGet could not verify the existing app allowAvailableUninstall setting. The update was deferred and will retry automatically.',
         };
       }
+      const hostedAllowAvailableUninstallSupported =
+        getFeatureFlags().localPackager || isHostedAllowAvailableUninstallEnabled();
+      if (allowAvailableUninstallResolution.value === true && !hostedAllowAvailableUninstallSupported) {
+        return {
+          success: false,
+          skipped: true,
+          code: 'INTUNE_SETTINGS_UNVERIFIED',
+          skipReason: 'Hosted auto-update cannot preserve allowAvailableUninstall=true until hosted workflow support is enabled. The update was deferred and will retry automatically.',
+        };
+      }
 
       // Create auto-update history record
       const historyRecord = await this.createHistoryRecord(policy.id, updateInfo, updateType);
@@ -495,7 +507,8 @@ export class AutoUpdateTrigger {
         qaDemand,
         options?.admitViaQaResume === true,
         options?.assignmentMigrationOverride,
-        allowAvailableUninstallResolution.value
+        hostedAllowAvailableUninstallSupported ? allowAvailableUninstallResolution.value : undefined,
+        hostedAllowAvailableUninstallSupported ? allowAvailableUninstallResolution.source : undefined
       );
 
       // Update history with job reference
@@ -891,7 +904,7 @@ export class AutoUpdateTrigger {
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
     override?: boolean
-  ): Promise<{ ok: true; value: boolean | undefined } | { ok: false }> {
+  ): Promise<{ ok: true; value: boolean | undefined; source: AllowAvailableUninstallSource } | { ok: false }> {
     const logDecision = (
       value: boolean | undefined,
       source: AllowAvailableUninstallSource,
@@ -909,13 +922,13 @@ export class AutoUpdateTrigger {
 
     if (typeof override === 'boolean') {
       logDecision(override, 'explicit_override', 'not_needed');
-      return { ok: true, value: override };
+      return { ok: true, value: override, source: 'explicit_override' };
     }
 
     const config = policy.deployment_config as DeploymentConfig | null;
     if (typeof config?.allowAvailableUninstall === 'boolean') {
       logDecision(config.allowAvailableUninstall, 'explicit_config', 'not_needed');
-      return { ok: true, value: config.allowAvailableUninstall };
+      return { ok: true, value: config.allowAvailableUninstall, source: 'explicit_config' };
     }
 
     // Step 3: Check prior upload_history -> packaging_jobs.package_config
@@ -946,10 +959,20 @@ export class AutoUpdateTrigger {
           logDecision(undefined, 'default_omitted', 'error');
           return { ok: false };
         }
-        const inheritedFromHistory = parseAllowAvailableUninstallFromRecord(priorJob?.package_config);
+        const priorRecord = priorJob?.package_config;
+        const priorSource =
+          priorRecord && typeof priorRecord === 'object' && !Array.isArray(priorRecord)
+            ? (priorRecord as Record<string, unknown>).allowAvailableUninstallSource
+            : undefined;
+        // Skip Step 3 if the prior job's value was Graph-inferred so subsequent
+        // Intune Portal edits continue to be respected via Step 4.
+        const inheritedFromHistory =
+          priorSource === 'inherited_graph'
+            ? undefined
+            : parseAllowAvailableUninstallFromRecord(priorRecord);
         if (inheritedFromHistory !== undefined) {
           logDecision(inheritedFromHistory, 'inherited_upload_history', 'not_needed');
-          return { ok: true, value: inheritedFromHistory };
+          return { ok: true, value: inheritedFromHistory, source: 'inherited_upload_history' };
         }
       }
     } catch {
@@ -971,14 +994,14 @@ export class AutoUpdateTrigger {
         );
         if (readResult.status === 'hit') {
           logDecision(readResult.value, 'inherited_graph', 'hit');
-          return { ok: true, value: readResult.value };
+          return { ok: true, value: readResult.value, source: 'inherited_graph' };
         }
         if (readResult.status === 'field_missing') {
           logDecision(undefined, 'default_graph_field_missing', 'field_missing');
-          return { ok: true, value: undefined };
+          return { ok: true, value: undefined, source: 'default_graph_field_missing' };
         }
         logDecision(undefined, 'default_source_missing', 'not_found');
-        return { ok: true, value: undefined };
+        return { ok: true, value: undefined, source: 'default_source_missing' };
       } catch {
         logDecision(undefined, 'default_omitted', 'error');
         return { ok: false };
@@ -986,7 +1009,7 @@ export class AutoUpdateTrigger {
     }
 
     logDecision(undefined, 'default_omitted', 'not_needed');
-    return { ok: true, value: undefined };
+    return { ok: true, value: undefined, source: 'default_omitted' };
   }
 
   /**
@@ -999,7 +1022,8 @@ export class AutoUpdateTrigger {
     qaDemand?: QaDemandResult,
     admitViaQaResume = false,
     assignmentMigrationOverride?: DeploymentConfig['assignmentMigration'],
-    resolvedAllowAvailableUninstall?: boolean
+    resolvedAllowAvailableUninstall?: boolean,
+    resolvedAllowAvailableUninstallSource?: AllowAvailableUninstallSource
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
     const assignments = normalizeAssignments(config);
@@ -1063,7 +1087,12 @@ export class AutoUpdateTrigger {
         nestedInstallerPath: updateInfo.nestedInstallerPath,
         installerSuccessCodes: updateInfo.installerSuccessCodes,
         ...(typeof resolvedAllowAvailableUninstall === 'boolean'
-          ? { allowAvailableUninstall: resolvedAllowAvailableUninstall }
+          ? {
+              allowAvailableUninstall: resolvedAllowAvailableUninstall,
+              ...(resolvedAllowAvailableUninstallSource
+                ? { allowAvailableUninstallSource: resolvedAllowAvailableUninstallSource }
+                : {}),
+            }
           : {}),
         forceCreate: config.forceCreateNewApp !== false,
         sourceIntuneAppId,

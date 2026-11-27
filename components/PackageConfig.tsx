@@ -340,12 +340,13 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const canUpdateSettings = isDeployed && !!intuneAppId;
+  const canSetAllowAvailableUninstallOnCreate =
+    process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL;
   const showAllowAvailableUninstallToggle =
     !isStoreApp &&
     !sameApp &&
-    (canUpdateSettings ||
-      process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
-      !process.env.NEXT_PUBLIC_SUPABASE_URL);
+    (canUpdateSettings || canSetAllowAvailableUninstallOnCreate);
 
   // Change detection: categorize modifications as Graph-patchable vs requires-redeploy
   const changeState = useMemo(() => {
@@ -661,7 +662,10 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
             categories: categories.length > 0 ? categories : undefined,
             espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
             relationships: relationships.length > 0 ? relationships : undefined,
-            allowAvailableUninstall: typeof allowAvailableUninstall === 'boolean' ? allowAvailableUninstall : undefined,
+            allowAvailableUninstall:
+              canSetAllowAvailableUninstallOnCreate && typeof allowAvailableUninstall === 'boolean'
+                ? allowAvailableUninstall
+                : undefined,
             updatePolicy,
             assignmentMigration: updatePolicy === 'auto_update' ? { carryOverAssignments, removeAssignmentsFromPreviousApp: false } : undefined,
             ...(isDeployed ? { forceCreate: true } : {}),

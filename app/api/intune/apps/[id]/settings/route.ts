@@ -258,6 +258,7 @@ export async function PATCH(
         }
         if (validatedAllowAvailableUninstall !== undefined) {
           updatedConfig.allowAvailableUninstall = validatedAllowAvailableUninstall;
+          updatedConfig.allowAvailableUninstallSource = 'explicit_settings_patch';
         }
         phase = 'config-save';
         const { data: saved, error: saveError } = await supabase
@@ -287,24 +288,37 @@ export async function PATCH(
 
       if (validatedAllowAvailableUninstall !== undefined) {
         phase = 'policy-sync';
-        const { data: policyRow } = await supabase
+        const { data: policyRow, error: policyReadError } = await supabase
           .from('app_update_policies')
           .select('id, deployment_config')
           .eq('user_id', user.userId)
           .eq('tenant_id', tenantId)
           .eq('winget_id', wingetId)
           .maybeSingle();
+        if (policyReadError) {
+          return NextResponse.json(
+            { error: 'Intune settings were updated, but the auto-update policy configuration could not be read. Refresh before trying again.' },
+            { status: 409 }
+          );
+        }
         if (policyRow?.deployment_config && typeof policyRow.deployment_config === 'object' && !Array.isArray(policyRow.deployment_config)) {
           const nextPolicyConfig: Record<string, Json | undefined> = {
             ...(policyRow.deployment_config as Record<string, Json | undefined>),
             allowAvailableUninstall: validatedAllowAvailableUninstall,
           };
-          await supabase
+          const { data: savedPolicy, error: policyUpdateError } = await supabase
             .from('app_update_policies')
             .update({ deployment_config: nextPolicyConfig, updated_at: new Date().toISOString() })
             .eq('id', policyRow.id)
             .eq('user_id', user.userId)
+            .select('id')
             .maybeSingle();
+          if (policyUpdateError || !savedPolicy) {
+            return NextResponse.json(
+              { error: 'Intune settings were updated, but the auto-update policy configuration could not be saved. Refresh before trying again.' },
+              { status: 409 }
+            );
+          }
         }
       }
     } else if (localDb && localJob && localConfig && typeof localConfig === 'object' && !Array.isArray(localConfig) && hasConfigChanges) {
@@ -339,7 +353,12 @@ export async function PATCH(
     if (err instanceof RelationshipUpdateError) {
       return NextResponse.json({ error: err.kind === 'approval_pending' ? 'Relationship update is awaiting administrator approval. Refresh before trying again.' : err.message, pending: err.kind === 'approval_pending', mayHaveApplied: err.mayHaveApplied, applied }, { status: err.kind === 'invalid' ? 400 : 409 });
     }
-    if (applied.length) return NextResponse.json({ error: 'Relationships were applied, but the remaining settings or saved configuration could not be updated. Refresh before trying again.', applied }, { status: 409 });
+    if (applied.length) {
+      const partialMessage = applied.includes('relationships')
+        ? 'Relationships were applied, but the remaining settings or saved configuration could not be updated. Refresh before trying again.'
+        : 'Some Intune settings were applied, but the remaining settings or saved configuration could not be updated. Refresh before trying again.';
+      return NextResponse.json({ error: partialMessage, applied }, { status: 409 });
+    }
     // Log only a fixed phase. Errors and request data may contain customer secrets.
     const errorKind = err instanceof Error && ['Error', 'TypeError', 'SyntaxError', 'AbortError'].includes(err.name)
       ? err.name : 'other';

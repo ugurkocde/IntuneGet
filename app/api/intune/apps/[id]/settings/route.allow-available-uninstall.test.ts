@@ -116,6 +116,7 @@ describe('PATCH /api/intune/apps/[id]/settings allowAvailableUninstall', () => {
       true
     );
     expect(state.savedJobConfig?.allowAvailableUninstall).toBe(true);
+    expect(state.savedJobConfig?.allowAvailableUninstallSource).toBe('explicit_settings_patch');
     expect(state.savedPolicyConfig?.allowAvailableUninstall).toBe(true);
   });
 });

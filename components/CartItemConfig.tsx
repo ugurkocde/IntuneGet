@@ -122,12 +122,13 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
       setAllowAvailableUninstall(initialAllowAvailableUninstall === true ? false : undefined);
     }
   };
+  const canSetAllowAvailableUninstallOnCreate =
+    process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL;
   const showAllowAvailableUninstallToggle =
     isWin32 &&
     !sameApp &&
-    (typeof item.allowAvailableUninstall === 'boolean' ||
-      process.env.NEXT_PUBLIC_HOSTED_ALLOW_AVAILABLE_UNINSTALL === 'true' ||
-      !process.env.NEXT_PUBLIC_SUPABASE_URL);
+    canSetAllowAvailableUninstallOnCreate;
   const [categories, setCategories] = useState<IntuneAppCategorySelection[]>(
     item.categories || []
   );
@@ -275,7 +276,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
         assignments: assignments.length ? assignments : undefined,
         categories: categories.length ? categories : undefined,
         espProfiles: espProfiles.length ? espProfiles : undefined,
-        allowAvailableUninstall: !sameApp && typeof allowAvailableUninstall === 'boolean' ? allowAvailableUninstall : undefined,
+        allowAvailableUninstall:
+          !sameApp && canSetAllowAvailableUninstallOnCreate && typeof allowAvailableUninstall === 'boolean'
+            ? allowAvailableUninstall
+            : undefined,
         updatePolicy,
         assignmentMigration: updatePolicy === 'auto_update'
           ? { carryOverAssignments, removeAssignmentsFromPreviousApp: false } : undefined,
@@ -331,7 +335,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           categories: !sameApp && categories.length > 0 ? categories : undefined,
           espProfiles: !sameApp && espProfiles.length > 0 ? espProfiles : undefined,
           relationships: !sameApp && relationships.length > 0 ? relationships : undefined,
-          allowAvailableUninstall: !sameApp && typeof allowAvailableUninstall === 'boolean' ? allowAvailableUninstall : undefined,
+          allowAvailableUninstall:
+          !sameApp && canSetAllowAvailableUninstallOnCreate && typeof allowAvailableUninstall === 'boolean'
+            ? allowAvailableUninstall
+            : undefined,
           requirementRules,
           installCommand,
           uninstallCommand,
