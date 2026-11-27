@@ -62,6 +62,8 @@ export interface DeploymentConfig {
 
   // Update deployment behavior (optional)
   forceCreateNewApp?: boolean;
+  // Win32-only Intune setting preserved across auto-updates. Omitted = inherit from prior deployment or Intune.
+  allowAvailableUninstall?: boolean;
   assignmentMigration?: {
     carryOverAssignments: boolean;
     removeAssignmentsFromPreviousApp: boolean;
@@ -233,6 +235,7 @@ export interface TriggerUpdateResponse {
         | 'UPDATE_SCOPE_HELD'
       | 'RATE_LIMIT_UNVERIFIED'
       | 'PSADT_BACKFILL_UNAVAILABLE'
+      | 'INTUNE_SETTINGS_UNVERIFIED'
       | 'WORKFLOW_DISPATCH_UNCONFIRMED'
       | 'WORKFLOW_DISPATCH_RATE_LIMITED'
       | 'ARCHITECTURE_UNAVAILABLE'

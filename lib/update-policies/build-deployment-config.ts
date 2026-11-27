@@ -24,6 +24,7 @@ import type { DeploymentConfig } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship, DetectionRule, RequirementRule } from '@/types/intune';
 import type { NormalizedInstaller, WingetInstaller } from '@/types/winget';
+import { parseAllowAvailableUninstallFromRecord } from '@/lib/allow-available-uninstall';
 
 export interface PackageConfigWithAssignments {
   assignments?: PackageAssignment[];
@@ -372,6 +373,24 @@ export type BuildDeploymentConfigResult =
   | { status: 'orphaned_job' }
   | { status: 'unavailable' };
 
+const NON_EXPLICIT_ALLOW_AVAILABLE_UNINSTALL_SOURCES = new Set([
+  'inherited_graph',
+  'default_graph_field_missing',
+  'default_source_missing',
+  'default_omitted',
+]);
+
+export function parseAllowAvailableUninstall(packageConfig: unknown): boolean | undefined {
+  if (
+    isObject(packageConfig) &&
+    typeof packageConfig.allowAvailableUninstallSource === 'string' &&
+    NON_EXPLICIT_ALLOW_AVAILABLE_UNINSTALL_SOURCES.has(packageConfig.allowAvailableUninstallSource)
+  ) {
+    return undefined;
+  }
+  return parseAllowAvailableUninstallFromRecord(packageConfig);
+}
+
 /**
  * Assemble a deployment config from a stored packaging job. Shared by the
  * Supabase and adapter-backed builders so both produce identical configs.
@@ -396,6 +415,7 @@ function assembleDeploymentConfigFromJob(job: {
   // config, leave it undefined so the auto-update trigger falls back to the
   // user's current global carryOverAssignments setting at update time.
   const assignmentMigration = parseAssignmentMigration(packageConfig);
+  const allowAvailableUninstall = parseAllowAvailableUninstall(packageConfig);
 
   return {
     displayName: job.display_name,
@@ -416,6 +436,7 @@ function assembleDeploymentConfigFromJob(job: {
     relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
     psadtConfig: parsePsadtConfig(packageConfig),
     forceCreateNewApp: true,
+    ...(allowAvailableUninstall !== undefined ? { allowAvailableUninstall } : {}),
     assignmentMigration,
   };
 }

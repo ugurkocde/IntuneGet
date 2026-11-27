@@ -170,6 +170,31 @@ export function extractForceCreate(packageConfig: unknown): boolean {
   return false;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/**
+ * Extract the tri-state allowAvailableUninstall flag strictly as a boolean.
+ */
+export function extractAllowAvailableUninstall(packageConfig: unknown): boolean | undefined {
+  if (typeof packageConfig === 'object' && packageConfig !== null && !Array.isArray(packageConfig)) {
+    const value = (packageConfig as Record<string, unknown>).allowAvailableUninstall;
+    if (typeof value === 'boolean') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function extractSourceIntuneAppId(packageConfig: unknown): string | undefined {
+  if (typeof packageConfig === 'object' && packageConfig !== null && !Array.isArray(packageConfig)) {
+    const value = (packageConfig as Record<string, unknown>).sourceIntuneAppId;
+    if (typeof value === 'string' && UUID_REGEX.test(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 interface GraphMimeContent {
   '@odata.type': '#microsoft.graph.mimeContent';
   type: string;
@@ -503,8 +528,94 @@ export class IntuneUploader {
       appBody.largeIcon = largeIcon;
     }
 
+    const allowAvailableUninstall = await this.resolveAllowAvailableUninstall(graphClient, job);
+    if (typeof allowAvailableUninstall === 'boolean') {
+      appBody.allowAvailableUninstall = allowAvailableUninstall;
+    }
+
     const response = await graphClient.post<{ id: string }>('/deviceAppManagement/mobileApps', appBody);
     return { id: response.id };
+  }
+
+  private async resolveAllowAvailableUninstall(
+    graphClient: GraphClient,
+    job: PackagingJob
+  ): Promise<boolean | undefined> {
+    const explicit = extractAllowAvailableUninstall(job.package_config);
+    if (explicit !== undefined) {
+      this.logger.info('Resolved allowAvailableUninstall setting', {
+        jobId: job.id,
+        wingetId: job.winget_id,
+        allowAvailableUninstall: explicit,
+        source: 'explicit_config',
+        graphReadStatus: 'not_needed',
+      });
+      return explicit;
+    }
+
+    const sourceIntuneAppId = extractSourceIntuneAppId(job.package_config);
+    if (!sourceIntuneAppId) {
+      this.logger.info('Resolved allowAvailableUninstall setting', {
+        jobId: job.id,
+        wingetId: job.winget_id,
+        allowAvailableUninstall: null,
+        source: 'default_omitted',
+        graphReadStatus: 'not_needed',
+      });
+      return undefined;
+    }
+
+    try {
+      const sourceApp = await graphClient.get<Record<string, unknown>>(
+        `/deviceAppManagement/mobileApps/${sourceIntuneAppId}`
+      );
+      if (!sourceApp || sourceApp['@odata.type'] !== '#microsoft.graph.win32LobApp') {
+        this.logger.info('Resolved allowAvailableUninstall setting', {
+          jobId: job.id,
+          wingetId: job.winget_id,
+          allowAvailableUninstall: null,
+          source: 'default_source_missing',
+          graphReadStatus: 'not_found',
+        });
+        return undefined;
+      }
+      if (typeof sourceApp.allowAvailableUninstall === 'boolean') {
+        this.logger.info('Resolved allowAvailableUninstall setting', {
+          jobId: job.id,
+          wingetId: job.winget_id,
+          allowAvailableUninstall: sourceApp.allowAvailableUninstall,
+          source: 'inherited_graph',
+          graphReadStatus: 'hit',
+        });
+        return sourceApp.allowAvailableUninstall;
+      }
+      this.logger.info('Resolved allowAvailableUninstall setting', {
+        jobId: job.id,
+        wingetId: job.winget_id,
+        allowAvailableUninstall: null,
+        source: 'default_graph_field_missing',
+        graphReadStatus: 'field_missing',
+      });
+      return undefined;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/^Graph API GET failed:\s*404\b/.test(message)) {
+        this.logger.info('Resolved allowAvailableUninstall setting', {
+          jobId: job.id,
+          wingetId: job.winget_id,
+          allowAvailableUninstall: null,
+          source: 'default_source_missing',
+          graphReadStatus: 'not_found',
+        });
+        return undefined;
+      }
+      this.logger.warn('Failed to verify source app allowAvailableUninstall; aborting create', {
+        jobId: job.id,
+        wingetId: job.winget_id,
+        graphReadStatus: 'error',
+      });
+      throw error;
+    }
   }
 
   /**
