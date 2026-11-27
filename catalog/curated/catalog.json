@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-11-23T22:41:40.719Z",
-    "expiresAt": "2026-11-30T22:41:40.719Z",
+    "generatedAt": "2026-11-27T18:41:32.437Z",
+    "expiresAt": "2026-12-04T18:41:32.437Z",
     "definitionsSha256": "260475c1f1435d9e7c72b821517f835b240b28f422721cb39e8703417f21b0dd",
     "releases": [
       {
@@ -14948,6 +14948,270 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/calibre/cdc7ac9e0f3546792e876e19.json"
           }
         }
+      },
+      {
+        "id": "thunderbird:15e07dff9077347d00e7cc31",
+        "candidate": {
+          "appId": "thunderbird",
+          "version": "161.0",
+          "installerUrl": "https://archive.mozilla.org/pub/thunderbird/releases/161.0/win64/en-US/Thunderbird%20Setup%20161.0.msi",
+          "vendorSha256": "f56decdcde25468d7dd6bab5d317011a57e69a798c0b1688e353dc32153cc65f",
+          "releaseNotesUrl": "https://www.thunderbird.net/",
+          "discoveredAt": "2026-11-24T16:40:29.215Z",
+          "id": "15e07dff9077347d00e7cc31"
+        },
+        "installerSha256": "f56decdcde25468d7dd6bab5d317011a57e69a798c0b1688e353dc32153cc65f",
+        "executionProfileSha256": "172962BFD2AC0C4390BB348C7F02CA16C33DBB0865620BBFFB3CEAD369A088FE",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-27T18:41:32.437Z",
+        "evidence": {
+          "verifiedAt": "2026-11-24T17:59:45.3626835Z",
+          "installerSha256": "f56decdcde25468d7dd6bab5d317011a57e69a798c0b1688e353dc32153cc65f",
+          "installerVersion": "161.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/thunderbird/15e07dff9077347d00e7cc31.json",
+          "signature": {
+            "publisher": "Mozilla Corporation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "e9a8d4a703d28d2f66669362027860e747a7c7b3",
+            "websiteCommit": "8cb02131734e16620fb80e167ec422271c74a3d2",
+            "runId": "45451903977",
+            "runAttempt": 1,
+            "artifactId": "14949043240",
+            "artifactSha256": "7916aa8a1802a0194993ade97877af081ded7e5126494d505b4035754423a1bb"
+          },
+          "security": {
+            "scanner": "defender",
+            "installerSha256": "f56decdcde25468d7dd6bab5d317011a57e69a798c0b1688e353dc32153cc65f",
+            "signatureVersion": "1.463.452.0",
+            "status": "clean",
+            "suspicious": 0,
+            "engineVersion": "1.1.26100.4",
+            "malicious": 0,
+            "scannedAt": "2026-11-24T17:56:03.5330154Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/thunderbird/15e07dff9077347d00e7cc31.json"
+          },
+          "qa": {
+            "installerVersion": "161.0",
+            "architecture": "x64",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "testedAt": "2026-11-24T17:59:35.9114189Z",
+            "testLevel": "psadt-package",
+            "upgradeFromVersion": "160.0",
+            "executionProfileSha256": "172962BFD2AC0C4390BB348C7F02CA16C33DBB0865620BBFFB3CEAD369A088FE",
+            "executionContext": "LocalSystem",
+            "previousInstallerSha256": "59be3d6abbec50270eb02bdd7639002f7e46eec95e01c7f94e71c76acd8e31bd",
+            "candidateId": "15e07dff9077347d00e7cc31",
+            "installerSha256": "f56decdcde25468d7dd6bab5d317011a57e69a798c0b1688e353dc32153cc65f",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/thunderbird/15e07dff9077347d00e7cc31.json"
+          }
+        }
+      },
+      {
+        "id": "dbeaver:62391efc68461fbd83fb188c",
+        "candidate": {
+          "appId": "dbeaver",
+          "version": "26.2.5.2",
+          "installerUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.5.2/dbeaver-ce-26.2.5.2-windows-x86_64.exe",
+          "vendorSha256": "eee1ee7eded5aaca5a6cbf5593dbe360ec9b70ff012cd0185fb686a9f1cfe511",
+          "releaseNotesUrl": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.5.2",
+          "discoveredAt": "2026-11-24T15:40:44.037Z",
+          "id": "62391efc68461fbd83fb188c"
+        },
+        "installerSha256": "eee1ee7eded5aaca5a6cbf5593dbe360ec9b70ff012cd0185fb686a9f1cfe511",
+        "executionProfileSha256": "9998717F0CD7CC2C49A03C1568AA12E12A0E8BF0D8D96DF1BB5B40AEEA9E47DB",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-27T18:41:32.437Z",
+        "evidence": {
+          "verifiedAt": "2026-11-24T16:45:48.4180939Z",
+          "installerSha256": "eee1ee7eded5aaca5a6cbf5593dbe360ec9b70ff012cd0185fb686a9f1cfe511",
+          "installerVersion": "26.2.5.2",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/62391efc68461fbd83fb188c.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "DBeaver Corp"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "1ad7be0a1b79655c35b7fa51351c3a36da804f14",
+            "websiteCommit": "0172c62ac6cb237457a10e4b75a8d35279f65f01",
+            "runId": "45437944852",
+            "runAttempt": 1,
+            "artifactId": "14943317616",
+            "artifactSha256": "054c169bddccc730a9898575fbbe6c513960a51d3de8ff59b77da6d8215e17db"
+          },
+          "security": {
+            "signatureVersion": "1.463.452.0",
+            "status": "clean",
+            "engineVersion": "1.1.26100.4",
+            "installerSha256": "eee1ee7eded5aaca5a6cbf5593dbe360ec9b70ff012cd0185fb686a9f1cfe511",
+            "scannedAt": "2026-11-24T16:42:24.1939779Z",
+            "scanner": "defender",
+            "malicious": 0,
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/62391efc68461fbd83fb188c.json"
+          },
+          "qa": {
+            "testLevel": "psadt-package",
+            "previousInstallerSha256": "8cce0a921ef3e0f43dd13357304bd0c18eff1cfcbf52f848db8f854af469cce3",
+            "executionProfileSha256": "9998717F0CD7CC2C49A03C1568AA12E12A0E8BF0D8D96DF1BB5B40AEEA9E47DB",
+            "installerVersion": "26.2.5.2",
+            "installerSha256": "eee1ee7eded5aaca5a6cbf5593dbe360ec9b70ff012cd0185fb686a9f1cfe511",
+            "candidateId": "62391efc68461fbd83fb188c",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "architecture": "x64",
+            "executionContext": "LocalSystem",
+            "upgradeFromVersion": "26.2.5",
+            "testedAt": "2026-11-24T16:45:34.8401635Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/dbeaver/62391efc68461fbd83fb188c.json"
+          }
+        }
+      },
+      {
+        "id": "qbittorrent:001e4769989608bf937bff3a",
+        "candidate": {
+          "appId": "qbittorrent",
+          "version": "5.3.1",
+          "installerUrl": "https://github.com/qbittorrent/qBittorrent/releases/download/release-5.3.1/qbittorrent_5.3.1_x64_setup.exe",
+          "vendorSha256": "836d0f415fdf195cb861a3bc88ac603d2bf4480f78a334d512ad0e458e7c8db5",
+          "releaseNotesUrl": "https://github.com/qbittorrent/qBittorrent/releases/tag/release-5.3.1",
+          "discoveredAt": "2026-11-24T16:17:34.067Z",
+          "id": "001e4769989608bf937bff3a"
+        },
+        "installerSha256": "836d0f415fdf195cb861a3bc88ac603d2bf4480f78a334d512ad0e458e7c8db5",
+        "executionProfileSha256": "6CD3CAF95516DA27DCCBB9FE96B4080BE337759FD50FFD20BEDEC91FB35591D0",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-11-27T18:41:32.437Z",
+        "evidence": {
+          "verifiedAt": "2026-11-24T17:29:58.7302870Z",
+          "installerSha256": "836d0f415fdf195cb861a3bc88ac603d2bf4480f78a334d512ad0e458e7c8db5",
+          "installerVersion": "5.3.1",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/qbittorrent/001e4769989608bf937bff3a.json",
+          "signature": {
+            "publisher": null,
+            "status": "unsigned"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "b3fddca3ce5bcf5a26fd2a6ebe7ef02e793a7916",
+            "websiteCommit": "8cb02131734e16620fb80e167ec422271c74a3d2",
+            "runId": "45446363478",
+            "runAttempt": 1,
+            "artifactId": "14948035953",
+            "artifactSha256": "d15fadce2576de81e36d62b4a23b80dcd1129d1bba7703f5c62eb09396df0c48"
+          },
+          "security": {
+            "suspicious": 0,
+            "installerSha256": "836d0f415fdf195cb861a3bc88ac603d2bf4480f78a334d512ad0e458e7c8db5",
+            "engineVersion": "1.1.26100.4",
+            "signatureVersion": "1.463.452.0",
+            "malicious": 0,
+            "scanner": "defender",
+            "status": "clean",
+            "scannedAt": "2026-11-24T17:26:21.9178314Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/qbittorrent/001e4769989608bf937bff3a.json"
+          },
+          "qa": {
+            "previousInstallerSha256": "aff5b3bdc00d6e5773d6099ba30f9696dd3dfd1669ab0f64ce5c4e7168486436",
+            "packagerCommit": "1cc5fb513cf3c23120f2b0741d66f11ee435d409",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerVersion": "5.3.1",
+            "installerSha256": "836d0f415fdf195cb861a3bc88ac603d2bf4480f78a334d512ad0e458e7c8db5",
+            "testLevel": "psadt-package",
+            "upgradeFromVersion": "5.3.0",
+            "architecture": "x64",
+            "testedAt": "2026-11-24T17:29:47.9149116Z",
+            "executionContext": "LocalSystem",
+            "candidateId": "001e4769989608bf937bff3a",
+            "executionProfileSha256": "6CD3CAF95516DA27DCCBB9FE96B4080BE337759FD50FFD20BEDEC91FB35591D0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/qbittorrent/001e4769989608bf937bff3a.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": [
@@ -14957,5 +15221,5 @@
     ]
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "FwNns338HYlKkKEMaAd+9IBsZFv/m5n/YGEaBJJytppFPeNBJRfeWI9LeSYmjgN/SB1EqS5Q0u0RKhdISFyNCA=="
+  "signature": "2vC0NM6BeHzVithHDSEu74vEp76OR7t/HNuQQNAW9YE1+q93VpphuG+nANpUoRD33Ro66KdG5uDTJ8Ot5d+nBg=="
 }
