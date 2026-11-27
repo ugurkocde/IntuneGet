@@ -5,10 +5,11 @@ export type ViewMode = "grid" | "list";
 
 /**
  * Saved PSADT defaults for newly configured Win32 packages (#2085).
- * Only enums, booleans and bounded integers. Never commands, detection,
- * paths, process names, branding, free text or verifyInstall.
+ * Enums, booleans, bounded integers and a personal company name. Never
+ * commands, detection, paths, process names, images or verifyInstall.
  */
 export interface PackageDefaults {
+  brandingCompanyName?: string;
   deployMode?: DeployMode;
   restartBehavior?: RestartBehavior;
   windowLocation?: DialogPosition;

@@ -51,7 +51,7 @@ const forbidden = {
   installCommand: 'evil.exe', uninstallCommand: 'x', detectionRules: [{ type: 'file' }],
   processesToClose: [{ name: 'x' }], registryMarkerPath: 'HKLM\\x', reviewedExactUninstall: true,
   brandingLogoPath: 'C:\\x.png', postInstallCommands: ['x'], verifyInstall: false,
-  brandingCompanyName: 'Acme', customPrompts: [], deferDeadline: '2026-01-01', requiredDiskSpace: 5,
+  customPrompts: [], deferDeadline: '2026-01-01', requiredDiskSpace: 5,
   forceCloseProcessesCountdown: 30,
 };
 
@@ -140,4 +140,25 @@ describe('package defaults in user settings', () => {
     const body = await (await get()).json();
     expect(body.settings.packageDefaults).toBeNull();
   });
+});
+
+
+it('round trips and clears company defaults while preserving other preferences', async () => {
+  expect((await patch({ packageDefaults: { brandingCompanyName: 'Personal company', allowDefer: false } })).status).toBe(200);
+  expect((await (await get()).json()).settings.packageDefaults).toEqual({ brandingCompanyName: 'Personal company', allowDefer: false });
+  expect((await patch({ packageDefaults: { brandingCompanyName: '', allowDefer: false } })).status).toBe(200);
+  expect((await (await get()).json()).settings.packageDefaults).toEqual({ brandingCompanyName: '', allowDefer: false });
+  expect((await patch({ packageDefaults: null })).status).toBe(200);
+  expect((await (await get()).json()).settings.packageDefaults).toBeNull();
+});
+
+it.each(['x'.repeat(129), '\u202Eprivate', 42, null])('rejects invalid company text alongside valid preferences', async (brandingCompanyName) => {
+  expect((await patch({ packageDefaults: { brandingCompanyName, allowDefer: true } })).status).toBe(400);
+  expect(h.state.lastUpsert).toBeNull();
+});
+
+it('requires authentication for company defaults reads and writes', async () => {
+  expect((await GET(new NextRequest('http://localhost/api/user/settings'))).status).toBe(401);
+  expect((await PATCH(new NextRequest('http://localhost/api/user/settings', { method: 'PATCH', body: JSON.stringify({ packageDefaults: { brandingCompanyName: 'Personal company' } }) }))).status).toBe(401);
+  expect(h.state.lastUpsert).toBeNull();
 });
