@@ -103,7 +103,7 @@ it('disables changes while server settings load and shows explicit scope', async
   mock.isLoading = true;
   await render();
   expect(input('Use saved package defaults').disabled).toBe(true);
-  expect(document.body.textContent).toContain('Quick add and bulk add use the standard settings');
+  expect(document.body.textContent).toContain('Applies to new Win32 packages, including quick add and bulk add');
 });
 
 it('edits one preference while retaining the other saved values', async () => {

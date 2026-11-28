@@ -4,9 +4,8 @@ import type { PackageDefaults } from '@/types/user-settings';
 /**
  * Saved defaults for newly configured Win32 packages (#2085).
  *
- * Only enums, booleans and integers bounded by the PackageConfig controls are
- * accepted. Commands, detection, paths, process names, branding, free text and
- * verifyInstall are never part of a saved default.
+ * Accepts bounded controls and personal company text. Commands, detection,
+ * paths, process names, images and verifyInstall remain package specific.
  */
 const DEPLOY_MODES: readonly DeployMode[] = ['Silent', 'NonInteractive', 'Auto'];
 const RESTART_BEHAVIORS: readonly RestartBehavior[] = ['Suppress', 'Force', 'Prompt'];
@@ -46,10 +45,21 @@ function boundedInteger(value: unknown, [min, max]: readonly [number, number]): 
     : undefined;
 }
 
+/** Company text is data, never an asset reference or executable expression. */
+export function isValidDefaultCompanyName(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 128
+    && !/\p{Bidi_Control}/u.test(value)
+    && !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/u.test(value)
+    && !/[\ud800-\udfff]/u.test(value);
+}
+
 /** Returns a clean defaults object, or null when nothing valid remains. */
 export function sanitizePackageDefaults(value: unknown): PackageDefaults | null {
   if (!isPlainObject(value)) return null;
   const result: PackageDefaults = {};
+  if (isValidDefaultCompanyName(value.brandingCompanyName)) {
+    result.brandingCompanyName = value.brandingCompanyName;
+  }
 
   if (DEPLOY_MODES.includes(value.deployMode as DeployMode)) {
     result.deployMode = value.deployMode as DeployMode;
@@ -85,7 +95,7 @@ export function sanitizePackageDefaults(value: unknown): PackageDefaults | null 
 /** Picks the saveable defaults out of a package's current PSADT config. */
 export function pickPackageDefaults(config: PSADTConfig): PackageDefaults | null {
   const clean = sanitizePackageDefaults(config);
-  const keys = ['deployMode', 'restartBehavior', 'windowLocation', ...BOOLEAN_KEYS, ...Object.keys(INTEGER_LIMITS), 'restartPrompt', 'progressDialog'] as const;
+  const keys = ['deployMode', 'restartBehavior', 'windowLocation', ...BOOLEAN_KEYS, ...Object.keys(INTEGER_LIMITS), 'restartPrompt', 'progressDialog', 'brandingCompanyName'] as const;
   for (const key of keys) {
     if ((key === 'deferTimes' || key === 'deferDays') && config.allowDefer !== true) continue;
     if (config[key as keyof PSADTConfig] !== undefined && (!clean || !(key in clean))) {
@@ -102,6 +112,7 @@ export function applyPackageDefaults(config: PSADTConfig, defaults: PackageDefau
   return {
     ...config,
     ...clean,
+    ...(config.brandingCompanyName !== undefined ? { brandingCompanyName: config.brandingCompanyName } : {}),
     ...(clean.progressDialog ? { progressDialog: { ...config.progressDialog, ...clean.progressDialog } } : {}),
     ...(clean.restartPrompt ? { restartPrompt: { ...clean.restartPrompt } } : {}),
   };

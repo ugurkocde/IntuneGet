@@ -3,7 +3,7 @@ import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { DEFAULT_USER_SETTINGS } from '@/types/user-settings';
 import type { UserSettings, StoredUserSettingsUpdate as UserSettingsUpdate } from '@/types/user-settings';
-import { sanitizePackageDefaults } from '@/lib/package-defaults';
+import { isValidDefaultCompanyName, sanitizePackageDefaults } from '@/lib/package-defaults';
 
 function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
@@ -158,6 +158,14 @@ export async function PATCH(request: NextRequest) {
       (payload.packageDefaults !== undefined && payload.packageDefaults !== null && !isStoredSettings(payload.packageDefaults))) {
       return NextResponse.json(
         { error: 'Settings must be a JSON object' },
+        { status: 400 }
+      );
+    }
+    if (isStoredSettings(payload.packageDefaults) &&
+      payload.packageDefaults.brandingCompanyName !== undefined &&
+      !isValidDefaultCompanyName(payload.packageDefaults.brandingCompanyName)) {
+      return NextResponse.json(
+        { error: 'Company name must be at most 128 characters without control characters.' },
         { status: 400 }
       );
     }

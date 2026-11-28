@@ -66,8 +66,8 @@ function DefaultsCard({ signedIn }: { signedIn: boolean }) {
   return (
     <section className="glass-light rounded-xl p-6 border border-overlay/5" aria-labelledby="package-defaults-heading">
       <h2 id="package-defaults-heading" className="text-lg font-semibold text-text-primary">New package defaults</h2>
-      <p className="mt-1 text-sm text-text-muted">Applies to new Win32 packages opened in the configuration dialog. Quick add and bulk add use the standard settings. Packages already in your cart keep their settings.</p>
-      <p className="mt-1 text-sm text-text-muted">Commands, detection, processes, branding and installer verification are never saved. Saving requires hosted services.</p>
+      <p className="mt-1 text-sm text-text-muted">Applies to new Win32 packages, including quick add and bulk add. Packages already in your cart keep their settings.</p>
+      <p className="mt-1 text-sm text-text-muted">Company name can be saved from the package configuration dialog. Defaults belong to your account across the tenants you select. Commands, detection, processes, images and installer verification are never saved. Saving requires hosted services.</p>
       <label className="mt-4 flex items-center gap-2 text-sm text-text-primary">
         <input type="checkbox" checked={Boolean(packageDefaults)} disabled={disabled} onChange={(event) => void save(event.target.checked ? values : null)} />
         Use saved package defaults

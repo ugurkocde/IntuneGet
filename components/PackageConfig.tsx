@@ -1171,7 +1171,7 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
               {!isStoreApp && configMode === 'advanced' && typeof savePackageDefaults === 'function' && (
                 <div className="rounded-lg border border-overlay/10 bg-bg-elevated px-3 py-2 text-xs text-text-secondary">
                   <p>
-                    Save the install behavior, deferral, restart and disk space choices below as your starting point for packages you configure from now on. Commands, detection, processes and branding are never saved. Packages already in your cart keep their settings.
+                    Save install behavior, deferral, restart, disk space and company name for new packages. These personal defaults apply across the tenants you select. Commands, detection, processes and images are never saved. Packages already in your cart keep their settings.
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <button type="button" disabled={isDefaultsSaving || packageDefaultsStatus !== 'loaded'} onClick={() => void saveCurrentAsDefaults(false)} className="rounded-md border border-overlay/15 px-2 py-1 text-text-primary hover:bg-overlay/5 disabled:opacity-50">
@@ -2122,8 +2122,9 @@ function AccountPackageConfig({ package: pkg, installers, versions = [], onClose
                     </label>
                     <input
                       type="text"
+                      maxLength={128}
                       value={config.brandingCompanyName || ''}
-                      onChange={(e) => updateConfig({ brandingCompanyName: e.target.value || undefined })}
+                      onChange={(e) => updateConfig({ brandingCompanyName: e.target.value })}
                       placeholder="PSAppDeployToolkit (default)"
                       className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm"
                     />

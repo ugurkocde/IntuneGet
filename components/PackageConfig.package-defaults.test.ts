@@ -169,13 +169,14 @@ describe('saved package defaults', () => {
   });
 
   it('discards seeded panel values when the account changes', async () => {
-    settingsState.packageDefaults = { deployMode: 'Auto' };
+    settingsState.packageDefaults = { deployMode: 'Auto', brandingCompanyName: 'User A' };
     await render();
     settingsState.accountScope += 1;
-    settingsState.packageDefaults = { deployMode: 'NonInteractive' };
+    settingsState.packageDefaults = { deployMode: 'NonInteractive', brandingCompanyName: 'User B' };
     await render();
     await act(async () => button('Add to Selection').click());
     expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.deployMode).toBe('NonInteractive');
+    expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.brandingCompanyName).toBe('User B');
   });
 
   it('does not apply late defaults after the user changes install behavior', async () => {
@@ -211,4 +212,20 @@ it('adds exact PowerShell session hooks without saving them as defaults', async 
   expect(settingsState.save.mock.calls[0]).toEqual([expect.not.objectContaining({ postInstallPowerShell: expect.anything() })]);
   await act(async () => button('Add to Selection').click());
   expect((useCartStore.getState().items[0] as Win32CartItem).psadtConfig.postInstallPowerShell).toBe(script);
+});
+
+
+it('saves an explicitly cleared company without resurrecting the personal default', async () => {
+  settingsState.packageDefaults = { brandingCompanyName: 'Saved company' };
+  await render();
+  await act(async () => button('Advanced').click());
+  await act(async () => button('Branding').click());
+  const input = document.querySelector('input[placeholder="PSAppDeployToolkit (default)"]') as HTMLInputElement;
+  expect(input.value).toBe('Saved company');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => button('Save as my defaults').click());
+  expect(settingsState.save).toHaveBeenCalledWith(expect.objectContaining({ brandingCompanyName: '' }));
 });
